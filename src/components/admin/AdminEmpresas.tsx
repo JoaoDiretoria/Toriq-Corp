@@ -731,7 +731,7 @@ export function AdminEmpresas() {
       if (criarAdmin && empresaData) {
         const { data: sessionData } = await supabase.auth.getSession();
         
-        const response = await fetch(`https://xraggzqaddfiymqgrtha.supabase.co/functions/v1/admin-create-user`, {
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-create-user`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -920,7 +920,7 @@ export function AdminEmpresas() {
 
       const { data: sessionData } = await supabase.auth.getSession();
       
-      const response = await fetch(`https://xraggzqaddfiymqgrtha.supabase.co/functions/v1/admin-create-user`, {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-create-user`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

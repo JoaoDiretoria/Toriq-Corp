@@ -263,7 +263,7 @@ export function AdminUsuarios() {
       try {
         const { data: sessionData } = await supabase.auth.getSession();
         
-        const response = await fetch(`https://xraggzqaddfiymqgrtha.supabase.co/functions/v1/admin-update-user`, {
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-update-user`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -321,7 +321,7 @@ export function AdminUsuarios() {
       const { data: sessionData } = await supabase.auth.getSession();
       
       // Call Edge Function to delete user from both profiles and auth.users
-      const response = await fetch(`https://xraggzqaddfiymqgrtha.supabase.co/functions/v1/admin-delete-user`, {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-delete-user`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -368,7 +368,7 @@ export function AdminUsuarios() {
       }
 
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL || 'https://xraggzqaddfiymqgrtha.supabase.co'}/functions/v1/admin-reset-password`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-reset-password`,
         {
           method: 'POST',
           headers: {
