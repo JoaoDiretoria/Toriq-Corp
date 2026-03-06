@@ -1,0 +1,1 @@
+export { AdminVagas } from './AdminVagas';

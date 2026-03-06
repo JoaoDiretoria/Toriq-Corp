@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Relatório de Treinamento - {{TREINAMENTO_NOME}}</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 15mm;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 11pt;
+      line-height: 1.6;
+      color: #333;
+    }
+
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      padding: 20mm;
+      margin: 0 auto 10mm;
+      background: white;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      page-break-after: always;
+      position: relative;
+    }
+
+    .page:last-child {
+      page-break-after: auto;
+    }
+
+    @media print {
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      .page {
+        margin: 0;
+        box-shadow: none;
+        page-break-after: always;
+      }
+      .page:last-child {
+        page-break-after: auto;
+      }
+    }
+
+    /* Cabeçalho e Rodapé */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #0066cc;
+      margin-bottom: 20px;
+    }
+
+    .header-logo {
+      max-width: 150px;
+      max-height: 60px;
+    }
+
+    .header-info {
+      text-align: right;
+      font-size: 9pt;
+      color: #666;
+    }
+
+    .footer {
+      position: absolute;
+      bottom: 15mm;
+      left: 20mm;
+      right: 20mm;
+      padding-top: 10px;
+      border-top: 1px solid #ddd;
+      font-size: 8pt;
+      color: #666;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* Capa */
+    .capa {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      min-height: 257mm;
+    }
+
+    .capa-logo {
+      max-width: 200px;
+      margin-bottom: 40px;
+    }
+
+    .capa h1 {
+      font-size: 28pt;
+      color: #0066cc;
+      margin-bottom: 20px;
+      font-weight: bold;
+    }
+
+    .capa h2 {
+      font-size: 18pt;
+      color: #333;
+      margin-bottom: 40px;
+    }
+
+    .capa-info {
+      margin-top: 40px;
+      text-align: left;
+      width: 80%;
+    }
+
+    .capa-info-item {
+      display: flex;
+      margin-bottom: 15px;
+      font-size: 12pt;
+    }
+
+    .capa-info-label {
+      font-weight: bold;
+      min-width: 150px;
+      color: #0066cc;
+    }
+
+    /* Títulos */
+    h1 {
+      font-size: 20pt;
+      color: #0066cc;
+      margin-bottom: 20px;
+      border-bottom: 2px solid #0066cc;
+      padding-bottom: 10px;
+    }
+
+    h2 {
+      font-size: 16pt;
+      color: #0066cc;
+      margin-top: 20px;
+      margin-bottom: 15px;
+    }
+
+    h3 {
+      font-size: 13pt;
+      color: #333;
+      margin-top: 15px;
+      margin-bottom: 10px;
+    }
+
+    /* Parágrafos */
+    p {
+      margin-bottom: 12px;
+      text-align: justify;
+    }
+
+    /* Tabelas */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      font-size: 10pt;
+    }
+
+    table th {
+      background-color: #0066cc;
+      color: white;
+      padding: 10px;
+      text-align: left;
+      font-weight: bold;
+    }
+
+    table td {
+      border: 1px solid #ddd;
+      padding: 8px;
+    }
+
+    table tr:nth-child(even) {
+      background-color: #f9f9f9;
+    }
+
+    table tr:hover {
+      background-color: #f0f0f0;
+    }
+
+    /* Listas */
+    ul, ol {
+      margin-left: 20px;
+      margin-bottom: 15px;
+    }
+
+    li {
+      margin-bottom: 8px;
+    }
+
+    /* Boxes de destaque */
+    .info-box {
+      background-color: #e6f2ff;
+      border-left: 4px solid #0066cc;
+      padding: 15px;
+      margin: 20px 0;
+    }
+
+    .warning-box {
+      background-color: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 15px;
+      margin: 20px 0;
+    }
+
+    /* Grid de fotos */
+    .photo-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 15px;
+      margin: 20px 0;
+    }
+
+    .photo-item {
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: center;
+    }
+
+    .photo-item img {
+      width: 100%;
+      height: 200px;
+      object-fit: cover;
+      margin-bottom: 10px;
+    }
+
+    .photo-caption {
+      font-size: 9pt;
+      color: #666;
+      font-style: italic;
+    }
+
+    /* Depoimentos */
+    .depoimento {
+      background-color: #f9f9f9;
+      border-left: 4px solid #0066cc;
+      padding: 15px;
+      margin: 15px 0;
+      font-style: italic;
+    }
+
+    .depoimento-autor {
+      text-align: right;
+      font-weight: bold;
+      margin-top: 10px;
+      font-style: normal;
+    }
+
+    /* Assinaturas */
+    .assinaturas {
+      display: flex;
+      justify-content: space-around;
+      margin-top: 60px;
+    }
+
+    .assinatura-box {
+      text-align: center;
+      width: 40%;
+    }
+
+    .assinatura-linha {
+      border-top: 1px solid #333;
+      margin-bottom: 10px;
+      padding-top: 5px;
+    }
+
+    /* Missão, Visão e Valores */
+    .mvv-container {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin: 30px 0;
+    }
+
+    .mvv-box {
+      background-color: #f5f5f5;
+      padding: 20px;
+      border-radius: 8px;
+      border-top: 4px solid #0066cc;
+    }
+
+    .mvv-box h3 {
+      color: #0066cc;
+      margin-bottom: 15px;
+      text-align: center;
+    }
+
+    /* Estatísticas */
+    .stats-container {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 15px;
+      margin: 20px 0;
+    }
+
+    .stat-box {
+      background-color: #0066cc;
+      color: white;
+      padding: 20px;
+      text-align: center;
+      border-radius: 8px;
+    }
+
+    .stat-number {
+      font-size: 24pt;
+      font-weight: bold;
+      display: block;
+      margin-bottom: 5px;
+    }
+
+    .stat-label {
+      font-size: 9pt;
+    }
+
+    /* Anexos */
+    .anexo-header {
+      background-color: #0066cc;
+      color: white;
+      padding: 15px;
+      margin: 30px 0 20px 0;
+      font-size: 14pt;
+      font-weight: bold;
+    }
+
+    /* Sumário */
+    .sumario-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px dotted #ccc;
+    }
+
+    .sumario-item:hover {
+      background-color: #f9f9f9;
+    }
+
+    /* Base Legal */
+    .base-legal {
+      background-color: #f9f9f9;
+      padding: 15px;
+      margin: 20px 0;
+      border-left: 4px solid #0066cc;
+      font-size: 10pt;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- PÁGINA 1: CAPA -->
+  <div class="page">
+    <div class="capa">
+      <img src="{{LOGO_EMPRESA}}" alt="Logo" class="capa-logo" onerror="this.style.display='none'">
+      
+      <h1>RELATÓRIO DE TREINAMENTO</h1>
+      <h2>{{TREINAMENTO_NOME}}</h2>
+      
+      <div class="capa-info">
+        <div class="capa-info-item">
+          <span class="capa-info-label">Cliente:</span>
+          <span>{{CLIENTE_NOME}}</span>
+        </div>
+        <div class="capa-info-item">
+          <span class="capa-info-label">Treinamento:</span>
+          <span>{{TREINAMENTO_NOME}} - {{TREINAMENTO_NR}}</span>
+        </div>
+        <div class="capa-info-item">
+          <span class="capa-info-label">Data:</span>
+          <span>{{DATA_INICIO}} a {{DATA_FIM}}</span>
+        </div>
+        <div class="capa-info-item">
+          <span class="capa-info-label">Local:</span>
+          <span>{{LOCAL_TREINAMENTO}}</span>
+        </div>
+        <div class="capa-info-item">
+          <span class="capa-info-label">Carga Horária:</span>
+          <span>{{CARGA_HORARIA}} horas</span>
+        </div>
+        <div class="capa-info-item">
+          <span class="capa-info-label">Instrutor:</span>
+          <span>{{INSTRUTOR_NOME}}</span>
+        </div>
+        <div class="capa-info-item">
+          <span class="capa-info-label">Turma:</span>
+          <span>{{CODIGO_TURMA}}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PÁGINA 2: APRESENTAÇÃO -->
+  <div class="page">
+    <div class="header">
+      <img src="{{LOGO_EMPRESA}}" alt="Logo" class="header-logo" onerror="this.style.display='none'">
+      <div class="header-info">
+        <div>{{EMPRESA_NOME}}</div>
+        <div>{{EMPRESA_TELEFONE}} | {{EMPRESA_EMAIL}}</div>
+      </div>
+    </div>
+
+    <h1>1. APRESENTAÇÃO</h1>
+
+    <h2>Sobre a Empresa</h2>
+    <p>{{EMPRESA_APRESENTACAO}}</p>
+
+    <div class="mvv-container">
+      <div class="mvv-box">
+        <h3>MISSÃO</h3>
+        <p>{{EMPRESA_MISSAO}}</p>
+      </div>
+      <div class="mvv-box">
+        <h3>VISÃO</h3>
+        <p>{{EMPRESA_VISAO}}</p>
+      </div>
+      <div class="mvv-box">
+        <h3>VALORES</h3>
+        <p>{{EMPRESA_VALORES}}</p>
+      </div>
+    </div>
+
+    <h2>Base Legal</h2>
+    <div class="base-legal">
+      <p><strong>Norma Regulamentadora:</strong> {{TREINAMENTO_NR}}</p>
+      <p><strong>Fundamentação Legal:</strong> {{BASE_LEGAL}}</p>
+      <p>Este treinamento está em conformidade com as exigências da legislação brasileira de segurança e saúde no trabalho, especialmente a {{TREINAMENTO_NR}} e demais normas aplicáveis.</p>
+    </div>
+
+    <div class="footer">
+      <span>{{EMPRESA_NOME}} | {{EMPRESA_CNPJ}}</span>
+      <span>Página 1</span>
+    </div>
+  </div>
+
+  <!-- PÁGINA 3: DADOS DO TREINAMENTO -->
+  <div class="page">
+    <div class="header">
+      <img src="{{LOGO_EMPRESA}}" alt="Logo" class="header-logo" onerror="this.style.display='none'">
+      <div class="header-info">
+        <div>Relatório de Treinamento</div>
+        <div>{{CODIGO_TURMA}}</div>
+      </div>
+    </div>
+
+    <h1>2. DADOS DO TREINAMENTO</h1>
+
+    <table>
+      <tr>
+        <th style="width: 30%;">Campo</th>
+        <th>Informação</th>
+      </tr>
+      <tr>
+        <td><strong>Curso</strong></td>
+        <td>{{TREINAMENTO_NOME}}</td>
+      </tr>
+      <tr>
+        <td><strong>Norma Regulamentadora</strong></td>
+        <td>{{TREINAMENTO_NR}}</td>
+      </tr>
+      <tr>
+        <td><strong>Código da Turma</strong></td>
+        <td>{{CODIGO_TURMA}}</td>
+      </tr>
+      <tr>
+        <td><strong>Cliente</strong></td>
+        <td>{{CLIENTE_NOME}}</td>
+      </tr>
+      <tr>
+        <td><strong>Local</strong></td>
+        <td>{{LOCAL_TREINAMENTO}}</td>
+      </tr>
+      <tr>
+        <td><strong>Data de Realização</strong></td>
+        <td>{{DATA_INICIO}} a {{DATA_FIM}}</td>
+      </tr>
+      <tr>
+        <td><strong>Horário</strong></td>
+        <td>{{HORARIO_TREINAMENTO}}</td>
+      </tr>
+      <tr>
+        <td><strong>Carga Horária</strong></td>
+        <td>{{CARGA_HORARIA}} horas</td>
+      </tr>
+      <tr>
+        <td><strong>Instrutor</strong></td>
+        <td>{{INSTRUTOR_NOME}}</td>
+      </tr>
+      <tr>
+        <td><strong>Formação do Instrutor</strong></td>
+        <td>{{INSTRUTOR_FORMACAO}}</td>
+      </tr>
+      <tr>
+        <td><strong>Participantes</strong></td>
+        <td>{{TOTAL_PARTICIPANTES}} colaboradores</td>
+      </tr>
+    </table>
+
+    <h2>Objetivo do Treinamento</h2>
+    <p>{{TREINAMENTO_OBJETIVO}}</p>
+
+    <h2>Metodologia</h2>
+    <p>{{TREINAMENTO_METODOLOGIA}}</p>
+
+    <h2>Conteúdo Programático</h2>
+    <div class="info-box">
+      {{TREINAMENTO_CONTEUDO_PROGRAMATICO}}
+    </div>
+
+    <div class="footer">
+      <span>{{EMPRESA_NOME}} | {{EMPRESA_CNPJ}}</span>
+      <span>Página 2</span>
+    </div>
+  </div>
+
+  <!-- PÁGINA 4: LISTA DE PRESENÇA - ANEXO 1 -->
+  <div class="page">
+    <div class="header">
+      <img src="{{LOGO_EMPRESA}}" alt="Logo" class="header-logo" onerror="this.style.display='none'">
+      <div class="header-info">
+        <div>Relatório de Treinamento</div>
+        <div>{{CODIGO_TURMA}}</div>
+      </div>
+    </div>
+
+    <div class="anexo-header">ANEXO 1 - LISTA DE PRESENÇA</div>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 5%;">#</th>
+          <th style="width: 35%;">Participante</th>
+          <th style="width: 15%;">CPF</th>
+          <th style="width: 20%;">Função</th>
+          <th style="width: 25%;">Assinatura</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{LISTA_PRESENCA}}
+      </tbody>
+    </table>
+
+    <div class="info-box">
+      <strong>Total de Participantes:</strong> {{TOTAL_PARTICIPANTES}}<br>
+      <strong>Presentes:</strong> {{TOTAL_PRESENTES}}<br>
+      <strong>Percentual de Presença:</strong> {{PERCENTUAL_PRESENCA}}%
+    </div>
+
+    <div class="footer">
+      <span>{{EMPRESA_NOME}} | {{EMPRESA_CNPJ}}</span>
+      <span>Página 3</span>
+    </div>
+  </div>
+
+  <!-- PÁGINA 5: AVALIAÇÕES PRÉ/PÓS - ANEXO 2 -->
+  <div class="page">
+    <div class="header">
+      <img src="{{LOGO_EMPRESA}}" alt="Logo" class="header-logo" onerror="this.style.display='none'">
+      <div class="header-info">
+        <div>Relatório de Treinamento</div>
+        <div>{{CODIGO_TURMA}}</div>
+      </div>
+    </div>
+
+    <div class="anexo-header">ANEXO 2 - AVALIAÇÕES DE CONHECIMENTO</div>
+
+    <h2>Metodologia de Avaliação</h2>
+    <p>Os participantes foram submetidos a avaliações de conhecimento antes (pré-teste) e após (pós-teste) o treinamento, com o objetivo de mensurar o aprendizado e a evolução dos conhecimentos sobre o tema abordado.</p>
+
+    <div class="stats-container">
+      <div class="stat-box">
+        <span class="stat-number">{{MEDIA_PRE_TESTE}}</span>
+        <span class="stat-label">Média Pré-Teste</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-number">{{MEDIA_POS_TESTE}}</span>
+        <span class="stat-label">Média Pós-Teste</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-number">{{EVOLUCAO_PERCENTUAL}}%</span>
+        <span class="stat-label">Evolução</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-number">{{TAXA_APROVACAO}}%</span>
+        <span class="stat-label">Taxa de Aprovação</span>
+      </div>
+    </div>
+
+    <h2>Resultados Individuais</h2>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 5%;">#</th>
+          <th style="width: 35%;">Participante</th>
+          <th style="width: 15%;">Pré-Teste</th>
+          <th style="width: 15%;">Pós-Teste</th>
+          <th style="width: 15%;">Evolução</th>
+          <th style="width: 15%;">Resultado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{RESULTADOS_AVALIACOES}}
+      </tbody>
+    </table>
+
+    <div class="info-box">
+      <strong>Critério de Aprovação:</strong> Nota mínima de 7,0 no pós-teste<br>
+      <strong>Aprovados:</strong> {{TOTAL_APROVADOS}} participantes<br>
+      <strong>Reorientados:</strong> {{TOTAL_REORIENTADOS}} participantes
+    </div>
+
+    <div class="footer">
+      <span>{{EMPRESA_NOME}} | {{EMPRESA_CNPJ}}</span>
+      <span>Página 4</span>
+    </div>
+  </div>
+
+  <!-- PÁGINA 6: AVALIAÇÃO DO TREINAMENTO - ANEXO 3 -->
+  <div class="page">
+    <div class="header">
+      <img src="{{LOGO_EMPRESA}}" alt="Logo" class="header-logo" onerror="this.style.display='none'">
+      <div class="header-info">
+        <div>Relatório de Treinamento</div>
+        <div>{{CODIGO_TURMA}}</div>
+      </div>
+    </div>
+
+    <div class="anexo-header">ANEXO 3 - AVALIAÇÃO DE REAÇÃO</div>
+
+    <h2>Pesquisa de Satisfação</h2>
+    <p>Ao final do treinamento, os participantes responderam a uma pesquisa de satisfação para avaliar diversos aspectos do curso, incluindo conteúdo, instrutor, metodologia e infraestrutura.</p>
+
+    <div class="stats-container">
+      <div class="stat-box">
+        <span class="stat-number">{{NPS_SCORE}}</span>
+        <span class="stat-label">NPS Score</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-number">{{SATISFACAO_GERAL}}%</span>
+        <span class="stat-label">Satisfação Geral</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-number">{{AVALIACAO_INSTRUTOR}}</span>
+        <span class="stat-label">Avaliação Instrutor</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-number">{{AVALIACAO_CONTEUDO}}</span>
+        <span class="stat-label">Avaliação Conteúdo</span>
+      </div>
+    </div>
+
+    <h2>Resultados por Critério</h2>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 50%;">Critério Avaliado</th>
+          <th style="width: 25%;">Média</th>
+          <th style="width: 25%;">Classificação</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{RESULTADOS_AVALIACAO_REACAO}}
+      </tbody>
+    </table>
+
+    <h2>Comentários e Sugestões</h2>
+    <div class="info-box">
+      {{COMENTARIOS_AVALIACAO}}
+    </div>
+
+    <div class="footer">
+      <span>{{EMPRESA_NOME}} | {{EMPRESA_CNPJ}}</span>
+      <span>Página 5</span>
+    </div>
+  </div>
+
+  <!-- PÁGINA 7: DEPOIMENTOS - ANEXO 4 -->
+  <div class="page">
+    <div class="header">
+      <img src="{{LOGO_EMPRESA}}" alt="Logo" class="header-logo" onerror="this.style.display='none'">
+      <div class="header-info">
+        <div>Relatório de Treinamento</div>
+        <div>{{CODIGO_TURMA}}</div>
+      </div>
+    </div>
+
+    <div class="anexo-header">ANEXO 4 - DEPOIMENTOS</div>
+
+    <p>Alguns participantes compartilharam suas impressões e experiências sobre o treinamento:</p>
+
+    {{DEPOIMENTOS}}
+
+    <div class="footer">
+      <span>{{EMPRESA_NOME}} | {{EMPRESA_CNPJ}}</span>
+      <span>Página 6</span>
+    </div>
+  </div>
+
+  <!-- PÁGINA 8: CERTIFICADOS - ANEXO 5 -->
+  <div class="page">
+    <div class="header">
+      <img src="{{LOGO_EMPRESA}}" alt="Logo" class="header-logo" onerror="this.style.display='none'">
+      <div class="header-info">
+        <div>Relatório de Treinamento</div>
+        <div>{{CODIGO_TURMA}}</div>
+      </div>
+    </div>
+
+    <div class="anexo-header">ANEXO 5 - CERTIFICADOS EMITIDOS</div>
+
+    <p>Relação dos participantes que concluíram o treinamento com aproveitamento e receberam certificado:</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 5%;">#</th>
+          <th style="width: 40%;">Participante</th>
+          <th style="width: 20%;">CPF</th>
+          <th style="width: 15%;">Data Emissão</th>
+          <th style="width: 20%;">Validade</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{LISTA_CERTIFICADOS}}
+      </tbody>
+    </table>
+
+    <div class="info-box">
+      <strong>Total de Certificados Emitidos:</strong> {{TOTAL_CERTIFICADOS}}<br>
+      <strong>Validade dos Certificados:</strong> {{VALIDADE_CERTIFICADO}}<br>
+      <strong>Observação:</strong> Os certificados foram emitidos em conformidade com a {{TREINAMENTO_NR}} e possuem QR Code para validação online.
+    </div>
+
+    <div class="footer">
+      <span>{{EMPRESA_NOME}} | {{EMPRESA_CNPJ}}</span>
+      <span>Página 7</span>
+    </div>
+  </div>
+
+  <!-- PÁGINA 9: FOTOS - ANEXO 6 -->
+  <div class="page">
+    <div class="header">
+      <img src="{{LOGO_EMPRESA}}" alt="Logo" class="header-logo" onerror="this.style.display='none'">
+      <div class="header-info">
+        <div>Relatório de Treinamento</div>
+        <div>{{CODIGO_TURMA}}</div>
+      </div>
+    </div>
+
+    <div class="anexo-header">ANEXO 6 - REGISTRO FOTOGRÁFICO</div>
+
+    <p>Imagens registradas durante a realização do treinamento:</p>
+
+    <div class="photo-grid">
+      {{FOTOS_TREINAMENTO}}
+    </div>
+
+    <div class="footer">
+      <span>{{EMPRESA_NOME}} | {{EMPRESA_CNPJ}}</span>
+      <span>Página 8</span>
+    </div>
+  </div>
+
+  <!-- PÁGINA 10: DOCUMENTOS DO INSTRUTOR - ANEXO 7 -->
+  <div class="page">
+    <div class="header">
+      <img src="{{LOGO_EMPRESA}}" alt="Logo" class="header-logo" onerror="this.style.display='none'">
+      <div class="header-info">
+        <div>Relatório de Treinamento</div>
+        <div>{{CODIGO_TURMA}}</div>
+      </div>
+    </div>
+
+    <div class="anexo-header">ANEXO 7 - DOCUMENTOS DO INSTRUTOR</div>
+
+    <h2>Qualificação do Instrutor</h2>
+    <p><strong>Nome:</strong> {{INSTRUTOR_NOME}}</p>
+    <p><strong>Formação:</strong> {{INSTRUTOR_FORMACAO}}</p>
+    <p><strong>Registro Profissional:</strong> {{INSTRUTOR_REGISTRO}}</p>
+
+    <h2>Documentos Comprobatórios</h2>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 10%;">#</th>
+          <th style="width: 50%;">Documento</th>
+          <th style="width: 40%;">Observação</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{DOCUMENTOS_INSTRUTOR}}
+      </tbody>
+    </table>
+
+    <div class="info-box">
+      <strong>Observação:</strong> Todos os documentos comprobatórios da qualificação do instrutor estão arquivados e disponíveis para consulta.
+    </div>
+
+    <div class="footer">
+      <span>{{EMPRESA_NOME}} | {{EMPRESA_CNPJ}}</span>
+      <span>Página 9</span>
+    </div>
+  </div>
+
+  <!-- PÁGINA 11: SUMÁRIO DE ANEXOS E CONTATOS -->
+  <div class="page">
+    <div class="header">
+      <img src="{{LOGO_EMPRESA}}" alt="Logo" class="header-logo" onerror="this.style.display='none'">
+      <div class="header-info">
+        <div>Relatório de Treinamento</div>
+        <div>{{CODIGO_TURMA}}</div>
+      </div>
+    </div>
+
+    <h1>SUMÁRIO DE ANEXOS</h1>
+
+    <div class="sumario-item">
+      <span>Anexo 1 - Lista de Presença</span>
+      <span>Página 3</span>
+    </div>
+    <div class="sumario-item">
+      <span>Anexo 2 - Avaliações de Conhecimento (Pré/Pós)</span>
+      <span>Página 4</span>
+    </div>
+    <div class="sumario-item">
+      <span>Anexo 3 - Avaliação de Reação</span>
+      <span>Página 5</span>
+    </div>
+    <div class="sumario-item">
+      <span>Anexo 4 - Depoimentos</span>
+      <span>Página 6</span>
+    </div>
+    <div class="sumario-item">
+      <span>Anexo 5 - Certificados Emitidos</span>
+      <span>Página 7</span>
+    </div>
+    <div class="sumario-item">
+      <span>Anexo 6 - Registro Fotográfico</span>
+      <span>Página 8</span>
+    </div>
+    <div class="sumario-item">
+      <span>Anexo 7 - Documentos do Instrutor</span>
+      <span>Página 9</span>
+    </div>
+
+    <h1 style="margin-top: 40px;">CONTATOS</h1>
+
+    <div class="info-box">
+      <h3>{{EMPRESA_NOME}}</h3>
+      <p><strong>Endereço:</strong> {{EMPRESA_ENDERECO}}</p>
+      <p><strong>Telefone:</strong> {{EMPRESA_TELEFONE}}</p>
+      <p><strong>E-mail:</strong> {{EMPRESA_EMAIL}}</p>
+      <p><strong>Website:</strong> {{EMPRESA_WEBSITE}}</p>
+      <p><strong>CNPJ:</strong> {{EMPRESA_CNPJ}}</p>
+    </div>
+
+    <div class="assinaturas">
+      <div class="assinatura-box">
+        <div class="assinatura-linha">
+          {{ASSINATURA_DIRETOR_TECNICO}}
+        </div>
+        <p><strong>{{DIRETOR_TECNICO_NOME}}</strong></p>
+        <p>Diretor Técnico</p>
+        <p>{{DIRETOR_TECNICO_REGISTRO}}</p>
+      </div>
+      <div class="assinatura-box">
+        <div class="assinatura-linha">
+          {{ASSINATURA_INSTRUTOR}}
+        </div>
+        <p><strong>{{INSTRUTOR_NOME}}</strong></p>
+        <p>Instrutor Responsável</p>
+        <p>{{INSTRUTOR_REGISTRO}}</p>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span>{{EMPRESA_NOME}} | {{EMPRESA_CNPJ}}</span>
+      <span>Página 10</span>
+    </div>
+  </div>
+
+</body>
+</html>

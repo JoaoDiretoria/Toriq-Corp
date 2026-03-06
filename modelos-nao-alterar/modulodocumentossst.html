@@ -1,0 +1,1816 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Módulo SST • PGR | LTCAT | PCMSO</title>
+  <style>
+    :root{
+      --bg:#0b1220; --card:#101b33; --card2:#0f1930; --muted:#8ea0c6; --text:#e9efff;
+      --brand:#4de1c1; --brand2:#5a8bff; --warn:#ffcc66; --danger:#ff6b6b; --ok:#4de1c1;
+      --border:rgba(255,255,255,.10);
+      --shadow: 0 20px 60px rgba(0,0,0,.45);
+      --r:16px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family:var(--sans); color:var(--text); background:
+      radial-gradient(1200px 700px at 15% 10%, rgba(90,139,255,.22), transparent 60%),
+      radial-gradient(900px 600px at 70% 20%, rgba(77,225,193,.18), transparent 55%),
+      radial-gradient(900px 600px at 40% 90%, rgba(255,204,102,.10), transparent 55%),
+      var(--bg);
+    }
+    a{color:inherit}
+    .wrap{max-width:1250px; margin:0 auto; padding:24px}
+    header{
+      display:flex; gap:16px; align-items:center; justify-content:space-between;
+      padding:18px 18px; border:1px solid var(--border); border-radius:var(--r);
+      background:linear-gradient(180deg, rgba(16,27,51,.92), rgba(16,27,51,.70));
+      box-shadow:var(--shadow);
+      position:sticky; top:14px; z-index:4; backdrop-filter: blur(10px);
+    }
+    .hleft{display:flex; align-items:center; gap:14px}
+    .logo{
+      width:42px; height:42px; border-radius:12px;
+      background:conic-gradient(from 220deg, var(--brand), var(--brand2), var(--warn));
+      box-shadow:0 10px 30px rgba(90,139,255,.18);
+    }
+    h1{font-size:16px; margin:0; letter-spacing:.2px}
+    .sub{font-size:12px; color:var(--muted); margin-top:2px}
+    .actions{display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end}
+    button, .btn{
+      background:rgba(255,255,255,.06);
+      border:1px solid var(--border);
+      color:var(--text);
+      padding:10px 12px;
+      border-radius:12px;
+      cursor:pointer;
+      font-weight:600;
+      transition:.15s ease;
+      display:inline-flex; align-items:center; gap:8px;
+      user-select:none;
+    }
+    button:hover{transform:translateY(-1px); background:rgba(255,255,255,.08)}
+    .primary{background:linear-gradient(135deg, rgba(77,225,193,.22), rgba(90,139,255,.20)); border-color:rgba(90,139,255,.35)}
+    .danger{background:rgba(255,107,107,.14); border-color:rgba(255,107,107,.35)}
+    .ok{background:rgba(77,225,193,.14); border-color:rgba(77,225,193,.35)}
+    .pill{
+      display:inline-flex; align-items:center; gap:8px;
+      padding:7px 10px; border-radius:999px; border:1px solid var(--border);
+      color:var(--muted); font-size:12px; background:rgba(255,255,255,.04);
+    }
+    .grid{
+      display:grid; gap:14px; margin-top:16px;
+      grid-template-columns: 360px 1fr;
+    }
+    @media (max-width: 980px){
+      .grid{grid-template-columns: 1fr}
+      header{position:relative; top:auto}
+      .actions{justify-content:flex-start}
+    }
+    .card{
+      border:1px solid var(--border);
+      border-radius:var(--r);
+      background:linear-gradient(180deg, rgba(16,27,51,.85), rgba(15,25,48,.72));
+      box-shadow:var(--shadow);
+      overflow:hidden;
+    }
+    .card .hd{
+      padding:14px 14px;
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      border-bottom:1px solid var(--border);
+      background:rgba(255,255,255,.03);
+    }
+    .card .hd h2{margin:0; font-size:13px; letter-spacing:.3px; text-transform:uppercase}
+    .card .bd{padding:14px}
+    .muted{color:var(--muted); font-size:12px; line-height:1.35}
+    .tabs{display:flex; gap:8px; flex-wrap:wrap}
+    .tab{
+      padding:9px 10px; border-radius:12px; border:1px solid var(--border);
+      background:rgba(255,255,255,.04); color:var(--muted);
+      cursor:pointer; font-weight:700; font-size:12px;
+    }
+    .tab.active{color:var(--text); border-color:rgba(77,225,193,.38); background:rgba(77,225,193,.10)}
+    .stepper{display:flex; flex-direction:column; gap:10px}
+    .step{
+      padding:12px; border-radius:14px; border:1px solid var(--border);
+      background:rgba(255,255,255,.04); cursor:pointer;
+      display:flex; gap:10px; align-items:flex-start; justify-content:space-between;
+    }
+    .step.active{border-color:rgba(90,139,255,.45); background:rgba(90,139,255,.10)}
+    .step .t{font-weight:800; font-size:13px}
+    .step .d{font-size:12px; color:var(--muted); margin-top:2px; line-height:1.35}
+    .badge{
+      font-size:11px; padding:4px 8px; border-radius:999px;
+      border:1px solid var(--border); color:var(--muted);
+      background:rgba(255,255,255,.03);
+      white-space:nowrap;
+    }
+    .badge.ok{border-color:rgba(77,225,193,.45); color:var(--ok); background:rgba(77,225,193,.08)}
+    .badge.warn{border-color:rgba(255,204,102,.45); color:var(--warn); background:rgba(255,204,102,.10)}
+    .badge.todo{border-color:rgba(255,255,255,.12); color:var(--muted)}
+    .sectionTitle{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px}
+    .sectionTitle h3{margin:0; font-size:14px}
+    .kpiRow{display:grid; grid-template-columns: repeat(3, 1fr); gap:10px}
+    @media(max-width:560px){ .kpiRow{grid-template-columns:1fr} }
+    .kpi{
+      padding:12px; border:1px solid var(--border); border-radius:14px;
+      background:rgba(255,255,255,.04);
+    }
+    .kpi .n{font-size:20px; font-weight:900}
+    .kpi .l{font-size:12px; color:var(--muted); margin-top:2px}
+    .form{
+      display:grid; gap:10px;
+      grid-template-columns: repeat(12, 1fr);
+    }
+    .field{grid-column: span 6}
+    .field.w4{grid-column: span 4}
+    .field.w3{grid-column: span 3}
+    .field.w12{grid-column: span 12}
+    .field label{display:block; font-size:12px; color:var(--muted); margin:0 0 6px 2px}
+    .field input, .field select, .field textarea{
+      width:100%;
+      padding:10px 10px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:rgba(10,18,36,.55);
+      color:var(--text);
+      outline:none;
+    }
+    .field textarea{min-height:88px; resize:vertical}
+    .req{color:var(--warn); font-weight:900; margin-left:4px}
+    .row{display:flex; gap:10px; flex-wrap:wrap}
+    .table{
+      width:100%;
+      border-collapse:separate;
+      border-spacing:0;
+      overflow:hidden;
+      border-radius:14px;
+      border:1px solid var(--border);
+      background:rgba(255,255,255,.03);
+    }
+    .table th, .table td{
+      padding:10px 10px;
+      font-size:12px;
+      border-bottom:1px solid var(--border);
+      vertical-align:top;
+    }
+    .table th{
+      text-align:left; color:var(--muted); font-weight:900; background:rgba(255,255,255,.04);
+    }
+    .table tr:last-child td{border-bottom:none}
+    .right{display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap}
+    .note{
+      padding:10px 12px;
+      border-radius:14px;
+      border:1px dashed rgba(255,255,255,.18);
+      background:rgba(255,255,255,.03);
+      font-size:12px; color:var(--muted);
+      line-height:1.35;
+    }
+    .divider{height:1px; background:var(--border); margin:12px 0}
+    .chip{
+      font-size:11px;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:rgba(255,255,255,.03);
+      color:var(--muted);
+      display:inline-flex; align-items:center; gap:8px;
+    }
+    .chip b{color:var(--text)}
+    .riskPill{
+      font-size:11px; padding:5px 8px; border-radius:999px; font-weight:900;
+      border:1px solid var(--border);
+      display:inline-flex; align-items:center; gap:6px;
+    }
+    .rLow{background:rgba(77,225,193,.10); color:var(--ok); border-color:rgba(77,225,193,.35)}
+    .rMed{background:rgba(255,204,102,.10); color:var(--warn); border-color:rgba(255,204,102,.35)}
+    .rHigh{background:rgba(255,107,107,.12); color:var(--danger); border-color:rgba(255,107,107,.35)}
+    .mono{font-family:var(--mono)}
+    .small{font-size:11px; color:var(--muted)}
+    .hidden{display:none !important}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="hleft">
+        <div class="logo"></div>
+        <div>
+          <h1>Sistema SST • Automação de Documentos</h1>
+          <div class="sub">Cadastro único → Visita técnica → Validação (TST/Eng/Médico) → Geração: PGR, LTCAT, PCMSO</div>
+        </div>
+      </div>
+      <div class="actions">
+        <span class="pill" id="statusPill">Status: <b id="globalStatus" style="color:var(--text)">Rascunho</b></span>
+        <button class="btn" id="btnSave">💾 Salvar</button>
+        <button class="btn" id="btnExportJson">⬇️ Exportar JSON</button>
+        <button class="btn primary" id="btnGenerate">⚙️ Gerar Documentos</button>
+        <button class="btn danger" id="btnReset">🧹 Limpar</button>
+      </div>
+    </header>
+
+    <div class="grid">
+      <!-- LADO ESQUERDO: MENU / ETAPAS -->
+      <div class="card">
+        <div class="hd">
+          <h2>Fluxo do Trabalho</h2>
+          <span class="badge todo" id="completionBadge">0% completo</span>
+        </div>
+        <div class="bd">
+          <div class="tabs" role="tablist" aria-label="Documentos">
+            <div class="tab active" data-doc="ALL">Visão Geral</div>
+            <div class="tab" data-doc="PGR">PGR</div>
+            <div class="tab" data-doc="LTCAT">LTCAT</div>
+            <div class="tab" data-doc="PCMSO">PCMSO</div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="stepper" id="stepper">
+            <div class="step active" data-step="empresa">
+              <div>
+                <div class="t">1) Cadastro da Empresa</div>
+                <div class="d">CNPJ, CNAE, grau de risco, endereço, vigência e responsáveis.</div>
+              </div>
+              <span class="badge todo" id="b_empresa">Pendente</span>
+            </div>
+
+            <div class="step" data-step="ambientes">
+              <div>
+                <div class="t">2) Ambientes / Setores</div>
+                <div class="d">Layout, descrição do ambiente, fotos, EPC/EPI e processos.</div>
+              </div>
+              <span class="badge todo" id="b_ambientes">Pendente</span>
+            </div>
+
+            <div class="step" data-step="funcoes">
+              <div>
+                <div class="t">3) Funções & GHE</div>
+                <div class="d">CBO, nº expostos, atividades, rotina, tempo de exposição.</div>
+              </div>
+              <span class="badge todo" id="b_funcoes">Pendente</span>
+            </div>
+
+            <div class="step" data-step="riscos">
+              <div>
+                <div class="t">4) Riscos / Agentes</div>
+                <div class="d">Reconhecimento (PGR), agentes nocivos (LTCAT) e gatilhos para PCMSO.</div>
+              </div>
+              <span class="badge todo" id="b_riscos">Pendente</span>
+            </div>
+
+            <div class="step" data-step="avaliacoes">
+              <div>
+                <div class="t">5) Avaliações</div>
+                <div class="d">Qualitativa/quantitativa (ruído, calor, químicos, etc.), metodologia e evidências.</div>
+              </div>
+              <span class="badge todo" id="b_avaliacoes">Pendente</span>
+            </div>
+
+            <div class="step" data-step="medidas">
+              <div>
+                <div class="t">6) Medidas & Plano de Ação</div>
+                <div class="d">Hierarquia de controle, EPC/EPI, prazos, responsáveis, monitoramento.</div>
+              </div>
+              <span class="badge todo" id="b_medidas">Pendente</span>
+            </div>
+
+            <div class="step" data-step="pcmsoprotocolos">
+              <div>
+                <div class="t">7) PCMSO • Protocolos</div>
+                <div class="d">Exames por função, periodicidade, ASO, retorno, mudança de risco.</div>
+              </div>
+              <span class="badge todo" id="b_pcmsoprotocolos">Pendente</span>
+            </div>
+
+            <div class="step" data-step="validacao">
+              <div>
+                <div class="t">8) Validação & Emissão</div>
+                <div class="d">Checklist final e assinaturas: TST, Eng. Seg., Médico do Trabalho.</div>
+              </div>
+              <span class="badge todo" id="b_validacao">Pendente</span>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="note">
+            <b>Automação (recomendado):</b><br/>
+            • Riscos cadastrados no PGR alimentam automaticamente: <b>LTCAT (agentes nocivos)</b> e <b>PCMSO (exames)</b>.<br/>
+            • Use <b>GHE</b> para evitar duplicidade: 1 registro → várias funções expostas ao mesmo perfil.
+          </div>
+        </div>
+      </div>
+
+      <!-- LADO DIREITO: CONTEÚDO / FORMULÁRIOS -->
+      <div class="card">
+        <div class="hd">
+          <h2 id="panelTitle">Visão Geral</h2>
+          <div class="row">
+            <span class="chip"><b id="kEmpresa">0</b> Empresa</span>
+            <span class="chip"><b id="kAmb">0</b> Ambientes</span>
+            <span class="chip"><b id="kFun">0</b> Funções</span>
+            <span class="chip"><b id="kRiscos">0</b> Riscos</span>
+            <span class="chip"><b id="kMedidas">0</b> Ações</span>
+          </div>
+        </div>
+        <div class="bd">
+          <!-- VISÃO GERAL -->
+          <section id="sec_overview">
+            <div class="sectionTitle">
+              <h3>Resumo Operacional</h3>
+              <div class="right">
+                <button class="btn ok" id="btnQuickFill">✨ Exemplo (Demo)</button>
+              </div>
+            </div>
+
+            <div class="kpiRow">
+              <div class="kpi">
+                <div class="n" id="kpiCompletion">0%</div>
+                <div class="l">completo (campos mínimos para emissão)</div>
+              </div>
+              <div class="kpi">
+                <div class="n" id="kpiPending">0</div>
+                <div class="l">pendências críticas (bloqueiam emissão)</div>
+              </div>
+              <div class="kpi">
+                <div class="n" id="kpiReady">—</div>
+                <div class="l">pronto para gerar (PGR/LTCAT/PCMSO)</div>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="note">
+              <b>Campos mínimos (emissão automatizada):</b><br/>
+              1) Empresa (CNPJ, CNAE, grau de risco, vigência e endereço).<br/>
+              2) Ambientes/Setores (descrição, processo, EPC/EPI).<br/>
+              3) Funções/GHE (CBO, atividades, nº expostos, tempo de exposição).<br/>
+              4) Riscos/Agentes (grupo, fonte geradora, danos, exposição).<br/>
+              5) Avaliações (qualitativa/quantitativa quando aplicável).<br/>
+              6) Medidas + Plano de Ação (responsável e prazo).<br/>
+              7) PCMSO (exames por função e periodicidade).<br/>
+              8) Validação por responsável técnico (TST/Eng/Médico).
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="sectionTitle">
+              <h3>Atalhos de Documento</h3>
+              <div class="muted">Clique e vá direto ao que o documento exige</div>
+            </div>
+
+            <div class="row">
+              <button class="btn" data-jump="riscos" data-doctab="PGR">📘 Inventário de Riscos (PGR)</button>
+              <button class="btn" data-jump="avaliacoes" data-doctab="LTCAT">📗 Avaliações (LTCAT)</button>
+              <button class="btn" data-jump="pcmsoprotocolos" data-doctab="PCMSO">📙 Quadro de Exames (PCMSO)</button>
+            </div>
+          </section>
+
+          <!-- 1) EMPRESA -->
+          <section id="sec_empresa" class="hidden">
+            <div class="sectionTitle">
+              <h3>1) Cadastro da Empresa</h3>
+              <span class="muted">Base única para PGR, LTCAT e PCMSO</span>
+            </div>
+
+            <div class="form">
+              <div class="field w4">
+                <label>CNPJ <span class="req">*</span></label>
+                <input id="empresa_cnpj" placeholder="00.000.000/0000-00" />
+              </div>
+              <div class="field w4">
+                <label>Razão Social <span class="req">*</span></label>
+                <input id="empresa_razao" placeholder="Nome empresarial" />
+              </div>
+              <div class="field w4">
+                <label>Nome Fantasia</label>
+                <input id="empresa_fantasia" placeholder="Opcional" />
+              </div>
+
+              <div class="field w4">
+                <label>CNAE (principal) <span class="req">*</span></label>
+                <input id="empresa_cnae" placeholder="00.00-0/00" />
+              </div>
+              <div class="field w4">
+                <label>Descrição do CNAE</label>
+                <input id="empresa_cnae_desc" placeholder="Atividade econômica" />
+              </div>
+              <div class="field w4">
+                <label>Grau de Risco <span class="req">*</span></label>
+                <select id="empresa_grau">
+                  <option value="">Selecione</option>
+                  <option>1</option><option>2</option><option>3</option><option>4</option>
+                </select>
+              </div>
+
+              <div class="field w6">
+                <label>Endereço <span class="req">*</span></label>
+                <input id="empresa_end" placeholder="Rua, nº, complemento" />
+              </div>
+              <div class="field w3">
+                <label>CEP</label>
+                <input id="empresa_cep" placeholder="00000-000" />
+              </div>
+              <div class="field w3">
+                <label>Bairro</label>
+                <input id="empresa_bairro" />
+              </div>
+              <div class="field w4">
+                <label>Cidade <span class="req">*</span></label>
+                <input id="empresa_cidade" />
+              </div>
+              <div class="field w2">
+                <label>UF <span class="req">*</span></label>
+                <input id="empresa_uf" placeholder="SP" maxlength="2" />
+              </div>
+              <div class="field w3">
+                <label>Vigência (início) <span class="req">*</span></label>
+                <input id="vig_ini" type="date" />
+              </div>
+              <div class="field w3">
+                <label>Vigência (fim) <span class="req">*</span></label>
+                <input id="vig_fim" type="date" />
+              </div>
+
+              <div class="field w12">
+                <label>Descrição do Processo/Atividade (visão macro)</label>
+                <textarea id="empresa_desc" placeholder="Descreva a operação da empresa (macroprocessos)"></textarea>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="sectionTitle">
+              <h3>Responsáveis Técnicos (para validação e assinatura)</h3>
+              <span class="muted">TST / Eng. Seg. / Médico do Trabalho</span>
+            </div>
+
+            <div class="form">
+              <div class="field w4">
+                <label>TST (nome)</label>
+                <input id="rt_tst_nome" placeholder="Nome completo" />
+              </div>
+              <div class="field w4">
+                <label>TST (registro MTE)</label>
+                <input id="rt_tst_reg" placeholder="0000000 UF" />
+              </div>
+              <div class="field w4">
+                <label>Contato (e-mail/telefone)</label>
+                <input id="rt_tst_contato" placeholder="Opcional" />
+              </div>
+
+              <div class="field w4">
+                <label>Eng. Segurança (nome)</label>
+                <input id="rt_eng_nome" placeholder="Nome completo" />
+              </div>
+              <div class="field w4">
+                <label>CREA (nº/UF)</label>
+                <input id="rt_eng_crea" placeholder="CREA 000000/UF" />
+              </div>
+              <div class="field w4">
+                <label>ART (nº)</label>
+                <input id="rt_eng_art" placeholder="Opcional (quando aplicável)" />
+              </div>
+
+              <div class="field w4">
+                <label>Médico do Trabalho (nome)</label>
+                <input id="rt_med_nome" placeholder="Nome completo" />
+              </div>
+              <div class="field w4">
+                <label>CRM (nº/UF)</label>
+                <input id="rt_med_crm" placeholder="CRM 000000/UF" />
+              </div>
+              <div class="field w4">
+                <label>RQE (se houver)</label>
+                <input id="rt_med_rqe" placeholder="Opcional" />
+              </div>
+            </div>
+
+            <div class="divider"></div>
+            <div class="right">
+              <button class="btn" data-next="ambientes">Próximo ➜</button>
+            </div>
+          </section>
+
+          <!-- 2) AMBIENTES -->
+          <section id="sec_ambientes" class="hidden">
+            <div class="sectionTitle">
+              <h3>2) Ambientes / Setores</h3>
+              <span class="muted">Cadastro do local e evidências de visita técnica</span>
+            </div>
+
+            <div class="form">
+              <div class="field w4">
+                <label>Setor <span class="req">*</span></label>
+                <input id="amb_setor" placeholder="Ex.: Administrativo" />
+              </div>
+              <div class="field w4">
+                <label>Ambiente (subárea)</label>
+                <input id="amb_nome" placeholder="Ex.: Sala 1º andar" />
+              </div>
+              <div class="field w4">
+                <label>Turnos / Horários</label>
+                <input id="amb_turno" placeholder="Ex.: Seg–Sex 08:00–17:00" />
+              </div>
+
+              <div class="field w12">
+                <label>Descrição do Ambiente <span class="req">*</span></label>
+                <textarea id="amb_desc" placeholder="Construção, piso, ventilação/iluminação, layout, condições, processo..."></textarea>
+              </div>
+
+              <div class="field w6">
+                <label>EPC existentes (lista)</label>
+                <textarea id="amb_epc" placeholder="Ex.: sinalização, corrimão, extintores, ventilação, guarda-corpo..."></textarea>
+              </div>
+              <div class="field w6">
+                <label>EPI obrigatórios (lista)</label>
+                <textarea id="amb_epi" placeholder="Ex.: calçado fechado, óculos, protetor auricular, luvas..."></textarea>
+              </div>
+
+              <div class="field w12">
+                <label>Evidências da Visita Técnica (links/IDs de fotos) <span class="small">(neste protótipo, use links ou nomes de arquivos)</span></label>
+                <textarea id="amb_evid" placeholder="Ex.: foto_entrada.jpg; foto_layout1.jpg; link_drive..."></textarea>
+              </div>
+            </div>
+
+            <div class="right">
+              <button class="btn" id="btnAddAmb">➕ Adicionar Ambiente</button>
+            </div>
+
+            <div class="divider"></div>
+
+            <table class="table" id="tblAmb">
+              <thead>
+                <tr>
+                  <th style="width:18%">Setor</th>
+                  <th style="width:18%">Ambiente</th>
+                  <th>Descrição</th>
+                  <th style="width:14%">EPC/EPI</th>
+                  <th style="width:12%">Ações</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+
+            <div class="divider"></div>
+            <div class="right">
+              <button class="btn" data-prev="empresa">⬅ Voltar</button>
+              <button class="btn" data-next="funcoes">Próximo ➜</button>
+            </div>
+          </section>
+
+          <!-- 3) FUNÇÕES & GHE -->
+          <section id="sec_funcoes" class="hidden">
+            <div class="sectionTitle">
+              <h3>3) Funções & GHE (Grupo Homogêneo de Exposição)</h3>
+              <span class="muted">Evita retrabalho: 1 GHE pode agrupar várias funções com o mesmo perfil de exposição</span>
+            </div>
+
+            <div class="form">
+              <div class="field w4">
+                <label>Ambiente/Setor <span class="req">*</span></label>
+                <select id="fn_amb"></select>
+              </div>
+              <div class="field w4">
+                <label>GHE <span class="req">*</span></label>
+                <input id="fn_ghe" placeholder="Ex.: GHE-ADM-01" />
+              </div>
+              <div class="field w4">
+                <label>Função/Cargo <span class="req">*</span></label>
+                <input id="fn_cargo" placeholder="Ex.: Auxiliar Administrativo" />
+              </div>
+
+              <div class="field w3">
+                <label>CBO <span class="req">*</span></label>
+                <input id="fn_cbo" placeholder="0000-00" />
+              </div>
+              <div class="field w3">
+                <label>Nº expostos (total) <span class="req">*</span></label>
+                <input id="fn_n" type="number" min="0" value="1" />
+              </div>
+              <div class="field w3">
+                <label>Sexo (M/F) <span class="small">(opcional)</span></label>
+                <input id="fn_sexo" placeholder="Ex.: 2/1" />
+              </div>
+              <div class="field w3">
+                <label>Tempo de exposição <span class="req">*</span></label>
+                <input id="fn_tempo" placeholder="Ex.: Habitual / intermitente" />
+              </div>
+
+              <div class="field w12">
+                <label>Descrição detalhada das atividades <span class="req">*</span></label>
+                <textarea id="fn_desc" placeholder="O que faz, como faz, frequência, ferramentas, deslocamentos, trabalho em altura/EC, etc."></textarea>
+              </div>
+            </div>
+
+            <div class="right">
+              <button class="btn" id="btnAddFn">➕ Adicionar Função</button>
+            </div>
+
+            <div class="divider"></div>
+
+            <table class="table" id="tblFn">
+              <thead>
+                <tr>
+                  <th style="width:18%">Ambiente</th>
+                  <th style="width:14%">GHE</th>
+                  <th style="width:18%">Cargo</th>
+                  <th style="width:10%">CBO</th>
+                  <th style="width:10%">Nº</th>
+                  <th>Atividades</th>
+                  <th style="width:12%">Ações</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+
+            <div class="divider"></div>
+            <div class="right">
+              <button class="btn" data-prev="ambientes">⬅ Voltar</button>
+              <button class="btn" data-next="riscos">Próximo ➜</button>
+            </div>
+          </section>
+
+          <!-- 4) RISCOS / AGENTES -->
+          <section id="sec_riscos" class="hidden">
+            <div class="sectionTitle">
+              <h3>4) Riscos / Agentes (PGR + LTCAT + gatilhos PCMSO)</h3>
+              <span class="muted">Reconhecimento do perigo, fonte geradora, danos, exposição, e classificação</span>
+            </div>
+
+            <div class="form">
+              <div class="field w4">
+                <label>Função/GHE <span class="req">*</span></label>
+                <select id="rk_fn"></select>
+              </div>
+              <div class="field w4">
+                <label>Grupo do Risco <span class="req">*</span></label>
+                <select id="rk_grupo">
+                  <option value="">Selecione</option>
+                  <option>Físico</option>
+                  <option>Químico</option>
+                  <option>Biológico</option>
+                  <option>Ergonômico</option>
+                  <option>Acidentes/Mecânico</option>
+                  <option>Periculosidade (NR-16)</option>
+                </select>
+              </div>
+              <div class="field w4">
+                <label>Agente/Perigo <span class="req">*</span></label>
+                <input id="rk_agente" placeholder="Ex.: Ruído; Calor; Postura sentada; Queda de mesmo nível..." />
+              </div>
+
+              <div class="field w6">
+                <label>Fontes geradoras <span class="req">*</span></label>
+                <input id="rk_fontes" placeholder="Ex.: ventilador; tráfego; escada; equipamento; processo..." />
+              </div>
+              <div class="field w6">
+                <label>Danos à saúde / integridade <span class="req">*</span></label>
+                <input id="rk_danos" placeholder="Ex.: PAIR; lombalgia; cortes; traumas..." />
+              </div>
+
+              <div class="field w12">
+                <label>Recomendações (boas práticas) <span class="req">*</span></label>
+                <textarea id="rk_recom" placeholder="Procedimentos seguros, sinalização, organização, pausas, treinamentos, etc."></textarea>
+              </div>
+
+              <div class="field w4">
+                <label>Avaliação <span class="req">*</span></label>
+                <select id="rk_tipoaval">
+                  <option value="">Selecione</option>
+                  <option>Qualitativa</option>
+                  <option>Quantitativa</option>
+                  <option>Quali + Quanti</option>
+                </select>
+              </div>
+              <div class="field w4">
+                <label>Severidade (1–5) <span class="req">*</span></label>
+                <input id="rk_sev" type="number" min="1" max="5" value="2" />
+              </div>
+              <div class="field w4">
+                <label>Probabilidade (1–5) <span class="req">*</span></label>
+                <input id="rk_prob" type="number" min="1" max="5" value="2" />
+              </div>
+
+              <div class="field w12">
+                <label>Observações técnicas (ex.: habitual/intermitente, NR aplicável, PPP)</label>
+                <textarea id="rk_obs" placeholder="Ex.: exposição habitual; considerar NR-15/NR-16; agente para fins previdenciários..."></textarea>
+              </div>
+            </div>
+
+            <div class="right">
+              <button class="btn" id="btnAddRk">➕ Adicionar Risco</button>
+            </div>
+
+            <div class="divider"></div>
+
+            <table class="table" id="tblRk">
+              <thead>
+                <tr>
+                  <th style="width:18%">Função/GHE</th>
+                  <th style="width:12%">Grupo</th>
+                  <th style="width:16%">Agente</th>
+                  <th>Fonte / Danos</th>
+                  <th style="width:12%">Nível</th>
+                  <th style="width:12%">Ações</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+
+            <div class="divider"></div>
+            <div class="right">
+              <button class="btn" data-prev="funcoes">⬅ Voltar</button>
+              <button class="btn" data-next="avaliacoes">Próximo ➜</button>
+            </div>
+          </section>
+
+          <!-- 5) AVALIAÇÕES -->
+          <section id="sec_avaliacoes" class="hidden">
+            <div class="sectionTitle">
+              <h3>5) Avaliações (LTCAT / suporte PGR)</h3>
+              <span class="muted">Metodologia, instrumento, calibração e resultado (quando aplicável)</span>
+            </div>
+
+            <div class="note">
+              <b>Regra prática (automação):</b><br/>
+              • Se risco for “Quantitativo”, o sistema exigirá: método, instrumento, data, resultado e critério (NR/NHO/ACGIH).<br/>
+              • Se risco for “Qualitativo”, exigirá: justificativa técnica, evidência de campo e medidas adotadas.
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="form">
+              <div class="field w4">
+                <label>Risco/Agente <span class="req">*</span></label>
+                <select id="av_risco"></select>
+              </div>
+              <div class="field w4">
+                <label>Tipo de avaliação <span class="req">*</span></label>
+                <select id="av_tipo">
+                  <option value="">Selecione</option>
+                  <option>Qualitativa (inspeção/observação)</option>
+                  <option>Quantitativa (medição)</option>
+                </select>
+              </div>
+              <div class="field w4">
+                <label>Data da avaliação <span class="req">*</span></label>
+                <input id="av_data" type="date" />
+              </div>
+
+              <div class="field w6">
+                <label>Metodologia / Critério <span class="req">*</span></label>
+                <input id="av_metodo" placeholder="Ex.: NR-15 Anexo 1; NHO-06; ACGIH TLV..." />
+              </div>
+              <div class="field w6">
+                <label>Instrumento / Equipamento</label>
+                <input id="av_inst" placeholder="Ex.: Dosímetro; medidor; IBUTG; bomba; etc." />
+              </div>
+
+              <div class="field w4">
+                <label>Resultado (valor)</label>
+                <input id="av_valor" placeholder="Ex.: 86 dB(A); 28,3°C IBUTG; 0,1 mg/m³..." />
+              </div>
+              <div class="field w4">
+                <label>Unidade</label>
+                <input id="av_unid" placeholder="dB(A), °C, mg/m³, ppm..." />
+              </div>
+              <div class="field w4">
+                <label>Conclusão</label>
+                <select id="av_conc">
+                  <option value="">Selecione</option>
+                  <option>Abaixo do limite</option>
+                  <option>Acima do limite</option>
+                  <option>Não aplicável</option>
+                  <option>Requer nova medição</option>
+                </select>
+              </div>
+
+              <div class="field w12">
+                <label>Evidências / Observações <span class="req">*</span></label>
+                <textarea id="av_obs" placeholder="Condições operacionais, rotina, representatividade, evidências de campo..."></textarea>
+              </div>
+            </div>
+
+            <div class="right">
+              <button class="btn" id="btnAddAv">➕ Adicionar Avaliação</button>
+            </div>
+
+            <div class="divider"></div>
+
+            <table class="table" id="tblAv">
+              <thead>
+                <tr>
+                  <th style="width:22%">Risco</th>
+                  <th style="width:16%">Tipo</th>
+                  <th style="width:12%">Data</th>
+                  <th>Metodologia / Resultado</th>
+                  <th style="width:12%">Conclusão</th>
+                  <th style="width:12%">Ações</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+
+            <div class="divider"></div>
+            <div class="right">
+              <button class="btn" data-prev="riscos">⬅ Voltar</button>
+              <button class="btn" data-next="medidas">Próximo ➜</button>
+            </div>
+          </section>
+
+          <!-- 6) MEDIDAS / PLANO DE AÇÃO -->
+          <section id="sec_medidas" class="hidden">
+            <div class="sectionTitle">
+              <h3>6) Medidas de Controle & Plano de Ação</h3>
+              <span class="muted">Hierarquia: eliminação → substituição → engenharia (EPC) → administrativas → EPI</span>
+            </div>
+
+            <div class="form">
+              <div class="field w4">
+                <label>Relacionado ao risco <span class="req">*</span></label>
+                <select id="ac_risco"></select>
+              </div>
+              <div class="field w4">
+                <label>Tipo de medida <span class="req">*</span></label>
+                <select id="ac_tipo">
+                  <option value="">Selecione</option>
+                  <option>Eliminação/Substituição</option>
+                  <option>Engenharia (EPC / Proteção coletiva)</option>
+                  <option>Administrativa/Organizacional</option>
+                  <option>EPI (Proteção individual)</option>
+                  <option>Treinamento/Capacitação</option>
+                  <option>Monitoramento (reavaliação)</option>
+                </select>
+              </div>
+              <div class="field w4">
+                <label>Status <span class="req">*</span></label>
+                <select id="ac_status">
+                  <option value="Pendente">Pendente</option>
+                  <option value="Em andamento">Em andamento</option>
+                  <option value="Concluída">Concluída</option>
+                </select>
+              </div>
+
+              <div class="field w12">
+                <label>Descrição da ação <span class="req">*</span></label>
+                <textarea id="ac_desc" placeholder="Ex.: elaborar AEP; instalar corrimão; sinalizar; implementar pausas; treinar NR-35..."></textarea>
+              </div>
+
+              <div class="field w4">
+                <label>Responsável <span class="req">*</span></label>
+                <input id="ac_resp" placeholder="Nome / setor" />
+              </div>
+              <div class="field w4">
+                <label>Prazo <span class="req">*</span></label>
+                <input id="ac_prazo" type="date" />
+              </div>
+              <div class="field w4">
+                <label>Indicador de verificação</label>
+                <input id="ac_ind" placeholder="Ex.: check-list; foto; certificado; relatório..." />
+              </div>
+            </div>
+
+            <div class="right">
+              <button class="btn" id="btnAddAc">➕ Adicionar Ação</button>
+            </div>
+
+            <div class="divider"></div>
+
+            <table class="table" id="tblAc">
+              <thead>
+                <tr>
+                  <th style="width:22%">Risco</th>
+                  <th style="width:18%">Tipo</th>
+                  <th>Descrição</th>
+                  <th style="width:14%">Prazo</th>
+                  <th style="width:12%">Status</th>
+                  <th style="width:12%">Ações</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+
+            <div class="divider"></div>
+            <div class="right">
+              <button class="btn" data-prev="avaliacoes">⬅ Voltar</button>
+              <button class="btn" data-next="pcmsoprotocolos">Próximo ➜</button>
+            </div>
+          </section>
+
+          <!-- 7) PCMSO: PROTOCOLOS -->
+          <section id="sec_pcmsoprotocolos" class="hidden">
+            <div class="sectionTitle">
+              <h3>7) PCMSO • Protocolos e Quadro de Exames</h3>
+              <span class="muted">Exames por função + periodicidade (admissional, periódico, retorno, mudança, demissional)</span>
+            </div>
+
+            <div class="note">
+              <b>Automação sugerida:</b><br/>
+              • Se houver risco de <b>trabalho em altura</b>, <b>espaço confinado</b>, <b>condução de veículos</b>, <b>ruído</b>, <b>RNI</b> etc., o sistema sugere exames padrão (editáveis).<br/>
+              • O médico valida e pode ajustar (NR-07).
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="form">
+              <div class="field w4">
+                <label>Função/GHE <span class="req">*</span></label>
+                <select id="ex_fn"></select>
+              </div>
+              <div class="field w4">
+                <label>Exame (nome) <span class="req">*</span></label>
+                <input id="ex_nome" placeholder="Ex.: Exame clínico; Acuidade visual; ECG; Espirometria..." />
+              </div>
+              <div class="field w4">
+                <label>Código (opcional)</label>
+                <input id="ex_cod" placeholder="Ex.: 0295" />
+              </div>
+
+              <div class="field w3">
+                <label>Admissional <span class="req">*</span></label>
+                <select id="ex_adm"><option>Sim</option><option>Não</option></select>
+              </div>
+              <div class="field w3">
+                <label>Periódico <span class="req">*</span></label>
+                <select id="ex_per"><option>Sim</option><option>Não</option></select>
+              </div>
+              <div class="field w3">
+                <label>Periodicidade</label>
+                <input id="ex_freq" placeholder="Ex.: anual / bienal" />
+              </div>
+              <div class="field w3">
+                <label>Demissional <span class="req">*</span></label>
+                <select id="ex_dem"><option>Sim</option><option>Não</option></select>
+              </div>
+
+              <div class="field w12">
+                <label>Justificativa técnica / vínculo com riscos</label>
+                <textarea id="ex_just" placeholder="Ex.: risco de RNI → acuidade visual; altura → avaliação clínica direcionada..."></textarea>
+              </div>
+            </div>
+
+            <div class="right">
+              <button class="btn" id="btnSuggestExams">🤖 Sugerir por riscos</button>
+              <button class="btn" id="btnAddExam">➕ Adicionar Exame</button>
+            </div>
+
+            <div class="divider"></div>
+
+            <table class="table" id="tblEx">
+              <thead>
+                <tr>
+                  <th style="width:22%">Função/GHE</th>
+                  <th style="width:22%">Exame</th>
+                  <th style="width:12%">Código</th>
+                  <th>Aplicação</th>
+                  <th style="width:12%">Ações</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+
+            <div class="divider"></div>
+            <div class="right">
+              <button class="btn" data-prev="medidas">⬅ Voltar</button>
+              <button class="btn" data-next="validacao">Próximo ➜</button>
+            </div>
+          </section>
+
+          <!-- 8) VALIDAÇÃO -->
+          <section id="sec_validacao" class="hidden">
+            <div class="sectionTitle">
+              <h3>8) Validação & Emissão</h3>
+              <span class="muted">Checklist final e assinaturas (TST/Eng/Médico)</span>
+            </div>
+
+            <div class="kpiRow">
+              <div class="kpi">
+                <div class="n" id="chkPGR">—</div>
+                <div class="l">PGR • pronto para emissão</div>
+              </div>
+              <div class="kpi">
+                <div class="n" id="chkLTCAT">—</div>
+                <div class="l">LTCAT • pronto para emissão</div>
+              </div>
+              <div class="kpi">
+                <div class="n" id="chkPCMSO">—</div>
+                <div class="l">PCMSO • pronto para emissão</div>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Item mínimo</th>
+                  <th style="width:18%">Status</th>
+                  <th>Como o sistema valida</th>
+                </tr>
+              </thead>
+              <tbody id="tblChecklist"></tbody>
+            </table>
+
+            <div class="divider"></div>
+
+            <div class="form">
+              <div class="field w4">
+                <label>Validação TST</label>
+                <select id="val_tst">
+                  <option value="Pendente">Pendente</option>
+                  <option value="Aprovado">Aprovado</option>
+                  <option value="Rejeitado">Rejeitado</option>
+                </select>
+              </div>
+              <div class="field w4">
+                <label>Validação Eng. Segurança (LTCAT)</label>
+                <select id="val_eng">
+                  <option value="Pendente">Pendente</option>
+                  <option value="Aprovado">Aprovado</option>
+                  <option value="Rejeitado">Rejeitado</option>
+                </select>
+              </div>
+              <div class="field w4">
+                <label>Validação Médico (PCMSO)</label>
+                <select id="val_med">
+                  <option value="Pendente">Pendente</option>
+                  <option value="Aprovado">Aprovado</option>
+                  <option value="Rejeitado">Rejeitado</option>
+                </select>
+              </div>
+
+              <div class="field w12">
+                <label>Observações finais / ressalvas</label>
+                <textarea id="val_obs" placeholder="Pendências, condicionantes, recomendações de revisão, etc."></textarea>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="right">
+              <button class="btn" data-prev="pcmsoprotocolos">⬅ Voltar</button>
+              <button class="btn primary" id="btnFinalGenerate">✅ Validar e Gerar Documentos</button>
+            </div>
+          </section>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================
+    // Modelo de dados (1 empresa por "projeto")
+    // =========================
+    const STORE_KEY = "sst_doc_module_v1";
+    const state = {
+      empresa: {
+        cnpj:"", razao:"", fantasia:"", cnae:"", cnaeDesc:"", grau:"", end:"", cep:"", bairro:"", cidade:"", uf:"",
+        vigIni:"", vigFim:"", desc:"",
+        rt:{ tst:{nome:"", reg:"", contato:""}, eng:{nome:"", crea:"", art:""}, med:{nome:"", crm:"", rqe:""} }
+      },
+      ambientes: [],   // {id,setor,nome,turno,desc,epc,epi,evid}
+      funcoes: [],     // {id,ambId,ambLabel,ghe,cargo,cbo,n,sexo,tempo,desc}
+      riscos: [],      // {id,fnId,fnLabel,grupo,agente,fontes,danos,recom,tipoAval,sev,prob,obs}
+      avaliacoes: [],  // {id,riscoId,riscoLabel,tipo,data,metodo,inst,valor,unid,conc,obs}
+      acoes: [],       // {id,riscoId,riscoLabel,tipo,status,desc,resp,prazo,ind}
+      exames: [],      // {id,fnId,fnLabel,nome,cod,adm,per,freq,dem,just}
+      validacao: {tst:"Pendente", eng:"Pendente", med:"Pendente", obs:""}
+    };
+
+    // =========================
+    // Utilidades
+    // =========================
+    const $ = (id)=>document.getElementById(id);
+    const uid = ()=> Math.random().toString(16).slice(2)+Date.now().toString(16);
+    const escapeHtml = (s="")=> String(s).replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m]));
+    function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); refresh(); }
+    function load(){
+      const raw = localStorage.getItem(STORE_KEY);
+      if(!raw) return;
+      try{
+        const parsed = JSON.parse(raw);
+        Object.assign(state, parsed);
+      }catch(e){ console.warn("Falha ao carregar:", e); }
+    }
+    function setDocTab(doc){
+      document.querySelectorAll(".tab").forEach(t=> t.classList.toggle("active", t.dataset.doc===doc));
+      // A aba aqui é apenas filtro mental; o fluxo continua igual.
+    }
+
+    // =========================
+    // Navegação (steps)
+    // =========================
+    const steps = ["overview","empresa","ambientes","funcoes","riscos","avaliacoes","medidas","pcmsoprotocolos","validacao"];
+    function showStep(step){
+      // title
+      const titles = {
+        overview:"Visão Geral", empresa:"Cadastro da Empresa", ambientes:"Ambientes / Setores",
+        funcoes:"Funções & GHE", riscos:"Riscos / Agentes", avaliacoes:"Avaliações",
+        medidas:"Medidas & Plano de Ação", pcmsoprotocolos:"PCMSO • Protocolos", validacao:"Validação & Emissão"
+      };
+      $("panelTitle").textContent = titles[step] || "Painel";
+      // sections
+      steps.forEach(s=>{
+        const el = document.getElementById("sec_"+s);
+        if(el) el.classList.toggle("hidden", s!==step);
+      });
+      // stepper
+      document.querySelectorAll(".step").forEach(x=> x.classList.toggle("active", x.dataset.step===step));
+      // doc-specific quick actions (optional)
+      window.scrollTo({top:0, behavior:"smooth"});
+    }
+
+    // =========================
+    // Cálculo de risco (matriz simples)
+    // =========================
+    function riskLevel(sev, prob){
+      const score = Number(sev||0) * Number(prob||0);
+      if(score >= 16) return {label:`Alto (${score})`, cls:"rHigh"};
+      if(score >= 8)  return {label:`Médio (${score})`, cls:"rMed"};
+      return {label:`Baixo (${score})`, cls:"rLow"};
+    }
+
+    // =========================
+    // Validações mínimas (para emissão)
+    // =========================
+    function hasEmpresaMin(){
+      const e = state.empresa;
+      return !!(e.cnpj && e.razao && e.cnae && e.grau && e.end && e.cidade && e.uf && e.vigIni && e.vigFim);
+    }
+    function hasAmbMin(){ return state.ambientes.length > 0 && state.ambientes.every(a=>a.setor && a.desc); }
+    function hasFnMin(){ return state.funcoes.length > 0 && state.funcoes.every(f=>f.ambId && f.ghe && f.cargo && f.cbo && (f.n!=="" && f.n!==null) && f.tempo && f.desc); }
+    function hasRiscosMin(){ return state.riscos.length > 0 && state.riscos.every(r=>r.fnId && r.grupo && r.agente && r.fontes && r.danos && r.recom && r.tipoAval && r.sev && r.prob); }
+    function hasAvalMin(){
+      // só exige avaliação se existir algum risco com quantitativa
+      const needs = state.riscos.filter(r=> String(r.tipoAval).toLowerCase().includes("quanti"));
+      if(needs.length===0) return true;
+      // para cada risco quantitativo, precisa pelo menos 1 avaliação vinculada
+      return needs.every(r=> state.avaliacoes.some(a=> a.riscoId===r.id));
+    }
+    function hasAcoesMin(){ return state.acoes.length > 0 && state.acoes.every(a=>a.riscoId && a.tipo && a.status && a.desc && a.resp && a.prazo); }
+    function hasExamesMin(){ return state.exames.length > 0 && state.exames.every(x=>x.fnId && x.nome && x.adm && x.per && x.dem); }
+    function isReadyPGR(){ return hasEmpresaMin() && hasAmbMin() && hasFnMin() && hasRiscosMin() && hasAcoesMin(); }
+    function isReadyLTCAT(){ return hasEmpresaMin() && hasAmbMin() && hasFnMin() && hasRiscosMin() && hasAvalMin(); }
+    function isReadyPCMSO(){ return hasEmpresaMin() && hasFnMin() && hasRiscosMin() && hasExamesMin(); }
+
+    function computeCompletion(){
+      // 8 blocos principais
+      const checks = [
+        {key:"empresa", ok: hasEmpresaMin()},
+        {key:"ambientes", ok: hasAmbMin()},
+        {key:"funcoes", ok: hasFnMin()},
+        {key:"riscos", ok: hasRiscosMin()},
+        {key:"avaliacoes", ok: hasAvalMin()},
+        {key:"medidas", ok: hasAcoesMin()},
+        {key:"pcmsoprotocolos", ok: hasExamesMin()},
+        {key:"validacao", ok: (state.validacao.tst==="Aprovado" && state.validacao.eng==="Aprovado" && state.validacao.med==="Aprovado")}
+      ];
+      const done = checks.filter(c=>c.ok).length;
+      const pct = Math.round((done / checks.length)*100);
+      const pendingCritical = checks.filter(c=>!c.ok).length;
+
+      return {checks, done, pct, pendingCritical};
+    }
+
+    // =========================
+    // Renderização (tabelas + selects)
+    // =========================
+    function refreshSelects(){
+      // Ambientes select
+      const ambSel = $("fn_amb");
+      const ambSel2 = $("amb_setor"); // input, ignore
+      [ambSel].forEach(sel=>{
+        if(!sel) return;
+        sel.innerHTML = `<option value="">Selecione</option>` + state.ambientes.map(a=>`<option value="${a.id}">${escapeHtml(a.setor)} • ${escapeHtml(a.nome||"—")}</option>`).join("");
+      });
+
+      // Funções select
+      const fnOptions = state.funcoes.map(f=>{
+        const label = `${f.ghe} • ${f.cargo} • ${f.ambLabel}`;
+        return `<option value="${f.id}">${escapeHtml(label)}</option>`;
+      }).join("");
+      ["rk_fn","ex_fn"].forEach(id=>{
+        const sel = $(id);
+        if(sel) sel.innerHTML = `<option value="">Selecione</option>` + fnOptions;
+      });
+
+      // Riscos select
+      const riscoOptions = state.riscos.map(r=>{
+        return `<option value="${r.id}">${escapeHtml(r.grupo)} • ${escapeHtml(r.agente)} • ${escapeHtml(r.fnLabel)}</option>`;
+      }).join("");
+      ["av_risco","ac_risco"].forEach(id=>{
+        const sel = $(id);
+        if(sel) sel.innerHTML = `<option value="">Selecione</option>` + riscoOptions;
+      });
+    }
+
+    function renderTables(){
+      // Ambientes
+      const tbA = $("tblAmb").querySelector("tbody");
+      tbA.innerHTML = state.ambientes.map(a=>`
+        <tr>
+          <td><b>${escapeHtml(a.setor)}</b></td>
+          <td>${escapeHtml(a.nome||"—")}</td>
+          <td class="muted">${escapeHtml(a.desc).slice(0,220)}${a.desc.length>220?"…":""}</td>
+          <td class="muted">${escapeHtml((a.epc||"").slice(0,80))}${(a.epi||"")? "<br/>"+escapeHtml((a.epi||"").slice(0,80)):""}</td>
+          <td>
+            <button class="btn danger" onclick="removeItem('ambientes','${a.id}')">Excluir</button>
+          </td>
+        </tr>
+      `).join("") || `<tr><td colspan="5" class="muted">Nenhum ambiente cadastrado.</td></tr>`;
+
+      // Funções
+      const tbF = $("tblFn").querySelector("tbody");
+      tbF.innerHTML = state.funcoes.map(f=>`
+        <tr>
+          <td>${escapeHtml(f.ambLabel)}</td>
+          <td><span class="chip"><b>${escapeHtml(f.ghe)}</b></span></td>
+          <td><b>${escapeHtml(f.cargo)}</b></td>
+          <td class="mono">${escapeHtml(f.cbo)}</td>
+          <td>${escapeHtml(f.n)}</td>
+          <td class="muted">${escapeHtml(f.desc).slice(0,200)}${f.desc.length>200?"…":""}</td>
+          <td><button class="btn danger" onclick="removeItem('funcoes','${f.id}')">Excluir</button></td>
+        </tr>
+      `).join("") || `<tr><td colspan="7" class="muted">Nenhuma função cadastrada.</td></tr>`;
+
+      // Riscos
+      const tbR = $("tblRk").querySelector("tbody");
+      tbR.innerHTML = state.riscos.map(r=>{
+        const lvl = riskLevel(r.sev, r.prob);
+        return `
+        <tr>
+          <td class="muted">${escapeHtml(r.fnLabel)}</td>
+          <td>${escapeHtml(r.grupo)}</td>
+          <td><b>${escapeHtml(r.agente)}</b></td>
+          <td class="muted">${escapeHtml(r.fontes)}<br/>${escapeHtml(r.danos)}</td>
+          <td><span class="riskPill ${lvl.cls}">${escapeHtml(lvl.label)}</span></td>
+          <td><button class="btn danger" onclick="removeItem('riscos','${r.id}')">Excluir</button></td>
+        </tr>`;
+      }).join("") || `<tr><td colspan="6" class="muted">Nenhum risco cadastrado.</td></tr>`;
+
+      // Avaliações
+      const tbV = $("tblAv").querySelector("tbody");
+      tbV.innerHTML = state.avaliacoes.map(a=>`
+        <tr>
+          <td class="muted">${escapeHtml(a.riscoLabel)}</td>
+          <td>${escapeHtml(a.tipo)}</td>
+          <td class="mono">${escapeHtml(a.data)}</td>
+          <td class="muted">${escapeHtml(a.metodo)}${a.valor? `<br/><b>${escapeHtml(a.valor)} ${escapeHtml(a.unid||"")}</b>`:""}</td>
+          <td>${escapeHtml(a.conc||"—")}</td>
+          <td><button class="btn danger" onclick="removeItem('avaliacoes','${a.id}')">Excluir</button></td>
+        </tr>
+      `).join("") || `<tr><td colspan="6" class="muted">Nenhuma avaliação cadastrada.</td></tr>`;
+
+      // Ações
+      const tbC = $("tblAc").querySelector("tbody");
+      tbC.innerHTML = state.acoes.map(a=>`
+        <tr>
+          <td class="muted">${escapeHtml(a.riscoLabel)}</td>
+          <td>${escapeHtml(a.tipo)}</td>
+          <td class="muted">${escapeHtml(a.desc).slice(0,220)}${a.desc.length>220?"…":""}<br/><span class="small">Resp.: ${escapeHtml(a.resp)} • Indic.: ${escapeHtml(a.ind||"—")}</span></td>
+          <td class="mono">${escapeHtml(a.prazo)}</td>
+          <td>${escapeHtml(a.status)}</td>
+          <td><button class="btn danger" onclick="removeItem('acoes','${a.id}')">Excluir</button></td>
+        </tr>
+      `).join("") || `<tr><td colspan="6" class="muted">Nenhuma ação cadastrada.</td></tr>`;
+
+      // Exames
+      const tbE = $("tblEx").querySelector("tbody");
+      tbE.innerHTML = state.exames.map(x=>`
+        <tr>
+          <td class="muted">${escapeHtml(x.fnLabel)}</td>
+          <td><b>${escapeHtml(x.nome)}</b><div class="small">${escapeHtml(x.freq||"")}</div></td>
+          <td class="mono">${escapeHtml(x.cod||"—")}</td>
+          <td class="muted">ADM: <b>${escapeHtml(x.adm)}</b> • PER: <b>${escapeHtml(x.per)}</b> • DEM: <b>${escapeHtml(x.dem)}</b></td>
+          <td><button class="btn danger" onclick="removeItem('exames','${x.id}')">Excluir</button></td>
+        </tr>
+      `).join("") || `<tr><td colspan="5" class="muted">Nenhum exame cadastrado.</td></tr>`;
+    }
+
+    function renderBadgesAndKpis(){
+      // counters
+      $("kEmpresa").textContent = hasEmpresaMin()? 1 : 0;
+      $("kAmb").textContent = state.ambientes.length;
+      $("kFun").textContent = state.funcoes.length;
+      $("kRiscos").textContent = state.riscos.length;
+      $("kMedidas").textContent = state.acoes.length;
+
+      const {checks, pct, pendingCritical} = computeCompletion();
+      $("kpiCompletion").textContent = pct + "%";
+      $("kpiPending").textContent = pendingCritical;
+      $("kpiReady").textContent = (isReadyPGR() && isReadyLTCAT() && isReadyPCMSO()) ? "SIM" : "NÃO";
+
+      $("completionBadge").textContent = pct + "% completo";
+
+      const mapBadge = (id, ok)=>{
+        const el = $(id);
+        el.className = "badge " + (ok ? "ok":"todo");
+        el.textContent = ok ? "OK" : "Pendente";
+      };
+      mapBadge("b_empresa", hasEmpresaMin());
+      mapBadge("b_ambientes", hasAmbMin());
+      mapBadge("b_funcoes", hasFnMin());
+      mapBadge("b_riscos", hasRiscosMin());
+      mapBadge("b_avaliacoes", hasAvalMin());
+      mapBadge("b_medidas", hasAcoesMin());
+      mapBadge("b_pcmsoprotocolos", hasExamesMin());
+      mapBadge("b_validacao", (state.validacao.tst==="Aprovado" && state.validacao.eng==="Aprovado" && state.validacao.med==="Aprovado"));
+
+      // status global
+      const readyAll = isReadyPGR() && isReadyLTCAT() && isReadyPCMSO();
+      $("globalStatus").textContent = readyAll ? "Pronto para emissão" : "Rascunho";
+
+      // checklist final
+      const rows = [
+        ["Empresa (identificação + vigência)", hasEmpresaMin(), "Valida campos obrigatórios de cadastro da empresa."],
+        ["Ambientes/Setores cadastrados", hasAmbMin(), "Exige pelo menos 1 ambiente com descrição mínima."],
+        ["Funções/GHE completos", hasFnMin(), "Exige CBO, nº expostos, atividades e tempo de exposição."],
+        ["Inventário de riscos (PGR)", hasRiscosMin(), "Exige grupo, agente, fonte, danos, recomendação e classificação."],
+        ["Avaliações (LTCAT) quando aplicável", hasAvalMin(), "Exige medição para riscos marcados como quantitativos."],
+        ["Plano de ação (medidas e prazos)", hasAcoesMin(), "Exige responsável e prazo para cada ação."],
+        ["Quadro de exames (PCMSO)", hasExamesMin(), "Exige exames por função e aplicação ADM/PER/DEM."],
+        ["Validações (TST/Eng/Médico)", (state.validacao.tst==="Aprovado" && state.validacao.eng==="Aprovado" && state.validacao.med==="Aprovado"), "Exige aprovação formal nas três áreas."]
+      ];
+      const tb = $("tblChecklist");
+      tb.innerHTML = rows.map(r=>{
+        const ok = r[1];
+        const st = ok ? `<span class="badge ok">OK</span>` : `<span class="badge warn">Pendente</span>`;
+        return `<tr><td><b>${escapeHtml(r[0])}</b></td><td>${st}</td><td class="muted">${escapeHtml(r[2])}</td></tr>`;
+      }).join("");
+
+      // checks by doc
+      $("chkPGR").textContent = isReadyPGR() ? "SIM" : "NÃO";
+      $("chkLTCAT").textContent = isReadyLTCAT() ? "SIM" : "NÃO";
+      $("chkPCMSO").textContent = isReadyPCMSO() ? "SIM" : "NÃO";
+    }
+
+    function refresh(){
+      refreshSelects();
+      renderTables();
+      renderBadgesAndKpis();
+    }
+
+    // =========================
+    // Remoção genérica
+    // =========================
+    window.removeItem = function(collection, id){
+      state[collection] = state[collection].filter(x=>x.id!==id);
+
+      // limpeza de vínculos em cascata simples
+      if(collection==="ambientes"){
+        const removedFn = state.funcoes.filter(f=>f.ambId===id).map(f=>f.id);
+        state.funcoes = state.funcoes.filter(f=>f.ambId!==id);
+        state.riscos = state.riscos.filter(r=>!removedFn.includes(r.fnId));
+      }
+      if(collection==="funcoes"){
+        state.riscos = state.riscos.filter(r=>r.fnId!==id);
+        state.exames = state.exames.filter(e=>e.fnId!==id);
+      }
+      if(collection==="riscos"){
+        state.avaliacoes = state.avaliacoes.filter(a=>a.riscoId!==id);
+        state.acoes = state.acoes.filter(a=>a.riscoId!==id);
+      }
+      save();
+    };
+
+    // =========================
+    // Eventos
+    // =========================
+    // Tabs
+    document.querySelectorAll(".tab").forEach(t=>{
+      t.addEventListener("click", ()=>{
+        setDocTab(t.dataset.doc);
+      });
+    });
+
+    // Stepper click
+    document.querySelectorAll(".step").forEach(s=>{
+      s.addEventListener("click", ()=> showStep(s.dataset.step));
+    });
+
+    // Next/Prev
+    document.querySelectorAll("[data-next]").forEach(b=>{
+      b.addEventListener("click", ()=> showStep(b.dataset.next));
+    });
+    document.querySelectorAll("[data-prev]").forEach(b=>{
+      b.addEventListener("click", ()=> showStep(b.dataset.prev));
+    });
+
+    // Jump buttons in overview
+    document.querySelectorAll("[data-jump]").forEach(b=>{
+      b.addEventListener("click", ()=>{
+        setDocTab(b.dataset.doctab || "ALL");
+        showStep(b.dataset.jump);
+      });
+    });
+
+    // Save
+    $("btnSave").addEventListener("click", ()=>{
+      collectEmpresa();
+      collectValidacao();
+      save();
+      alert("Dados salvos no navegador (localStorage).");
+    });
+
+    // Export JSON
+    $("btnExportJson").addEventListener("click", ()=>{
+      collectEmpresa();
+      collectValidacao();
+      const blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "sst_projeto.json";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+
+    // Reset
+    $("btnReset").addEventListener("click", ()=>{
+      if(!confirm("Remover todos os dados deste projeto?")) return;
+      localStorage.removeItem(STORE_KEY);
+      location.reload();
+    });
+
+    // Generate (placeholder)
+    $("btnGenerate").addEventListener("click", ()=>{
+      collectEmpresa(); collectValidacao();
+      const okAll = isReadyPGR() && isReadyLTCAT() && isReadyPCMSO();
+      if(!okAll){
+        alert("Ainda há pendências críticas. Vá em “Validação & Emissão” para ver o checklist.");
+        showStep("validacao");
+        return;
+      }
+      alert("Aqui você chamaria o gerador (backend) para montar PGR/LTCAT/PCMSO em PDF/DOCX automaticamente.");
+    });
+
+    $("btnFinalGenerate").addEventListener("click", ()=>{
+      collectEmpresa(); collectValidacao(); save();
+      const okAll = isReadyPGR() && isReadyLTCAT() && isReadyPCMSO()
+        && (state.validacao.tst==="Aprovado" && state.validacao.eng==="Aprovado" && state.validacao.med==="Aprovado");
+      if(!okAll){
+        alert("Para emissão final: complete itens mínimos e obtenha aprovação TST/Eng/Médico.");
+        return;
+      }
+      alert("✅ Validação concluída. Agora o sistema pode emitir e versionar PGR/LTCAT/PCMSO.");
+    });
+
+    // Quick Fill demo
+    $("btnQuickFill").addEventListener("click", ()=>{
+      if(!confirm("Carregar dados de exemplo (substitui o que estiver nos campos atuais)?")) return;
+      // Empresa
+      state.empresa = {
+        cnpj:"17.201.622/0001-80",
+        razao:"JOAO CARLOS ROMAN THEODORO",
+        fantasia:"VERTICAL TREINAMENTOS",
+        cnae:"85.99-6/04",
+        cnaeDesc:"Treinamento em desenvolvimento profissional e gerencial",
+        grau:"2",
+        end:"Rua Anibal Jose Dos Santos, 117",
+        cep:"13890-000",
+        bairro:"Terras do Alegre",
+        cidade:"Águas da Prata",
+        uf:"SP",
+        vigIni:"2025-02-01",
+        vigFim:"2026-01-31",
+        desc:"Prestação de serviços de treinamento e atividades administrativas correlatas.",
+        rt:{
+          tst:{nome:"TST Exemplo", reg:"0000000 SP", contato:""},
+          eng:{nome:"Eng. Exemplo", crea:"CREA 000000/SP", art:""},
+          med:{nome:"Dr. Exemplo", crm:"CRM 000000/SP", rqe:""}
+        }
+      };
+      state.ambientes = [];
+      state.funcoes = [];
+      state.riscos = [];
+      state.avaliacoes = [];
+      state.acoes = [];
+      state.exames = [];
+      state.validacao = {tst:"Pendente", eng:"Pendente", med:"Pendente", obs:""};
+
+      // Um ambiente + uma função + riscos + ação + exames
+      const ambId = uid();
+      state.ambientes.push({
+        id:ambId,
+        setor:"ADMINISTRATIVO",
+        nome:"Sala 1º andar",
+        turno:"Seg–Sex 08:00–17:00",
+        desc:"Construção em alvenaria, piso cerâmico, ventilação/iluminação natural reforçadas por LED e ventilador.",
+        epc:"Sinalização; organização do layout; corrimão em escadas",
+        epi:"Calçado fechado",
+        evid:"foto_layout.jpg; foto_escada.jpg"
+      });
+
+      const fnId = uid();
+      state.funcoes.push({
+        id:fnId, ambId, ambLabel:"ADMINISTRATIVO • Sala 1º andar",
+        ghe:"GHE-ADM-01", cargo:"Auxiliar Administrativo", cbo:"4110-10",
+        n:2, sexo:"1/1", tempo:"Habitual / intermitente",
+        desc:"Apoio administrativo, emissão de relatórios, atendimento, gestão de documentos e plataforma."
+      });
+
+      const rk1 = uid();
+      state.riscos.push({
+        id:rk1, fnId, fnLabel:"GHE-ADM-01 • Auxiliar Administrativo • ADMINISTRATIVO • Sala 1º andar",
+        grupo:"Ergonômico", agente:"Postura por longos períodos sentado",
+        fontes:"Permanência sentado / mobiliário", danos:"Dor lombar / desconforto musculoesquelético",
+        recom:"Pausas programadas, ajustes de cadeira/mesa, ginástica laboral, alternância postural.",
+        tipoAval:"Qualitativa", sev:2, prob:2, obs:"NR-17: manter AEP atualizada."
+      });
+
+      const rk2 = uid();
+      state.riscos.push({
+        id:rk2, fnId, fnLabel:"GHE-ADM-01 • Auxiliar Administrativo • ADMINISTRATIVO • Sala 1º andar",
+        grupo:"Acidentes/Mecânico", agente:"Queda de mesmo nível",
+        fontes:"Piso escorregadio / desníveis", danos:"Lesões e traumas diversos",
+        recom:"Manter vias de circulação livres, sinalizar áreas molhadas, iluminação adequada, calçado antiderrapante.",
+        tipoAval:"Qualitativa", sev:2, prob:2, obs:"Boas práticas + inspeções."
+      });
+
+      state.acoes.push({
+        id:uid(), riscoId:rk1, riscoLabel:"Ergonômico • Postura por longos períodos sentado • GHE-ADM-01",
+        tipo:"Administrativa/Organizacional", status:"Pendente",
+        desc:"Elaborar e/ou manter atualizada a Análise Ergonômica Preliminar (AEP) e implementar pausas.",
+        resp:"Gestão/Admin", prazo:"2025-03-31", ind:"AEP assinada + registro de pausas"
+      });
+
+      state.exames.push({
+        id:uid(), fnId, fnLabel:"GHE-ADM-01 • Auxiliar Administrativo • ADMINISTRATIVO • Sala 1º andar",
+        nome:"Exame Clínico", cod:"0295", adm:"Sim", per:"Sim", freq:"Anual", dem:"Sim",
+        just:"Rastreamento geral conforme PCMSO."
+      });
+
+      writeEmpresaToForm();
+      writeValidacaoToForm();
+      save();
+      showStep("overview");
+    });
+
+    // Add Ambiente
+    $("btnAddAmb").addEventListener("click", ()=>{
+      collectEmpresa();
+      const setor = $("amb_setor").value.trim();
+      const nome  = $("amb_nome").value.trim();
+      const turno = $("amb_turno").value.trim();
+      const desc  = $("amb_desc").value.trim();
+      if(!setor || !desc){
+        alert("Informe pelo menos: Setor e Descrição do ambiente.");
+        return;
+      }
+      state.ambientes.push({
+        id:uid(), setor, nome, turno,
+        desc, epc:$("amb_epc").value.trim(), epi:$("amb_epi").value.trim(),
+        evid:$("amb_evid").value.trim()
+      });
+      ["amb_setor","amb_nome","amb_turno","amb_desc","amb_epc","amb_epi","amb_evid"].forEach(id=>$(id).value="");
+      save();
+    });
+
+    // Add Função
+    $("btnAddFn").addEventListener("click", ()=>{
+      const ambId = $("fn_amb").value;
+      const amb = state.ambientes.find(a=>a.id===ambId);
+      const ghe = $("fn_ghe").value.trim();
+      const cargo = $("fn_cargo").value.trim();
+      const cbo = $("fn_cbo").value.trim();
+      const n = $("fn_n").value;
+      const sexo = $("fn_sexo").value.trim();
+      const tempo = $("fn_tempo").value.trim();
+      const desc = $("fn_desc").value.trim();
+      if(!ambId || !ghe || !cargo || !cbo || !tempo || !desc){
+        alert("Campos obrigatórios: Ambiente, GHE, Cargo, CBO, Tempo de exposição e Descrição.");
+        return;
+      }
+      state.funcoes.push({
+        id:uid(), ambId,
+        ambLabel:`${amb.setor} • ${amb.nome||"—"}`,
+        ghe, cargo, cbo, n, sexo, tempo, desc
+      });
+      ["fn_ghe","fn_cargo","fn_cbo","fn_n","fn_sexo","fn_tempo","fn_desc"].forEach(id=>{
+        if(id==="fn_n") $(id).value=1; else $(id).value="";
+      });
+      save();
+    });
+
+    // Add Risco
+    $("btnAddRk").addEventListener("click", ()=>{
+      const fnId = $("rk_fn").value;
+      const fn = state.funcoes.find(f=>f.id===fnId);
+      const grupo = $("rk_grupo").value;
+      const agente = $("rk_agente").value.trim();
+      const fontes = $("rk_fontes").value.trim();
+      const danos = $("rk_danos").value.trim();
+      const recom = $("rk_recom").value.trim();
+      const tipoAval = $("rk_tipoaval").value;
+      const sev = $("rk_sev").value;
+      const prob = $("rk_prob").value;
+      const obs = $("rk_obs").value.trim();
+
+      if(!fnId || !grupo || !agente || !fontes || !danos || !recom || !tipoAval || !sev || !prob){
+        alert("Preencha todos os campos obrigatórios do risco.");
+        return;
+      }
+      const fnLabel = `${fn.ghe} • ${fn.cargo} • ${fn.ambLabel}`;
+      state.riscos.push({
+        id:uid(), fnId, fnLabel, grupo, agente, fontes, danos, recom, tipoAval, sev, prob, obs
+      });
+      ["rk_grupo","rk_agente","rk_fontes","rk_danos","rk_recom","rk_tipoaval","rk_sev","rk_prob","rk_obs"].forEach(id=>{
+        if(id==="rk_sev" || id==="rk_prob") $(id).value=2; else $(id).value="";
+      });
+      save();
+    });
+
+    // Add Avaliação
+    $("btnAddAv").addEventListener("click", ()=>{
+      const riscoId = $("av_risco").value;
+      const r = state.riscos.find(x=>x.id===riscoId);
+      const tipo = $("av_tipo").value;
+      const data = $("av_data").value;
+      const metodo = $("av_metodo").value.trim();
+      const inst = $("av_inst").value.trim();
+      const valor = $("av_valor").value.trim();
+      const unid = $("av_unid").value.trim();
+      const conc = $("av_conc").value;
+      const obs = $("av_obs").value.trim();
+
+      if(!riscoId || !tipo || !data || !metodo || !obs){
+        alert("Campos obrigatórios: Risco, Tipo, Data, Metodologia e Evidências/Observações.");
+        return;
+      }
+      const riscoLabel = `${r.grupo} • ${r.agente} • ${r.fnLabel}`;
+      state.avaliacoes.push({ id:uid(), riscoId, riscoLabel, tipo, data, metodo, inst, valor, unid, conc, obs });
+      ["av_tipo","av_data","av_metodo","av_inst","av_valor","av_unid","av_conc","av_obs"].forEach(id=>$(id).value="");
+      save();
+    });
+
+    // Add Ação
+    $("btnAddAc").addEventListener("click", ()=>{
+      const riscoId = $("ac_risco").value;
+      const r = state.riscos.find(x=>x.id===riscoId);
+      const tipo = $("ac_tipo").value;
+      const status = $("ac_status").value;
+      const desc = $("ac_desc").value.trim();
+      const resp = $("ac_resp").value.trim();
+      const prazo = $("ac_prazo").value;
+      const ind = $("ac_ind").value.trim();
+
+      if(!riscoId || !tipo || !status || !desc || !resp || !prazo){
+        alert("Campos obrigatórios: Risco, Tipo, Status, Descrição, Responsável e Prazo.");
+        return;
+      }
+      const riscoLabel = `${r.grupo} • ${r.agente} • ${r.fnLabel}`;
+      state.acoes.push({ id:uid(), riscoId, riscoLabel, tipo, status, desc, resp, prazo, ind });
+      ["ac_tipo","ac_status","ac_desc","ac_resp","ac_prazo","ac_ind"].forEach(id=>$(id).value="");
+      $("ac_status").value = "Pendente";
+      save();
+    });
+
+    // Add Exame
+    $("btnAddExam").addEventListener("click", ()=>{
+      const fnId = $("ex_fn").value;
+      const f = state.funcoes.find(x=>x.id===fnId);
+      const nome = $("ex_nome").value.trim();
+      const cod = $("ex_cod").value.trim();
+      const adm = $("ex_adm").value;
+      const per = $("ex_per").value;
+      const freq = $("ex_freq").value.trim();
+      const dem = $("ex_dem").value;
+      const just = $("ex_just").value.trim();
+
+      if(!fnId || !nome || !adm || !per || !dem){
+        alert("Campos obrigatórios: Função, Exame e aplicação (ADM/PER/DEM).");
+        return;
+      }
+      const fnLabel = `${f.ghe} • ${f.cargo} • ${f.ambLabel}`;
+      state.exames.push({ id:uid(), fnId, fnLabel, nome, cod, adm, per, freq, dem, just });
+      ["ex_nome","ex_cod","ex_freq","ex_just"].forEach(id=>$(id).value="");
+      save();
+    });
+
+    // Sugerir exames por risco (heurística simples editável)
+    $("btnSuggestExams").addEventListener("click", ()=>{
+      const fnId = $("ex_fn").value;
+      if(!fnId){ alert("Selecione uma função para sugerir exames."); return; }
+      const f = state.funcoes.find(x=>x.id===fnId);
+      const fnLabel = `${f.ghe} • ${f.cargo} • ${f.ambLabel}`;
+      const riscosFn = state.riscos.filter(r=>r.fnId===fnId);
+
+      const toAdd = [];
+      // Exame clínico sempre
+      toAdd.push({nome:"Exame Clínico", cod:"0295", adm:"Sim", per:"Sim", freq:"Anual", dem:"Sim", just:"Protocolo básico do PCMSO."});
+
+      const has = (kw)=> riscosFn.some(r=> (r.agente||"").toLowerCase().includes(kw) || (r.obs||"").toLowerCase().includes(kw));
+      if(has("radia") || has("rni") || has("solar")) toAdd.push({nome:"Acuidade Visual", cod:"0296", adm:"Sim", per:"Sim", freq:"Anual", dem:"Sim", just:"Exposição/associação com radiação não ionizante e riscos correlatos."});
+      if(has("altura")) toAdd.push({nome:"Avaliação Psicológica", cod:"0300", adm:"Sim", per:"Sim", freq:"Bienal", dem:"Não", just:"Trabalho em altura: aptidão e fatores psicossociais."});
+      if(has("altura")) toAdd.push({nome:"Eletrocardiograma", cod:"0530", adm:"Sim", per:"Sim", freq:"Bienal", dem:"Não", just:"Trabalho em altura: avaliação cardiovascular conforme critérios clínicos."});
+      if(has("altura") || has("confin")) toAdd.push({nome:"Espirometria", cod:"0562", adm:"Sim", per:"Sim", freq:"Bienal", dem:"Não", just:"Aptidão respiratória para condições específicas."});
+
+      // Evita duplicar
+      const exists = (nome)=> state.exames.some(e=> e.fnId===fnId && e.nome.toLowerCase()===nome.toLowerCase());
+      let added = 0;
+      toAdd.forEach(x=>{
+        if(exists(x.nome)) return;
+        state.exames.push({ id:uid(), fnId, fnLabel, ...x });
+        added++;
+      });
+      save();
+      alert(`Sugestões aplicadas: ${added} exame(s) adicionados. Você pode editar removendo/ajustando.`);
+    });
+
+    // =========================
+    // Coleta e escrita de formulários (Empresa/Validação)
+    // =========================
+    function collectEmpresa(){
+      state.empresa.cnpj = $("empresa_cnpj").value.trim();
+      state.empresa.razao = $("empresa_razao").value.trim();
+      state.empresa.fantasia = $("empresa_fantasia").value.trim();
+      state.empresa.cnae = $("empresa_cnae").value.trim();
+      state.empresa.cnaeDesc = $("empresa_cnae_desc").value.trim();
+      state.empresa.grau = $("empresa_grau").value;
+      state.empresa.end = $("empresa_end").value.trim();
+      state.empresa.cep = $("empresa_cep").value.trim();
+      state.empresa.bairro = $("empresa_bairro").value.trim();
+      state.empresa.cidade = $("empresa_cidade").value.trim();
+      state.empresa.uf = $("empresa_uf").value.trim().toUpperCase();
+      state.empresa.vigIni = $("vig_ini").value;
+      state.empresa.vigFim = $("vig_fim").value;
+      state.empresa.desc = $("empresa_desc").value.trim();
+
+      state.empresa.rt.tst.nome = $("rt_tst_nome").value.trim();
+      state.empresa.rt.tst.reg = $("rt_tst_reg").value.trim();
+      state.empresa.rt.tst.contato = $("rt_tst_contato").value.trim();
+
+      state.empresa.rt.eng.nome = $("rt_eng_nome").value.trim();
+      state.empresa.rt.eng.crea = $("rt_eng_crea").value.trim();
+      state.empresa.rt.eng.art = $("rt_eng_art").value.trim();
+
+      state.empresa.rt.med.nome = $("rt_med_nome").value.trim();
+      state.empresa.rt.med.crm = $("rt_med_crm").value.trim();
+      state.empresa.rt.med.rqe = $("rt_med_rqe").value.trim();
+    }
+    function writeEmpresaToForm(){
+      const e = state.empresa;
+      $("empresa_cnpj").value = e.cnpj||"";
+      $("empresa_razao").value = e.razao||"";
+      $("empresa_fantasia").value = e.fantasia||"";
+      $("empresa_cnae").value = e.cnae||"";
+      $("empresa_cnae_desc").value = e.cnaeDesc||"";
+      $("empresa_grau").value = e.grau||"";
+      $("empresa_end").value = e.end||"";
+      $("empresa_cep").value = e.cep||"";
+      $("empresa_bairro").value = e.bairro||"";
+      $("empresa_cidade").value = e.cidade||"";
+      $("empresa_uf").value = e.uf||"";
+      $("vig_ini").value = e.vigIni||"";
+      $("vig_fim").value = e.vigFim||"";
+      $("empresa_desc").value = e.desc||"";
+
+      $("rt_tst_nome").value = e.rt?.tst?.nome||"";
+      $("rt_tst_reg").value = e.rt?.tst?.reg||"";
+      $("rt_tst_contato").value = e.rt?.tst?.contato||"";
+
+      $("rt_eng_nome").value = e.rt?.eng?.nome||"";
+      $("rt_eng_crea").value = e.rt?.eng?.crea||"";
+      $("rt_eng_art").value = e.rt?.eng?.art||"";
+
+      $("rt_med_nome").value = e.rt?.med?.nome||"";
+      $("rt_med_crm").value = e.rt?.med?.crm||"";
+      $("rt_med_rqe").value = e.rt?.med?.rqe||"";
+    }
+
+    function collectValidacao(){
+      state.validacao.tst = $("val_tst").value;
+      state.validacao.eng = $("val_eng").value;
+      state.validacao.med = $("val_med").value;
+      state.validacao.obs = $("val_obs").value.trim();
+    }
+    function writeValidacaoToForm(){
+      $("val_tst").value = state.validacao.tst||"Pendente";
+      $("val_eng").value = state.validacao.eng||"Pendente";
+      $("val_med").value = state.validacao.med||"Pendente";
+      $("val_obs").value = state.validacao.obs||"";
+    }
+
+    // Atualiza validação ao alterar selects
+    ["val_tst","val_eng","val_med","val_obs"].forEach(id=>{
+      const el = $(id);
+      if(el) el.addEventListener("change", ()=>{ collectValidacao(); save(); });
+    });
+
+    // =========================
+    // Init
+    // =========================
+    load();
+    writeEmpresaToForm();
+    writeValidacaoToForm();
+    refresh();
+    showStep("overview");
+  </script>
+</body>
+</html>

@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>Bem-vindo ao Toriq</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap');
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Outfit', 'Segoe UI', Arial, sans-serif;
+      background-color: #E9EFEF;
+      color: #182B29;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    
+    .email-wrapper {
+      width: 100%;
+      background-color: #E9EFEF;
+      padding: 40px 20px;
+    }
+    
+    .email-container {
+      max-width: 520px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 4px 24px rgba(24, 43, 41, 0.08);
+    }
+    
+    .email-header {
+      background: linear-gradient(135deg, #0B5D4A 0%, #182B29 100%);
+      padding: 32px 40px;
+      text-align: center;
+    }
+    
+    .logo {
+      max-width: 140px;
+      height: auto;
+      filter: brightness(0) invert(1);
+    }
+    
+    .email-body {
+      padding: 40px;
+    }
+    
+    .greeting {
+      font-size: 14px;
+      color: #5c6779;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 500;
+    }
+    
+    .title {
+      font-size: 26px;
+      font-weight: 700;
+      color: #182B29;
+      margin-bottom: 24px;
+      letter-spacing: -0.02em;
+    }
+    
+    .message {
+      font-size: 15px;
+      color: #3d4852;
+      margin-bottom: 20px;
+      line-height: 1.7;
+    }
+    
+    .message strong {
+      color: #182B29;
+    }
+    
+    .highlight-box {
+      background-color: #f0fdf4;
+      border-left: 4px solid #16E17A;
+      padding: 16px 20px;
+      border-radius: 0 8px 8px 0;
+      margin: 24px 0;
+    }
+    
+    .highlight-box p {
+      font-size: 14px;
+      color: #166534;
+      margin: 0;
+    }
+    
+    .highlight-box strong {
+      font-weight: 600;
+    }
+    
+    .button-container {
+      text-align: center;
+      margin: 32px 0;
+    }
+    
+    .button {
+      display: inline-block;
+      background-color: #16E17A;
+      color: #0B5D4A !important;
+      text-decoration: none;
+      padding: 16px 40px;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 14px rgba(22, 225, 122, 0.35);
+    }
+    
+    .button:hover {
+      background-color: #12c96c;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(22, 225, 122, 0.4);
+    }
+    
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, #d5d7dc, transparent);
+      margin: 32px 0;
+    }
+    
+    .link-section {
+      background-color: #f6f8f8;
+      border-radius: 10px;
+      padding: 20px;
+      margin-top: 24px;
+    }
+    
+    .link-label {
+      font-size: 12px;
+      color: #5c6779;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    
+    .link-url {
+      font-size: 12px;
+      color: #0B5D4A;
+      word-break: break-all;
+      font-family: 'Courier New', monospace;
+      background-color: #e9efef;
+      padding: 10px 12px;
+      border-radius: 6px;
+      display: block;
+    }
+    
+    .expiry-info {
+      text-align: center;
+      margin-top: 24px;
+      padding: 16px;
+      background-color: #fff8e6;
+      border-radius: 10px;
+    }
+    
+    .expiry-info p {
+      font-size: 13px;
+      color: #92400e;
+      margin: 0;
+    }
+    
+    .expiry-info .icon {
+      font-size: 20px;
+      margin-bottom: 8px;
+    }
+    
+    .features-list {
+      margin: 24px 0;
+      padding: 0;
+      list-style: none;
+    }
+    
+    .features-list li {
+      font-size: 14px;
+      color: #3d4852;
+      padding: 8px 0;
+      padding-left: 28px;
+      position: relative;
+    }
+    
+    .features-list li::before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      color: #16E17A;
+      font-weight: bold;
+    }
+    
+    .email-footer {
+      background-color: #f6f8f8;
+      padding: 28px 40px;
+      text-align: center;
+      border-top: 1px solid #e9efef;
+    }
+    
+    .footer-text {
+      font-size: 12px;
+      color: #5c6779;
+      margin-bottom: 12px;
+      line-height: 1.6;
+    }
+    
+    .footer-links {
+      margin-top: 16px;
+    }
+    
+    .footer-links a {
+      color: #0B5D4A;
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 500;
+      margin: 0 12px;
+    }
+    
+    .footer-links a:hover {
+      color: #16E17A;
+    }
+    
+    .copyright {
+      font-size: 11px;
+      color: #9ca3af;
+      margin-top: 20px;
+    }
+    
+    /* Responsivo */
+    @media only screen and (max-width: 600px) {
+      .email-wrapper {
+        padding: 20px 12px;
+      }
+      
+      .email-header {
+        padding: 24px 20px;
+      }
+      
+      .logo {
+        max-width: 120px;
+      }
+      
+      .email-body {
+        padding: 28px 24px;
+      }
+      
+      .title {
+        font-size: 22px;
+      }
+      
+      .button {
+        padding: 14px 32px;
+        font-size: 14px;
+        width: 100%;
+      }
+      
+      .email-footer {
+        padding: 24px 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="email-wrapper">
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+      <tr>
+        <td align="center">
+          <div class="email-container">
+            <!-- Header com Logo -->
+            <div class="email-header">
+              <img src="https://xraggzqaddfiymqgrtha.supabase.co/storage/v1/object/public/assets/logo-toriq-white.png" alt="Toriq" class="logo">
+            </div>
+            
+            <!-- Corpo do Email -->
+            <div class="email-body">
+              <p class="greeting">Bem-vindo!</p>
+              <h1 class="title">Você foi convidado para o Toriq</h1>
+              
+              <p class="message">
+                Você recebeu um convite para acessar a plataforma <strong>Toriq</strong> com o email <strong>{{ .Email }}</strong>.
+              </p>
+              
+              <div class="highlight-box">
+                <p>
+                  <strong>Próximo passo:</strong> Clique no botão abaixo para definir sua senha e começar a usar o sistema.
+                </p>
+              </div>
+              
+              <p class="message">
+                Com o Toriq você terá acesso a:
+              </p>
+              
+              <ul class="features-list">
+                <li>Gestão completa de treinamentos</li>
+                <li>Controle de EPIs e equipamentos</li>
+                <li>Documentos e certificados digitais</li>
+                <li>Relatórios e indicadores em tempo real</li>
+              </ul>
+              
+              <!-- Botão Principal -->
+              <div class="button-container">
+                <a href="{{ .ConfirmationURL }}" class="button">Definir Minha Senha</a>
+              </div>
+              
+              <!-- Informação de Expiração -->
+              <div class="expiry-info">
+                <div class="icon">⏱️</div>
+                <p>Este link expira em <strong>24 horas</strong></p>
+              </div>
+              
+              <div class="divider"></div>
+              
+              <!-- Link Alternativo -->
+              <div class="link-section">
+                <p class="link-label">Ou copie e cole este link no seu navegador:</p>
+                <span class="link-url">{{ .ConfirmationURL }}</span>
+              </div>
+            </div>
+            
+            <!-- Footer -->
+            <div class="email-footer">
+              <p class="footer-text">
+                Este é um e-mail automático enviado pelo sistema Toriq.<br>
+                Por favor, não responda a esta mensagem.
+              </p>
+              
+              <div class="footer-links">
+                <a href="https://toriq.com.br/suporte">Suporte</a>
+                <a href="https://toriq.com.br/privacidade">Privacidade</a>
+                <a href="https://toriq.com.br/termos">Termos de Uso</a>
+              </div>
+              
+              <p class="copyright">
+                © 2026 Toriq • Todos os direitos reservados
+              </p>
+            </div>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </div>
+</body>
+</html>

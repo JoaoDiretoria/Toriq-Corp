@@ -1,0 +1,224 @@
+/* Landing Page Specific Styles - TORIQ Brand */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
+/* Landing page wrapper - applies dark theme */
+.landing-page {
+  /* TORIQ Brand Colors */
+  --spring-green: 158 83% 48%;
+  --dark-green: 168 28% 13%;
+  --green: 161 79% 20%;
+  --soft-white: 180 10% 93%;
+  --gray: 0 0% 17%;
+  --black: 0 0% 0%;
+
+  /* Semantic mappings for landing */
+  --background: 168 28% 13%;
+  --foreground: 180 10% 93%;
+
+  --card: 168 28% 16%;
+  --card-foreground: 180 10% 93%;
+
+  --popover: 168 28% 13%;
+  --popover-foreground: 180 10% 93%;
+
+  --primary: 158 83% 48%;
+  --primary-foreground: 168 28% 8%;
+
+  --secondary: 161 79% 20%;
+  --secondary-foreground: 180 10% 93%;
+
+  --muted: 168 28% 20%;
+  --muted-foreground: 180 10% 70%;
+
+  --accent: 158 83% 48%;
+  --accent-foreground: 168 28% 8%;
+
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 40% 98%;
+
+  --border: 168 20% 25%;
+  --input: 168 20% 25%;
+  --ring: 158 83% 48%;
+
+  /* Custom effects */
+  --glow-primary: 0 0 60px hsla(158, 83%, 48%, 0.4);
+  --glow-subtle: 0 0 30px hsla(158, 83%, 48%, 0.2);
+  --gradient-hero: linear-gradient(135deg, hsl(168 28% 8%) 0%, hsl(168 28% 13%) 50%, hsl(161 79% 15%) 100%);
+  --gradient-card: linear-gradient(180deg, hsla(158, 83%, 48%, 0.08) 0%, transparent 100%);
+  --gradient-text: linear-gradient(90deg, hsl(158 83% 48%) 0%, hsl(158 83% 65%) 100%);
+
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: 'Outfit', sans-serif;
+}
+
+.landing-page h1,
+.landing-page h2,
+.landing-page h3,
+.landing-page h4,
+.landing-page h5,
+.landing-page h6 {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+}
+
+/* Text gradient */
+.landing-page .text-gradient {
+  background: var(--gradient-text);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Glow effects */
+.landing-page .glow-primary {
+  box-shadow: var(--glow-primary);
+}
+
+.landing-page .glow-subtle {
+  box-shadow: var(--glow-subtle);
+}
+
+/* Glass effects */
+.landing-page .glass {
+  background: hsla(168, 28%, 13%, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid hsla(158, 83%, 48%, 0.1);
+}
+
+.landing-page .glass-card {
+  background: var(--gradient-card);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid hsla(158, 83%, 48%, 0.15);
+}
+
+/* Hero gradient */
+.landing-page .hero-gradient {
+  background: var(--gradient-hero);
+}
+
+/* Noise overlay */
+.landing-page .noise-overlay {
+  position: relative;
+}
+
+.landing-page .noise-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.03;
+  pointer-events: none;
+  mix-blend-mode: overlay;
+}
+
+/* Animations */
+.landing-page .animate-float {
+  animation: lp-float 6s ease-in-out infinite;
+}
+
+.landing-page .animate-pulse-slow {
+  animation: lp-pulse-slow 4s ease-in-out infinite;
+}
+
+.landing-page .animate-fade-up {
+  animation: lp-fade-up 0.8s ease-out forwards;
+}
+
+.landing-page .animate-fade-in {
+  animation: lp-fade-in 0.6s ease-out forwards;
+}
+
+.landing-page .animate-scale-in {
+  animation: lp-scale-in 0.5s ease-out forwards;
+}
+
+@keyframes lp-float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-20px);
+  }
+}
+
+@keyframes lp-pulse-slow {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes lp-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes lp-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes lp-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Dark lighter color */
+.landing-page .dark-lighter {
+  background-color: hsl(168 28% 18%);
+}
+
+.landing-page .bg-dark-lighter\/50 {
+  background-color: hsla(168, 28%, 18%, 0.5);
+}
+
+.landing-page .bg-dark-lighter\/30 {
+  background-color: hsla(168, 28%, 18%, 0.3);
+}
+
+.landing-page .via-dark-lighter\/50 {
+  --tw-gradient-via: hsla(168, 28%, 18%, 0.5);
+}
+
+.landing-page .via-dark-lighter\/30 {
+  --tw-gradient-via: hsla(168, 28%, 18%, 0.3);
+}
+
+/* Scrollbar styling for landing page */
+.landing-page::-webkit-scrollbar {
+  width: 8px;
+}
+
+.landing-page::-webkit-scrollbar-track {
+  background: hsl(168 28% 10%);
+}
+
+.landing-page::-webkit-scrollbar-thumb {
+  background: hsl(158 83% 48% / 0.3);
+  border-radius: 4px;
+}
+
+.landing-page::-webkit-scrollbar-thumb:hover {
+  background: hsl(158 83% 48% / 0.5);
+}

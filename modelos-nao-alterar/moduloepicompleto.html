@@ -1,0 +1,1290 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>SST • Controle Completo de EPI (Estoque, Entrega, Validade, Ficha e Assinatura)</title>
+  <style>
+    :root{
+      --bg:#0b1220;
+      --card:#0f1b33;
+      --card2:#0c162b;
+      --text:#eaf0ff;
+      --muted:#9db0d6;
+      --line:rgba(255,255,255,.12);
+      --brand:#6aa8ff;
+      --ok:#34d399;
+      --warn:#fbbf24;
+      --bad:#fb7185;
+      --shadow:0 16px 60px rgba(0,0,0,.45);
+      --r:16px;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family:var(--sans); color:var(--text);
+      background:
+        radial-gradient(900px 600px at 15% 10%, rgba(106,168,255,.22), transparent 55%),
+        radial-gradient(900px 600px at 80% 20%, rgba(52,211,153,.16), transparent 55%),
+        radial-gradient(900px 600px at 50% 90%, rgba(251,191,36,.12), transparent 55%),
+        var(--bg);
+    }
+    header{
+      position:sticky; top:12px; z-index:10;
+      max-width:1500px; margin:0 auto; padding:14px;
+      border:1px solid var(--line);
+      border-radius:var(--r);
+      background:linear-gradient(180deg, rgba(15,27,51,.92), rgba(15,27,51,.70));
+      box-shadow:var(--shadow);
+      backdrop-filter: blur(10px);
+      display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+    }
+    .brand{display:flex; align-items:center; gap:12px}
+    .logo{
+      width:42px;height:42px;border-radius:14px;
+      background:conic-gradient(from 210deg, var(--brand), var(--ok), var(--warn), var(--brand));
+      box-shadow:0 12px 28px rgba(106,168,255,.18);
+    }
+    h1{margin:0; font-size:16px}
+    .sub{margin:2px 0 0; font-size:12px; color:var(--muted); line-height:1.25}
+    .actions{display:flex; gap:10px; flex-wrap:wrap}
+    button{
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.06);
+      color:var(--text);
+      padding:10px 12px;
+      border-radius:12px;
+      cursor:pointer;
+      font-weight:900;
+      display:inline-flex; align-items:center; gap:8px;
+      transition:.15s ease;
+      white-space:nowrap;
+    }
+    button:hover{transform:translateY(-1px); background:rgba(255,255,255,.08)}
+    .primary{border-color:rgba(106,168,255,.55); background:rgba(106,168,255,.14)}
+    .danger{border-color:rgba(251,113,133,.55); background:rgba(251,113,133,.10)}
+    .okbtn{border-color:rgba(52,211,153,.55); background:rgba(52,211,153,.10)}
+    .pill{
+      font-size:12px; color:var(--muted);
+      border:1px solid var(--line);
+      padding:6px 10px; border-radius:999px;
+      background:rgba(255,255,255,.04);
+      display:inline-flex; align-items:center; gap:8px;
+    }
+    .dot{width:10px;height:10px;border-radius:999px;background:#94a3b8}
+    .dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.bad{background:var(--bad)}
+
+    .wrap{max-width:1500px; margin:0 auto; padding:16px 14px 34px}
+    .grid{display:grid; gap:14px; grid-template-columns: 360px minmax(0,1fr) 460px;}
+    @media (max-width: 1280px){ .grid{grid-template-columns: 360px 1fr} .right{grid-column:1/-1} }
+    @media (max-width: 980px){ .grid{grid-template-columns: 1fr} header{position:relative; top:auto} }
+
+    .card{
+      border:1px solid var(--line);
+      border-radius:var(--r);
+      background:linear-gradient(180deg, rgba(15,27,51,.86), rgba(12,22,43,.70));
+      box-shadow:var(--shadow);
+      overflow:hidden;
+      min-height: 0;
+    }
+    .hd{
+      padding:14px;
+      border-bottom:1px solid var(--line);
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      background:rgba(255,255,255,.03);
+    }
+    .hd h2{margin:0; font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted)}
+    .bd{padding:14px; overflow:auto; min-height:0}
+    .muted{color:var(--muted); font-size:12px; line-height:1.35}
+    .divider{height:1px; background:var(--line); margin:12px 0}
+
+    .tabs{display:flex; gap:8px; flex-wrap:wrap}
+    .tab{
+      padding:8px 10px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.04);
+      color:var(--muted);
+      cursor:pointer;
+      font-weight:900;
+      font-size:12px;
+    }
+    .tab.active{border-color:rgba(106,168,255,.55); background:rgba(106,168,255,.12); color:var(--text)}
+
+    .kpis{display:grid; grid-template-columns: repeat(4, 1fr); gap:10px}
+    @media (max-width: 980px){ .kpis{grid-template-columns: repeat(2, 1fr)} }
+    .kpi{padding:12px; border:1px solid var(--line); border-radius:14px; background:rgba(255,255,255,.04)}
+    .kpi .n{font-size:20px; font-weight:1000}
+    .kpi .t{margin-top:2px; font-size:11px; color:var(--muted)}
+
+    .form{display:grid; grid-template-columns: repeat(12, 1fr); gap:10px}
+    .c12{grid-column:1/-1}
+    .c6{grid-column: span 6}
+    .c4{grid-column: span 4}
+    .c3{grid-column: span 3}
+    .c2{grid-column: span 2}
+    @media (max-width: 980px){ .c6,.c4,.c3,.c2{grid-column:1/-1} }
+
+    .field{display:flex; flex-direction:column; gap:6px}
+    label{font-size:12px; color:var(--muted); font-weight:900}
+    input, select, textarea{
+      width:100%;
+      padding:10px 10px;
+      border-radius:12px;
+      border:1px solid var(--line);
+      background:rgba(10,18,36,.55);
+      color:var(--text);
+      outline:none;
+      font-size:13px;
+    }
+    textarea{min-height:90px; resize:vertical}
+    .req{color:var(--warn); font-weight:1000; margin-left:4px}
+    .rightRow{display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap; margin-top:10px}
+
+    .table{
+      width:100%; border-collapse:separate; border-spacing:0;
+      border:1px solid var(--line);
+      border-radius:14px; overflow:hidden;
+      background:rgba(255,255,255,.03);
+    }
+    .table th,.table td{padding:10px; border-bottom:1px solid var(--line); font-size:12.5px; vertical-align:top}
+    .table th{background:rgba(255,255,255,.04); color:var(--muted); text-transform:uppercase; letter-spacing:.08em; font-size:11px}
+    .table tr:last-child td{border-bottom:none}
+    .mini{font-size:11px; color:var(--muted)}
+    .mono{font-family:var(--mono)}
+
+    .badge{
+      font-size:11px; padding:5px 8px; border-radius:999px;
+      border:1px solid var(--line); color:var(--muted);
+      background:rgba(255,255,255,.03);
+      display:inline-flex; align-items:center; gap:6px;
+      white-space:nowrap;
+    }
+    .badge.ok{border-color:rgba(52,211,153,.40); color:var(--ok); background:rgba(52,211,153,.08)}
+    .badge.warn{border-color:rgba(251,191,36,.45); color:var(--warn); background:rgba(251,191,36,.10)}
+    .badge.bad{border-color:rgba(251,113,133,.45); color:var(--bad); background:rgba(251,113,133,.10)}
+
+    .search{
+      display:flex; gap:10px; flex-wrap:wrap;
+    }
+
+    /* Assinatura */
+    .sigBox{
+      border:1px dashed rgba(255,255,255,.22);
+      background:rgba(0,0,0,.18);
+      border-radius:14px;
+      padding:10px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    canvas{
+      width:100%;
+      height:180px;
+      background:rgba(255,255,255,.04);
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:12px;
+      touch-action:none;
+    }
+
+    .callout{
+      padding:10px 12px;
+      border-radius:14px;
+      border:1px dashed rgba(255,255,255,.18);
+      background:rgba(255,255,255,.03);
+      font-size:12px; color:var(--muted);
+      line-height:1.35;
+    }
+    .hidden{display:none !important}
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="logo"></div>
+    <div>
+      <h1>Controle de EPI • Estoque, Entrega, Validade, Ficha e Assinatura</h1>
+      <div class="sub">Cadastro EPI/CA → Compras/Lotes → Estoque → Entrega → Devolução/Substituição → Alertas de validade → Ficha assinada</div>
+    </div>
+  </div>
+  <div class="actions">
+    <span class="pill"><span class="dot" id="dotStatus"></span> <span id="txtStatus">Rascunho</span></span>
+    <button id="btnSave">💾 Salvar</button>
+    <button id="btnExport">⬇️ Exportar JSON</button>
+    <button id="btnPrint" class="primary">🖨️ Imprimir Ficha</button>
+    <button id="btnReset" class="danger">🧹 Limpar</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="grid">
+
+    <!-- LEFT: navegação e indicadores -->
+    <section class="card">
+      <div class="hd">
+        <h2>Painel</h2>
+        <span class="badge" id="sysId">SISTEMA: EPI-01</span>
+      </div>
+      <div class="bd">
+        <div class="kpis">
+          <div class="kpi"><div class="n" id="kEpis">0</div><div class="t">EPIs cadastrados</div></div>
+          <div class="kpi"><div class="n" id="kLotes">0</div><div class="t">lotes em estoque</div></div>
+          <div class="kpi"><div class="n" id="kEntregas">0</div><div class="t">entregas</div></div>
+          <div class="kpi"><div class="n" id="kAlertas">0</div><div class="t">alertas validade</div></div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="tabs" id="tabs">
+          <div class="tab active" data-tab="epi">1) Cadastro de EPI</div>
+          <div class="tab" data-tab="estoque">2) Estoque/Lotes</div>
+          <div class="tab" data-tab="entrega">3) Entrega/Devolução</div>
+          <div class="tab" data-tab="ficha">4) Ficha + Assinatura</div>
+          <div class="tab" data-tab="alertas">5) Alertas</div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="callout">
+          <b>Boas práticas (NR-06):</b><br/>
+          • manter registro de entrega e treinamento/orientação de uso, guarda e conservação;<br/>
+          • controle por CA, validade, lote e fornecedor;<br/>
+          • rastreabilidade por trabalhador, função e setor;<br/>
+          • substituição por dano/perda/validade.
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="muted">
+          <b>Regras sugeridas:</b><br/>
+          • alerta “a vencer” com 60/30/7 dias;<br/>
+          • impedir entrega de lote vencido;<br/>
+          • exigir assinatura do trabalhador na ficha de EPI.
+        </div>
+      </div>
+    </section>
+
+    <!-- CENTER: telas -->
+    <section class="card">
+      <div class="hd">
+        <h2 id="panelTitle">Cadastro de EPI</h2>
+        <span class="pill">Completude: <b id="pct">0%</b></span>
+      </div>
+      <div class="bd">
+
+        <!-- 1) Cadastro EPI -->
+        <section id="sec_epi">
+          <div class="muted">Cadastre o item EPI com CA, fabricante e regras de validade/uso. (O estoque será por <b>lote</b>.)</div>
+          <div class="divider"></div>
+
+          <div class="form">
+            <div class="field c6">
+              <label>Nome do EPI <span class="req">*</span></label>
+              <input id="epi_nome" placeholder="Ex.: Luva nitrílica / Capacete / Óculos de segurança"/>
+            </div>
+            <div class="field c3">
+              <label>CA <span class="req">*</span></label>
+              <input id="epi_ca" placeholder="Ex.: 12345"/>
+            </div>
+            <div class="field c3">
+              <label>Tipo</label>
+              <select id="epi_tipo">
+                <option>Proteção das mãos</option>
+                <option>Proteção dos olhos/face</option>
+                <option>Proteção da cabeça</option>
+                <option>Proteção respiratória</option>
+                <option>Proteção auditiva</option>
+                <option>Proteção dos pés</option>
+                <option>Proteção do corpo</option>
+                <option>Outro</option>
+              </select>
+            </div>
+
+            <div class="field c6">
+              <label>Fabricante</label>
+              <input id="epi_fab" placeholder="Ex.: 3M / Ansell / MSA"/>
+            </div>
+            <div class="field c6">
+              <label>Modelo/Descrição</label>
+              <input id="epi_modelo" placeholder="Ex.: PFF2 com válvula / Óculos incolor antiembaçante"/>
+            </div>
+
+            <div class="field c4">
+              <label>Vida útil (dias) <span class="mini">(opcional)</span></label>
+              <input id="epi_vida" type="number" min="0" placeholder="Ex.: 90"/>
+            </div>
+            <div class="field c4">
+              <label>Validade por lote? <span class="req">*</span></label>
+              <select id="epi_val_lote">
+                <option value="sim">Sim (validade é do lote)</option>
+                <option value="nao">Não (controlar só vida útil)</option>
+              </select>
+            </div>
+            <div class="field c4">
+              <label>Critério de substituição</label>
+              <select id="epi_subst">
+                <option>Por validade / vida útil / dano</option>
+                <option>Somente por dano</option>
+                <option>Somente por validade</option>
+                <option>Outro</option>
+              </select>
+            </div>
+
+            <div class="field c12">
+              <label>Orientações de uso, guarda e conservação <span class="req">*</span></label>
+              <textarea id="epi_orient" placeholder="Descreva instruções que irão constar na ficha (uso correto, higienização, armazenamento, troca)."></textarea>
+            </div>
+          </div>
+
+          <div class="rightRow">
+            <button id="btnAddEpi" class="okbtn">➕ Cadastrar EPI</button>
+          </div>
+
+          <div class="divider"></div>
+          <div class="search">
+            <div class="field" style="flex:1">
+              <label>Buscar EPI</label>
+              <input id="qEpi" placeholder="Digite nome/CA/fabricante..."/>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+          <table class="table" id="tblEpi">
+            <thead>
+              <tr>
+                <th style="width:22%">EPI</th>
+                <th style="width:12%">CA</th>
+                <th style="width:18%">Tipo</th>
+                <th>Orientações</th>
+                <th style="width:12%">Ações</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </section>
+
+        <!-- 2) Estoque -->
+        <section id="sec_estoque" class="hidden">
+          <div class="muted">
+            Controle de estoque por <b>lote</b>: entrada, quantidade, validade, fornecedor e custo.
+            O sistema bloqueia entrega de lote vencido e gera alertas.
+          </div>
+          <div class="divider"></div>
+
+          <div class="form">
+            <div class="field c6">
+              <label>EPI <span class="req">*</span></label>
+              <select id="st_epi"></select>
+            </div>
+            <div class="field c3">
+              <label>Lote <span class="req">*</span></label>
+              <input id="st_lote" placeholder="Ex.: LT-2025-001"/>
+            </div>
+            <div class="field c3">
+              <label>Quantidade <span class="req">*</span></label>
+              <input id="st_qtd" type="number" min="1" value="1"/>
+            </div>
+
+            <div class="field c4">
+              <label>Data de entrada <span class="req">*</span></label>
+              <input id="st_entrada" type="date"/>
+            </div>
+            <div class="field c4">
+              <label>Validade do lote <span class="req">*</span></label>
+              <input id="st_validade" type="date"/>
+            </div>
+            <div class="field c4">
+              <label>Fornecedor</label>
+              <input id="st_forn" placeholder="Razão social / nome"/>
+            </div>
+
+            <div class="field c4">
+              <label>Custo unitário (opcional)</label>
+              <input id="st_custo" type="number" min="0" step="0.01" placeholder="0,00"/>
+            </div>
+            <div class="field c4">
+              <label>Local de armazenamento</label>
+              <input id="st_local" placeholder="Almoxarifado / Armário / Sala"/>
+            </div>
+            <div class="field c4">
+              <label>Observações</label>
+              <input id="st_obs" placeholder="Ex.: caixa avariada; divergência; etc."/>
+            </div>
+          </div>
+
+          <div class="rightRow">
+            <button id="btnAddLote" class="okbtn">➕ Registrar lote</button>
+          </div>
+
+          <div class="divider"></div>
+          <div class="search">
+            <div class="field" style="flex:1">
+              <label>Buscar lote</label>
+              <input id="qLote" placeholder="EPI/CA/Lote/Fornecedor..."/>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+          <table class="table" id="tblLotes">
+            <thead>
+              <tr>
+                <th style="width:24%">EPI</th>
+                <th style="width:14%">Lote</th>
+                <th style="width:10%">Qtd</th>
+                <th style="width:16%">Entrada</th>
+                <th style="width:16%">Validade</th>
+                <th>Status</th>
+                <th style="width:12%">Ações</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </section>
+
+        <!-- 3) Entrega -->
+        <section id="sec_entrega" class="hidden">
+          <div class="muted">
+            Registre entrega, devolução, troca e motivo. A entrega baixa estoque do lote e alimenta a <b>Ficha de EPI</b>.
+          </div>
+          <div class="divider"></div>
+
+          <div class="form">
+            <div class="field c6">
+              <label>Trabalhador <span class="req">*</span></label>
+              <input id="en_nome" placeholder="Nome completo"/>
+            </div>
+            <div class="field c3">
+              <label>Matrícula/CPF</label>
+              <input id="en_id" placeholder="Matrícula ou CPF"/>
+            </div>
+            <div class="field c3">
+              <label>Setor/Função <span class="req">*</span></label>
+              <input id="en_setor" placeholder="Setor • Função"/>
+            </div>
+
+            <div class="field c6">
+              <label>EPI (lote disponível) <span class="req">*</span></label>
+              <select id="en_lote"></select>
+              <div class="mini">Somente lotes com saldo e não vencidos aparecem aqui.</div>
+            </div>
+            <div class="field c3">
+              <label>Quantidade <span class="req">*</span></label>
+              <input id="en_qtd" type="number" min="1" value="1"/>
+            </div>
+            <div class="field c3">
+              <label>Data <span class="req">*</span></label>
+              <input id="en_data" type="date"/>
+            </div>
+
+            <div class="field c4">
+              <label>Tipo de movimentação <span class="req">*</span></label>
+              <select id="en_tipo">
+                <option value="entrega">Entrega</option>
+                <option value="devolucao">Devolução</option>
+                <option value="troca">Troca</option>
+              </select>
+            </div>
+            <div class="field c4">
+              <label>Motivo</label>
+              <select id="en_motivo">
+                <option>Rotina</option>
+                <option>Dano</option>
+                <option>Perda</option>
+                <option>Validade</option>
+                <option>Substituição por troca de função</option>
+                <option>Outro</option>
+              </select>
+            </div>
+            <div class="field c4">
+              <label>Treinamento/orientação realizada?</label>
+              <select id="en_trein">
+                <option>Sim</option>
+                <option>Não</option>
+              </select>
+            </div>
+
+            <div class="field c12">
+              <label>Observações (EPI entregue, numeração, ajuste, etc.)</label>
+              <textarea id="en_obs" placeholder="Ex.: tamanho M; ajuste de tiras; orientado a higienizar diariamente."></textarea>
+            </div>
+          </div>
+
+          <div class="rightRow">
+            <button id="btnAddEntrega" class="okbtn">➕ Registrar movimentação</button>
+          </div>
+
+          <div class="divider"></div>
+          <div class="search">
+            <div class="field" style="flex:1">
+              <label>Buscar entregas</label>
+              <input id="qEnt" placeholder="Trabalhador/CPF/EPI/CA/Lote..."/>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+          <table class="table" id="tblEntregas">
+            <thead>
+              <tr>
+                <th style="width:18%">Trabalhador</th>
+                <th style="width:16%">Setor/Função</th>
+                <th>EPI/Lote</th>
+                <th style="width:8%">Qtd</th>
+                <th style="width:12%">Data</th>
+                <th style="width:10%">Tipo</th>
+                <th style="width:10%">Trein.</th>
+                <th style="width:10%">Ações</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </section>
+
+        <!-- 4) Ficha + assinatura -->
+        <section id="sec_ficha" class="hidden">
+          <div class="muted">
+            Gere a ficha por trabalhador (histórico de entregas) e capture assinatura (mouse/touch).
+          </div>
+          <div class="divider"></div>
+
+          <div class="form">
+            <div class="field c6">
+              <label>Selecionar trabalhador (por nome/ID) <span class="req">*</span></label>
+              <select id="fi_trab"></select>
+            </div>
+            <div class="field c3">
+              <label>Data de emissão</label>
+              <input id="fi_data" type="date"/>
+            </div>
+            <div class="field c3">
+              <label>Responsável pela entrega</label>
+              <input id="fi_resp" placeholder="Nome do TST/almoxarife"/>
+            </div>
+
+            <div class="field c12">
+              <label>Declaração (texto padrão)</label>
+              <textarea id="fi_decl">
+Declaro que recebi os EPIs descritos, em perfeito estado, com orientações de uso, guarda e conservação, comprometendo-me a utilizá-los conforme instruções e comunicar imediatamente qualquer dano/perda/necessidade de substituição.
+              </textarea>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="callout">
+            <b>Importante:</b> Para validade jurídica, recomenda-se: identificação do trabalhador, descrição completa do EPI (CA, modelo),
+            data, quantidade, assinatura do trabalhador e do responsável, além do registro de orientação/treinamento (quando aplicável).
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="sigBox">
+            <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:center">
+              <div class="muted"><b>Assinatura do trabalhador</b> (canvas)</div>
+              <div style="display:flex; gap:10px; flex-wrap:wrap">
+                <button id="btnClearSig" class="danger">✖ Limpar</button>
+                <button id="btnSaveSig" class="okbtn">✅ Salvar assinatura</button>
+              </div>
+            </div>
+            <canvas id="sig"></canvas>
+            <div class="mini">Dica: em produção, salve como imagem (base64) + hash + timestamp.</div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="muted"><b>Prévia da ficha (texto)</b></div>
+          <div class="divider"></div>
+          <textarea id="fi_preview" class="mono" readonly style="min-height:320px"></textarea>
+        </section>
+
+        <!-- 5) Alertas -->
+        <section id="sec_alertas" class="hidden">
+          <div class="muted">
+            Alertas automáticos: lotes vencidos, a vencer e estoque baixo. Ajuste as janelas de alerta.
+          </div>
+          <div class="divider"></div>
+
+          <div class="form">
+            <div class="field c4">
+              <label>Alertar “a vencer” (dias)</label>
+              <input id="al_antes" type="number" min="1" value="60"/>
+            </div>
+            <div class="field c4">
+              <label>Estoque baixo (≤)</label>
+              <input id="al_min" type="number" min="0" value="5"/>
+            </div>
+            <div class="field c4">
+              <label>Bloquear entrega de vencidos</label>
+              <select id="al_bloq">
+                <option value="sim">Sim</option>
+                <option value="nao">Não</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+          <table class="table" id="tblAlertas">
+            <thead>
+              <tr>
+                <th>Tipo</th>
+                <th>EPI/Lote</th>
+                <th style="width:16%">Validade</th>
+                <th style="width:10%">Saldo</th>
+                <th>Recomendação</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </section>
+
+      </div>
+    </section>
+
+    <!-- RIGHT: validações e relatórios -->
+    <section class="card right">
+      <div class="hd">
+        <h2>Validação + Exportação</h2>
+        <span class="pill"><span class="dot" id="dotReady"></span> <span id="txtReady">Base incompleta</span></span>
+      </div>
+      <div class="bd">
+        <div class="muted">Checklist mínimo (anti-retrabalho e rastreabilidade).</div>
+        <div class="divider"></div>
+
+        <table class="table">
+          <thead>
+            <tr><th>Item</th><th style="width:140px">Status</th><th>Regra</th></tr>
+          </thead>
+          <tbody id="tblChecks"></tbody>
+        </table>
+
+        <div class="divider"></div>
+
+        <div class="muted"><b>Observações do sistema:</b></div>
+        <div class="divider"></div>
+        <div class="callout" id="sysNotes">
+          • Cadastre EPIs com CA e orientações.<br/>
+          • Registre lotes com validade e saldo.<br/>
+          • Entregas vinculam trabalhador ↔ lote, baixando estoque.<br/>
+          • Ficha consolida histórico e requer assinatura.
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<script>
+  // =============================
+  // Helpers + State
+  // =============================
+  const STORE = "sst_epi_control_v1";
+  const $ = (id)=>document.getElementById(id);
+  const uid = ()=> Math.random().toString(16).slice(2) + Date.now().toString(16);
+  const esc = (s="")=> String(s).replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m]));
+
+  const state = load() ?? {
+    epis: [],    // {id,nome,ca,tipo,fab,modelo,vida,valLote,subst,orient}
+    lotes: [],   // {id,epiId,epiLabel,ca,lote,qtd,saldo,entrada,validade,forn,custo,local,obs}
+    movs: [],    // {id,trabNome,trabId,setor,lotId,epiLabel,ca,lote,qtd,data,tipo,motivo,trein,obs}
+    trab: [],    // {id,nome,doc,setor}
+    ass: {},     // {trabKey: {img,data}}
+    rules: {antes:60, min:5, bloq:"sim"},
+  };
+
+  function save(){ localStorage.setItem(STORE, JSON.stringify(state)); renderAll(); }
+  function load(){ try{ const r=localStorage.getItem(STORE); return r?JSON.parse(r):null; }catch(e){ return null; } }
+  function resetAll(){ localStorage.removeItem(STORE); location.reload(); }
+
+  // =============================
+  // Tabs
+  // =============================
+  const tabEls = Array.from(document.querySelectorAll(".tab"));
+  const secMap = {
+    epi: $("sec_epi"),
+    estoque: $("sec_estoque"),
+    entrega: $("sec_entrega"),
+    ficha: $("sec_ficha"),
+    alertas: $("sec_alertas")
+  };
+  const titleMap = {
+    epi:"Cadastro de EPI",
+    estoque:"Estoque/Lotes",
+    entrega:"Entrega/Devolução",
+    ficha:"Ficha + Assinatura",
+    alertas:"Alertas"
+  };
+  function setTab(key){
+    tabEls.forEach(t=>t.classList.toggle("active", t.dataset.tab===key));
+    Object.entries(secMap).forEach(([k,el])=> el.classList.toggle("hidden", k!==key));
+    $("panelTitle").textContent = titleMap[key] || "Controle de EPI";
+  }
+  $("tabs").addEventListener("click", (e)=>{
+    const t = e.target.closest(".tab");
+    if(!t) return;
+    setTab(t.dataset.tab);
+  });
+
+  // =============================
+  // Defaults
+  // =============================
+  function todayISO(){ return new Date().toISOString().slice(0,10); }
+  $("st_entrada").value = $("st_entrada").value || todayISO();
+  $("en_data").value = $("en_data").value || todayISO();
+  $("fi_data").value = $("fi_data").value || todayISO();
+
+  // =============================
+  // CRUD: EPI
+  // =============================
+  $("btnAddEpi").addEventListener("click", ()=>{
+    const nome = $("epi_nome").value.trim();
+    const ca = $("epi_ca").value.trim();
+    const orient = $("epi_orient").value.trim();
+    if(!nome || !ca || !orient){
+      alert("Obrigatório: Nome do EPI, CA e Orientações.");
+      return;
+    }
+    // Evita duplicar CA+nome
+    if(state.epis.some(e=>e.ca===ca && e.nome.toLowerCase()===nome.toLowerCase())){
+      alert("Este EPI (nome+CA) já está cadastrado.");
+      return;
+    }
+    state.epis.push({
+      id: uid(),
+      nome, ca,
+      tipo: $("epi_tipo").value,
+      fab: $("epi_fab").value.trim(),
+      modelo: $("epi_modelo").value.trim(),
+      vida: Number($("epi_vida").value||0),
+      valLote: $("epi_val_lote").value,
+      subst: $("epi_subst").value,
+      orient
+    });
+    ["epi_nome","epi_ca","epi_fab","epi_modelo","epi_vida","epi_orient"].forEach(id=>$(id).value="");
+    $("epi_tipo").selectedIndex=0;
+    $("epi_val_lote").value="sim";
+    $("epi_subst").selectedIndex=0;
+    save();
+  });
+
+  // =============================
+  // CRUD: Lotes/Estoque
+  // =============================
+  $("btnAddLote").addEventListener("click", ()=>{
+    const epiId = $("st_epi").value;
+    const epi = state.epis.find(e=>e.id===epiId);
+    const lote = $("st_lote").value.trim();
+    const qtd = Number($("st_qtd").value||0);
+    const entrada = $("st_entrada").value;
+    const validade = $("st_validade").value;
+    if(!epiId || !lote || !(qtd>0) || !entrada || !validade){
+      alert("Obrigatório: EPI, Lote, Quantidade, Entrada e Validade.");
+      return;
+    }
+    if(new Date(validade) < new Date(entrada)){
+      alert("Validade não pode ser anterior à entrada.");
+      return;
+    }
+    // não duplicar lote do mesmo EPI
+    if(state.lotes.some(l=>l.epiId===epiId && l.lote.toLowerCase()===lote.toLowerCase())){
+      alert("Este lote já existe para este EPI.");
+      return;
+    }
+    state.lotes.push({
+      id: uid(),
+      epiId,
+      epiLabel: epi?.nome || "—",
+      ca: epi?.ca || "",
+      lote,
+      qtd,
+      saldo: qtd,
+      entrada,
+      validade,
+      forn: $("st_forn").value.trim(),
+      custo: Number($("st_custo").value||0),
+      local: $("st_local").value.trim(),
+      obs: $("st_obs").value.trim()
+    });
+    ["st_lote","st_qtd","st_forn","st_custo","st_local","st_obs"].forEach(id=>$(id).value="");
+    $("st_qtd").value=1;
+    $("st_entrada").value=todayISO();
+    save();
+  });
+
+  // =============================
+  // Movimentações (Entrega/Devolução/Troca)
+  // =============================
+  $("btnAddEntrega").addEventListener("click", ()=>{
+    const nome = $("en_nome").value.trim();
+    const trabId = $("en_id").value.trim();
+    const setor = $("en_setor").value.trim();
+    const lotId = $("en_lote").value;
+    const lote = state.lotes.find(l=>l.id===lotId);
+    const qtd = Number($("en_qtd").value||0);
+    const data = $("en_data").value;
+    const tipo = $("en_tipo").value;
+    const motivo = $("en_motivo").value;
+    const trein = $("en_trein").value;
+    const obs = $("en_obs").value.trim();
+    if(!nome || !setor || !lotId || !(qtd>0) || !data || !tipo){
+      alert("Obrigatório: Trabalhador, Setor/Função, Lote/EPI, Quantidade, Data e Tipo.");
+      return;
+    }
+    // Regras estoque
+    const isVencido = lote ? new Date(lote.validade) < startOfDay(new Date()) : false;
+    if(tipo==="entrega"){
+      if(!lote){ alert("Selecione um lote válido."); return; }
+      if(isVencido && state.rules.bloq==="sim"){ alert("Entrega bloqueada: lote vencido."); return; }
+      if(lote.saldo < qtd){ alert("Saldo insuficiente no lote."); return; }
+      lote.saldo -= qtd;
+    } else {
+      // devolução / troca: devolve ao saldo
+      if(!lote){ alert("Selecione um lote válido."); return; }
+      lote.saldo += qtd;
+      if(lote.saldo > lote.qtd) lote.saldo = lote.qtd;
+    }
+
+    // Cadastro trabalhador (anti-retrabalho)
+    const key = (trabId || nome).toLowerCase();
+    if(!state.trab.some(t=>t.key===key)){
+      state.trab.push({ key, nome, doc: trabId, setor });
+    }
+
+    state.movs.push({
+      id: uid(),
+      trabNome: nome,
+      trabId,
+      setor,
+      lotId,
+      epiLabel: lote?.epiLabel || "—",
+      ca: lote?.ca || "",
+      lote: lote?.lote || "",
+      qtd,
+      data,
+      tipo,
+      motivo,
+      trein,
+      obs
+    });
+
+    ["en_obs"].forEach(id=>$(id).value="");
+    $("en_qtd").value=1;
+    $("en_data").value=todayISO();
+    save();
+  });
+
+  function startOfDay(d){ const x = new Date(d); x.setHours(0,0,0,0); return x; }
+
+  // =============================
+  // Delete with cascade safety
+  // =============================
+  function del(arr, id){
+    if(arr==="epis"){
+      // bloqueia exclusão se houver lote
+      if(state.lotes.some(l=>l.epiId===id)){
+        alert("Não é possível excluir: há lotes vinculados a este EPI.");
+        return;
+      }
+      state.epis = state.epis.filter(x=>x.id!==id);
+    }
+    if(arr==="lotes"){
+      // bloqueia exclusão se houver movimentação
+      if(state.movs.some(m=>m.lotId===id)){
+        alert("Não é possível excluir: há movimentações vinculadas a este lote.");
+        return;
+      }
+      state.lotes = state.lotes.filter(x=>x.id!==id);
+    }
+    if(arr==="movs"){
+      state.movs = state.movs.filter(x=>x.id!==id);
+    }
+    save();
+  }
+  window.del = del;
+
+  // =============================
+  // Signature pad
+  // =============================
+  const canvas = $("sig");
+  const ctx = canvas.getContext("2d");
+  let drawing=false, last=null;
+
+  function resizeCanvas(){
+    const r = canvas.getBoundingClientRect();
+    const scale = window.devicePixelRatio || 1;
+    canvas.width = Math.floor(r.width * scale);
+    canvas.height = Math.floor(r.height * scale);
+    ctx.setTransform(scale,0,0,scale,0,0);
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "rgba(234,240,255,.92)";
+  }
+  window.addEventListener("resize", resizeCanvas);
+  setTimeout(resizeCanvas, 50);
+
+  function pos(e){
+    const r = canvas.getBoundingClientRect();
+    const touch = e.touches && e.touches[0];
+    const x = (touch ? touch.clientX : e.clientX) - r.left;
+    const y = (touch ? touch.clientY : e.clientY) - r.top;
+    return {x,y};
+  }
+  function down(e){ drawing=true; last=pos(e); }
+  function move(e){
+    if(!drawing) return;
+    e.preventDefault();
+    const p = pos(e);
+    ctx.beginPath();
+    ctx.moveTo(last.x, last.y);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    last=p;
+  }
+  function up(){ drawing=false; last=null; }
+
+  canvas.addEventListener("mousedown", down);
+  canvas.addEventListener("mousemove", move);
+  window.addEventListener("mouseup", up);
+  canvas.addEventListener("touchstart", down, {passive:false});
+  canvas.addEventListener("touchmove", move, {passive:false});
+  window.addEventListener("touchend", up);
+
+  $("btnClearSig").addEventListener("click", ()=>{
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+  });
+
+  $("btnSaveSig").addEventListener("click", ()=>{
+    const trabKey = $("fi_trab").value;
+    if(!trabKey){ alert("Selecione um trabalhador."); return; }
+    // salva base64
+    const img = canvas.toDataURL("image/png");
+    state.ass[trabKey] = { img, data: todayISO() };
+    save();
+    alert("Assinatura salva para o trabalhador selecionado.");
+  });
+
+  // =============================
+  // Filters / search
+  // =============================
+  $("qEpi").addEventListener("input", renderAll);
+  $("qLote").addEventListener("input", renderAll);
+  $("qEnt").addEventListener("input", renderAll);
+
+  // =============================
+  // Alert rules
+  // =============================
+  $("al_antes").addEventListener("input", ()=>{ state.rules.antes = Number($("al_antes").value||60); save(); });
+  $("al_min").addEventListener("input", ()=>{ state.rules.min = Number($("al_min").value||5); save(); });
+  $("al_bloq").addEventListener("change", ()=>{ state.rules.bloq = $("al_bloq").value; save(); });
+
+  // =============================
+  // Build ficha
+  // =============================
+  function buildFicha(){
+    const trabKey = $("fi_trab").value;
+    const t = state.trab.find(x=>x.key===trabKey);
+    const data = $("fi_data").value || todayISO();
+    const resp = $("fi_resp").value.trim();
+    const decl = $("fi_decl").value.trim();
+
+    const movs = state.movs
+      .filter(m => ((m.trabId||m.trabNome).toLowerCase() === trabKey))
+      .sort((a,b)=> (a.data||"").localeCompare(b.data||""));
+
+    const lines = [];
+    lines.push("FICHA DE ENTREGA DE EPI (PRÉVIA)");
+    lines.push("================================");
+    lines.push(`Trabalhador: ${t?.nome||"—"}   Documento/Matrícula: ${t?.doc||"—"}`);
+    lines.push(`Setor/Função: ${t?.setor||"—"}`);
+    lines.push(`Data de emissão: ${data}`);
+    lines.push(`Responsável: ${resp||"—"}`);
+    lines.push("--------------------------------");
+    lines.push("ENTREGAS / MOVIMENTAÇÕES:");
+    if(!movs.length){
+      lines.push("- (sem movimentações registradas)");
+    } else {
+      movs.forEach((m,i)=>{
+        lines.push(`${i+1}) ${m.data} • ${m.tipo.toUpperCase()} • ${m.epiLabel} (CA ${m.ca}) • Lote ${m.lote} • Qtd ${m.qtd}`);
+        lines.push(`   Motivo: ${m.motivo} • Trein.: ${m.trein}`);
+        if(m.obs) lines.push(`   Obs.: ${m.obs}`);
+      });
+    }
+    lines.push("--------------------------------");
+    lines.push("DECLARAÇÃO:");
+    lines.push(decl || "—");
+    lines.push("");
+    const ass = state.ass[trabKey];
+    lines.push(`Assinatura registrada: ${ass ? "SIM ("+ass.data+")" : "NÃO"}`);
+    $("fi_preview").value = lines.join("\\n");
+  }
+
+  ["fi_trab","fi_data","fi_resp","fi_decl"].forEach(id=>{
+    $(id).addEventListener("input", ()=>{ buildFicha(); });
+    $(id).addEventListener("change", ()=>{ buildFicha(); });
+  });
+
+  // =============================
+  // Populate selects
+  // =============================
+  function fillSelects(){
+    // EPI select in estoque
+    $("st_epi").innerHTML = `<option value="">Selecione</option>` + state.epis.map(e=>
+      `<option value="${esc(e.id)}">${esc(e.nome)} (CA ${esc(e.ca)})</option>`
+    ).join("");
+
+    // lote select in entrega: apenas não vencidos e com saldo>0 (para entrega)
+    const today = startOfDay(new Date());
+    const available = state.lotes.filter(l=>{
+      const venc = startOfDay(new Date(l.validade)) < today;
+      return (!venc) && (l.saldo > 0);
+    });
+    $("en_lote").innerHTML = `<option value="">Selecione</option>` + available.map(l=>
+      `<option value="${esc(l.id)}">${esc(l.epiLabel)} (CA ${esc(l.ca)}) • Lote ${esc(l.lote)} • Saldo ${l.saldo} • Val ${esc(l.validade)}</option>`
+    ).join("");
+
+    // trabalhadores para ficha
+    $("fi_trab").innerHTML = `<option value="">Selecione</option>` + state.trab
+      .sort((a,b)=> (a.nome||"").localeCompare(b.nome||""))
+      .map(t=>`<option value="${esc((t.doc||t.nome).toLowerCase())}">${esc(t.nome)} • ${esc(t.doc||"sem ID")} • ${esc(t.setor||"")}</option>`)
+      .join("");
+
+    // alert rules
+    $("al_antes").value = state.rules.antes ?? 60;
+    $("al_min").value = state.rules.min ?? 5;
+    $("al_bloq").value = state.rules.bloq ?? "sim";
+  }
+
+  // =============================
+  // Rendering
+  // =============================
+  function epiMatches(e, q){
+    const s = (q||"").toLowerCase();
+    if(!s) return true;
+    return [e.nome,e.ca,e.fab,e.modelo,e.tipo].some(v=>String(v||"").toLowerCase().includes(s));
+  }
+  function loteMatches(l, q){
+    const s = (q||"").toLowerCase();
+    if(!s) return true;
+    return [l.epiLabel,l.ca,l.lote,l.forn,l.local].some(v=>String(v||"").toLowerCase().includes(s));
+  }
+  function movMatches(m, q){
+    const s = (q||"").toLowerCase();
+    if(!s) return true;
+    return [m.trabNome,m.trabId,m.setor,m.epiLabel,m.ca,m.lote,m.tipo,m.motivo].some(v=>String(v||"").toLowerCase().includes(s));
+  }
+
+  function loteStatus(l){
+    const today = startOfDay(new Date());
+    const val = startOfDay(new Date(l.validade));
+    const days = Math.ceil((val - today)/(1000*60*60*24));
+    if(days < 0) return {lbl:"Vencido", cls:"bad", days};
+    const antes = state.rules.antes ?? 60;
+    if(days <= 7) return {lbl:"A vencer (≤7d)", cls:"warn", days};
+    if(days <= 30) return {lbl:"A vencer (≤30d)", cls:"warn", days};
+    if(days <= antes) return {lbl:`A vencer (≤${antes}d)`, cls:"warn", days};
+    return {lbl:"Válido", cls:"ok", days};
+  }
+
+  function renderTables(){
+    // KPIs
+    const alertas = buildAlerts(false);
+    $("kEpis").textContent = state.epis.length;
+    $("kLotes").textContent = state.lotes.length;
+    $("kEntregas").textContent = state.movs.length;
+    $("kAlertas").textContent = alertas.length;
+
+    // EPIs
+    const qE = $("qEpi").value;
+    const epiRows = state.epis.filter(e=>epiMatches(e,qE));
+    $("tblEpi").querySelector("tbody").innerHTML = epiRows.map(e=>`
+      <tr>
+        <td><b>${esc(e.nome)}</b><div class="mini">${esc(e.fab||"")} ${esc(e.modelo||"")}</div></td>
+        <td class="mono">${esc(e.ca)}</td>
+        <td>${esc(e.tipo)}</td>
+        <td class="mini">${esc(e.orient).slice(0,140)}${e.orient.length>140?"…":""}</td>
+        <td><button class="danger" onclick="del('epis','${e.id}')">Excluir</button></td>
+      </tr>
+    `).join("") || `<tr><td colspan="5" class="muted">Nenhum EPI cadastrado.</td></tr>`;
+
+    // LOTES
+    const qL = $("qLote").value;
+    const lotRows = state.lotes.filter(l=>loteMatches(l,qL));
+    $("tblLotes").querySelector("tbody").innerHTML = lotRows.map(l=>{
+      const st = loteStatus(l);
+      return `
+        <tr>
+          <td><b>${esc(l.epiLabel)}</b><div class="mini">CA ${esc(l.ca)} • Forn: ${esc(l.forn||"—")} • Local: ${esc(l.local||"—")}</div></td>
+          <td class="mono">${esc(l.lote)}</td>
+          <td class="mono">${l.saldo}/${l.qtd}</td>
+          <td class="mono">${esc(l.entrada)}</td>
+          <td class="mono">${esc(l.validade)}</td>
+          <td><span class="badge ${st.cls}">${esc(st.lbl)}</span><div class="mini">${st.days>=0 ? (st.days+" dias") : ("há "+Math.abs(st.days)+" dias")}</div></td>
+          <td><button class="danger" onclick="del('lotes','${l.id}')">Excluir</button></td>
+        </tr>
+      `;
+    }).join("") || `<tr><td colspan="7" class="muted">Nenhum lote registrado.</td></tr>`;
+
+    // MOVS
+    const qM = $("qEnt").value;
+    const movRows = state.movs.filter(m=>movMatches(m,qM));
+    $("tblEntregas").querySelector("tbody").innerHTML = movRows.map(m=>`
+      <tr>
+        <td><b>${esc(m.trabNome)}</b><div class="mini">${esc(m.trabId||"—")}</div></td>
+        <td class="mini">${esc(m.setor)}</td>
+        <td class="mini"><b>${esc(m.epiLabel)}</b> (CA ${esc(m.ca)})<br/>Lote ${esc(m.lote)} • Motivo: ${esc(m.motivo)}</td>
+        <td class="mono">${m.qtd}</td>
+        <td class="mono">${esc(m.data)}</td>
+        <td>${esc(m.tipo)}</td>
+        <td>${esc(m.trein)}</td>
+        <td><button class="danger" onclick="del('movs','${m.id}')">Excluir</button></td>
+      </tr>
+    `).join("") || `<tr><td colspan="8" class="muted">Nenhuma movimentação registrada.</td></tr>`;
+
+    // ALERTAS
+    renderAlerts();
+  }
+
+  function buildAlerts(render=true){
+    const today = startOfDay(new Date());
+    const antes = Number(state.rules.antes ?? 60);
+    const min = Number(state.rules.min ?? 5);
+    const items = [];
+
+    state.lotes.forEach(l=>{
+      const val = startOfDay(new Date(l.validade));
+      const days = Math.ceil((val - today)/(1000*60*60*24));
+      if(days < 0){
+        items.push({tipo:"Lote vencido", epi:l, rec:"Bloquear uso/entrega. Segregar e providenciar substituição/descarta conforme política."});
+      } else if(days <= antes){
+        items.push({tipo:`A vencer (${days}d)`, epi:l, rec:"Programar compra/reposição e priorizar consumo do lote (FIFO)."});
+      }
+      if(l.saldo <= min){
+        items.push({tipo:"Estoque baixo", epi:l, rec:"Repor estoque mínimo para evitar falta em entrega obrigatória."});
+      }
+    });
+
+    return items;
+  }
+
+  function renderAlerts(){
+    const items = buildAlerts();
+    const tb = $("tblAlertas").querySelector("tbody");
+    tb.innerHTML = items.map(it=>{
+      const st = loteStatus(it.epi);
+      const typeCls = it.tipo.includes("venc") ? "bad" : (it.tipo.includes("baixo") ? "warn" : "warn");
+      return `
+        <tr>
+          <td><span class="badge ${typeCls}">${esc(it.tipo)}</span></td>
+          <td class="mini"><b>${esc(it.epi.epiLabel)}</b> (CA ${esc(it.epi.ca)})<br/>Lote ${esc(it.epi.lote)}</td>
+          <td class="mono">${esc(it.epi.validade)}</td>
+          <td class="mono">${it.epi.saldo}</td>
+          <td class="mini">${esc(it.rec)}</td>
+        </tr>
+      `;
+    }).join("") || `<tr><td colspan="5" class="muted">Sem alertas no momento.</td></tr>`;
+  }
+
+  // =============================
+  // Checks
+  // =============================
+  function computeChecks(){
+    const epiOk = state.epis.length>0 && state.epis.every(e=>e.nome && e.ca && e.orient);
+    const loteOk = state.lotes.length>0 && state.lotes.every(l=>l.epiId && l.lote && l.qtd>0 && l.validade);
+    const movOk = state.movs.length>0;
+    const fichaOk = Object.keys(state.ass).length>0; // ao menos 1 assinatura registrada
+    const alertsOk = true;
+
+    const rows = [
+      ["Cadastro de EPI", epiOk, "EPI com Nome, CA e Orientações."],
+      ["Estoque por lote", loteOk, "Lote com entrada, validade e saldo."],
+      ["Registro de entregas", movOk, "Ao menos 1 movimentação registrada."],
+      ["Ficha com assinatura", fichaOk, "Assinatura vinculada ao trabalhador."],
+      ["Alertas", alertsOk, "Regras e painel de alertas ativos."]
+    ];
+    const done = rows.filter(r=>r[1]).length;
+    const pct = Math.round((done/rows.length)*100);
+    const ready = epiOk && loteOk; // mínimo p/ operar
+    return {rows,pct,ready};
+  }
+
+  function renderChecks(){
+    const {rows,pct,ready} = computeChecks();
+    $("pct").textContent = pct + "%";
+    $("tblChecks").innerHTML = rows.map(r=>{
+      const b = r[1]
+        ? `<span class="badge ok"><span class="dot ok"></span> OK</span>`
+        : `<span class="badge warn"><span class="dot warn"></span> Pendente</span>`;
+      return `<tr><td><b>${esc(r[0])}</b></td><td>${b}</td><td class="muted">${esc(r[2])}</td></tr>`;
+    }).join("");
+
+    $("dotReady").className = "dot " + (ready ? "ok" : "warn");
+    $("txtReady").textContent = ready ? "Operação habilitada" : "Base incompleta";
+
+    $("dotStatus").className = "dot " + (pct>=80 ? "ok" : "warn");
+    $("txtStatus").textContent = (pct>=80) ? "Conforme" : "Em ajuste";
+  }
+
+  // =============================
+  // Print (simple)
+  // =============================
+  function printFicha(){
+    buildFicha();
+    const txt = $("fi_preview").value || "Selecione um trabalhador e gere a ficha.";
+    const w = window.open("", "_blank");
+    w.document.write(`
+      <html><head><title>Ficha EPI</title>
+      <style>
+        body{font-family:Arial; padding:24px;}
+        pre{white-space:pre-wrap; font-size:12px; line-height:1.45}
+        img{max-width:100%; height:auto; border:1px solid #ddd; padding:8px;}
+      </style></head><body>
+      <pre>${txt.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</pre>
+      <h3>Assinatura</h3>
+      ${(() => {
+        const key = $("fi_trab").value;
+        const a = state.ass[key];
+        return a ? `<img src="${a.img}" alt="assinatura"/>` : `<p>(sem assinatura registrada)</p>`;
+      })()}
+      </body></html>
+    `);
+    w.document.close();
+    w.focus();
+    w.print();
+    w.close();
+  }
+
+  // =============================
+  // Buttons (save/export/reset/print)
+  // =============================
+  $("btnSave").addEventListener("click", ()=>{ save(); alert("Salvo no navegador (localStorage)."); });
+  $("btnReset").addEventListener("click", ()=>{ if(confirm("Limpar todos os dados?")) resetAll(); });
+  $("btnExport").addEventListener("click", ()=>{
+    const blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `controle_epi_export.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+  $("btnPrint").addEventListener("click", ()=>{
+    setTab("ficha");
+    setTimeout(printFicha, 200);
+  });
+
+  // =============================
+  // Render pipeline
+  // =============================
+  function renderAll(){
+    fillSelects();
+    renderTables();
+    renderChecks();
+    buildFicha();
+  }
+
+  // init tab and render
+  setTab("epi");
+  renderAll();
+</script>
+
+</body>
+</html>

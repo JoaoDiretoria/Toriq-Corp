@@ -1,0 +1,1786 @@
+
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Módulo AEP (NR-17) — Levantamento • Cadastro • Elaboração • Validação • PDF</title>
+  <style>
+    :root{
+      --bg:#0b1220;
+      --panel:#111a2e;
+      --panel2:#0f172a;
+      --text:#e8eefc;
+      --muted:#a9b6d6;
+      --brand:#66c2ff;
+      --ok:#7CFFB2;
+      --warn:#FFD37C;
+      --bad:#FF7C7C;
+      --line:rgba(255,255,255,.08);
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius:16px;
+      --radius2:12px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family:var(--sans); background:linear-gradient(180deg, #071022, #0b1220 50%, #070e1e);
+      color:var(--text);
+    }
+    a{color:inherit}
+    .app{
+      display:grid;
+      grid-template-columns: 320px 1fr;
+      min-height:100vh;
+    }
+    .sidebar{
+      position:sticky; top:0; height:100vh; overflow:auto;
+      padding:18px 16px;
+      background:linear-gradient(180deg, rgba(17,26,46,.95), rgba(15,23,42,.95));
+      border-right:1px solid var(--line);
+    }
+    .brand{
+      display:flex; gap:12px; align-items:center; padding:10px 12px; border-radius:14px;
+      background:rgba(255,255,255,.04); border:1px solid var(--line); box-shadow:var(--shadow);
+    }
+    .logo{
+      width:40px; height:40px; border-radius:12px;
+      background: radial-gradient(circle at 30% 30%, #66c2ff, #1f3a8a 60%, #0b1220);
+      border:1px solid rgba(255,255,255,.15);
+    }
+    .brand h1{font-size:14px; margin:0; line-height:1.2}
+    .brand p{margin:2px 0 0; font-size:12px; color:var(--muted)}
+    .nav{
+      margin-top:14px;
+      display:flex; flex-direction:column; gap:8px;
+    }
+    .nav button{
+      all:unset; cursor:pointer;
+      padding:12px 12px;
+      border-radius:14px;
+      background:rgba(255,255,255,.03);
+      border:1px solid var(--line);
+      transition:.15s ease;
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    .nav button:hover{transform:translateY(-1px); background:rgba(255,255,255,.05)}
+    .nav button.active{border-color:rgba(102,194,255,.7); box-shadow:0 0 0 3px rgba(102,194,255,.15)}
+    .nav .left{display:flex; gap:10px; align-items:center}
+    .pill{
+      font-size:11px; padding:4px 8px; border-radius:999px;
+      border:1px solid var(--line); color:var(--muted);
+      background:rgba(255,255,255,.02);
+    }
+    .footer-note{
+      margin-top:14px; padding:12px;
+      border:1px dashed rgba(255,255,255,.18);
+      border-radius:14px; color:var(--muted);
+      font-size:12px;
+    }
+
+    .main{
+      padding:22px;
+      overflow:auto;
+    }
+    .topbar{
+      display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between;
+      margin-bottom:14px;
+    }
+    .topbar .title{
+      display:flex; flex-direction:column; gap:4px;
+    }
+    .topbar h2{margin:0; font-size:18px}
+    .topbar .subtitle{margin:0; color:var(--muted); font-size:13px}
+    .actions{display:flex; gap:8px; flex-wrap:wrap}
+    .btn{
+      border:1px solid var(--line); background:rgba(255,255,255,.03); color:var(--text);
+      padding:10px 12px; border-radius:12px; cursor:pointer; transition:.15s ease;
+    }
+    .btn:hover{background:rgba(255,255,255,.06); transform:translateY(-1px)}
+    .btn.primary{border-color:rgba(102,194,255,.7); background:rgba(102,194,255,.12)}
+    .btn.ok{border-color:rgba(124,255,178,.7); background:rgba(124,255,178,.10)}
+    .btn.warn{border-color:rgba(255,211,124,.7); background:rgba(255,211,124,.10)}
+    .btn.danger{border-color:rgba(255,124,124,.7); background:rgba(255,124,124,.10)}
+    .grid{
+      display:grid; gap:14px;
+      grid-template-columns: repeat(12, 1fr);
+    }
+    .card{
+      grid-column: span 12;
+      background:rgba(255,255,255,.03);
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      overflow:hidden;
+    }
+    .card .hd{
+      padding:14px 14px 10px;
+      border-bottom:1px solid var(--line);
+      display:flex; align-items:flex-start; justify-content:space-between; gap:10px;
+      background:rgba(255,255,255,.02);
+    }
+    .card .hd h3{margin:0; font-size:14px}
+    .card .hd p{margin:4px 0 0; color:var(--muted); font-size:12px}
+    .card .bd{padding:14px}
+    .row{display:grid; grid-template-columns: 1fr 1fr; gap:12px}
+    @media (max-width: 980px){
+      .app{grid-template-columns: 1fr}
+      .sidebar{position:relative; height:auto}
+      .row{grid-template-columns: 1fr}
+    }
+    label{display:block; font-size:12px; color:var(--muted); margin:0 0 6px}
+    input, select, textarea{
+      width:100%;
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px solid var(--line);
+      background:rgba(0,0,0,.25);
+      color:var(--text);
+      outline:none;
+    }
+    textarea{min-height:110px; resize:vertical}
+    .hint{font-size:11px; color:var(--muted); margin-top:6px}
+    .split{
+      display:grid; grid-template-columns: 1.2fr .8fr; gap:14px;
+    }
+    @media (max-width: 980px){ .split{grid-template-columns:1fr} }
+    .kpi{
+      display:grid; grid-template-columns: repeat(3, 1fr); gap:10px;
+    }
+    @media (max-width: 980px){ .kpi{grid-template-columns:1fr} }
+    .k{
+      padding:12px; border-radius:14px; border:1px solid var(--line);
+      background:rgba(255,255,255,.02);
+    }
+    .k strong{display:block; font-size:12px; color:var(--muted)}
+    .k span{display:block; font-size:18px; margin-top:6px}
+    .status{
+      display:inline-flex; align-items:center; gap:8px;
+      padding:6px 10px; border-radius:999px; font-size:12px; border:1px solid var(--line);
+      background:rgba(255,255,255,.02);
+    }
+    .dot{width:10px; height:10px; border-radius:99px; background:var(--muted)}
+    .dot.ok{background:var(--ok)}
+    .dot.warn{background:var(--warn)}
+    .dot.bad{background:var(--bad)}
+    .table{
+      width:100%;
+      border-collapse:separate; border-spacing:0;
+      border:1px solid var(--line);
+      border-radius:14px; overflow:hidden;
+      background:rgba(0,0,0,.18);
+    }
+    .table th, .table td{
+      padding:10px 10px;
+      border-bottom:1px solid var(--line);
+      vertical-align:top;
+      font-size:12px;
+    }
+    .table th{color:var(--muted); text-align:left; background:rgba(255,255,255,.02)}
+    .table tr:last-child td{border-bottom:none}
+    .badge{
+      display:inline-block; font-size:11px; padding:4px 8px; border-radius:999px;
+      border:1px solid var(--line); color:var(--muted);
+      background:rgba(255,255,255,.02);
+      white-space:nowrap;
+    }
+    .badge.ok{border-color:rgba(124,255,178,.6); color:rgba(124,255,178,.95)}
+    .badge.warn{border-color:rgba(255,211,124,.6); color:rgba(255,211,124,.95)}
+    .badge.bad{border-color:rgba(255,124,124,.6); color:rgba(255,124,124,.95)}
+    .tabs{
+      display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;
+    }
+    .tabs button{
+      all:unset; cursor:pointer;
+      padding:8px 10px; border-radius:999px;
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.02);
+      font-size:12px; color:var(--muted);
+    }
+    .tabs button.active{border-color:rgba(102,194,255,.7); color:var(--text); background:rgba(102,194,255,.10)}
+    .code{
+      font-family:var(--mono);
+      font-size:11px;
+      background:rgba(0,0,0,.35);
+      border:1px solid var(--line);
+      padding:12px;
+      border-radius:14px;
+      overflow:auto;
+      white-space:pre;
+      line-height:1.35;
+    }
+    .small{font-size:12px; color:var(--muted)}
+    .divider{height:1px; background:var(--line); margin:12px 0}
+  </style>
+</head>
+
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo" aria-hidden="true"></div>
+      <div>
+        <h1>Módulo AEP (NR-17)</h1>
+        <p>Levantamento • Cadastro • Elaboração • Validação • PDF</p>
+      </div>
+    </div>
+
+    <nav class="nav" id="nav">
+      <button class="active" data-view="dashboard">
+        <span class="left">📌 <strong>Dashboard</strong></span>
+        <span class="pill">Visão geral</span>
+      </button>
+      <button data-view="cadastro">
+        <span class="left">🏢 <strong>Cadastro</strong></span>
+        <span class="pill">Empresa / GHE</span>
+      </button>
+      <button data-view="campo">
+        <span class="left">🧭 <strong>Levantamento em Campo</strong></span>
+        <span class="pill">Fase 1</span>
+      </button>
+      <button data-view="banco">
+        <span class="left">🗃️ <strong>Banco de Dados</strong></span>
+        <span class="pill">Cadastro</span>
+      </button>
+      <button data-view="elaboracao">
+        <span class="left">🧩 <strong>Elaboração</strong></span>
+        <span class="pill">Fase 2/3</span>
+      </button>
+      <button data-view="validacao">
+        <span class="left">✅ <strong>Validação</strong></span>
+        <span class="pill">Aprovação</span>
+      </button>
+      <button data-view="pdf">
+        <span class="left">📄 <strong>Entrega em PDF</strong></span>
+        <span class="pill">Download</span>
+      </button>
+    </nav>
+
+    <div class="footer-note">
+      <div><strong>Referência do fluxo</strong></div>
+      <div class="small" style="margin-top:6px">
+        O módulo segue as etapas do AEP (coleta/avaliação/documento), incluindo visita, entrevista,
+        registros e recomendações. :contentReference[oaicite:1]{index=1}
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div class="title">
+        <h2 id="pageTitle">Dashboard</h2>
+        <p class="subtitle" id="pageSubtitle">Acompanhe o andamento do caso e os próximos passos.</p>
+      </div>
+      <div class="actions">
+        <button class="btn" id="btnSave">Salvar</button>
+        <button class="btn primary" id="btnQuickPDF">Gerar PDF (prévia)</button>
+        <button class="btn warn" id="btnReset">Limpar dados (local)</button>
+      </div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <section class="view" id="view-dashboard">
+      <div class="grid">
+
+        <div class="card">
+          <div class="hd">
+            <div>
+              <h3>Resumo do Caso</h3>
+              <p>Identificação e status da AEP.</p>
+            </div>
+            <span class="status"><span class="dot warn" id="caseDot"></span><span id="caseStatus">Em andamento</span></span>
+          </div>
+          <div class="bd split">
+            <div>
+              <div class="row">
+                <div>
+                  <label>Empresa</label>
+                  <input id="empresaNome" placeholder="Ex.: Irmãos Diogo Comércio de Hortifruit LTDA" />
+                  <div class="hint">Campos típicos de identificação. :contentReference[oaicite:2]{index=2}</div>
+                </div>
+                <div>
+                  <label>CNPJ</label>
+                  <input id="empresaCnpj" placeholder="00.000.000/0000-00" />
+                </div>
+              </div>
+
+              <div class="row" style="margin-top:12px">
+                <div>
+                  <label>Endereço</label>
+                  <input id="empresaEndereco" placeholder="Rua, número, bairro/cidade - UF" />
+                </div>
+                <div>
+                  <label>CNAE / Grau de risco</label>
+                  <input id="empresaCnaeRisco" placeholder="CNAE / Grau" />
+                </div>
+              </div>
+
+              <div class="divider"></div>
+
+              <label>Demanda (por que a AEP está sendo feita?)</label>
+              <textarea id="demanda" placeholder="Descreva a demanda (NR-17 / ergonomia / adequação das condições de trabalho)"></textarea>
+              <div class="hint">A AEP atende a NR-17 e busca adequação às características psicofisiológicas. :contentReference[oaicite:3]{index=3}</div>
+
+              <label style="margin-top:10px">Objetivos</label>
+              <textarea id="objetivos" placeholder="Descreva objetivos e escopo (postos, funções, tarefas, riscos e recomendações)"></textarea>
+              <div class="hint">Objetivo: avaliar postos/funções/tarefas e recomendar melhorias. :contentReference[oaicite:4]{index=4}</div>
+            </div>
+
+            <div>
+              <div class="kpi">
+                <div class="k">
+                  <strong>Fase 1 — Coleta</strong>
+                  <span id="kpiColeta">0%</span>
+                  <div class="small">Visita, entrevista, fotos.</div>
+                </div>
+                <div class="k">
+                  <strong>Fase 2 — Avaliação</strong>
+                  <span id="kpiAvaliacao">0%</span>
+                  <div class="small">Perigos, riscos e diagnóstico.</div>
+                </div>
+                <div class="k">
+                  <strong>Fase 3 — Documento/PDF</strong>
+                  <span id="kpiDocumento">0%</span>
+                  <div class="small">Relatório final e entrega.</div>
+                </div>
+              </div>
+
+              <div class="card" style="margin-top:14px">
+                <div class="hd">
+                  <div>
+                    <h3>Checklist de Entrega</h3>
+                    <p>O que não pode faltar no relatório.</p>
+                  </div>
+                  <span class="badge">modelo</span>
+                </div>
+                <div class="bd">
+                  <table class="table">
+                    <thead>
+                      <tr><th>Item</th><th>Status</th></tr>
+                    </thead>
+                    <tbody id="deliveryChecklist">
+                      <tr><td>Etapas (Coleta/Avaliação/Documento)</td><td><span class="badge warn">pendente</span></td></tr>
+                      <tr><td>Legendas de resultado (ausência / baixo / médio-alto)</td><td><span class="badge warn">pendente</span></td></tr>
+                      <tr><td>Tarefa prescrita x tarefa real</td><td><span class="badge warn">pendente</span></td></tr>
+                      <tr><td>Recomendações e cronograma</td><td><span class="badge warn">pendente</span></td></tr>
+                      <tr><td>Encerramento / validade / responsável técnico</td><td><span class="badge warn">pendente</span></td></tr>
+                    </tbody>
+                  </table>
+                  <div class="hint" style="margin-top:10px">
+                    Baseado nas seções do documento (etapas, legendas, tarefas, recomendações/cronograma e encerramento/validade). :contentReference[oaicite:5]{index=5} :contentReference[oaicite:6]{index=6} :contentReference[oaicite:7]{index=7}
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- CADASTRO -->
+    <section class="view" id="view-cadastro" hidden>
+      <div class="grid">
+        <div class="card">
+          <div class="hd">
+            <div>
+              <h3>Cadastro — Empresa</h3>
+              <p>Dados base para o relatório.</p>
+            </div>
+            <span class="badge">NR-17</span>
+          </div>
+          <div class="bd">
+            <div class="row">
+              <div>
+                <label>Empresa</label>
+                <input id="cEmpresa" placeholder="Razão social" />
+              </div>
+              <div>
+                <label>CNPJ</label>
+                <input id="cCnpj" placeholder="00.000.000/0000-00" />
+              </div>
+            </div>
+
+            <div class="row" style="margin-top:12px">
+              <div>
+                <label>Endereço</label>
+                <input id="cEndereco" placeholder="Endereço completo" />
+              </div>
+              <div>
+                <label>CEP</label>
+                <input id="cCep" placeholder="00000-000" />
+              </div>
+            </div>
+
+            <div class="row" style="margin-top:12px">
+              <div>
+                <label>CNAE (atividade principal)</label>
+                <input id="cCnae" placeholder="Ex.: 46.33-8/01" />
+              </div>
+              <div>
+                <label>Grau de risco</label>
+                <select id="cGrau">
+                  <option value="">Selecione</option>
+                  <option>1</option><option>2</option><option>3</option><option>4</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="hint" style="margin-top:10px">
+              Campos equivalentes aos usados na seção “Identificação”. :contentReference[oaicite:8]{index=8}
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="hd">
+            <div>
+              <h3>Cadastro — GHE / Setores / Funções</h3>
+              <p>Configure o escopo da análise por grupo homogêneo.</p>
+            </div>
+            <span class="badge">escopo</span>
+          </div>
+          <div class="bd">
+            <div class="row">
+              <div>
+                <label>GHE</label>
+                <input id="gheCodigo" placeholder="Ex.: GHE A" />
+              </div>
+              <div>
+                <label>Setor</label>
+                <input id="gheSetor" placeholder="Ex.: Administrativo" />
+              </div>
+            </div>
+            <div style="margin-top:12px">
+              <label>Função</label>
+              <input id="gheFuncao" placeholder="Ex.: Auxiliar de escritório" />
+              <div class="hint">Modelo baseado no “Quadro de setores e funções analisadas”. :contentReference[oaicite:9]{index=9}</div>
+            </div>
+
+            <div class="divider"></div>
+
+            <button class="btn ok" id="btnAddGHE">Adicionar ao cadastro</button>
+            <div class="hint">Itens adicionados aparecem no “Banco de Dados”.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CAMPO -->
+    <section class="view" id="view-campo" hidden>
+      <div class="grid">
+        <div class="card">
+          <div class="hd">
+            <div>
+              <h3>Levantamento em Campo (Fase 1 — Coleta)</h3>
+              <p>Visita, inspeção, entrevistas e registros (foto/vídeo).</p>
+            </div>
+            <span class="badge ok">Fase 1</span>
+          </div>
+          <div class="bd">
+            <div class="row">
+              <div>
+                <label>Data da visita</label>
+                <input id="campoData" type="date" />
+                <div class="hint">O documento descreve visitas e entrevistas em outubro/2024. :contentReference[oaicite:10]{index=10}</div>
+              </div>
+              <div>
+                <label>Acompanhante (empresa)</label>
+                <input id="campoAcompanhante" placeholder="Nome / cargo" />
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="tabs" id="campoTabs">
+              <button class="active" data-subview="tarefas">Tarefas</button>
+              <button data-subview="entrevistas">Entrevistas</button>
+              <button data-subview="registros">Registros (foto/vídeo)</button>
+              <button data-subview="perigos">Perigos/Riscos</button>
+            </div>
+
+            <!-- subviews -->
+            <div id="campo-tarefas">
+              <div class="row">
+                <div>
+                  <label>Função / Atividade</label>
+                  <input id="campoFuncao" placeholder="Ex.: Auxiliar administrativo" />
+                </div>
+                <div>
+                  <label>Setor</label>
+                  <input id="campoSetor" placeholder="Ex.: Administrativo" />
+                </div>
+              </div>
+              <div class="row" style="margin-top:12px">
+                <div>
+                  <label>Tarefa prescrita</label>
+                  <textarea id="tarefaPrescrita" placeholder="O que a função deveria fazer (descrição oficial)"></textarea>
+                </div>
+                <div>
+                  <label>Tarefa real</label>
+                  <textarea id="tarefaReal" placeholder="O que realmente é feito no dia a dia"></textarea>
+                </div>
+              </div>
+              <div class="hint">
+                Campo “prescrita x real” segue o padrão do documento. :contentReference[oaicite:11]{index=11}
+              </div>
+              <button class="btn ok" id="btnSalvarTarefas" style="margin-top:10px">Salvar tarefas</button>
+            </div>
+
+            <div id="campo-entrevistas" hidden>
+              <div class="row">
+                <div>
+                  <label>Colaborador (identificação interna)</label>
+                  <input id="entrevistaColab" placeholder="Ex.: Colab #01 (sem nome, se preferir)" />
+                </div>
+                <div>
+                  <label>Queixas / desconfortos / melhorias</label>
+                  <input id="entrevistaQueixas" placeholder="Resumo objetivo" />
+                </div>
+              </div>
+              <div style="margin-top:12px">
+                <label>Relato (motivo) e observações</label>
+                <textarea id="entrevistaTexto" placeholder="Ex.: relata sobrecarga mental, concentração alta, pausas..."></textarea>
+                <div class="hint">O documento registra entrevista/motivo e embasamento por item avaliado. :contentReference[oaicite:12]{index=12}</div>
+              </div>
+              <button class="btn ok" id="btnSalvarEntrevista" style="margin-top:10px">Salvar entrevista</button>
+            </div>
+
+            <div id="campo-registros" hidden>
+              <div class="row">
+                <div>
+                  <label>URL/ID do registro (foto/vídeo)</label>
+                  <input id="registroUrl" placeholder="Ex.: /uploads/aep/foto1.jpg ou id do arquivo" />
+                </div>
+                <div>
+                  <label>Descrição</label>
+                  <input id="registroDesc" placeholder="Ex.: Posto de trabalho 1" />
+                </div>
+              </div>
+              <div class="hint" style="margin-top:10px">
+                Previsto em “Registro de fotos e vídeos das atividades”. :contentReference[oaicite:13]{index=13}
+              </div>
+              <button class="btn ok" id="btnSalvarRegistro" style="margin-top:10px">Salvar registro</button>
+            </div>
+
+            <div id="campo-perigos" hidden>
+              <div class="row">
+                <div>
+                  <label>Categoria</label>
+                  <select id="perigoCategoria">
+                    <option>Biomecânicos</option>
+                    <option>Mobiliários e Equipamentos</option>
+                    <option>Organizacionais</option>
+                    <option>Ambientais</option>
+                    <option>Psicossociais/Cognitivos</option>
+                  </select>
+                </div>
+                <div>
+                  <label>Legenda do resultado</label>
+                  <select id="perigoLegenda">
+                    <option value="ausencia">Ausência</option>
+                    <option value="baixo">Presença (Baixo)</option>
+                    <option value="medioalto">Presença (Médio/Alto)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style="margin-top:12px">
+                <label>Perigo / Fator de risco (descrição)</label>
+                <input id="perigoDesc" placeholder="Ex.: Movimentos repetitivos (digitação) / sobrecarga mental" />
+              </div>
+
+              <div class="row" style="margin-top:12px">
+                <div>
+                  <label>Entrevista / Motivo</label>
+                  <textarea id="perigoMotivo" placeholder="O que foi observado/relatado"></textarea>
+                </div>
+                <div>
+                  <label>Embasamento (normas/método)</label>
+                  <textarea id="perigoEmbasamento" placeholder="Ex.: NR-17 17.4.3 letra f / OCRA / NHO11..."></textarea>
+                </div>
+              </div>
+
+              <div class="hint">
+                A legenda “ausência / baixo / médio-alto” está no documento. :contentReference[oaicite:14]{index=14}
+              </div>
+              <button class="btn ok" id="btnSalvarPerigo" style="margin-top:10px">Salvar item de perigo/risco</button>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BANCO -->
+    <section class="view" id="view-banco" hidden>
+      <div class="grid">
+        <div class="card">
+          <div class="hd">
+            <div>
+              <h3>Banco de Dados (Cadastro de Informações)</h3>
+              <p>Visão consolidada do que foi cadastrado nas telas anteriores.</p>
+            </div>
+            <span class="badge">dados</span>
+          </div>
+          <div class="bd">
+            <div class="tabs" id="dbTabs">
+              <button class="active" data-subview="db-ghe">GHE</button>
+              <button data-subview="db-tarefas">Tarefas</button>
+              <button data-subview="db-entrevistas">Entrevistas</button>
+              <button data-subview="db-registros">Registros</button>
+              <button data-subview="db-riscos">Perigos/Riscos</button>
+              <button data-subview="db-modelo">Modelo de Tabelas</button>
+            </div>
+
+            <div id="db-ghe">
+              <table class="table">
+                <thead><tr><th>GHE</th><th>Setor</th><th>Função</th><th>Ações</th></tr></thead>
+                <tbody id="dbGheBody"></tbody>
+              </table>
+            </div>
+
+            <div id="db-tarefas" hidden>
+              <table class="table">
+                <thead><tr><th>Setor</th><th>Função</th><th>Prescrita</th><th>Real</th></tr></thead>
+                <tbody id="dbTarefasBody"></tbody>
+              </table>
+              <div class="hint">Modelo “atividade prescrita x real”. :contentReference[oaicite:15]{index=15}</div>
+            </div>
+
+            <div id="db-entrevistas" hidden>
+              <table class="table">
+                <thead><tr><th>Colaborador</th><th>Queixas/Resumo</th><th>Relato</th></tr></thead>
+                <tbody id="dbEntrevistasBody"></tbody>
+              </table>
+            </div>
+
+            <div id="db-registros" hidden>
+              <table class="table">
+                <thead><tr><th>Arquivo/URL</th><th>Descrição</th></tr></thead>
+                <tbody id="dbRegistrosBody"></tbody>
+              </table>
+            </div>
+
+            <div id="db-riscos" hidden>
+              <table class="table">
+                <thead><tr><th>Categoria</th><th>Legenda</th><th>Descrição</th><th>Motivo</th><th>Embasamento</th></tr></thead>
+                <tbody id="dbRiscosBody"></tbody>
+              </table>
+              <div class="hint">Estrutura “risco/perigo + entrevista/motivo + embasamento” reflete o padrão do documento. :contentReference[oaicite:16]{index=16}</div>
+            </div>
+
+            <div id="db-modelo" hidden>
+              <div class="small">Sugestão de modelagem (SQL) — ajuste conforme seu stack:</div>
+              <div class="code" aria-label="Modelo de tabelas (SQL)">
+-- EMPRESA / CASO
+CREATE TABLE aep_caso (
+  id UUID PRIMARY KEY,
+  empresa_nome TEXT NOT NULL,
+  cnpj TEXT,
+  endereco TEXT,
+  cep TEXT,
+  cnae TEXT,
+  grau_risco INT,
+  demanda TEXT,
+  objetivos TEXT,
+  status TEXT DEFAULT 'EM_ANDAMENTO',
+  criado_em TIMESTAMP DEFAULT NOW()
+);
+
+-- GHE / SETORES / FUNÇÕES
+CREATE TABLE aep_ghe (
+  id UUID PRIMARY KEY,
+  caso_id UUID REFERENCES aep_caso(id),
+  ghe_codigo TEXT NOT NULL,      -- ex.: "GHE A"
+  setor TEXT NOT NULL,           -- ex.: "Administrativo"
+  funcao TEXT NOT NULL           -- ex.: "Auxiliar de escritório"
+);
+
+-- LEVANTAMENTO EM CAMPO (visitas)
+CREATE TABLE aep_visita (
+  id UUID PRIMARY KEY,
+  caso_id UUID REFERENCES aep_caso(id),
+  data DATE,
+  acompanhante TEXT,
+  observacoes TEXT
+);
+
+-- TAREFAS (prescrita x real)
+CREATE TABLE aep_tarefa (
+  id UUID PRIMARY KEY,
+  caso_id UUID REFERENCES aep_caso(id),
+  setor TEXT,
+  funcao TEXT,
+  tarefa_prescrita TEXT,
+  tarefa_real TEXT
+);
+
+-- ENTREVISTAS / QUEIXAS
+CREATE TABLE aep_entrevista (
+  id UUID PRIMARY KEY,
+  caso_id UUID REFERENCES aep_caso(id),
+  colaborador_ref TEXT,      -- opcional: anonimizado
+  queixas_resumo TEXT,
+  relato TEXT
+);
+
+-- REGISTROS (foto/vídeo)
+CREATE TABLE aep_registro (
+  id UUID PRIMARY KEY,
+  caso_id UUID REFERENCES aep_caso(id),
+  arquivo_ref TEXT,          -- URL/ID do storage
+  descricao TEXT
+);
+
+-- PERIGOS/RISCOS (com legenda e embasamento)
+CREATE TABLE aep_risco (
+  id UUID PRIMARY KEY,
+  caso_id UUID REFERENCES aep_caso(id),
+  categoria TEXT,            -- biomecânico, mobiliário, etc.
+  legenda TEXT,              -- ausencia | baixo | medioalto (conforme legendas)
+  descricao TEXT,
+  motivo TEXT,
+  embasamento TEXT
+);
+
+-- RECOMENDAÇÕES / AÇÕES (tabela resumo e cronograma)
+CREATE TABLE aep_acao (
+  id UUID PRIMARY KEY,
+  caso_id UUID REFERENCES aep_caso(id),
+  tipo TEXT,                 -- 'RECOMENDACAO' | 'CRONOGRAMA'
+  descricao TEXT,
+  prazo_inicio DATE,
+  prazo_fim DATE,
+  responsavel TEXT,
+  status TEXT DEFAULT 'PROPOSTO'
+);
+
+-- DOCUMENTO / PDF
+CREATE TABLE aep_documento (
+  id UUID PRIMARY KEY,
+  caso_id UUID REFERENCES aep_caso(id),
+  versao INT DEFAULT 1,
+  conteudo_html TEXT,        -- snapshot para auditoria
+  pdf_ref TEXT,              -- URL/ID do PDF gerado
+  validado_por TEXT,
+  validado_em TIMESTAMP
+);
+              </div>
+              <div class="hint">
+                O documento prevê recomendações + cronograma de ações. :contentReference[oaicite:17]{index=17}
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ELABORAÇÃO -->
+    <section class="view" id="view-elaboracao" hidden>
+      <div class="grid">
+
+        <div class="card">
+          <div class="hd">
+            <div>
+              <h3>Elaboração (Fase 2/3)</h3>
+              <p>Monte o relatório a partir dos dados cadastrados.</p>
+            </div>
+            <span class="badge ok">Relatório</span>
+          </div>
+          <div class="bd">
+            <div class="tabs" id="docTabs">
+              <button class="active" data-subview="doc-template">Template</button>
+              <button data-subview="doc-conteudo">Conteúdo</button>
+              <button data-subview="doc-recomendacoes">Recomendações</button>
+              <button data-subview="doc-cronograma">Cronograma</button>
+            </div>
+
+            <div id="doc-template">
+              <div class="small">Blocos do relatório (habilite/desabilite conforme necessidade):</div>
+              <div class="row" style="margin-top:10px">
+                <div>
+                  <label><input type="checkbox" id="blkIdent" checked /> Identificação / Demanda / Objetivos</label>
+                  <label><input type="checkbox" id="blkLegis" checked /> Considerações legislativas/normativas</label>
+                  <label><input type="checkbox" id="blkEtapas" checked /> Etapas (Fase 1/2/3)</label>
+                  <label><input type="checkbox" id="blkTarefas" checked /> Tarefas (prescrita x real)</label>
+                </div>
+                <div>
+                  <label><input type="checkbox" id="blkRiscos" checked /> Avaliação de perigos/riscos (tabelas)</label>
+                  <label><input type="checkbox" id="blkResumo" checked /> Tabela resumo riscos x soluções</label>
+                  <label><input type="checkbox" id="blkEncerr" checked /> Encerramento / validade / responsável</label>
+                </div>
+              </div>
+
+              <div class="hint" style="margin-top:10px">
+                Etapas e itens de documento seguem o quadro “FASE 1/2/3”. :contentReference[oaicite:18]{index=18}
+              </div>
+
+              <button class="btn primary" id="btnMontarHTML" style="margin-top:10px">Montar HTML do relatório</button>
+            </div>
+
+            <div id="doc-conteudo" hidden>
+              <label>HTML gerado (prévia para o back-end renderizar em PDF)</label>
+              <textarea id="docHtml" style="min-height:260px" placeholder="Clique em 'Montar HTML do relatório' para gerar..."></textarea>
+              <div class="hint">
+                Inclui: identificação/demanda/objetivos :contentReference[oaicite:19]{index=19}, etapas :contentReference[oaicite:20]{index=20} e tarefas prescrita x real :contentReference[oaicite:21]{index=21}.
+              </div>
+            </div>
+
+            <div id="doc-recomendacoes" hidden>
+              <div class="row">
+                <div>
+                  <label>Recomendações (texto livre)</label>
+                  <textarea id="recomendacoes" placeholder="Ex.: micro pausas, suporte de monitor, ginástica laboral, alternância de atividades..."></textarea>
+                </div>
+                <div>
+                  <label>Fonte/observação</label>
+                  <textarea id="recomendacoesObs" placeholder="Opcional: referencie itens do checklist/tabela resumo"></textarea>
+                </div>
+              </div>
+              <div class="hint">
+                O documento traz recomendações e “tabela resumo de riscos x soluções”. :contentReference[oaicite:22]{index=22}
+              </div>
+              <button class="btn ok" id="btnSalvarRecomendacoes" style="margin-top:10px">Salvar recomendações</button>
+            </div>
+
+            <div id="doc-cronograma" hidden>
+              <div class="row">
+                <div>
+                  <label>Descrição da ação</label>
+                  <input id="cronDesc" placeholder="Ex.: Instalar suporte de monitor em posto 1" />
+                </div>
+                <div>
+                  <label>Responsável</label>
+                  <input id="cronResp" placeholder="Ex.: Administração / COERGO" />
+                </div>
+              </div>
+              <div class="row" style="margin-top:12px">
+                <div>
+                  <label>Início</label>
+                  <input id="cronIni" type="date" />
+                </div>
+                <div>
+                  <label>Fim</label>
+                  <input id="cronFim" type="date" />
+                </div>
+              </div>
+              <button class="btn ok" id="btnAddCron" style="margin-top:10px">Adicionar ao cronograma</button>
+
+              <div class="divider"></div>
+
+              <table class="table">
+                <thead><tr><th>Ação</th><th>Responsável</th><th>Período</th><th>Status</th></tr></thead>
+                <tbody id="dbCronBody"></tbody>
+              </table>
+              <div class="hint">
+                O documento prevê “cronograma de ações” e implantação das melhorias. :contentReference[oaicite:23]{index=23}
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- VALIDAÇÃO -->
+    <section class="view" id="view-validacao" hidden>
+      <div class="grid">
+        <div class="card">
+          <div class="hd">
+            <div>
+              <h3>Validação</h3>
+              <p>Revisão interna → validação técnica → aprovação do cliente.</p>
+            </div>
+            <span class="badge warn">workflow</span>
+          </div>
+          <div class="bd">
+            <div class="row">
+              <div>
+                <label>Responsável técnico (assinatura)</label>
+                <input id="respTecnico" placeholder="Nome / Registro (ex.: CREFITO...)" />
+                <div class="hint">
+                  Encerramento do documento inclui responsável técnico e validade. :contentReference[oaicite:24]{index=24}
+                </div>
+              </div>
+              <div>
+                <label>Validade do documento</label>
+                <input id="validade" placeholder="Ex.: 2 anos / data final" />
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <table class="table">
+              <thead><tr><th>Etapa</th><th>Responsável</th><th>Status</th><th>Observações</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td>Revisão interna (conteúdo)</td>
+                  <td><input id="valRevResp" placeholder="Nome" /></td>
+                  <td>
+                    <select id="valRevStatus">
+                      <option value="pendente">Pendente</option>
+                      <option value="ok">OK</option>
+                      <option value="ajustes">Ajustes</option>
+                    </select>
+                  </td>
+                  <td><input id="valRevObs" placeholder="Comentários" /></td>
+                </tr>
+                <tr>
+                  <td>Validação técnica (normas/métodos)</td>
+                  <td><input id="valTecResp" placeholder="Nome" /></td>
+                  <td>
+                    <select id="valTecStatus">
+                      <option value="pendente">Pendente</option>
+                      <option value="ok">OK</option>
+                      <option value="ajustes">Ajustes</option>
+                    </select>
+                  </td>
+                  <td><input id="valTecObs" placeholder="Comentários" /></td>
+                </tr>
+                <tr>
+                  <td>Aprovação do cliente</td>
+                  <td><input id="valCliResp" placeholder="Nome" /></td>
+                  <td>
+                    <select id="valCliStatus">
+                      <option value="pendente">Pendente</option>
+                      <option value="ok">Aprovado</option>
+                      <option value="ajustes">Reprovado/ajustes</option>
+                    </select>
+                  </td>
+                  <td><input id="valCliObs" placeholder="Comentários" /></td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap">
+              <button class="btn ok" id="btnMarcarValidado">Marcar como validado</button>
+              <button class="btn" id="btnVoltarElab">Voltar para elaboração</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PDF -->
+    <section class="view" id="view-pdf" hidden>
+      <div class="grid">
+        <div class="card">
+          <div class="hd">
+            <div>
+              <h3>Entrega em PDF</h3>
+              <p>Geração do PDF, controle de versão e comprovante de entrega.</p>
+            </div>
+            <span class="badge ok">Fase 3</span>
+          </div>
+          <div class="bd">
+            <div class="row">
+              <div>
+                <label>Versão do documento</label>
+                <input id="pdfVersao" type="number" min="1" value="1" />
+              </div>
+              <div>
+                <label>Status de entrega</label>
+                <select id="pdfStatus">
+                  <option value="nao">Não entregue</option>
+                  <option value="enviado">Enviado</option>
+                  <option value="confirmado">Confirmado</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="row" style="margin-top:12px">
+              <div>
+                <label>E-mail do destinatário</label>
+                <input id="pdfEmail" placeholder="cliente@empresa.com" />
+              </div>
+              <div>
+                <label>Data de entrega</label>
+                <input id="pdfData" type="date" />
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div style="display:flex; gap:8px; flex-wrap:wrap">
+              <button class="btn primary" id="btnGerarPDF">Gerar PDF</button>
+              <button class="btn" id="btnBaixarPDF">Baixar PDF</button>
+              <button class="btn ok" id="btnRegistrarEntrega">Registrar entrega</button>
+            </div>
+
+            <div class="hint" style="margin-top:10px">
+              O documento final prevê “documento a ser entregue” (Fase 3) e encerramento com validade. :contentReference[oaicite:25]{index=25} :contentReference[oaicite:26]{index=26}
+            </div>
+
+            <div class="card" style="margin-top:14px">
+              <div class="hd">
+                <div>
+                  <h3>Log de entregas</h3>
+                  <p>Histórico (auditoria).</p>
+                </div>
+                <span class="badge">log</span>
+              </div>
+              <div class="bd">
+                <table class="table">
+                  <thead><tr><th>Versão</th><th>Data</th><th>Status</th><th>Destino</th></tr></thead>
+                  <tbody id="dbEntregaBody"></tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  // =====================
+  // Local “state”
+  // =====================
+  const storeKey = "aep_module_state_v1";
+  const state = loadState();
+
+  function loadState(){
+    try{ return JSON.parse(localStorage.getItem(storeKey)) || defaultState(); }
+    catch(e){ return defaultState(); }
+  }
+  function defaultState(){
+    return {
+      empresa:{ nome:"", cnpj:"", endereco:"", cep:"", cnae:"", grau:"", demanda:"", objetivos:"", cnaeRisco:"" },
+      ghe:[],
+      tarefas:[],
+      entrevistas:[],
+      registros:[],
+      riscos:[],
+      recomendacoes:{ texto:"", obs:"" },
+      cronograma:[],
+      entregas:[],
+      validacao:{
+        respTecnico:"", validade:"",
+        rev:{resp:"", status:"pendente", obs:""},
+        tec:{resp:"", status:"pendente", obs:""},
+        cli:{resp:"", status:"pendente", obs:""},
+        validado:false
+      },
+      visita:{ data:"", acompanhante:"" },
+      doc:{ html:"", blocks:{ ident:true, legis:true, etapas:true, tarefas:true, riscos:true, resumo:true, encerr:true } }
+    }
+  }
+  function saveState(){
+    localStorage.setItem(storeKey, JSON.stringify(state));
+    refreshUI();
+  }
+
+  // =====================
+  // Navigation
+  // =====================
+  const nav = document.getElementById("nav");
+  const views = {
+    dashboard: document.getElementById("view-dashboard"),
+    cadastro: document.getElementById("view-cadastro"),
+    campo: document.getElementById("view-campo"),
+    banco: document.getElementById("view-banco"),
+    elaboracao: document.getElementById("view-elaboracao"),
+    validacao: document.getElementById("view-validacao"),
+    pdf: document.getElementById("view-pdf"),
+  };
+  const pageTitle = document.getElementById("pageTitle");
+  const pageSubtitle = document.getElementById("pageSubtitle");
+
+  const meta = {
+    dashboard: {t:"Dashboard", s:"Acompanhe o andamento do caso e os próximos passos."},
+    cadastro: {t:"Cadastro", s:"Cadastre empresa e escopo (GHE/Setor/Função)."},
+    campo: {t:"Levantamento em Campo", s:"Visita, entrevistas, registros e identificação de perigos/riscos (Fase 1)."},
+    banco: {t:"Banco de Dados", s:"Dados consolidados cadastrados no módulo."},
+    elaboracao: {t:"Elaboração", s:"Monte o relatório e o HTML que será renderizado em PDF (Fase 2/3)."},
+    validacao: {t:"Validação", s:"Revisão interna, validação técnica e aprovação do cliente."},
+    pdf: {t:"Entrega em PDF", s:"Controle de versão, geração do PDF e registro de entrega."},
+  };
+
+  nav.addEventListener("click", (e)=>{
+    const btn = e.target.closest("button[data-view]");
+    if(!btn) return;
+    const view = btn.dataset.view;
+    setView(view);
+  });
+
+  function setView(view){
+    Object.keys(views).forEach(k => views[k].hidden = (k !== view));
+    [...nav.querySelectorAll("button")].forEach(b=>b.classList.toggle("active", b.dataset.view === view));
+    pageTitle.textContent = meta[view].t;
+    pageSubtitle.textContent = meta[view].s;
+  }
+
+  // =====================
+  // Sub-tabs
+  // =====================
+  function setupTabs(wrapperId, prefix){
+    const wrap = document.getElementById(wrapperId);
+    wrap.addEventListener("click", (e)=>{
+      const b = e.target.closest("button[data-subview]");
+      if(!b) return;
+      [...wrap.querySelectorAll("button")].forEach(x=>x.classList.toggle("active", x===b));
+      const sub = b.dataset.subview;
+
+      // show/hide by known ids
+      const ids = [...document.querySelectorAll(`[id^="${prefix}-"]`)].map(x=>x.id);
+      ids.forEach(id=>{
+        const el = document.getElementById(id);
+        el.hidden = (id !== `${prefix}-${sub.replace(prefix+"-","")}` && id !== `${sub}`);
+      });
+
+      // special: for some groups, subview id already includes prefix
+      const el2 = document.getElementById(sub);
+      if(el2){
+        // hide siblings with same prefix
+        [...document.querySelectorAll(`[id^="${prefix}-"]`)].forEach(x=>x.hidden = true);
+        el2.hidden = false;
+      }
+    });
+  }
+
+  // Campo tabs (manual mapping)
+  const campoTabs = document.getElementById("campoTabs");
+  campoTabs.addEventListener("click", (e)=>{
+    const b = e.target.closest("button[data-subview]");
+    if(!b) return;
+    [...campoTabs.querySelectorAll("button")].forEach(x=>x.classList.toggle("active", x===b));
+    const sub = b.dataset.subview;
+    ["tarefas","entrevistas","registros","perigos"].forEach(k=>{
+      document.getElementById(`campo-${k}`).hidden = (k !== sub);
+    });
+  });
+
+  // DB tabs
+  const dbTabs = document.getElementById("dbTabs");
+  dbTabs.addEventListener("click", (e)=>{
+    const b = e.target.closest("button[data-subview]");
+    if(!b) return;
+    [...dbTabs.querySelectorAll("button")].forEach(x=>x.classList.toggle("active", x===b));
+    const sub = b.dataset.subview;
+    ["db-ghe","db-tarefas","db-entrevistas","db-registros","db-riscos","db-modelo"].forEach(id=>{
+      document.getElementById(id).hidden = (id !== sub);
+    });
+  });
+
+  // Doc tabs
+  const docTabs = document.getElementById("docTabs");
+  docTabs.addEventListener("click", (e)=>{
+    const b = e.target.closest("button[data-subview]");
+    if(!b) return;
+    [...docTabs.querySelectorAll("button")].forEach(x=>x.classList.toggle("active", x===b));
+    const sub = b.dataset.subview;
+    ["doc-template","doc-conteudo","doc-recomendacoes","doc-cronograma"].forEach(id=>{
+      document.getElementById(id).hidden = (id !== sub);
+    });
+  });
+
+  // =====================
+  // Wiring: dashboard inputs
+  // =====================
+  const bind = (id, get, set) => {
+    const el = document.getElementById(id);
+    el.value = get() ?? "";
+    el.addEventListener("input", ()=>{ set(el.value); });
+  };
+
+  // Dashboard fields mirrored with Cadastro (kept simple)
+  bind("empresaNome", ()=>state.empresa.nome, v=>state.empresa.nome=v);
+  bind("empresaCnpj", ()=>state.empresa.cnpj, v=>state.empresa.cnpj=v);
+  bind("empresaEndereco", ()=>state.empresa.endereco, v=>state.empresa.endereco=v);
+  bind("empresaCnaeRisco", ()=>state.empresa.cnaeRisco, v=>state.empresa.cnaeRisco=v);
+  bind("demanda", ()=>state.empresa.demanda, v=>state.empresa.demanda=v);
+  bind("objetivos", ()=>state.empresa.objetivos, v=>state.empresa.objetivos=v);
+
+  // Cadastro fields
+  bind("cEmpresa", ()=>state.empresa.nome, v=>state.empresa.nome=v);
+  bind("cCnpj", ()=>state.empresa.cnpj, v=>state.empresa.cnpj=v);
+  bind("cEndereco", ()=>state.empresa.endereco, v=>state.empresa.endereco=v);
+  bind("cCep", ()=>state.empresa.cep, v=>state.empresa.cep=v);
+  bind("cCnae", ()=>state.empresa.cnae, v=>state.empresa.cnae=v);
+  const cGrau = document.getElementById("cGrau");
+  cGrau.value = state.empresa.grau || "";
+  cGrau.addEventListener("change", ()=> state.empresa.grau = cGrau.value);
+
+  // Campo visit
+  const campoData = document.getElementById("campoData");
+  campoData.value = state.visita.data || "";
+  campoData.addEventListener("change", ()=> state.visita.data = campoData.value);
+
+  bind("campoAcompanhante", ()=>state.visita.acompanhante, v=>state.visita.acompanhante=v);
+
+  // =====================
+  // Add GHE
+  // =====================
+  document.getElementById("btnAddGHE").addEventListener("click", ()=>{
+    const ghe = {
+      id: crypto.randomUUID(),
+      codigo: document.getElementById("gheCodigo").value.trim(),
+      setor: document.getElementById("gheSetor").value.trim(),
+      funcao: document.getElementById("gheFuncao").value.trim(),
+    };
+    if(!ghe.codigo || !ghe.setor || !ghe.funcao){
+      alert("Preencha GHE, setor e função.");
+      return;
+    }
+    state.ghe.push(ghe);
+    document.getElementById("gheCodigo").value="";
+    document.getElementById("gheSetor").value="";
+    document.getElementById("gheFuncao").value="";
+    saveState();
+    setView("banco");
+    document.querySelector('#dbTabs button[data-subview="db-ghe"]').click();
+  });
+
+  // =====================
+  // Save Tarefas
+  // =====================
+  document.getElementById("btnSalvarTarefas").addEventListener("click", ()=>{
+    const t = {
+      id: crypto.randomUUID(),
+      setor: document.getElementById("campoSetor").value.trim(),
+      funcao: document.getElementById("campoFuncao").value.trim(),
+      prescrita: document.getElementById("tarefaPrescrita").value.trim(),
+      real: document.getElementById("tarefaReal").value.trim(),
+    };
+    if(!t.setor || !t.funcao || !t.prescrita || !t.real){
+      alert("Preencha setor, função, tarefa prescrita e tarefa real.");
+      return;
+    }
+    state.tarefas.push(t);
+    saveState();
+    alert("Tarefas salvas.");
+  });
+
+  // =====================
+  // Save Entrevista
+  // =====================
+  document.getElementById("btnSalvarEntrevista").addEventListener("click", ()=>{
+    const ent = {
+      id: crypto.randomUUID(),
+      colab: document.getElementById("entrevistaColab").value.trim(),
+      queixas: document.getElementById("entrevistaQueixas").value.trim(),
+      texto: document.getElementById("entrevistaTexto").value.trim(),
+    };
+    if(!ent.colab || !ent.texto){
+      alert("Informe ao menos Colaborador (ref.) e Relato.");
+      return;
+    }
+    state.entrevistas.push(ent);
+    saveState();
+    alert("Entrevista salva.");
+  });
+
+  // =====================
+  // Save Registro
+  // =====================
+  document.getElementById("btnSalvarRegistro").addEventListener("click", ()=>{
+    const r = {
+      id: crypto.randomUUID(),
+      url: document.getElementById("registroUrl").value.trim(),
+      desc: document.getElementById("registroDesc").value.trim(),
+    };
+    if(!r.url || !r.desc){
+      alert("Informe arquivo/URL e descrição.");
+      return;
+    }
+    state.registros.push(r);
+    saveState();
+    alert("Registro salvo.");
+  });
+
+  // =====================
+  // Save Risco
+  // =====================
+  document.getElementById("btnSalvarPerigo").addEventListener("click", ()=>{
+    const map = { ausencia:"Ausência", baixo:"Presença (Baixo)", medioalto:"Presença (Médio/Alto)" };
+    const x = {
+      id: crypto.randomUUID(),
+      categoria: document.getElementById("perigoCategoria").value,
+      legenda: document.getElementById("perigoLegenda").value,
+      legendaLabel: map[document.getElementById("perigoLegenda").value],
+      desc: document.getElementById("perigoDesc").value.trim(),
+      motivo: document.getElementById("perigoMotivo").value.trim(),
+      emb: document.getElementById("perigoEmbasamento").value.trim(),
+    };
+    if(!x.desc){
+      alert("Descreva o perigo/fator de risco.");
+      return;
+    }
+    state.riscos.push(x);
+    saveState();
+    alert("Item salvo.");
+  });
+
+  // =====================
+  // Recommendations
+  // =====================
+  bind("recomendacoes", ()=>state.recomendacoes.texto, v=>state.recomendacoes.texto=v);
+  bind("recomendacoesObs", ()=>state.recomendacoes.obs, v=>state.recomendacoes.obs=v);
+  document.getElementById("btnSalvarRecomendacoes").addEventListener("click", ()=>{
+    saveState();
+    alert("Recomendações salvas.");
+  });
+
+  // =====================
+  // Cronograma
+  // =====================
+  document.getElementById("btnAddCron").addEventListener("click", ()=>{
+    const a = {
+      id: crypto.randomUUID(),
+      desc: document.getElementById("cronDesc").value.trim(),
+      resp: document.getElementById("cronResp").value.trim(),
+      ini: document.getElementById("cronIni").value,
+      fim: document.getElementById("cronFim").value,
+      status: "PROPOSTO"
+    };
+    if(!a.desc) { alert("Descreva a ação."); return; }
+    state.cronograma.push(a);
+    document.getElementById("cronDesc").value="";
+    document.getElementById("cronResp").value="";
+    document.getElementById("cronIni").value="";
+    document.getElementById("cronFim").value="";
+    saveState();
+  });
+
+  // =====================
+  // Validation
+  // =====================
+  bind("respTecnico", ()=>state.validacao.respTecnico, v=>state.validacao.respTecnico=v);
+  bind("validade", ()=>state.validacao.validade, v=>state.validacao.validade=v);
+
+  // table selects/inputs
+  function bindValRow(prefix){
+    const resp = document.getElementById(prefix+"Resp");
+    const status = document.getElementById(prefix+"Status");
+    const obs = document.getElementById(prefix+"Obs");
+    const target = prefix === "valRev" ? state.validacao.rev : (prefix==="valTec" ? state.validacao.tec : state.validacao.cli);
+    resp.value = target.resp || "";
+    status.value = target.status || "pendente";
+    obs.value = target.obs || "";
+    resp.addEventListener("input", ()=>target.resp = resp.value);
+    status.addEventListener("change", ()=>target.status = status.value);
+    obs.addEventListener("input", ()=>target.obs = obs.value);
+  }
+  bindValRow("valRev");
+  bindValRow("valTec");
+  bindValRow("valCli");
+
+  document.getElementById("btnMarcarValidado").addEventListener("click", ()=>{
+    // simplistic rule: all statuses ok
+    const allOk = [state.validacao.rev, state.validacao.tec, state.validacao.cli].every(x=>x.status==="ok");
+    if(!allOk){
+      alert("Para marcar como validado, deixe Revisão, Técnica e Cliente como OK/Aprovado.");
+      return;
+    }
+    state.validacao.validado = true;
+    saveState();
+    alert("Caso marcado como VALIDADO.");
+  });
+
+  document.getElementById("btnVoltarElab").addEventListener("click", ()=>{
+    setView("elaboracao");
+    document.querySelector('#docTabs button[data-subview="doc-template"]').click();
+  });
+
+  // =====================
+  // Document builder (HTML)
+  // =====================
+  document.getElementById("blkIdent").checked = state.doc.blocks.ident;
+  document.getElementById("blkLegis").checked = state.doc.blocks.legis;
+  document.getElementById("blkEtapas").checked = state.doc.blocks.etapas;
+  document.getElementById("blkTarefas").checked = state.doc.blocks.tarefas;
+  document.getElementById("blkRiscos").checked = state.doc.blocks.riscos;
+  document.getElementById("blkResumo").checked = state.doc.blocks.resumo;
+  document.getElementById("blkEncerr").checked = state.doc.blocks.encerr;
+
+  ["blkIdent","blkLegis","blkEtapas","blkTarefas","blkRiscos","blkResumo","blkEncerr"].forEach(id=>{
+    document.getElementById(id).addEventListener("change", ()=>{
+      const map = { blkIdent:"ident", blkLegis:"legis", blkEtapas:"etapas", blkTarefas:"tarefas", blkRiscos:"riscos", blkResumo:"resumo", blkEncerr:"encerr" };
+      state.doc.blocks[map[id]] = document.getElementById(id).checked;
+      saveState();
+    });
+  });
+
+  document.getElementById("btnMontarHTML").addEventListener("click", ()=>{
+    state.doc.html = buildReportHTML();
+    document.getElementById("docHtml").value = state.doc.html;
+    saveState();
+    // jump to content tab
+    document.querySelector('#docTabs button[data-subview="doc-conteudo"]').click();
+  });
+
+  function esc(s){
+    return (s||"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+  }
+
+  function buildReportHTML(){
+    const e = state.empresa;
+    const blocks = state.doc.blocks;
+
+    const risksRows = state.riscos.map(r=>`
+      <tr>
+        <td>${esc(r.categoria)}</td>
+        <td>${esc(r.legendaLabel)}</td>
+        <td>${esc(r.desc)}</td>
+        <td>${esc(r.motivo)}</td>
+        <td>${esc(r.emb)}</td>
+      </tr>`).join("");
+
+    const tarefasRows = state.tarefas.map(t=>`
+      <tr>
+        <td>${esc(t.setor)}</td>
+        <td>${esc(t.funcao)}</td>
+        <td>${esc(t.prescrita)}</td>
+        <td>${esc(t.real)}</td>
+      </tr>`).join("");
+
+    const registrosRows = state.registros.map(r=>`
+      <li><strong>${esc(r.desc)}:</strong> ${esc(r.url)}</li>`).join("");
+
+    const entrevistasRows = state.entrevistas.map(x=>`
+      <li><strong>${esc(x.colab)}:</strong> ${esc(x.queixas)}<br/>${esc(x.texto)}</li>`).join("");
+
+    const cronRows = state.cronograma.map(a=>`
+      <tr>
+        <td>${esc(a.desc)}</td>
+        <td>${esc(a.resp)}</td>
+        <td>${esc(a.ini)} &rarr; ${esc(a.fim)}</td>
+        <td>${esc(a.status)}</td>
+      </tr>`).join("");
+
+    const gheRows = state.ghe.map(g=>`
+      <tr><td>${esc(g.codigo)}</td><td>${esc(g.setor)}</td><td>${esc(g.funcao)}</td></tr>`).join("");
+
+    return `<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>AEP - Relatório</title>
+<style>
+  body{font-family: Arial, Helvetica, sans-serif; font-size:12px; color:#111; margin:24px;}
+  h1{font-size:18px; margin:0 0 8px}
+  h2{font-size:14px; margin:16px 0 8px}
+  p{margin:6px 0}
+  .muted{color:#555}
+  table{width:100%; border-collapse:collapse; margin:8px 0}
+  th,td{border:1px solid #bbb; padding:6px; vertical-align:top}
+  th{background:#f2f2f2; text-align:left}
+  ul{margin:6px 0 6px 18px}
+  .box{border:1px solid #bbb; padding:10px; margin:8px 0}
+</style>
+</head>
+<body>
+  <h1>AVALIAÇÃO ERGONÔMICA PRELIMINAR (AEP)</h1>
+  <p class="muted">Relatório gerado pelo sistema</p>
+
+  ${blocks.ident ? `
+  <h2>Identificação</h2>
+  <div class="box">
+    <p><strong>Empresa:</strong> ${esc(e.nome)}</p>
+    <p><strong>CNPJ:</strong> ${esc(e.cnpj)}</p>
+    <p><strong>Endereço:</strong> ${esc(e.endereco)}</p>
+    <p><strong>CEP:</strong> ${esc(e.cep)}</p>
+    <p><strong>CNAE:</strong> ${esc(e.cnae)}</p>
+    <p><strong>Grau de risco:</strong> ${esc(e.grau)}</p>
+  </div>
+
+  <h2>Demanda</h2>
+  <p>${esc(e.demanda)}</p>
+
+  <h2>Objetivos</h2>
+  <p>${esc(e.objetivos)}</p>
+  ` : ""}
+
+  ${blocks.legis ? `
+  <h2>Considerações legislativas, normativas e técnicas</h2>
+  <p class="muted">Inserir aqui a lista de normas aplicáveis conforme seu template padrão.</p>
+  ` : ""}
+
+  ${blocks.etapas ? `
+  <h2>Etapas (fluxo do sistema)</h2>
+  <div class="box">
+    <p><strong>Fase 1 — Coleta:</strong> visita/inspeção, entrevistas, registro de fotos e vídeos.</p>
+    <p><strong>Fase 2 — Avaliação:</strong> identificação de perigos/riscos (biomecânicos, mobiliários/equipamentos, organizacionais, ambientais, psicossociais/cognitivos).</p>
+    <p><strong>Fase 3 — Documento:</strong> resumo, recomendações, cronograma, encerramento e referências.</p>
+  </div>
+
+  <h2>Legendas de resultado</h2>
+  <ul>
+    <li>Ausência de perigo/fator de risco e/ou risco ergonômico</li>
+    <li>Presença de perigo/fator de risco e/ou risco ergonômico baixo</li>
+    <li>Presença de risco ergonômico: médio/alto</li>
+  </ul>
+  ` : ""}
+
+  <h2>GHE / Setores / Funções analisadas</h2>
+  <table>
+    <thead><tr><th>GHE</th><th>Setor</th><th>Função</th></tr></thead>
+    <tbody>${gheRows || "<tr><td colspan='3' class='muted'>Sem dados</td></tr>"}</tbody>
+  </table>
+
+  ${blocks.tarefas ? `
+  <h2>Tarefas (prescrita x real)</h2>
+  <table>
+    <thead><tr><th>Setor</th><th>Função</th><th>Prescrita</th><th>Real</th></tr></thead>
+    <tbody>${tarefasRows || "<tr><td colspan='4' class='muted'>Sem dados</td></tr>"}</tbody>
+  </table>
+  ` : ""}
+
+  <h2>Entrevistas</h2>
+  <ul>${entrevistasRows || "<li class='muted'>Sem registros</li>"}</ul>
+
+  <h2>Registros fotográficos (foto/vídeo)</h2>
+  <ul>${registrosRows || "<li class='muted'>Sem registros</li>"}</ul>
+
+  ${blocks.riscos ? `
+  <h2>Avaliação de perigos (fatores de risco) e riscos ergonômicos</h2>
+  <table>
+    <thead><tr><th>Categoria</th><th>Legenda</th><th>Descrição</th><th>Motivo</th><th>Embasamento</th></tr></thead>
+    <tbody>${risksRows || "<tr><td colspan='5' class='muted'>Sem dados</td></tr>"}</tbody>
+  </table>
+  ` : ""}
+
+  ${blocks.resumo ? `
+  <h2>Recomendações / Tabela resumo (síntese)</h2>
+  <div class="box">
+    <p>${esc(state.recomendacoes.texto) || "<span class='muted'>Sem recomendações registradas</span>"}</p>
+    <p class="muted">${esc(state.recomendacoes.obs)}</p>
+  </div>
+
+  <h2>Cronograma de ações</h2>
+  <table>
+    <thead><tr><th>Ação</th><th>Responsável</th><th>Período</th><th>Status</th></tr></thead>
+    <tbody>${cronRows || "<tr><td colspan='4' class='muted'>Sem ações registradas</td></tr>"}</tbody>
+  </table>
+  ` : ""}
+
+  ${blocks.encerr ? `
+  <h2>Encerramento</h2>
+  <div class="box">
+    <p><strong>Responsável técnico:</strong> ${esc(state.validacao.respTecnico)}</p>
+    <p><strong>Validade:</strong> ${esc(state.validacao.validade)}</p>
+    <p class="muted">Reavaliar em caso de alteração de tarefas, layout ou modo operatório.</p>
+  </div>
+  ` : ""}
+
+</body>
+</html>`;
+  }
+
+  // =====================
+  // PDF / Delivery Log (mock)
+  // =====================
+  document.getElementById("btnRegistrarEntrega").addEventListener("click", ()=>{
+    const versao = Number(document.getElementById("pdfVersao").value || 1);
+    const status = document.getElementById("pdfStatus").value;
+    const email = document.getElementById("pdfEmail").value.trim();
+    const data = document.getElementById("pdfData").value;
+    if(!email){ alert("Informe e-mail do destinatário."); return; }
+    state.entregas.push({ id: crypto.randomUUID(), versao, status, email, data });
+    saveState();
+    alert("Entrega registrada.");
+  });
+
+  document.getElementById("btnGerarPDF").addEventListener("click", ()=>{
+    // mock: in real life, call backend (HTML->PDF).
+    if(!state.doc.html){ state.doc.html = buildReportHTML(); }
+    saveState();
+    alert("PDF gerado (mock). Integre com back-end para renderizar HTML→PDF.");
+  });
+  document.getElementById("btnBaixarPDF").addEventListener("click", ()=>{
+    alert("Mock: faça download via link retornado pelo back-end (storage).");
+  });
+
+  // Quick PDF button on top
+  document.getElementById("btnQuickPDF").addEventListener("click", ()=>{
+    setView("elaboracao");
+    if(!state.doc.html){ state.doc.html = buildReportHTML(); }
+    document.getElementById("docHtml").value = state.doc.html;
+    document.querySelector('#docTabs button[data-subview="doc-conteudo"]').click();
+    saveState();
+  });
+
+  // Global save / reset
+  document.getElementById("btnSave").addEventListener("click", ()=>{
+    saveState();
+    alert("Dados salvos (localStorage).");
+  });
+  document.getElementById("btnReset").addEventListener("click", ()=>{
+    if(!confirm("Isso apaga os dados salvos localmente neste navegador. Continuar?")) return;
+    localStorage.removeItem(storeKey);
+    location.reload();
+  });
+
+  // =====================
+  // Render lists & KPIs
+  // =====================
+  function refreshUI(){
+    // mirror fields
+    document.getElementById("cEmpresa").value = state.empresa.nome || "";
+    document.getElementById("empresaNome").value = state.empresa.nome || "";
+    document.getElementById("cCnpj").value = state.empresa.cnpj || "";
+    document.getElementById("empresaCnpj").value = state.empresa.cnpj || "";
+    document.getElementById("cEndereco").value = state.empresa.endereco || "";
+    document.getElementById("empresaEndereco").value = state.empresa.endereco || "";
+    document.getElementById("cCep").value = state.empresa.cep || "";
+    document.getElementById("cCnae").value = state.empresa.cnae || "";
+    document.getElementById("cGrau").value = state.empresa.grau || "";
+    document.getElementById("empresaCnaeRisco").value = state.empresa.cnaeRisco || "";
+
+    // DB tables
+    const gheBody = document.getElementById("dbGheBody");
+    gheBody.innerHTML = state.ghe.map(g=>`
+      <tr>
+        <td>${escapeHtml(g.codigo)}</td>
+        <td>${escapeHtml(g.setor)}</td>
+        <td>${escapeHtml(g.funcao)}</td>
+        <td><button class="btn danger" onclick="removeItem('ghe','${g.id}')">Excluir</button></td>
+      </tr>`).join("") || `<tr><td colspan="4" class="small">Sem itens cadastrados</td></tr>`;
+
+    const tBody = document.getElementById("dbTarefasBody");
+    tBody.innerHTML = state.tarefas.map(t=>`
+      <tr>
+        <td>${escapeHtml(t.setor)}</td>
+        <td>${escapeHtml(t.funcao)}</td>
+        <td>${escapeHtml(t.prescrita)}</td>
+        <td>${escapeHtml(t.real)}</td>
+      </tr>`).join("") || `<tr><td colspan="4" class="small">Sem tarefas cadastradas</td></tr>`;
+
+    const eBody = document.getElementById("dbEntrevistasBody");
+    eBody.innerHTML = state.entrevistas.map(x=>`
+      <tr>
+        <td>${escapeHtml(x.colab)}</td>
+        <td>${escapeHtml(x.queixas)}</td>
+        <td>${escapeHtml(x.texto)}</td>
+      </tr>`).join("") || `<tr><td colspan="3" class="small">Sem entrevistas</td></tr>`;
+
+    const rBody = document.getElementById("dbRegistrosBody");
+    rBody.innerHTML = state.registros.map(x=>`
+      <tr>
+        <td>${escapeHtml(x.url)}</td>
+        <td>${escapeHtml(x.desc)}</td>
+      </tr>`).join("") || `<tr><td colspan="2" class="small">Sem registros</td></tr>`;
+
+    const riscosBody = document.getElementById("dbRiscosBody");
+    riscosBody.innerHTML = state.riscos.map(x=>`
+      <tr>
+        <td>${escapeHtml(x.categoria)}</td>
+        <td>${escapeHtml(x.legendaLabel)}</td>
+        <td>${escapeHtml(x.desc)}</td>
+        <td>${escapeHtml(x.motivo)}</td>
+        <td>${escapeHtml(x.emb)}</td>
+      </tr>`).join("") || `<tr><td colspan="5" class="small">Sem perigos/riscos</td></tr>`;
+
+    // Cron table
+    const cronBody = document.getElementById("dbCronBody");
+    cronBody.innerHTML = state.cronograma.map(a=>`
+      <tr>
+        <td>${escapeHtml(a.desc)}</td>
+        <td>${escapeHtml(a.resp)}</td>
+        <td>${escapeHtml(a.ini)} → ${escapeHtml(a.fim)}</td>
+        <td><span class="badge">${escapeHtml(a.status)}</span></td>
+      </tr>`).join("") || `<tr><td colspan="4" class="small">Sem ações no cronograma</td></tr>`;
+
+    // Delivery log
+    const entregaBody = document.getElementById("dbEntregaBody");
+    entregaBody.innerHTML = state.entregas.map(x=>`
+      <tr>
+        <td>${x.versao}</td>
+        <td>${escapeHtml(x.data)}</td>
+        <td>${escapeHtml(x.status)}</td>
+        <td>${escapeHtml(x.email)}</td>
+      </tr>`).join("") || `<tr><td colspan="4" class="small">Sem entregas registradas</td></tr>`;
+
+    // Document HTML
+    document.getElementById("docHtml").value = state.doc.html || "";
+
+    // KPI estimates (simple heuristics)
+    const coleta = scorePercent([
+      !!state.visita.data,
+      state.tarefas.length>0,
+      state.entrevistas.length>0,
+      state.registros.length>0
+    ]);
+    const avaliacao = scorePercent([
+      state.riscos.length>0
+    ]);
+    const documento = scorePercent([
+      (state.doc.html||"").length>50,
+      (state.recomendacoes.texto||"").trim().length>0 || state.cronograma.length>0,
+      state.validacao.validado
+    ]);
+
+    document.getElementById("kpiColeta").textContent = coleta + "%";
+    document.getElementById("kpiAvaliacao").textContent = avaliacao + "%";
+    document.getElementById("kpiDocumento").textContent = documento + "%";
+
+    // Case status
+    const dot = document.getElementById("caseDot");
+    const label = document.getElementById("caseStatus");
+    let st = "Em andamento";
+    dot.className = "dot warn";
+    if(documento >= 66 && state.validacao.validado){
+      st = "Validado";
+      dot.className = "dot ok";
+    }else if(coleta < 34){
+      st = "Início (coleta pendente)";
+      dot.className = "dot warn";
+    }
+    label.textContent = st;
+
+    // Delivery checklist (rough completion)
+    const checklist = document.getElementById("deliveryChecklist");
+    const okEtapas = true; // always present in template builder; still tracked by doc blocks
+    const okLegendas = true;
+    const okTarefas = state.tarefas.length>0;
+    const okRec = (state.recomendacoes.texto||"").trim().length>0 || state.cronograma.length>0;
+    const okEncerr = (state.validacao.respTecnico||"").trim().length>0 && (state.validacao.validade||"").trim().length>0;
+
+    checklist.innerHTML = `
+      <tr><td>Etapas (Coleta/Avaliação/Documento)</td><td>${badge(okEtapas)}</td></tr>
+      <tr><td>Legendas de resultado (ausência / baixo / médio-alto)</td><td>${badge(okLegendas)}</td></tr>
+      <tr><td>Tarefa prescrita x tarefa real</td><td>${badge(okTarefas)}</td></tr>
+      <tr><td>Recomendações e cronograma</td><td>${badge(okRec)}</td></tr>
+      <tr><td>Encerramento / validade / responsável técnico</td><td>${badge(okEncerr)}</td></tr>
+    `;
+  }
+
+  function scorePercent(flags){
+    const total = flags.length;
+    const ok = flags.filter(Boolean).length;
+    return Math.round((ok/Math.max(1,total))*100);
+  }
+
+  function badge(ok){
+    return ok ? `<span class="badge ok">ok</span>` : `<span class="badge warn">pendente</span>`;
+  }
+
+  function escapeHtml(s){
+    return (s||"")
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;");
+  }
+
+  window.removeItem = (key, id)=>{
+    if(!confirm("Excluir este item?")) return;
+    state[key] = state[key].filter(x=>x.id !== id);
+    saveState();
+  };
+
+  // Init render
+  refreshUI();
+  setView("dashboard");
+</script>
+</body>
+</html>
+

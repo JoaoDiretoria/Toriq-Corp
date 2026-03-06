@@ -1,0 +1,167 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap');
+
+  :root {
+    /* Paleta TORIQ */
+    --background: 0 15% 93%; /* #E9EFEF */
+    --foreground: 174 29% 13%; /* #182B29 */
+    --card: 0 0% 100%;
+    --card-foreground: 174 29% 13%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 174 29% 13%;
+    --primary: 150 82% 48%; /* #16E17A */
+    --primary-foreground: 0 0% 6%; /* contrasta bem no verde claro */
+    --secondary: 166 79% 20%; /* #0B5D4A */
+    --secondary-foreground: 0 0% 96%;
+    --muted: 0 0% 25%; /* próximo do gray #2B2B2B */
+    --muted-foreground: 0 0% 35%; /* texto de apoio mais escuro para melhor contraste */
+    --accent: 174 29% 18%; /* tom escurecido para detalhes */
+    --accent-foreground: 0 0% 96%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 25%;
+    --input: 0 0% 85%;
+    --ring: 150 82% 48%;
+    --radius: 0.5rem;
+    --chart-1: 150 82% 48%;
+    --chart-2: 166 79% 20%;
+    --chart-3: 174 29% 13%;
+    --chart-4: 0 0% 25%;
+    --chart-5: 0 0% 93%;
+    --sidebar-background: 0 15% 93%;
+    --sidebar-foreground: 174 29% 13%;
+    --sidebar-primary: 150 82% 48%;
+    --sidebar-primary-foreground: 0 0% 6%;
+    --sidebar-accent: 166 79% 20%;
+    --sidebar-accent-foreground: 0 0% 96%;
+    --sidebar-border: 0 0% 25%;
+    --sidebar-ring: 150 82% 48%;
+    
+    /* Status colors */
+    --success: 142 76% 36%; /* #16a34a */
+    --success-foreground: 0 0% 98%;
+    --warning: 38 92% 50%; /* #f59e0b */
+    --warning-foreground: 0 0% 6%;
+    --error: 0 84% 60%; /* #ef4444 */
+    --error-foreground: 0 0% 98%;
+    --info: 199 89% 48%; /* #0ea5e9 */
+    --info-foreground: 0 0% 98%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    font-family: 'Outfit', 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6, .font-heading {
+    font-family: 'Conthrax', 'Outfit', 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    letter-spacing: 0.01em;
+  }
+}
+
+@layer utilities {
+  .bg-gradient-primary {
+    @apply bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] text-white;
+  }
+}
+
+/* Jelly animation for Kanban cards */
+@keyframes jelly {
+  0% { transform: scale(1, 1); }
+  25% { transform: scale(0.95, 1.05); }
+  50% { transform: scale(1.05, 0.95); }
+  75% { transform: scale(0.98, 1.02); }
+  100% { transform: scale(1, 1); }
+}
+
+.animate-jelly {
+  animation: jelly 0.4s ease-out;
+}
+
+/* Wiggle animation for notification bell */
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  15% { transform: rotate(12deg); }
+  30% { transform: rotate(-10deg); }
+  45% { transform: rotate(8deg); }
+  60% { transform: rotate(-6deg); }
+  75% { transform: rotate(4deg); }
+  90% { transform: rotate(-2deg); }
+}
+
+.animate-wiggle {
+  animation: wiggle 1s ease-in-out infinite;
+}
+
+/* Custom scrollbar for contract preview - Chrome/Safari/Edge */
+.contract-preview-area::-webkit-scrollbar {
+  width: 12px !important;
+  display: block !important;
+}
+
+.contract-preview-area::-webkit-scrollbar-track {
+  background: #e5e7eb !important;
+  border-radius: 6px !important;
+}
+
+.contract-preview-area::-webkit-scrollbar-thumb {
+  background: #fb923c !important;
+  border-radius: 6px !important;
+  border: 2px solid #e5e7eb !important;
+}
+
+.contract-preview-area::-webkit-scrollbar-thumb:hover {
+  background: #f97316 !important;
+}
+
+/* Firefox */
+.contract-preview-area {
+  scrollbar-width: auto !important;
+  scrollbar-color: #fb923c #e5e7eb !important;
+}
+
+/* Scrollbar sempre visível para tabelas */
+.scrollbar-always-visible {
+  overflow: auto !important;
+}
+
+.scrollbar-always-visible::-webkit-scrollbar {
+  width: 10px !important;
+  height: 10px !important;
+  display: block !important;
+}
+
+.scrollbar-always-visible::-webkit-scrollbar-track {
+  background: hsl(var(--muted)) !important;
+  border-radius: 5px !important;
+}
+
+.scrollbar-always-visible::-webkit-scrollbar-thumb {
+  background: hsl(var(--primary)) !important;
+  border-radius: 5px !important;
+}
+
+.scrollbar-always-visible::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary) / 0.8) !important;
+}
+
+.scrollbar-always-visible::-webkit-scrollbar-corner {
+  background: hsl(var(--muted)) !important;
+}
+
+/* Firefox */
+.scrollbar-always-visible {
+  scrollbar-width: auto !important;
+  scrollbar-color: hsl(var(--primary)) hsl(var(--muted)) !important;
+}

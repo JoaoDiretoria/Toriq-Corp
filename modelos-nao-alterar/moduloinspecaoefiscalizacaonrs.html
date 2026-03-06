@@ -1,0 +1,896 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SST • Inspeções e Fiscalizações por NR</title>
+  <style>
+    :root{
+      --bg:#0b1220;
+      --card:#0f1b33;
+      --card2:#0c162b;
+      --text:#e9efff;
+      --muted:#9bb0d6;
+      --border:rgba(255,255,255,.10);
+      --brand:#5a8bff;
+      --ok:#34d399;
+      --warn:#fbbf24;
+      --bad:#fb7185;
+      --shadow: 0 20px 60px rgba(0,0,0,.45);
+      --r:16px;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family:var(--sans); color:var(--text);
+      background:
+        radial-gradient(900px 600px at 15% 10%, rgba(90,139,255,.24), transparent 55%),
+        radial-gradient(900px 600px at 70% 20%, rgba(52,211,153,.18), transparent 55%),
+        radial-gradient(900px 600px at 50% 90%, rgba(251,191,36,.12), transparent 55%),
+        var(--bg);
+    }
+    header{
+      position:sticky; top:12px; z-index:10;
+      max-width:1320px; margin:0 auto;
+      padding:14px; border-radius:var(--r);
+      border:1px solid var(--border);
+      background:linear-gradient(180deg, rgba(15,27,51,.92), rgba(15,27,51,.72));
+      box-shadow:var(--shadow);
+      backdrop-filter: blur(10px);
+      display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+    }
+    .brand{display:flex; align-items:center; gap:12px}
+    .logo{
+      width:42px;height:42px;border-radius:14px;
+      background:conic-gradient(from 180deg, var(--brand), var(--ok), var(--warn), var(--brand));
+      box-shadow:0 12px 26px rgba(90,139,255,.18);
+    }
+    h1{margin:0;font-size:16px; letter-spacing:.2px}
+    .sub{margin:2px 0 0; font-size:12px; color:var(--muted); line-height:1.25}
+    .actions{display:flex; gap:10px; flex-wrap:wrap}
+    button, .btn{
+      border:1px solid var(--border);
+      background:rgba(255,255,255,.06);
+      color:var(--text);
+      padding:10px 12px;
+      border-radius:12px;
+      cursor:pointer;
+      font-weight:700;
+      display:inline-flex; align-items:center; gap:8px;
+      transition:.15s ease;
+      user-select:none;
+    }
+    button:hover{transform:translateY(-1px); background:rgba(255,255,255,.08)}
+    .primary{border-color:rgba(90,139,255,.45); background:linear-gradient(135deg, rgba(90,139,255,.22), rgba(52,211,153,.14))}
+    .danger{border-color:rgba(251,113,133,.45); background:rgba(251,113,133,.12)}
+    .wrap{max-width:1320px; margin:0 auto; padding:16px 14px 34px}
+    .grid{
+      display:grid; gap:14px;
+      grid-template-columns: 360px 1fr 420px;
+      margin-top:14px;
+    }
+    @media (max-width: 1200px){ .grid{grid-template-columns: 360px 1fr} .rightPanel{grid-column:1/-1} }
+    @media (max-width: 900px){ .grid{grid-template-columns:1fr} header{position:relative; top:auto} }
+    .card{
+      border:1px solid var(--border);
+      border-radius:var(--r);
+      background:linear-gradient(180deg, rgba(15,27,51,.86), rgba(12,22,43,.70));
+      box-shadow:var(--shadow);
+      overflow:hidden;
+    }
+    .hd{
+      padding:14px;
+      border-bottom:1px solid var(--border);
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      background:rgba(255,255,255,.03);
+    }
+    .hd h2{margin:0; font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted)}
+    .bd{padding:14px}
+    .muted{color:var(--muted); font-size:12px; line-height:1.35}
+    .pill{
+      font-size:12px; color:var(--muted);
+      border:1px solid var(--border);
+      padding:6px 10px; border-radius:999px;
+      background:rgba(255,255,255,.04);
+      display:inline-flex; align-items:center; gap:8px;
+      white-space:nowrap;
+    }
+    .dot{width:10px;height:10px;border-radius:999px;background:#94a3b8}
+    .dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.bad{background:var(--bad)}
+    .tabs{display:flex; gap:8px; flex-wrap:wrap}
+    .tab{
+      padding:9px 10px; border-radius:999px;
+      border:1px solid var(--border);
+      background:rgba(255,255,255,.04);
+      color:var(--muted); font-weight:900; font-size:12px;
+      cursor:pointer;
+    }
+    .tab.active{color:var(--text); border-color:rgba(52,211,153,.40); background:rgba(52,211,153,.10)}
+    .field{display:flex; flex-direction:column; gap:6px}
+    label{font-size:12px; color:var(--muted); font-weight:800}
+    input, select, textarea{
+      width:100%;
+      padding:10px 10px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:rgba(10,18,36,.55);
+      color:var(--text);
+      outline:none;
+      font-size:13px;
+    }
+    textarea{min-height:90px; resize:vertical}
+    .form{display:grid; grid-template-columns: repeat(12, 1fr); gap:10px}
+    .c12{grid-column:1/-1}
+    .c6{grid-column: span 6}
+    .c4{grid-column: span 4}
+    .c3{grid-column: span 3}
+    .c2{grid-column: span 2}
+    @media (max-width: 900px){ .c6,.c4,.c3,.c2{grid-column:1/-1} }
+    .divider{height:1px; background:var(--border); margin:12px 0}
+    .kpis{display:grid; grid-template-columns: repeat(4, 1fr); gap:10px}
+    @media (max-width:900px){ .kpis{grid-template-columns: repeat(2, 1fr)} }
+    .kpi{
+      padding:12px; border:1px solid var(--border); border-radius:14px;
+      background:rgba(255,255,255,.04);
+    }
+    .kpi .n{font-size:20px; font-weight:1000}
+    .kpi .t{font-size:11px; color:var(--muted); margin-top:2px}
+    .list{display:flex; flex-direction:column; gap:10px}
+    .item{
+      padding:12px; border:1px solid var(--border); border-radius:14px;
+      background:rgba(255,255,255,.04);
+      cursor:pointer;
+    }
+    .item:hover{background:rgba(255,255,255,.06)}
+    .item .top{display:flex; align-items:flex-start; justify-content:space-between; gap:10px}
+    .item .title{font-weight:900}
+    .item .meta{font-size:12px; color:var(--muted); margin-top:4px; line-height:1.3}
+    .badge{
+      font-size:11px; padding:5px 8px; border-radius:999px;
+      border:1px solid var(--border); color:var(--muted);
+      background:rgba(255,255,255,.03);
+      white-space:nowrap;
+      display:inline-flex; align-items:center; gap:6px;
+    }
+    .badge.ok{border-color:rgba(52,211,153,.40); color:var(--ok); background:rgba(52,211,153,.08)}
+    .badge.warn{border-color:rgba(251,191,36,.45); color:var(--warn); background:rgba(251,191,36,.10)}
+    .badge.bad{border-color:rgba(251,113,133,.45); color:var(--bad); background:rgba(251,113,133,.10)}
+    .table{
+      width:100%; border-collapse:separate; border-spacing:0;
+      border:1px solid var(--border);
+      border-radius:14px; overflow:hidden;
+      background:rgba(255,255,255,.03);
+    }
+    .table th,.table td{padding:10px; border-bottom:1px solid var(--border); font-size:12.5px; vertical-align:top}
+    .table th{background:rgba(255,255,255,.04); color:var(--muted); text-transform:uppercase; letter-spacing:.08em; font-size:11px}
+    .table tr:last-child td{border-bottom:none}
+    .right{display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap}
+    .small{font-size:11px; color:var(--muted)}
+    .mono{font-family:var(--mono)}
+    .hidden{display:none !important}
+    .scoreBar{
+      height:10px; border-radius:999px;
+      border:1px solid rgba(255,255,255,.12);
+      background:rgba(255,255,255,.05);
+      overflow:hidden;
+    }
+    .scoreBar > div{height:100%; width:0%; background:linear-gradient(90deg, var(--ok), var(--warn), var(--bad))}
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="logo"></div>
+    <div>
+      <h1>SST • Inspeções e Fiscalizações por NR</h1>
+      <div class="sub">Checklist normativo • Evidências • Não conformidades • Plano de ação • Relatório automático</div>
+    </div>
+  </div>
+  <div class="actions">
+    <span class="pill"><span class="dot" id="dotStatus"></span> <span id="txtStatus">Rascunho</span></span>
+    <button id="btnSave">💾 Salvar</button>
+    <button id="btnExport">⬇️ Exportar JSON</button>
+    <button id="btnNew" class="primary">➕ Nova inspeção</button>
+    <button id="btnReset" class="danger">🧹 Limpar</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="grid">
+    <!-- ESQUERDA: cadastro da inspeção + NRs -->
+    <section class="card">
+      <div class="hd">
+        <h2>Configuração da Inspeção</h2>
+        <span class="badge" id="inspIdBadge">ID: —</span>
+      </div>
+      <div class="bd">
+        <div class="form">
+          <div class="field c12">
+            <label>Empresa / Unidade</label>
+            <input id="emp" placeholder="Ex.: Vertical Treinamentos — Unidade SP" />
+          </div>
+          <div class="field c6">
+            <label>Tipo</label>
+            <select id="tipo">
+              <option>Inspeção de rotina</option>
+              <option>Fiscalização interna</option>
+              <option>Inspeção temática</option>
+              <option>Auditoria de conformidade</option>
+              <option>Investigação (pós-incidente)</option>
+            </select>
+          </div>
+          <div class="field c6">
+            <label>Escopo (área/setor)</label>
+            <input id="escopo" placeholder="Ex.: Administrativo / Produção / Obra X" />
+          </div>
+          <div class="field c4">
+            <label>Data</label>
+            <input id="data" type="date" />
+          </div>
+          <div class="field c4">
+            <label>Inspetor</label>
+            <input id="inspetor" placeholder="TST / Eng." />
+          </div>
+          <div class="field c4">
+            <label>Responsável da área</label>
+            <input id="respArea" placeholder="Gestor / Encarregado" />
+          </div>
+          <div class="field c12">
+            <label>Objetivo</label>
+            <textarea id="objetivo" placeholder="Ex.: verificar atendimento às NRs aplicáveis, registrar evidências e plano de ação."></textarea>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="field">
+          <label>NRs aplicáveis (seleção rápida)</label>
+          <div class="tabs" id="nrChips"></div>
+          <div class="small" style="margin-top:8px">
+            Dica: você pode adaptar a lista (no JS) para incluir NRs temáticas usadas na sua operação.
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="right">
+          <button id="btnLoadTemplate" class="primary">📋 Carregar checklist padrão</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- CENTRO: checklist normativo -->
+    <section class="card">
+      <div class="hd">
+        <h2>Checklist normativo (itens por NR)</h2>
+        <span class="pill">
+          <span class="dot" id="dotChecklist"></span>
+          <span>Conformidade:</span>
+          <b id="pctConform">0%</b>
+        </span>
+      </div>
+
+      <div class="bd">
+        <div class="kpis">
+          <div class="kpi"><div class="n" id="kTotal">0</div><div class="t">itens</div></div>
+          <div class="kpi"><div class="n" id="kOk">0</div><div class="t">conformes</div></div>
+          <div class="kpi"><div class="n" id="kNc">0</div><div class="t">não conformes</div></div>
+          <div class="kpi"><div class="n" id="kNa">0</div><div class="t">não aplicáveis</div></div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="field">
+          <label>Filtro</label>
+          <div class="form">
+            <div class="field c4">
+              <select id="fNR"></select>
+            </div>
+            <div class="field c4">
+              <select id="fStatus">
+                <option value="">Todos</option>
+                <option value="OK">Conforme</option>
+                <option value="NC">Não conforme</option>
+                <option value="NA">Não aplicável</option>
+                <option value="OBS">Observação</option>
+              </select>
+            </div>
+            <div class="field c4">
+              <input id="fText" placeholder="Buscar por texto (ex.: EPI, escada, treinamento)" />
+            </div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div id="checklist" class="list"></div>
+
+        <div class="divider"></div>
+
+        <div class="right">
+          <button id="btnAddItem">➕ Adicionar item</button>
+          <button id="btnGenerateReport" class="primary">🧾 Gerar relatório (prévia)</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- DIREITA: item selecionado + evidências + ação corretiva -->
+    <section class="card rightPanel">
+      <div class="hd">
+        <h2>Item selecionado • Evidências • Ação</h2>
+        <span class="badge" id="selBadge">—</span>
+      </div>
+      <div class="bd">
+        <div id="noSelection" class="note muted">
+          Selecione um item do checklist para registrar evidências, classificar o atendimento e gerar plano de ação.
+        </div>
+
+        <div id="editPanel" class="hidden">
+          <div class="form">
+            <div class="field c12">
+              <label>NR</label>
+              <input id="eNR" class="mono" disabled />
+            </div>
+            <div class="field c12">
+              <label>Requisito / Item</label>
+              <textarea id="eReq"></textarea>
+            </div>
+
+            <div class="field c6">
+              <label>Status</label>
+              <select id="eStatus">
+                <option value="OK">Conforme (OK)</option>
+                <option value="NC">Não conforme (NC)</option>
+                <option value="NA">Não aplicável (NA)</option>
+                <option value="OBS">Observação (OBS)</option>
+              </select>
+            </div>
+
+            <div class="field c6">
+              <label>Risco / Severidade (opcional)</label>
+              <select id="eSev">
+                <option value="">—</option>
+                <option>Baixa</option>
+                <option>Média</option>
+                <option>Alta</option>
+                <option>Crítica</option>
+              </select>
+            </div>
+
+            <div class="field c12">
+              <label>Evidências (links/IDs de fotos/documentos)</label>
+              <textarea id="eEvid" placeholder="Ex.: foto_escada.jpg; link_drive; OS_123; certificado_treinamento.pdf"></textarea>
+            </div>
+
+            <div class="field c12">
+              <label>Observações do inspetor</label>
+              <textarea id="eObs" placeholder="Descreva o achado, local, condição e referência objetiva."></textarea>
+            </div>
+
+            <div class="divider c12"></div>
+
+            <div class="field c12">
+              <label>Plano de ação (quando NC)</label>
+              <textarea id="eAcao" placeholder="Descreva a ação corretiva/preventiva (5W2H opcional)."></textarea>
+            </div>
+
+            <div class="field c6">
+              <label>Responsável</label>
+              <input id="eResp" placeholder="Nome / área" />
+            </div>
+            <div class="field c6">
+              <label>Prazo</label>
+              <input id="ePrazo" type="date" />
+            </div>
+
+            <div class="field c12">
+              <label>Critério de verificação</label>
+              <input id="eVerif" placeholder="Ex.: foto pós-ação; check-list; evidência documental; relatório" />
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="right">
+            <button id="btnApply" class="ok">✅ Aplicar</button>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="field">
+          <label>Resumo de conformidade</label>
+          <div class="scoreBar"><div id="barConform"></div></div>
+          <div class="small" style="margin-top:8px">
+            Percentual considera apenas itens com status <b>OK</b> sobre itens aplicáveis (OK + NC + OBS). NA não entra no cálculo.
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="field">
+          <label>Prévia do relatório (texto)</label>
+          <textarea id="reportPreview" class="mono" readonly style="min-height:220px"></textarea>
+          <div class="small">Esta prévia é para o protótipo. No sistema real, você gera PDF/DOCX com capa, sumário, anexos e assinaturas.</div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+  // =========================
+  // Estado + Persistência
+  // =========================
+  const STORE_KEY = "sst_inspecoes_nr_v1";
+
+  const NR_LIST = [
+    {code:"NR-01", name:"Disposições gerais / GRO"},
+    {code:"NR-05", name:"CIPA"},
+    {code:"NR-06", name:"EPI"},
+    {code:"NR-07", name:"PCMSO"},
+    {code:"NR-09", name:"Avaliação/controle de exposições"},
+    {code:"NR-10", name:"Eletricidade"},
+    {code:"NR-11", name:"Movimentação de materiais"},
+    {code:"NR-12", name:"Máquinas e equipamentos"},
+    {code:"NR-17", name:"Ergonomia"},
+    {code:"NR-20", name:"Inflamáveis e combustíveis"},
+    {code:"NR-23", name:"Proteção contra incêndios"},
+    {code:"NR-26", name:"Sinalização / Químicos (GHS)"},
+    {code:"NR-33", name:"Espaço confinado"},
+    {code:"NR-35", name:"Trabalho em altura"}
+  ];
+
+  // Templates mínimos por NR (ajuste conforme sua operação)
+  const CHECKLIST_TEMPLATES = {
+    "NR-01": [
+      "Existe inventário de riscos atualizado (PGR/GRO) e plano de ação vigente?",
+      "Mudanças de processo/ambiente foram avaliadas (gestão de mudanças)?",
+      "Treinamentos e comunicações de SST estão evidenciados (registros)?"
+    ],
+    "NR-06": [
+      "EPI fornecido é adequado ao risco e possui CA válido?",
+      "Há registro de entrega, treinamento de uso, higienização e troca do EPI?",
+      "Uso do EPI é efetivamente fiscalizado no posto de trabalho?"
+    ],
+    "NR-07": [
+      "PCMSO vigente (vigência/assinatura/coordenação médica) está disponível?",
+      "ASO e exames complementares estão compatíveis com os riscos por função?",
+      "Há controle de periodicidade e gestão de afastamentos/retornos?"
+    ],
+    "NR-12": [
+      "Máquinas possuem proteções e dispositivos de segurança em funcionamento?",
+      "Há procedimentos (bloqueio/etiquetagem quando aplicável) e treinamento?",
+      "Sinalização, manutenção e inspeções periódicas estão evidenciadas?"
+    ],
+    "NR-17": [
+      "Postos de trabalho atendem ergonomia básica (mobiliário/ajustes)?",
+      "Há pausas/alternância postural e organização do trabalho adequada?",
+      "Existe AEP/AET quando aplicável e ações implementadas?"
+    ],
+    "NR-23": [
+      "Rotas de fuga, saídas e sinalização de emergência estão desobstruídas?",
+      "Extintores: validade, acesso, sinalização e inspeção periódica OK?",
+      "Há plano de emergência/brigada quando aplicável?"
+    ],
+    "NR-35": [
+      "Há análise de risco/Permissão de Trabalho para atividades em altura?",
+      "Treinamentos NR-35 e inspeção de EPIs/ancoragens estão evidenciados?",
+      "Sistemas de ancoragem e proteção coletiva estão conformes?"
+    ]
+  };
+
+  const state = loadState() ?? {
+    meta: {
+      id: makeId(),
+      empresa: "",
+      tipo: "Inspeção de rotina",
+      escopo: "",
+      data: new Date().toISOString().slice(0,10),
+      inspetor: "",
+      respArea: "",
+      objetivo: "",
+      nrs: ["NR-01","NR-06","NR-07","NR-17","NR-23"]
+    },
+    items: [], // {id,nr,req,status,evid,obs,sev,acao,resp,prazo,verif,createdAt,updatedAt}
+    selectedId: null
+  };
+
+  function saveState(){
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    renderAll();
+  }
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(STORE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    }catch(e){ return null; }
+  }
+  function resetAll(){
+    localStorage.removeItem(STORE_KEY);
+    location.reload();
+  }
+  function makeId(){
+    return "INSP-" + Math.random().toString(16).slice(2,8).toUpperCase() + "-" + Date.now().toString(16).slice(-6).toUpperCase();
+  }
+
+  // =========================
+  // Helpers DOM
+  // =========================
+  const $ = (id)=>document.getElementById(id);
+  const esc = (s="")=> String(s).replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m]));
+  const nowISO = ()=> new Date().toISOString();
+  const uid = ()=> Math.random().toString(16).slice(2) + Date.now().toString(16);
+
+  function badgeFor(status){
+    if(status==="OK") return `<span class="badge ok"><span class="dot ok"></span> OK</span>`;
+    if(status==="NC") return `<span class="badge bad"><span class="dot bad"></span> NC</span>`;
+    if(status==="NA") return `<span class="badge"><span class="dot"></span> NA</span>`;
+    return `<span class="badge warn"><span class="dot warn"></span> OBS</span>`;
+  }
+
+  function complianceStats(){
+    const ok = state.items.filter(i=>i.status==="OK").length;
+    const nc = state.items.filter(i=>i.status==="NC").length;
+    const na = state.items.filter(i=>i.status==="NA").length;
+    const obs = state.items.filter(i=>i.status==="OBS").length;
+    const applicable = ok + nc + obs;
+    const pct = applicable ? Math.round((ok/applicable)*100) : 0;
+    return {total: state.items.length, ok, nc, na, obs, pct, applicable};
+  }
+
+  // =========================
+  // Render UI
+  // =========================
+  function renderNRChips(){
+    const holder = $("nrChips");
+    holder.innerHTML = "";
+    NR_LIST.forEach(nr=>{
+      const active = state.meta.nrs.includes(nr.code);
+      const chip = document.createElement("button");
+      chip.className = "tab" + (active ? " active":"");
+      chip.type = "button";
+      chip.textContent = nr.code;
+      chip.title = nr.name;
+      chip.addEventListener("click", ()=>{
+        if(active){
+          state.meta.nrs = state.meta.nrs.filter(x=>x!==nr.code);
+        }else{
+          state.meta.nrs.push(nr.code);
+        }
+        saveState();
+      });
+      holder.appendChild(chip);
+    });
+  }
+
+  function renderFilters(){
+    const nrSel = $("fNR");
+    const selected = nrSel.value;
+    nrSel.innerHTML = `<option value="">Todas as NRs</option>` +
+      state.meta.nrs.map(nr=>`<option value="${esc(nr)}">${esc(nr)}</option>`).join("");
+    if(selected) nrSel.value = selected;
+  }
+
+  function renderChecklist(){
+    const box = $("checklist");
+    const fNR = $("fNR").value;
+    const fStatus = $("fStatus").value;
+    const fText = $("fText").value.trim().toLowerCase();
+
+    const items = state.items
+      .filter(i=> !fNR || i.nr===fNR)
+      .filter(i=> !fStatus || i.status===fStatus)
+      .filter(i=> !fText || (i.req+i.obs+i.evid+i.acao).toLowerCase().includes(fText))
+      .sort((a,b)=> (a.nr+b.req).localeCompare(b.nr+b.req));
+
+    box.innerHTML = "";
+
+    if(items.length===0){
+      box.innerHTML = `<div class="muted">Nenhum item encontrado. Carregue o checklist padrão ou adicione itens manualmente.</div>`;
+      return;
+    }
+
+    items.forEach(i=>{
+      const el = document.createElement("div");
+      el.className = "item";
+      el.innerHTML = `
+        <div class="top">
+          <div>
+            <div class="title">${esc(i.nr)} • ${esc(i.req).slice(0,110)}${i.req.length>110?"…":""}</div>
+            <div class="meta">
+              ${i.sev ? `Sev.: <b>${esc(i.sev)}</b> • ` : ""}
+              ${i.prazo ? `Prazo: <span class="mono">${esc(i.prazo)}</span> • ` : ""}
+              Atualizado: <span class="mono">${esc((i.updatedAt||i.createdAt||"").slice(0,19).replace("T"," "))}</span>
+            </div>
+          </div>
+          <div>${badgeFor(i.status)}</div>
+        </div>
+      `;
+      el.addEventListener("click", ()=>{
+        state.selectedId = i.id;
+        renderEditor();
+        renderReportPreview();
+        saveState();
+      });
+      box.appendChild(el);
+    });
+  }
+
+  function renderEditor(){
+    const sel = state.items.find(x=>x.id===state.selectedId);
+    $("selBadge").textContent = sel ? `Item: ${sel.nr}` : "—";
+    $("noSelection").classList.toggle("hidden", !!sel);
+    $("editPanel").classList.toggle("hidden", !sel);
+    if(!sel) return;
+
+    $("eNR").value = sel.nr;
+    $("eReq").value = sel.req;
+    $("eStatus").value = sel.status;
+    $("eSev").value = sel.sev || "";
+    $("eEvid").value = sel.evid || "";
+    $("eObs").value = sel.obs || "";
+    $("eAcao").value = sel.acao || "";
+    $("eResp").value = sel.resp || "";
+    $("ePrazo").value = sel.prazo || "";
+    $("eVerif").value = sel.verif || "";
+  }
+
+  function renderKPIs(){
+    const s = complianceStats();
+    $("kTotal").textContent = s.total;
+    $("kOk").textContent = s.ok;
+    $("kNc").textContent = s.nc;
+    $("kNa").textContent = s.na;
+    $("pctConform").textContent = s.pct + "%";
+
+    // dots status
+    const dotChecklist = $("dotChecklist");
+    dotChecklist.className = "dot " + (s.pct>=85 ? "ok" : (s.pct>=60 ? "warn":"bad"));
+
+    const dotStatus = $("dotStatus");
+    dotStatus.className = "dot " + (s.nc===0 && s.total>0 ? "ok" : (s.total===0 ? "" : "warn"));
+    $("txtStatus").textContent = s.total===0 ? "Rascunho" : (s.nc===0 ? "Conforme" : "Com não conformidades");
+
+    // bar
+    $("barConform").style.width = s.pct + "%";
+  }
+
+  function renderReportPreview(){
+    const s = complianceStats();
+    const meta = state.meta;
+
+    const byNR = {};
+    state.items.forEach(i=>{
+      (byNR[i.nr] ||= []).push(i);
+    });
+
+    const lines = [];
+    lines.push(`RELATÓRIO DE INSPEÇÃO / FISCALIZAÇÃO SST (PRÉVIA)`);
+    lines.push(`ID: ${meta.id}`);
+    lines.push(`Empresa/Unidade: ${meta.empresa || "—"}`);
+    lines.push(`Tipo: ${meta.tipo} | Escopo: ${meta.escopo || "—"}`);
+    lines.push(`Data: ${meta.data || "—"} | Inspetor: ${meta.inspetor || "—"} | Responsável área: ${meta.respArea || "—"}`);
+    lines.push(`Objetivo: ${meta.objetivo || "—"}`);
+    lines.push(`NRs avaliadas: ${meta.nrs.join(", ") || "—"}`);
+    lines.push(`---------------------------------------------`);
+    lines.push(`Resumo: Itens=${s.total} | OK=${s.ok} | NC=${s.nc} | NA=${s.na} | OBS=${s.obs} | Conformidade=${s.pct}%`);
+    lines.push(`---------------------------------------------`);
+
+    meta.nrs.forEach(nr=>{
+      const items = (byNR[nr] || []);
+      if(items.length===0) return;
+      lines.push(`\n${nr}`);
+      items.forEach((i,idx)=>{
+        const st = i.status;
+        lines.push(`  ${idx+1}. [${st}] ${i.req}`);
+        if(i.evid) lines.push(`     Evidências: ${i.evid}`);
+        if(i.obs)  lines.push(`     Observações: ${i.obs}`);
+        if(i.status==="NC"){
+          lines.push(`     Ação: ${i.acao || "—"}`);
+          lines.push(`     Resp.: ${i.resp || "—"} | Prazo: ${i.prazo || "—"} | Verificação: ${i.verif || "—"}`);
+        }
+      });
+    });
+
+    lines.push(`\n---------------------------------------------`);
+    lines.push(`Assinaturas (modelo):`);
+    lines.push(`- Inspetor SST: ____________________  Data: ____/____/_____`);
+    lines.push(`- Responsável da área: _____________  Data: ____/____/_____`);
+    lines.push(`- Gestão/Coordenação: ______________  Data: ____/____/_____`);
+
+    $("reportPreview").value = lines.join("\n");
+  }
+
+  function renderAll(){
+    // meta -> form
+    $("inspIdBadge").textContent = `ID: ${state.meta.id}`;
+    $("emp").value = state.meta.empresa;
+    $("tipo").value = state.meta.tipo;
+    $("escopo").value = state.meta.escopo;
+    $("data").value = state.meta.data;
+    $("inspetor").value = state.meta.inspetor;
+    $("respArea").value = state.meta.respArea;
+    $("objetivo").value = state.meta.objetivo;
+
+    renderNRChips();
+    renderFilters();
+    renderKPIs();
+    renderChecklist();
+    renderEditor();
+    renderReportPreview();
+  }
+
+  // =========================
+  // Lógica de Checklist
+  // =========================
+  function loadDefaultChecklist(){
+    // cria itens com base nas NRs selecionadas; se já existem itens, mantém e só adiciona novos
+    const existingKey = new Set(state.items.map(i => i.nr + "::" + i.req.trim()));
+    const toAdd = [];
+    state.meta.nrs.forEach(nr=>{
+      const templ = CHECKLIST_TEMPLATES[nr] || [];
+      templ.forEach(req=>{
+        const key = nr + "::" + req.trim();
+        if(existingKey.has(key)) return;
+        toAdd.push({
+          id: uid(),
+          nr, req,
+          status:"OBS",
+          evid:"",
+          obs:"",
+          sev:"",
+          acao:"",
+          resp:"",
+          prazo:"",
+          verif:"",
+          createdAt: nowISO(),
+          updatedAt: nowISO()
+        });
+      });
+    });
+    if(toAdd.length===0){
+      alert("Nenhum item novo para adicionar (ou não há template para as NRs selecionadas).");
+      return;
+    }
+    state.items.push(...toAdd);
+    saveState();
+  }
+
+  function addManualItem(){
+    const allowed = state.meta.nrs.length ? state.meta.nrs : ["NR-01"];
+    const nr = allowed[0];
+    state.items.unshift({
+      id: uid(),
+      nr,
+      req:"(Descreva o requisito normativo aqui)",
+      status:"OBS",
+      evid:"",
+      obs:"",
+      sev:"",
+      acao:"",
+      resp:"",
+      prazo:"",
+      verif:"",
+      createdAt: nowISO(),
+      updatedAt: nowISO()
+    });
+    state.selectedId = state.items[0].id;
+    saveState();
+  }
+
+  function applyEditor(){
+    const sel = state.items.find(x=>x.id===state.selectedId);
+    if(!sel) return;
+
+    sel.req = $("eReq").value.trim();
+    sel.status = $("eStatus").value;
+    sel.sev = $("eSev").value;
+    sel.evid = $("eEvid").value.trim();
+    sel.obs = $("eObs").value.trim();
+    sel.acao = $("eAcao").value.trim();
+    sel.resp = $("eResp").value.trim();
+    sel.prazo = $("ePrazo").value;
+    sel.verif = $("eVerif").value.trim();
+    sel.updatedAt = nowISO();
+
+    // regra: se NC, sugerir ação mínima
+    if(sel.status==="NC" && !sel.acao){
+      sel.acao = "Definir e implementar ação corretiva/preventiva para atendimento ao requisito.";
+    }
+    saveState();
+  }
+
+  function syncMetaFromForm(){
+    state.meta.empresa = $("emp").value.trim();
+    state.meta.tipo = $("tipo").value;
+    state.meta.escopo = $("escopo").value.trim();
+    state.meta.data = $("data").value;
+    state.meta.inspetor = $("inspetor").value.trim();
+    state.meta.respArea = $("respArea").value.trim();
+    state.meta.objetivo = $("objetivo").value.trim();
+  }
+
+  // =========================
+  // Export
+  // =========================
+  function exportJSON(){
+    syncMetaFromForm();
+    const blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `inspecao_${state.meta.id}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  // =========================
+  // Eventos
+  // =========================
+  ["emp","tipo","escopo","data","inspetor","respArea","objetivo"].forEach(id=>{
+    $(id).addEventListener("input", ()=>{
+      syncMetaFromForm();
+      saveState();
+    });
+    $(id).addEventListener("change", ()=>{
+      syncMetaFromForm();
+      saveState();
+    });
+  });
+
+  $("btnLoadTemplate").addEventListener("click", loadDefaultChecklist);
+  $("btnAddItem").addEventListener("click", addManualItem);
+  $("btnApply").addEventListener("click", applyEditor);
+
+  $("fNR").addEventListener("change", renderChecklist);
+  $("fStatus").addEventListener("change", renderChecklist);
+  $("fText").addEventListener("input", renderChecklist);
+
+  $("btnGenerateReport").addEventListener("click", ()=>{
+    renderReportPreview();
+    alert("Prévia do relatório atualizada (campo à direita).");
+  });
+
+  $("btnSave").addEventListener("click", ()=>{
+    syncMetaFromForm();
+    saveState();
+    alert("Salvo no navegador (localStorage).");
+  });
+
+  $("btnExport").addEventListener("click", exportJSON);
+
+  $("btnReset").addEventListener("click", ()=>{
+    if(confirm("Limpar todos os dados desta inspeção?")) resetAll();
+  });
+
+  $("btnNew").addEventListener("click", ()=>{
+    if(!confirm("Criar uma nova inspeção? (a atual será substituída)")) return;
+    localStorage.removeItem(STORE_KEY);
+    const fresh = {
+      meta: {
+        id: makeId(),
+        empresa: "",
+        tipo: "Inspeção de rotina",
+        escopo: "",
+        data: new Date().toISOString().slice(0,10),
+        inspetor: "",
+        respArea: "",
+        objetivo: "",
+        nrs: ["NR-01","NR-06","NR-07","NR-17","NR-23"]
+      },
+      items: [],
+      selectedId: null
+    };
+    localStorage.setItem(STORE_KEY, JSON.stringify(fresh));
+    location.reload();
+  });
+
+  // =========================
+  // INIT
+  // =========================
+  renderAll();
+</script>
+</body>
+</html>

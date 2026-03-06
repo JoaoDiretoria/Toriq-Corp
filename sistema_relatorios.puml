@@ -1,0 +1,136 @@
+@startuml Sistema de Relatórios e Certificados
+
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam handwritten false
+
+title Sistema de Relatórios e Certificados - Arquitetura v2.1
+
+package "Frontend (React + TypeScript)" {
+  [VisualizarRelatorio.tsx] as Relatorio
+  [SSTModeloRelatorio.tsx] as ModeloRelatorio
+  [VisualizarCertificado.tsx] as Certificado
+  
+  package "Páginas do Relatório" {
+    [Capa] as P1
+    [Empresa SST] as P2
+    [Cliente/Empresa] as P3
+    [Treinamento] as P4
+    [Turma e Instrutor] as P5
+    [Lista de Presença] as P6
+    [Avaliações] as P7
+    [Fotos] as P8
+    [Certificados] as P9
+    [Diplomas Instrutor] as P10
+    [Agradecimentos] as P11
+  }
+  
+  package "Variáveis Certificado" {
+    [LOGO_EMPRESA] as VarLogo
+    [ASSINATURAS] as VarAss
+    [COLABORADOR_*] as VarColab
+    [TREINAMENTO_*] as VarTrein
+  }
+}
+
+package "Design System" {
+  [Header] as Header
+  [Rodapé] as Rodape
+  [Cards] as Cards
+  [Tabelas] as Tabelas
+}
+
+package "Bibliotecas" {
+  [jsPDF] as PDF
+  [html2canvas] as Canvas
+}
+
+database "Supabase" {
+  [turmas_treinamento] as TurmasDB
+  [turmas_treinamento_aulas] as AulasDB
+  [turma_colaboradores] as ColabDB
+  [turma_anexos] as AnexosDB
+  [informacoes_empresa] as EmpresaDB
+  [instrutor_formacao_treinamento] as FormacaoDB
+  [instrutores] as InstrutorDB
+}
+
+' Relacionamentos
+Relatorio --> P1
+Relatorio --> P2
+Relatorio --> P3
+Relatorio --> P4
+Relatorio --> P5
+Relatorio --> P6
+Relatorio --> P7
+Relatorio --> P8
+Relatorio --> P9
+Relatorio --> P10
+Relatorio --> P11
+
+P1 ..> Header
+P2 ..> Header
+P3 ..> Header
+P6 ..> Tabelas
+P7 ..> Cards
+
+Relatorio --> PDF : exporta
+Relatorio --> Canvas : captura
+
+Relatorio --> TurmasDB
+Relatorio --> AulasDB
+Relatorio --> ColabDB
+Relatorio --> AnexosDB
+Relatorio --> EmpresaDB
+Relatorio --> FormacaoDB
+
+ModeloRelatorio --> EmpresaDB : busca logo e diretor técnico
+ModeloRelatorio --> VarLogo
+ModeloRelatorio --> VarAss
+
+Certificado --> TurmasDB
+Certificado --> InstrutorDB
+Certificado --> EmpresaDB
+
+note right of Relatorio
+  **Design Profissional:**
+  - Cores neutras (slate/gray)
+  - Tipografia Segoe UI
+  - Header com logo + turma
+  - Rodapé com paginação
+  
+  **Páginas:**
+  1. Capa - Logo + resumo
+  2. Empresa SST - Missão/Visão/Valores
+  3. Cliente/Empresa - Dados
+  4. Treinamento - Conteúdo programático
+  5. Turma/Instrutor - Grid 2 colunas
+  6. Presença - Tabela com assinaturas
+  7. Avaliações - Gráfico + tabela
+  8. Fotos - 1 por página
+  9. Certificados - Frente/Verso
+  10. Diplomas - Formações instrutor
+  11. Agradecimentos - Mensagem final
+end note
+
+note right of ModeloRelatorio
+  **Variáveis Dinâmicas:**
+  - {LOGO_EMPRESA} - Logo da empresa
+  - {ASSINATURAS} - Diretor + Instrutor
+  - {COLABORADOR_*} - Dados colaborador
+  - {TREINAMENTO_*} - Dados treinamento
+  
+  **Dados Reais:**
+  - Logo: informacoes_empresa.logo_pequena_url
+  - Diretor: informacoes_empresa.diretor_tecnico_*
+  - Instrutor: instrutores.assinatura_url
+end note
+
+note bottom of PDF
+  **Exportação PDF:**
+  - Portrait/Landscape dinâmico
+  - Certificados em A4 paisagem
+  - Compressão de imagens
+end note
+
+@enduml

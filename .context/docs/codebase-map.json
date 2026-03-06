@@ -1,0 +1,1715 @@
+{
+  "version": "1.0.0",
+  "generated": "2026-01-20T20:40:51.223Z",
+  "stack": {
+    "primaryLanguage": "typescript",
+    "languages": [
+      "javascript",
+      "typescript"
+    ],
+    "frameworks": [],
+    "buildTools": [
+      "vite",
+      "docker"
+    ],
+    "testFrameworks": [],
+    "packageManager": "bun",
+    "isMonorepo": false,
+    "hasDocker": true,
+    "hasCI": false
+  },
+  "structure": {
+    "totalFiles": 532,
+    "topDirectories": [
+      {
+        "name": "AGENTS.md",
+        "fileCount": 1
+      },
+      {
+        "name": "ANALISE_COMPLETA_SISTEMA.md",
+        "fileCount": 1
+      },
+      {
+        "name": "bun.lockb",
+        "fileCount": 1
+      },
+      {
+        "name": "components.json",
+        "fileCount": 1
+      },
+      {
+        "name": "DEPLOYMENT_FIX.md",
+        "fileCount": 1
+      },
+      {
+        "name": "doc",
+        "fileCount": 10
+      },
+      {
+        "name": "Dockerfile",
+        "fileCount": 1
+      },
+      {
+        "name": "docs",
+        "fileCount": 8
+      },
+      {
+        "name": "DOCUMENTACAO_SISTEMA_RELATORIOS.md",
+        "fileCount": 1
+      },
+      {
+        "name": "DOCUMENTACAO_SISTEMA.md",
+        "fileCount": 1
+      },
+      {
+        "name": "eslint.config.js",
+        "fileCount": 1
+      },
+      {
+        "name": "index.html",
+        "fileCount": 1
+      },
+      {
+        "name": "migration_quantidade_kit.sql",
+        "fileCount": 1
+      },
+      {
+        "name": "modelos-nao-alterar",
+        "fileCount": 5
+      },
+      {
+        "name": "nginx.conf",
+        "fileCount": 1
+      },
+      {
+        "name": "ngrok.exe",
+        "fileCount": 1
+      },
+      {
+        "name": "package-lock.json",
+        "fileCount": 1
+      },
+      {
+        "name": "package.json",
+        "fileCount": 1
+      },
+      {
+        "name": "plan.md",
+        "fileCount": 1
+      },
+      {
+        "name": "postcss.config.js",
+        "fileCount": 1
+      },
+      {
+        "name": "public",
+        "fileCount": 11
+      },
+      {
+        "name": "README.md",
+        "fileCount": 1
+      },
+      {
+        "name": "Relatório Esqueleto.docx",
+        "fileCount": 1
+      },
+      {
+        "name": "relatorio_GAL007-NR6_6 (1).pdf",
+        "fileCount": 1
+      },
+      {
+        "name": "server.cjs",
+        "fileCount": 1
+      },
+      {
+        "name": "server.js",
+        "fileCount": 1
+      },
+      {
+        "name": "sistema_relatorios.puml",
+        "fileCount": 1
+      },
+      {
+        "name": "src",
+        "fileCount": 277
+      },
+      {
+        "name": "supabase",
+        "fileCount": 192
+      },
+      {
+        "name": "tailwind.config.ts",
+        "fileCount": 1
+      },
+      {
+        "name": "tsconfig.app.json",
+        "fileCount": 1
+      },
+      {
+        "name": "tsconfig.json",
+        "fileCount": 1
+      },
+      {
+        "name": "tsconfig.node.json",
+        "fileCount": 1
+      },
+      {
+        "name": "vite.config.ts",
+        "fileCount": 1
+      },
+      {
+        "name": "vite.config.ts.timestamp-1767519244335-55912be1b97238.mjs",
+        "fileCount": 1
+      }
+    ],
+    "languageDistribution": [
+      {
+        "extension": ".tsx",
+        "count": 251
+      },
+      {
+        "extension": ".sql",
+        "count": 190
+      },
+      {
+        "extension": ".ts",
+        "count": 27
+      },
+      {
+        "extension": ".md",
+        "count": 25
+      },
+      {
+        "extension": ".json",
+        "count": 9
+      },
+      {
+        "extension": ".html",
+        "count": 7
+      },
+      {
+        "extension": ".js",
+        "count": 3
+      },
+      {
+        "extension": ".css",
+        "count": 2
+      },
+      {
+        "extension": ".mjs",
+        "count": 1
+      },
+      {
+        "extension": ".puml",
+        "count": 1
+      }
+    ]
+  },
+  "architecture": {
+    "layers": [
+      {
+        "name": "Config",
+        "description": "Configuration and constants",
+        "directories": [
+          ".",
+          "src\\config"
+        ],
+        "symbolCount": 5,
+        "dependsOn": []
+      },
+      {
+        "name": "Utils",
+        "description": "Shared utilities and helpers",
+        "directories": [
+          "src\\utils",
+          "src\\lib",
+          "src\\utils\\facial-recognition",
+          "src\\components\\shared\\support",
+          "src\\components\\shared\\notifications",
+          "src\\pages\\shared",
+          "src\\components\\shared"
+        ],
+        "symbolCount": 26,
+        "dependsOn": [
+          "Services",
+          "Components"
+        ]
+      },
+      {
+        "name": "Services",
+        "description": "Business logic and orchestration",
+        "directories": [
+          "src\\lib",
+          "src\\utils\\facial-recognition"
+        ],
+        "symbolCount": 29,
+        "dependsOn": []
+      },
+      {
+        "name": "Components",
+        "description": "UI components and views",
+        "directories": [
+          "src\\components\\ui",
+          "src\\components\\sst\\toriq-training",
+          "src\\components\\sst\\toriq-epi",
+          "src\\components\\sst\\toriq-corp",
+          "src\\pages",
+          "src\\hooks",
+          "src\\components",
+          "src\\pages\\relatorio",
+          "src\\pages\\public",
+          "src\\pages\\modulos",
+          "src\\pages\\instrutor",
+          "src\\pages\\cliente",
+          "src\\pages\\certificado",
+          "src\\components\\turma",
+          "src\\components\\sst",
+          "src\\components\\parceira",
+          "src\\components\\instrutor",
+          "src\\components\\cliente",
+          "src\\components\\avaliacao",
+          "src\\components\\admin",
+          "src\\components\\sst\\cadastros",
+          "src\\components\\sst\\toriq-corp\\configuracoes"
+        ],
+        "symbolCount": 210,
+        "dependsOn": [
+          "Repositories"
+        ]
+      },
+      {
+        "name": "Repositories",
+        "description": "Data access and persistence",
+        "directories": [
+          "src\\components\\sst"
+        ],
+        "symbolCount": 3,
+        "dependsOn": []
+      }
+    ],
+    "patterns": [
+      {
+        "name": "Service Layer",
+        "confidence": 0.85,
+        "description": "Encapsulates business logic in service classes",
+        "occurrences": 2
+      }
+    ],
+    "entryPoints": [
+      "supabase\\functions\\gerar-contas-recorrentes\\index.ts",
+      "supabase\\functions\\admin-create-user\\index.ts",
+      "src\\utils\\facial-recognition\\index.ts",
+      "src\\components\\sst\\toriq-training\\index.ts",
+      "src\\components\\sst\\toriq-epi\\index.ts",
+      "src\\components\\sst\\toriq-corp\\index.ts",
+      "src\\components\\shared\\support\\index.ts",
+      "src\\components\\shared\\notifications\\index.ts",
+      "src\\main.tsx",
+      "server.js"
+    ]
+  },
+  "symbols": {
+    "classes": [
+      {
+        "name": "FaceDetector",
+        "kind": "class",
+        "file": "src\\utils\\facial-recognition\\FaceDetector.ts",
+        "line": 10,
+        "exported": true
+      },
+      {
+        "name": "FacialRecognitionService",
+        "kind": "class",
+        "file": "src\\utils\\facial-recognition\\FacialRecognitionService.ts",
+        "line": 17,
+        "exported": true
+      },
+      {
+        "name": "ImageProcessor",
+        "kind": "class",
+        "file": "src\\utils\\facial-recognition\\ImageProcessor.ts",
+        "line": 9,
+        "exported": true
+      },
+      {
+        "name": "FaceApiService",
+        "kind": "class",
+        "file": "src\\utils\\facial-recognition\\FaceApiService.ts",
+        "line": 23,
+        "exported": false
+      }
+    ],
+    "interfaces": [
+      {
+        "name": "AulaAgendada",
+        "kind": "interface",
+        "file": "src\\components\\shared\\AgendaTreinamentos.tsx",
+        "line": 25,
+        "exported": true
+      },
+      {
+        "name": "BadgeProps",
+        "kind": "interface",
+        "file": "src\\components\\ui\\badge.tsx",
+        "line": 23,
+        "exported": true
+      },
+      {
+        "name": "ButtonProps",
+        "kind": "interface",
+        "file": "src\\components\\ui\\button.tsx",
+        "line": 33,
+        "exported": true
+      },
+      {
+        "name": "CardMovimentacao",
+        "kind": "interface",
+        "file": "src\\hooks\\useCardMovimentacoes.tsx",
+        "line": 5,
+        "exported": true
+      },
+      {
+        "name": "Cargo",
+        "kind": "interface",
+        "file": "src\\components\\cliente\\ClienteCargos.tsx",
+        "line": 40,
+        "exported": true
+      },
+      {
+        "name": "CBOOcupacao",
+        "kind": "interface",
+        "file": "src\\lib\\cboService.ts",
+        "line": 3,
+        "exported": true
+      },
+      {
+        "name": "Cidade",
+        "kind": "interface",
+        "file": "src\\lib\\ibgeService.ts",
+        "line": 9,
+        "exported": true
+      },
+      {
+        "name": "Colaborador",
+        "kind": "interface",
+        "file": "src\\components\\cliente\\ClienteColaboradores.tsx",
+        "line": 33,
+        "exported": true
+      },
+      {
+        "name": "ComparisonMetrics",
+        "kind": "interface",
+        "file": "src\\utils\\facial-recognition\\types.ts",
+        "line": 65,
+        "exported": true
+      },
+      {
+        "name": "DadosCustoMensal",
+        "kind": "interface",
+        "file": "src\\components\\admin\\CalculadoraCustoMensal.tsx",
+        "line": 22,
+        "exported": true
+      },
+      {
+        "name": "DistanceResult",
+        "kind": "interface",
+        "file": "src\\lib\\googleMapsService.ts",
+        "line": 6,
+        "exported": true
+      },
+      {
+        "name": "Estado",
+        "kind": "interface",
+        "file": "src\\lib\\ibgeService.ts",
+        "line": 3,
+        "exported": true
+      },
+      {
+        "name": "FaceApiResult",
+        "kind": "interface",
+        "file": "src\\utils\\facial-recognition\\FaceApiService.ts",
+        "line": 10,
+        "exported": true
+      },
+      {
+        "name": "FaceDetectionResult",
+        "kind": "interface",
+        "file": "src\\utils\\facial-recognition\\types.ts",
+        "line": 27,
+        "exported": true
+      },
+      {
+        "name": "FacialValidationResult",
+        "kind": "interface",
+        "file": "src\\utils\\facial-recognition\\types.ts",
+        "line": 50,
+        "exported": true
+      },
+      {
+        "name": "ImageAnalysis",
+        "kind": "interface",
+        "file": "src\\utils\\facial-recognition\\types.ts",
+        "line": 12,
+        "exported": true
+      },
+      {
+        "name": "ModuloConfig",
+        "kind": "interface",
+        "file": "src\\config\\modulosTelas.ts",
+        "line": 19,
+        "exported": true
+      },
+      {
+        "name": "Notificacao",
+        "kind": "interface",
+        "file": "src\\hooks\\useNotificacoes.tsx",
+        "line": 6,
+        "exported": true
+      },
+      {
+        "name": "PDFGenerationOptions",
+        "kind": "interface",
+        "file": "src\\utils\\pdfUtils.ts",
+        "line": 13,
+        "exported": true
+      },
+      {
+        "name": "PDFResult",
+        "kind": "interface",
+        "file": "src\\utils\\pdfUtils.ts",
+        "line": 28,
+        "exported": true
+      },
+      {
+        "name": "ProcessingLog",
+        "kind": "interface",
+        "file": "src\\utils\\facial-recognition\\types.ts",
+        "line": 5,
+        "exported": true
+      },
+      {
+        "name": "Setor",
+        "kind": "interface",
+        "file": "src\\components\\cliente\\ClienteSetores.tsx",
+        "line": 40,
+        "exported": true
+      },
+      {
+        "name": "TelaMódulo",
+        "kind": "interface",
+        "file": "src\\config\\modulosTelas.ts",
+        "line": 11,
+        "exported": true
+      },
+      {
+        "name": "TextareaProps",
+        "kind": "interface",
+        "file": "src\\components\\ui\\textarea.tsx",
+        "line": 5,
+        "exported": true
+      },
+      {
+        "name": "TurmaAgenda",
+        "kind": "interface",
+        "file": "src\\components\\shared\\AgendaTreinamentos.tsx",
+        "line": 33,
+        "exported": true
+      },
+      {
+        "name": "AdminCargoDialogProps",
+        "kind": "interface",
+        "file": "src\\components\\admin\\AdminCargoDialog.tsx",
+        "line": 49,
+        "exported": false
+      },
+      {
+        "name": "AdminDashboardHomeProps",
+        "kind": "interface",
+        "file": "src\\components\\admin\\AdminDashboardHome.tsx",
+        "line": 39,
+        "exported": false
+      },
+      {
+        "name": "AdminSetorDialogProps",
+        "kind": "interface",
+        "file": "src\\components\\admin\\AdminSetorDialog.tsx",
+        "line": 49,
+        "exported": false
+      },
+      {
+        "name": "AdminSidebarProps",
+        "kind": "interface",
+        "file": "src\\components\\admin\\AdminSidebar.tsx",
+        "line": 26,
+        "exported": false
+      },
+      {
+        "name": "AgendaTreinamentosProps",
+        "kind": "interface",
+        "file": "src\\components\\shared\\AgendaTreinamentos.tsx",
+        "line": 49,
+        "exported": false
+      },
+      {
+        "name": "AlterarSenhaDialogProps",
+        "kind": "interface",
+        "file": "src\\components\\shared\\AlterarSenhaDialog.tsx",
+        "line": 20,
+        "exported": false
+      },
+      {
+        "name": "AtividadeRecente",
+        "kind": "interface",
+        "file": "src\\components\\admin\\AdminDashboardHome.tsx",
+        "line": 31,
+        "exported": false
+      },
+      {
+        "name": "AulaAgendada",
+        "kind": "interface",
+        "file": "src\\components\\sst\\SSTSolicitacoesTreinamentos.tsx",
+        "line": 16,
+        "exported": false
+      },
+      {
+        "name": "AuthContextType",
+        "kind": "interface",
+        "file": "src\\hooks\\useAuth.tsx",
+        "line": 24,
+        "exported": false
+      },
+      {
+        "name": "AvaliacaoReacaoFormProps",
+        "kind": "interface",
+        "file": "src\\components\\avaliacao\\AvaliacaoReacaoForm.tsx",
+        "line": 39,
+        "exported": false
+      },
+      {
+        "name": "Block",
+        "kind": "interface",
+        "file": "src\\pages\\public\\PropostaWeb.tsx",
+        "line": 19,
+        "exported": false
+      },
+      {
+        "name": "CacheEntry",
+        "kind": "interface",
+        "file": "src\\lib\\googleMapsService.ts",
+        "line": 18,
+        "exported": false
+      },
+      {
+        "name": "CadastroEPI",
+        "kind": "interface",
+        "file": "src\\components\\sst\\toriq-epi\\ToriqEPICatalogo.tsx",
+        "line": 198,
+        "exported": false
+      },
+      {
+        "name": "CalculadoraCustoMensalProps",
+        "kind": "interface",
+        "file": "src\\components\\admin\\CalculadoraCustoMensal.tsx",
+        "line": 16,
+        "exported": false
+      },
+      {
+        "name": "CalculadoraVertical365Props",
+        "kind": "interface",
+        "file": "src\\components\\admin\\CalculadoraVertical365.tsx",
+        "line": 57,
+        "exported": false
+      },
+      {
+        "name": "CardMovimentacoesHistoryProps",
+        "kind": "interface",
+        "file": "src\\components\\shared\\CardMovimentacoesHistory.tsx",
+        "line": 15,
+        "exported": false
+      },
+      {
+        "name": "Cargo",
+        "kind": "interface",
+        "file": "src\\components\\admin\\AdminCargoDialog.tsx",
+        "line": 39,
+        "exported": false
+      },
+      {
+        "name": "Categoria",
+        "kind": "interface",
+        "file": "src\\components\\avaliacao\\AvaliacaoReacaoForm.tsx",
+        "line": 23,
+        "exported": false
+      },
+      {
+        "name": "CategoriaCliente",
+        "kind": "interface",
+        "file": "src\\components\\admin\\AdminCategoriasClientes.tsx",
+        "line": 37,
+        "exported": false
+      },
+      {
+        "name": "ClienteSidebarProps",
+        "kind": "interface",
+        "file": "src\\components\\cliente\\ClienteSidebar.tsx",
+        "line": 20,
+        "exported": false
+      },
+      {
+        "name": "ColaboradoresPendentesListProps",
+        "kind": "interface",
+        "file": "src\\components\\turma\\ColaboradoresPendentesList.tsx",
+        "line": 15,
+        "exported": false
+      },
+      {
+        "name": "ColaboradorImportCSVProps",
+        "kind": "interface",
+        "file": "src\\components\\cliente\\ColaboradorImportCSV.tsx",
+        "line": 39,
+        "exported": false
+      },
+      {
+        "name": "ColaboradorPendente",
+        "kind": "interface",
+        "file": "src\\components\\turma\\ColaboradorPendenteCard.tsx",
+        "line": 22,
+        "exported": false
+      },
+      {
+        "name": "ColaboradorPendente",
+        "kind": "interface",
+        "file": "src\\components\\turma\\ColaboradoresPendentesList.tsx",
+        "line": 6,
+        "exported": false
+      },
+      {
+        "name": "ColaboradorPendenteCardProps",
+        "kind": "interface",
+        "file": "src\\components\\turma\\ColaboradorPendenteCard.tsx",
+        "line": 31,
+        "exported": false
+      }
+    ],
+    "functions": [
+      {
+        "name": "AdminConfiguracoes",
+        "kind": "function",
+        "file": "src\\components\\admin\\AdminConfiguracoes.tsx",
+        "line": 4,
+        "exported": true
+      },
+      {
+        "name": "AdminSidebar",
+        "kind": "function",
+        "file": "src\\components\\admin\\AdminSidebar.tsx",
+        "line": 62,
+        "exported": true
+      },
+      {
+        "name": "AlterarSenha",
+        "kind": "function",
+        "file": "src\\pages\\AlterarSenha.tsx",
+        "line": 12,
+        "exported": true
+      },
+      {
+        "name": "AlterarSenhaDialog",
+        "kind": "function",
+        "file": "src\\components\\shared\\AlterarSenhaDialog.tsx",
+        "line": 25,
+        "exported": true
+      },
+      {
+        "name": "applyWhiteLabelConfig",
+        "kind": "function",
+        "file": "src\\hooks\\useWhiteLabel.tsx",
+        "line": 59,
+        "exported": true
+      },
+      {
+        "name": "AuthProvider",
+        "kind": "function",
+        "file": "src\\hooks\\useAuth.tsx",
+        "line": 38,
+        "exported": true
+      },
+      {
+        "name": "calculateDistance",
+        "kind": "function",
+        "file": "src\\lib\\googleMapsService.ts",
+        "line": 195,
+        "exported": true
+      },
+      {
+        "name": "calculateDistancesFromInstructors",
+        "kind": "function",
+        "file": "src\\lib\\googleMapsService.ts",
+        "line": 243,
+        "exported": true
+      },
+      {
+        "name": "CardMovimentacoesHistory",
+        "kind": "function",
+        "file": "src\\components\\shared\\CardMovimentacoesHistory.tsx",
+        "line": 43,
+        "exported": true
+      },
+      {
+        "name": "clearDistanceCache",
+        "kind": "function",
+        "file": "src\\lib\\googleMapsService.ts",
+        "line": 103,
+        "exported": true
+      },
+      {
+        "name": "ClienteFinanceiro",
+        "kind": "function",
+        "file": "src\\components\\cliente\\ClienteFinanceiro.tsx",
+        "line": 34,
+        "exported": true
+      },
+      {
+        "name": "ClienteSidebar",
+        "kind": "function",
+        "file": "src\\components\\cliente\\ClienteSidebar.tsx",
+        "line": 37,
+        "exported": true
+      },
+      {
+        "name": "cn",
+        "kind": "function",
+        "file": "src\\lib\\utils.ts",
+        "line": 4,
+        "exported": true
+      },
+      {
+        "name": "CurrentScreenProvider",
+        "kind": "function",
+        "file": "src\\hooks\\useCurrentScreen.tsx",
+        "line": 30,
+        "exported": true
+      },
+      {
+        "name": "DetalhesTurma",
+        "kind": "function",
+        "file": "src\\pages\\modulos\\DetalhesTurma.tsx",
+        "line": 53,
+        "exported": true
+      },
+      {
+        "name": "downloadPDF",
+        "kind": "function",
+        "file": "src\\utils\\pdfUtils.ts",
+        "line": 227,
+        "exported": true
+      },
+      {
+        "name": "EmpresaModeBanner",
+        "kind": "function",
+        "file": "src\\components\\admin\\EmpresaModeBanner.tsx",
+        "line": 6,
+        "exported": true
+      },
+      {
+        "name": "EmpresaModeProvider",
+        "kind": "function",
+        "file": "src\\hooks\\useEmpresaMode.tsx",
+        "line": 21,
+        "exported": true
+      },
+      {
+        "name": "formatDistance",
+        "kind": "function",
+        "file": "src\\lib\\googleMapsService.ts",
+        "line": 333,
+        "exported": true
+      },
+      {
+        "name": "generateCompactPDF",
+        "kind": "function",
+        "file": "src\\utils\\pdfUtils.ts",
+        "line": 100,
+        "exported": true
+      },
+      {
+        "name": "getCacheStats",
+        "kind": "function",
+        "file": "src\\lib\\googleMapsService.ts",
+        "line": 112,
+        "exported": true
+      },
+      {
+        "name": "getCBOByCodigo",
+        "kind": "function",
+        "file": "src\\lib\\cboService.ts",
+        "line": 34,
+        "exported": true
+      },
+      {
+        "name": "getCidadesPorEstado",
+        "kind": "function",
+        "file": "src\\lib\\ibgeService.ts",
+        "line": 56,
+        "exported": true
+      },
+      {
+        "name": "getEstados",
+        "kind": "function",
+        "file": "src\\lib\\ibgeService.ts",
+        "line": 19,
+        "exported": true
+      },
+      {
+        "name": "getIdsTelasPorModulo",
+        "kind": "function",
+        "file": "src\\config\\modulosTelas.ts",
+        "line": 156,
+        "exported": true
+      },
+      {
+        "name": "getModuloByNome",
+        "kind": "function",
+        "file": "src\\config\\modulosTelas.ts",
+        "line": 161,
+        "exported": true
+      },
+      {
+        "name": "getTodasTelasPorModulo",
+        "kind": "function",
+        "file": "src\\config\\modulosTelas.ts",
+        "line": 139,
+        "exported": true
+      },
+      {
+        "name": "InstrutorAgendaTreinamentos",
+        "kind": "function",
+        "file": "src\\components\\instrutor\\InstrutorAgendaTreinamentos.tsx",
+        "line": 11,
+        "exported": true
+      },
+      {
+        "name": "InstrutorSidebar",
+        "kind": "function",
+        "file": "src\\components\\instrutor\\InstrutorSidebar.tsx",
+        "line": 35,
+        "exported": true
+      },
+      {
+        "name": "loadAndApplyWhiteLabelConfig",
+        "kind": "function",
+        "file": "src\\hooks\\useWhiteLabel.tsx",
+        "line": 133,
+        "exported": true
+      },
+      {
+        "name": "ModulosAtivosProvider",
+        "kind": "function",
+        "file": "src\\hooks\\useModulosAtivos.tsx",
+        "line": 38,
+        "exported": true
+      },
+      {
+        "name": "NotificationItem",
+        "kind": "function",
+        "file": "src\\components\\shared\\notifications\\NotificationItem.tsx",
+        "line": 92,
+        "exported": true
+      },
+      {
+        "name": "ParceiraAgenda",
+        "kind": "function",
+        "file": "src\\components\\parceira\\ParceiraAgenda.tsx",
+        "line": 7,
+        "exported": true
+      },
+      {
+        "name": "ParceiraSidebar",
+        "kind": "function",
+        "file": "src\\components\\parceira\\ParceiraSidebar.tsx",
+        "line": 26,
+        "exported": true
+      },
+      {
+        "name": "PermissaoBadge",
+        "kind": "function",
+        "file": "src\\hooks\\useTelaPermissoes.tsx",
+        "line": 112,
+        "exported": true
+      },
+      {
+        "name": "searchCBO",
+        "kind": "function",
+        "file": "src\\lib\\cboService.ts",
+        "line": 13,
+        "exported": true
+      },
+      {
+        "name": "SSTCadastros",
+        "kind": "function",
+        "file": "src\\components\\sst\\SSTCadastros.tsx",
+        "line": 4,
+        "exported": true
+      },
+      {
+        "name": "SSTPerfilEmpresa",
+        "kind": "function",
+        "file": "src\\components\\sst\\SSTPerfilEmpresa.tsx",
+        "line": 30,
+        "exported": true
+      },
+      {
+        "name": "Toaster",
+        "kind": "function",
+        "file": "src\\components\\ui\\toaster.tsx",
+        "line": 4,
+        "exported": true
+      },
+      {
+        "name": "ToriqCorpAdministrativo",
+        "kind": "function",
+        "file": "src\\components\\sst\\toriq-corp\\ToriqCorpAdministrativo.tsx",
+        "line": 8,
+        "exported": true
+      },
+      {
+        "name": "ToriqCorpComercial",
+        "kind": "function",
+        "file": "src\\components\\sst\\toriq-corp\\ToriqCorpComercial.tsx",
+        "line": 8,
+        "exported": true
+      },
+      {
+        "name": "ToriqCorpContasPagar",
+        "kind": "function",
+        "file": "src\\components\\sst\\toriq-corp\\ToriqCorpContasPagar.tsx",
+        "line": 3,
+        "exported": true
+      },
+      {
+        "name": "ToriqCorpContasReceber",
+        "kind": "function",
+        "file": "src\\components\\sst\\toriq-corp\\ToriqCorpContasReceber.tsx",
+        "line": 3,
+        "exported": true
+      },
+      {
+        "name": "ToriqCorpContratos",
+        "kind": "function",
+        "file": "src\\components\\sst\\toriq-corp\\ToriqCorpContratos.tsx",
+        "line": 50,
+        "exported": true
+      },
+      {
+        "name": "ToriqCorpFinanceiroCadastros",
+        "kind": "function",
+        "file": "src\\components\\sst\\toriq-corp\\ToriqCorpFinanceiroCadastros.tsx",
+        "line": 3,
+        "exported": true
+      },
+      {
+        "name": "ToriqCorpMarketing",
+        "kind": "function",
+        "file": "src\\components\\sst\\toriq-corp\\ToriqCorpMarketing.tsx",
+        "line": 8,
+        "exported": true
+      },
+      {
+        "name": "ToriqCorpTecnico",
+        "kind": "function",
+        "file": "src\\components\\sst\\toriq-corp\\ToriqCorpTecnico.tsx",
+        "line": 4,
+        "exported": true
+      },
+      {
+        "name": "ToriqEPIDevolucoes",
+        "kind": "function",
+        "file": "src\\components\\sst\\toriq-epi\\ToriqEPIDevolucoes.tsx",
+        "line": 7,
+        "exported": true
+      },
+      {
+        "name": "ToriqEPIFicha",
+        "kind": "function",
+        "file": "src\\components\\sst\\toriq-epi\\ToriqEPIFicha.tsx",
+        "line": 7,
+        "exported": true
+      },
+      {
+        "name": "ToriqEPIRelatorios",
+        "kind": "function",
+        "file": "src\\components\\sst\\toriq-epi\\ToriqEPIRelatorios.tsx",
+        "line": 5,
+        "exported": true
+      }
+    ],
+    "types": [
+      {
+        "name": "CalendarProps",
+        "kind": "type",
+        "file": "src\\components\\ui\\calendar.tsx",
+        "line": 15,
+        "exported": true
+      },
+      {
+        "name": "ChartConfig",
+        "kind": "type",
+        "file": "src\\components\\ui\\chart.tsx",
+        "line": 9,
+        "exported": true
+      },
+      {
+        "name": "ClienteSection",
+        "kind": "type",
+        "file": "src\\pages\\ClienteDashboard.tsx",
+        "line": 23,
+        "exported": true
+      },
+      {
+        "name": "DistanceProgressCallback",
+        "kind": "type",
+        "file": "src\\lib\\googleMapsService.ts",
+        "line": 239,
+        "exported": true
+      },
+      {
+        "name": "GrupoAcesso",
+        "kind": "type",
+        "file": "src\\hooks\\useHierarquia.tsx",
+        "line": 5,
+        "exported": true
+      },
+      {
+        "name": "InstrutorSection",
+        "kind": "type",
+        "file": "src\\components\\instrutor\\InstrutorSidebar.tsx",
+        "line": 19,
+        "exported": true
+      },
+      {
+        "name": "KanbanTipo",
+        "kind": "type",
+        "file": "src\\hooks\\useCardMovimentacoes.tsx",
+        "line": 24,
+        "exported": true
+      },
+      {
+        "name": "Action",
+        "kind": "type",
+        "file": "src\\hooks\\use-toast.ts",
+        "line": 31,
+        "exported": false
+      },
+      {
+        "name": "ActionType",
+        "kind": "type",
+        "file": "src\\hooks\\use-toast.ts",
+        "line": 29,
+        "exported": false
+      },
+      {
+        "name": "AdminSection",
+        "kind": "type",
+        "file": "src\\pages\\AdminDashboard.tsx",
+        "line": 32,
+        "exported": false
+      },
+      {
+        "name": "AdminSection",
+        "kind": "type",
+        "file": "src\\components\\admin\\AdminSidebar.tsx",
+        "line": 24,
+        "exported": false
+      },
+      {
+        "name": "CarouselApi",
+        "kind": "type",
+        "file": "src\\components\\ui\\carousel.tsx",
+        "line": 8,
+        "exported": false
+      },
+      {
+        "name": "CarouselContextProps",
+        "kind": "type",
+        "file": "src\\components\\ui\\carousel.tsx",
+        "line": 20,
+        "exported": false
+      },
+      {
+        "name": "CarouselOptions",
+        "kind": "type",
+        "file": "src\\components\\ui\\carousel.tsx",
+        "line": 10,
+        "exported": false
+      },
+      {
+        "name": "CarouselPlugin",
+        "kind": "type",
+        "file": "src\\components\\ui\\carousel.tsx",
+        "line": 11,
+        "exported": false
+      },
+      {
+        "name": "CarouselProps",
+        "kind": "type",
+        "file": "src\\components\\ui\\carousel.tsx",
+        "line": 13,
+        "exported": false
+      },
+      {
+        "name": "ChartContextProps",
+        "kind": "type",
+        "file": "src\\components\\ui\\chart.tsx",
+        "line": 16,
+        "exported": false
+      },
+      {
+        "name": "ConfigSection",
+        "kind": "type",
+        "file": "src\\components\\sst\\toriq-corp\\ToriqCorpConfiguracoes.tsx",
+        "line": 6,
+        "exported": false
+      },
+      {
+        "name": "FiltroTab",
+        "kind": "type",
+        "file": "src\\components\\shared\\notifications\\NotificationPopover.tsx",
+        "line": 14,
+        "exported": false
+      },
+      {
+        "name": "FormFieldContextValue",
+        "kind": "type",
+        "file": "src\\components\\ui\\form.tsx",
+        "line": 11,
+        "exported": false
+      },
+      {
+        "name": "FormItemContextValue",
+        "kind": "type",
+        "file": "src\\components\\ui\\form.tsx",
+        "line": 56,
+        "exported": false
+      },
+      {
+        "name": "InstrutorSection",
+        "kind": "type",
+        "file": "src\\components\\instrutor\\InstrutorInicio.tsx",
+        "line": 56,
+        "exported": false
+      },
+      {
+        "name": "PaginationLinkProps",
+        "kind": "type",
+        "file": "src\\components\\ui\\pagination.tsx",
+        "line": 29,
+        "exported": false
+      },
+      {
+        "name": "ParceiraSection",
+        "kind": "type",
+        "file": "src\\pages\\ParceiraDashboard.tsx",
+        "line": 14,
+        "exported": false
+      },
+      {
+        "name": "ParceiraSection",
+        "kind": "type",
+        "file": "src\\components\\parceira\\ParceiraSidebar.tsx",
+        "line": 19,
+        "exported": false
+      },
+      {
+        "name": "ParceiraSection",
+        "kind": "type",
+        "file": "src\\components\\parceira\\ParceiraInicio.tsx",
+        "line": 37,
+        "exported": false
+      },
+      {
+        "name": "SidebarContext",
+        "kind": "type",
+        "file": "src\\components\\ui\\sidebar.tsx",
+        "line": 23,
+        "exported": false
+      },
+      {
+        "name": "StatusAtualizacao",
+        "kind": "type",
+        "file": "src\\components\\sst\\SSTMeuPerfil.tsx",
+        "line": 16,
+        "exported": false
+      },
+      {
+        "name": "Toast",
+        "kind": "type",
+        "file": "src\\hooks\\use-toast.ts",
+        "line": 135,
+        "exported": false
+      },
+      {
+        "name": "ToasterProps",
+        "kind": "type",
+        "file": "src\\components\\ui\\sonner.tsx",
+        "line": 4,
+        "exported": false
+      },
+      {
+        "name": "ToasterToast",
+        "kind": "type",
+        "file": "src\\hooks\\use-toast.ts",
+        "line": 8,
+        "exported": false
+      },
+      {
+        "name": "UseCarouselParameters",
+        "kind": "type",
+        "file": "src\\components\\ui\\carousel.tsx",
+        "line": 9,
+        "exported": false
+      }
+    ],
+    "enums": []
+  },
+  "publicAPI": [
+    {
+      "name": "AdminConfiguracoes",
+      "kind": "function",
+      "file": "src\\components\\admin\\AdminConfiguracoes.tsx",
+      "line": 4,
+      "exported": true
+    },
+    {
+      "name": "AdminSidebar",
+      "kind": "function",
+      "file": "src\\components\\admin\\AdminSidebar.tsx",
+      "line": 62,
+      "exported": true
+    },
+    {
+      "name": "AlterarSenha",
+      "kind": "function",
+      "file": "src\\pages\\AlterarSenha.tsx",
+      "line": 12,
+      "exported": true
+    },
+    {
+      "name": "AlterarSenhaDialog",
+      "kind": "function",
+      "file": "src\\components\\shared\\AlterarSenhaDialog.tsx",
+      "line": 25,
+      "exported": true
+    },
+    {
+      "name": "applyWhiteLabelConfig",
+      "kind": "function",
+      "file": "src\\hooks\\useWhiteLabel.tsx",
+      "line": 59,
+      "exported": true
+    },
+    {
+      "name": "AulaAgendada",
+      "kind": "interface",
+      "file": "src\\components\\shared\\AgendaTreinamentos.tsx",
+      "line": 25,
+      "exported": true
+    },
+    {
+      "name": "AuthProvider",
+      "kind": "function",
+      "file": "src\\hooks\\useAuth.tsx",
+      "line": 38,
+      "exported": true
+    },
+    {
+      "name": "BadgeProps",
+      "kind": "interface",
+      "file": "src\\components\\ui\\badge.tsx",
+      "line": 23,
+      "exported": true
+    },
+    {
+      "name": "ButtonProps",
+      "kind": "interface",
+      "file": "src\\components\\ui\\button.tsx",
+      "line": 33,
+      "exported": true
+    },
+    {
+      "name": "calculateDistance",
+      "kind": "function",
+      "file": "src\\lib\\googleMapsService.ts",
+      "line": 195,
+      "exported": true
+    },
+    {
+      "name": "calculateDistancesFromInstructors",
+      "kind": "function",
+      "file": "src\\lib\\googleMapsService.ts",
+      "line": 243,
+      "exported": true
+    },
+    {
+      "name": "CalendarProps",
+      "kind": "type",
+      "file": "src\\components\\ui\\calendar.tsx",
+      "line": 15,
+      "exported": true
+    },
+    {
+      "name": "CardMovimentacao",
+      "kind": "interface",
+      "file": "src\\hooks\\useCardMovimentacoes.tsx",
+      "line": 5,
+      "exported": true
+    },
+    {
+      "name": "CardMovimentacoesHistory",
+      "kind": "function",
+      "file": "src\\components\\shared\\CardMovimentacoesHistory.tsx",
+      "line": 43,
+      "exported": true
+    },
+    {
+      "name": "Cargo",
+      "kind": "interface",
+      "file": "src\\components\\cliente\\ClienteCargos.tsx",
+      "line": 40,
+      "exported": true
+    },
+    {
+      "name": "CBOOcupacao",
+      "kind": "interface",
+      "file": "src\\lib\\cboService.ts",
+      "line": 3,
+      "exported": true
+    },
+    {
+      "name": "ChartConfig",
+      "kind": "type",
+      "file": "src\\components\\ui\\chart.tsx",
+      "line": 9,
+      "exported": true
+    },
+    {
+      "name": "Cidade",
+      "kind": "interface",
+      "file": "src\\lib\\ibgeService.ts",
+      "line": 9,
+      "exported": true
+    },
+    {
+      "name": "clearDistanceCache",
+      "kind": "function",
+      "file": "src\\lib\\googleMapsService.ts",
+      "line": 103,
+      "exported": true
+    },
+    {
+      "name": "ClienteFinanceiro",
+      "kind": "function",
+      "file": "src\\components\\cliente\\ClienteFinanceiro.tsx",
+      "line": 34,
+      "exported": true
+    },
+    {
+      "name": "ClienteSection",
+      "kind": "type",
+      "file": "src\\pages\\ClienteDashboard.tsx",
+      "line": 23,
+      "exported": true
+    },
+    {
+      "name": "ClienteSidebar",
+      "kind": "function",
+      "file": "src\\components\\cliente\\ClienteSidebar.tsx",
+      "line": 37,
+      "exported": true
+    },
+    {
+      "name": "cn",
+      "kind": "function",
+      "file": "src\\lib\\utils.ts",
+      "line": 4,
+      "exported": true
+    },
+    {
+      "name": "Colaborador",
+      "kind": "interface",
+      "file": "src\\components\\cliente\\ClienteColaboradores.tsx",
+      "line": 33,
+      "exported": true
+    },
+    {
+      "name": "ComparisonMetrics",
+      "kind": "interface",
+      "file": "src\\utils\\facial-recognition\\types.ts",
+      "line": 65,
+      "exported": true
+    },
+    {
+      "name": "CurrentScreenProvider",
+      "kind": "function",
+      "file": "src\\hooks\\useCurrentScreen.tsx",
+      "line": 30,
+      "exported": true
+    },
+    {
+      "name": "DadosCustoMensal",
+      "kind": "interface",
+      "file": "src\\components\\admin\\CalculadoraCustoMensal.tsx",
+      "line": 22,
+      "exported": true
+    },
+    {
+      "name": "DetalhesTurma",
+      "kind": "function",
+      "file": "src\\pages\\modulos\\DetalhesTurma.tsx",
+      "line": 53,
+      "exported": true
+    },
+    {
+      "name": "DistanceProgressCallback",
+      "kind": "type",
+      "file": "src\\lib\\googleMapsService.ts",
+      "line": 239,
+      "exported": true
+    },
+    {
+      "name": "DistanceResult",
+      "kind": "interface",
+      "file": "src\\lib\\googleMapsService.ts",
+      "line": 6,
+      "exported": true
+    },
+    {
+      "name": "downloadPDF",
+      "kind": "function",
+      "file": "src\\utils\\pdfUtils.ts",
+      "line": 227,
+      "exported": true
+    },
+    {
+      "name": "EmpresaModeBanner",
+      "kind": "function",
+      "file": "src\\components\\admin\\EmpresaModeBanner.tsx",
+      "line": 6,
+      "exported": true
+    },
+    {
+      "name": "EmpresaModeProvider",
+      "kind": "function",
+      "file": "src\\hooks\\useEmpresaMode.tsx",
+      "line": 21,
+      "exported": true
+    },
+    {
+      "name": "Estado",
+      "kind": "interface",
+      "file": "src\\lib\\ibgeService.ts",
+      "line": 3,
+      "exported": true
+    },
+    {
+      "name": "FaceApiResult",
+      "kind": "interface",
+      "file": "src\\utils\\facial-recognition\\FaceApiService.ts",
+      "line": 10,
+      "exported": true
+    },
+    {
+      "name": "FaceDetectionResult",
+      "kind": "interface",
+      "file": "src\\utils\\facial-recognition\\types.ts",
+      "line": 27,
+      "exported": true
+    },
+    {
+      "name": "FaceDetector",
+      "kind": "class",
+      "file": "src\\utils\\facial-recognition\\FaceDetector.ts",
+      "line": 10,
+      "exported": true
+    },
+    {
+      "name": "FacialRecognitionService",
+      "kind": "class",
+      "file": "src\\utils\\facial-recognition\\FacialRecognitionService.ts",
+      "line": 17,
+      "exported": true
+    },
+    {
+      "name": "FacialValidationResult",
+      "kind": "interface",
+      "file": "src\\utils\\facial-recognition\\types.ts",
+      "line": 50,
+      "exported": true
+    },
+    {
+      "name": "formatDistance",
+      "kind": "function",
+      "file": "src\\lib\\googleMapsService.ts",
+      "line": 333,
+      "exported": true
+    },
+    {
+      "name": "generateCompactPDF",
+      "kind": "function",
+      "file": "src\\utils\\pdfUtils.ts",
+      "line": 100,
+      "exported": true
+    },
+    {
+      "name": "getCacheStats",
+      "kind": "function",
+      "file": "src\\lib\\googleMapsService.ts",
+      "line": 112,
+      "exported": true
+    },
+    {
+      "name": "getCBOByCodigo",
+      "kind": "function",
+      "file": "src\\lib\\cboService.ts",
+      "line": 34,
+      "exported": true
+    },
+    {
+      "name": "getCidadesPorEstado",
+      "kind": "function",
+      "file": "src\\lib\\ibgeService.ts",
+      "line": 56,
+      "exported": true
+    },
+    {
+      "name": "getEstados",
+      "kind": "function",
+      "file": "src\\lib\\ibgeService.ts",
+      "line": 19,
+      "exported": true
+    },
+    {
+      "name": "getIdsTelasPorModulo",
+      "kind": "function",
+      "file": "src\\config\\modulosTelas.ts",
+      "line": 156,
+      "exported": true
+    },
+    {
+      "name": "getModuloByNome",
+      "kind": "function",
+      "file": "src\\config\\modulosTelas.ts",
+      "line": 161,
+      "exported": true
+    },
+    {
+      "name": "getTodasTelasPorModulo",
+      "kind": "function",
+      "file": "src\\config\\modulosTelas.ts",
+      "line": 139,
+      "exported": true
+    },
+    {
+      "name": "GrupoAcesso",
+      "kind": "type",
+      "file": "src\\hooks\\useHierarquia.tsx",
+      "line": 5,
+      "exported": true
+    },
+    {
+      "name": "ImageAnalysis",
+      "kind": "interface",
+      "file": "src\\utils\\facial-recognition\\types.ts",
+      "line": 12,
+      "exported": true
+    }
+  ],
+  "dependencies": {
+    "mostImported": [
+      {
+        "file": "C:\\Users\\lukas\\Desktop\\vertical-on-sistema-de-sst\\src\\utils\\facial-recognition\\types.ts",
+        "importedBy": 3
+      },
+      {
+        "file": "C:\\Users\\lukas\\Desktop\\vertical-on-sistema-de-sst\\src\\components\\sst\\toriq-corp\\SetorDashboard.tsx",
+        "importedBy": 3
+      },
+      {
+        "file": "C:\\Users\\lukas\\Desktop\\vertical-on-sistema-de-sst\\src\\utils\\facial-recognition\\ImageProcessor.ts",
+        "importedBy": 1
+      },
+      {
+        "file": "C:\\Users\\lukas\\Desktop\\vertical-on-sistema-de-sst\\src\\utils\\facial-recognition\\FaceDetector.ts",
+        "importedBy": 1
+      },
+      {
+        "file": "C:\\Users\\lukas\\Desktop\\vertical-on-sistema-de-sst\\src\\integrations\\supabase\\types.ts",
+        "importedBy": 1
+      },
+      {
+        "file": "C:\\Users\\lukas\\Desktop\\vertical-on-sistema-de-sst\\src\\App.tsx",
+        "importedBy": 1
+      },
+      {
+        "file": "C:\\Users\\lukas\\Desktop\\vertical-on-sistema-de-sst\\src\\index.css",
+        "importedBy": 1
+      },
+      {
+        "file": "C:\\Users\\lukas\\Desktop\\vertical-on-sistema-de-sst\\src\\pages\\Index.tsx",
+        "importedBy": 1
+      },
+      {
+        "file": "C:\\Users\\lukas\\Desktop\\vertical-on-sistema-de-sst\\src\\pages\\Auth.tsx",
+        "importedBy": 1
+      },
+      {
+        "file": "C:\\Users\\lukas\\Desktop\\vertical-on-sistema-de-sst\\src\\pages\\Dashboard.tsx",
+        "importedBy": 1
+      },
+      {
+        "file": "C:\\Users\\lukas\\Desktop\\vertical-on-sistema-de-sst\\src\\pages\\AdminDashboard.tsx",
+        "importedBy": 1
+      },
+      {
+        "file": "C:\\Users\\lukas\\Desktop\\vertical-on-sistema-de-sst\\src\\pages\\SSTDashboard.tsx",
+        "importedBy": 1
+      },
+      {
+        "file": "C:\\Users\\lukas\\Desktop\\vertical-on-sistema-de-sst\\src\\pages\\ClienteDashboard.tsx",
+        "importedBy": 1
+      },
+      {
+        "file": "C:\\Users\\lukas\\Desktop\\vertical-on-sistema-de-sst\\src\\pages\\ParceiraDashboard.tsx",
+        "importedBy": 1
+      },
+      {
+        "file": "C:\\Users\\lukas\\Desktop\\vertical-on-sistema-de-sst\\src\\pages\\ModuloPage.tsx",
+        "importedBy": 1
+      },
+      {
+        "file": "C:\\Users\\lukas\\Desktop\\vertical-on-sistema-de-sst\\src\\pages\\modulos\\GestaoEPI.tsx",
+        "importedBy": 1
+      },
+      {
+        "file": "C:\\Users\\lukas\\Desktop\\vertical-on-sistema-de-sst\\src\\pages\\modulos\\SaudeOcupacional.tsx",
+        "importedBy": 1
+      },
+      {
+        "file": "C:\\Users\\lukas\\Desktop\\vertical-on-sistema-de-sst\\src\\pages\\modulos\\GestaoTreinamentos.tsx",
+        "importedBy": 1
+      },
+      {
+        "file": "C:\\Users\\lukas\\Desktop\\vertical-on-sistema-de-sst\\src\\pages\\modulos\\GestaoTerceiros.tsx",
+        "importedBy": 1
+      },
+      {
+        "file": "C:\\Users\\lukas\\Desktop\\vertical-on-sistema-de-sst\\src\\pages\\modulos\\GestaoTurmas.tsx",
+        "importedBy": 1
+      }
+    ]
+  },
+  "stats": {
+    "totalSymbols": 320,
+    "exportedSymbols": 97,
+    "analysisTimeMs": 2656
+  }
+}

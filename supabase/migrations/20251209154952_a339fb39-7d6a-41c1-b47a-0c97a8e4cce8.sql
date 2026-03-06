@@ -1,0 +1,1 @@
+ALTER TABLE empresas ADD COLUMN possui_gestao_treinamentos boolean DEFAULT false;

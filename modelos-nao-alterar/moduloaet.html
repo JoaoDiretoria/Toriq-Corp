@@ -1,0 +1,1706 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Módulo SST • AET (NR-17) — Inspeção, Análise e Emissão</title>
+  <style>
+    :root{
+      --bg:#0b1220;
+      --panel:#0f1a33;
+      --panel2:#101f3d;
+      --card:#0f1a33cc;
+      --line:#23365f;
+      --text:#e8efff;
+      --muted:#b9c7ee;
+      --muted2:#93a6d9;
+      --primary:#6aa8ff;
+      --primary2:#8bd0ff;
+      --ok:#2ee59d;
+      --warn:#ffd166;
+      --bad:#ff5c7a;
+      --shadow: 0 10px 24px rgba(0,0,0,.32);
+      --radius:18px;
+      --radius2:14px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+    }
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      font-family:var(--sans);
+      background:
+        radial-gradient(1200px 700px at 20% -10%, rgba(106,168,255,.25), transparent 60%),
+        radial-gradient(1000px 600px at 100% 10%, rgba(46,229,157,.15), transparent 55%),
+        radial-gradient(900px 600px at 70% 120%, rgba(255,92,122,.12), transparent 60%),
+        var(--bg);
+      color:var(--text);
+    }
+    a{ color:inherit; }
+    .app{
+      display:grid;
+      grid-template-columns: 340px 1fr;
+      gap:16px;
+      padding:18px;
+      height:100%;
+      max-width: 1500px;
+      margin:0 auto;
+    }
+    .sidebar{
+      background:linear-gradient(180deg, rgba(16,31,61,.9), rgba(15,26,51,.85));
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      display:flex;
+      flex-direction:column;
+      overflow:hidden;
+      min-height: 0;
+    }
+    .main{
+      background:linear-gradient(180deg, rgba(16,31,61,.72), rgba(15,26,51,.55));
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      overflow:hidden;
+      min-height: 0;
+      display:flex;
+      flex-direction:column;
+    }
+
+    /* Sidebar header */
+    .sb-head{
+      padding:16px 16px 12px;
+      border-bottom:1px solid var(--line);
+      background: rgba(11,18,32,.25);
+    }
+    .brand{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:10px;
+    }
+    .logo{
+      width:44px;height:44px;border-radius:14px;
+      background: radial-gradient(circle at 30% 25%, rgba(139,208,255,.9), rgba(106,168,255,.55) 45%, rgba(46,229,157,.35) 70%, rgba(255,92,122,.25));
+      border:1px solid rgba(255,255,255,.15);
+      box-shadow: 0 10px 18px rgba(0,0,0,.24);
+    }
+    .brand h1{
+      font-size:15px;
+      line-height:1.1;
+      margin:0;
+      letter-spacing:.3px;
+    }
+    .brand small{
+      display:block;
+      color:var(--muted2);
+      font-weight:500;
+      margin-top:3px;
+    }
+    .pill{
+      font-size:12px;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.18);
+      background:rgba(106,168,255,.12);
+      color:var(--primary2);
+      white-space:nowrap;
+    }
+
+    .project-box{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:10px;
+    }
+    .field{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+    }
+    label{
+      font-size:12px;
+      color:var(--muted);
+      letter-spacing:.2px;
+    }
+    input, select, textarea{
+      width:100%;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.14);
+      background:rgba(255,255,255,.06);
+      color:var(--text);
+      padding:10px 12px;
+      outline:none;
+      transition:.15s ease;
+      font-size:13px;
+    }
+    textarea{ min-height: 92px; resize: vertical; }
+    input:focus, select:focus, textarea:focus{
+      border-color: rgba(106,168,255,.65);
+      box-shadow:0 0 0 4px rgba(106,168,255,.12);
+    }
+    .row{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+
+    /* Steps */
+    .steps{
+      padding:12px;
+      overflow:auto;
+      min-height:0;
+    }
+    .step{
+      border:1px solid rgba(255,255,255,.12);
+      background:rgba(255,255,255,.04);
+      border-radius:16px;
+      padding:12px;
+      margin-bottom:10px;
+      cursor:pointer;
+      position:relative;
+    }
+    .step.active{
+      border-color: rgba(106,168,255,.55);
+      background: rgba(106,168,255,.08);
+    }
+    .step .top{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .step h3{
+      margin:0;
+      font-size:13px;
+      letter-spacing:.2px;
+    }
+    .step p{
+      margin:6px 0 0;
+      font-size:12px;
+      color:var(--muted2);
+      line-height:1.35;
+    }
+    .badge{
+      font-size:11px;
+      padding:4px 8px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.16);
+      background:rgba(255,255,255,.05);
+      color:var(--muted);
+      white-space:nowrap;
+    }
+    .badge.ok{ color: var(--ok); border-color: rgba(46,229,157,.35); background: rgba(46,229,157,.08); }
+    .badge.warn{ color: var(--warn); border-color: rgba(255,209,102,.35); background: rgba(255,209,102,.08); }
+    .badge.bad{ color: var(--bad); border-color: rgba(255,92,122,.35); background: rgba(255,92,122,.08); }
+
+    /* Main header */
+    .main-head{
+      padding:14px 16px;
+      border-bottom:1px solid var(--line);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      background: rgba(11,18,32,.18);
+    }
+    .title{
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+    }
+    .title h2{ margin:0; font-size:15px; letter-spacing:.2px; }
+    .title small{ color:var(--muted2); }
+
+    .actions{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+    .btn{
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,.16);
+      background:rgba(255,255,255,.06);
+      color:var(--text);
+      padding:9px 12px;
+      font-size:12px;
+      cursor:pointer;
+      transition:.15s ease;
+      display:inline-flex;
+      gap:8px;
+      align-items:center;
+      white-space:nowrap;
+    }
+    .btn:hover{ transform: translateY(-1px); background:rgba(255,255,255,.09); }
+    .btn.primary{
+      border-color: rgba(106,168,255,.55);
+      background: rgba(106,168,255,.16);
+      color: var(--primary2);
+    }
+    .btn.success{
+      border-color: rgba(46,229,157,.45);
+      background: rgba(46,229,157,.12);
+      color: var(--ok);
+    }
+    .btn.danger{
+      border-color: rgba(255,92,122,.45);
+      background: rgba(255,92,122,.10);
+      color: var(--bad);
+    }
+    .kbd{
+      font-family:var(--mono);
+      font-size:11px;
+      color:rgba(255,255,255,.75);
+      padding:2px 6px;
+      border:1px solid rgba(255,255,255,.16);
+      border-bottom-color: rgba(255,255,255,.10);
+      border-radius:8px;
+      background:rgba(0,0,0,.25);
+    }
+
+    /* Content */
+    .content{
+      padding:16px;
+      overflow:auto;
+      min-height:0;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap:14px;
+      align-items:start;
+    }
+    .card{
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.04);
+      border-radius: var(--radius);
+      padding:14px;
+    }
+    .card h4{
+      margin:0 0 10px;
+      font-size:13px;
+      letter-spacing:.2px;
+    }
+    .muted{ color:var(--muted2); font-size:12px; line-height:1.45; }
+    .hint{
+      font-size:12px;
+      color: rgba(255,255,255,.78);
+      padding:10px 12px;
+      border-radius:14px;
+      border:1px dashed rgba(255,255,255,.18);
+      background: rgba(0,0,0,.18);
+      line-height:1.45;
+    }
+    .hint b{ color: var(--primary2); font-weight:700; }
+    .chips{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      margin-top:10px;
+    }
+    .chip{
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.04);
+      border-radius:999px;
+      padding:6px 10px;
+      font-size:12px;
+      color: var(--muted);
+    }
+    .chip strong{ color: var(--text); font-weight:700; }
+
+    .tabs{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      margin: 8px 0 12px;
+    }
+    .tab{
+      padding:8px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.16);
+      background: rgba(255,255,255,.04);
+      font-size:12px;
+      cursor:pointer;
+      color: var(--muted);
+    }
+    .tab.active{
+      border-color: rgba(106,168,255,.55);
+      background: rgba(106,168,255,.12);
+      color: var(--primary2);
+    }
+
+    .table{
+      width:100%;
+      border-collapse:separate;
+      border-spacing:0;
+      overflow:hidden;
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,.12);
+    }
+    .table th, .table td{
+      padding:10px 10px;
+      border-bottom:1px solid rgba(255,255,255,.08);
+      font-size:12px;
+      vertical-align:top;
+    }
+    .table th{
+      text-align:left;
+      color: var(--muted);
+      background: rgba(0,0,0,.20);
+      font-weight:600;
+    }
+    .table tr:last-child td{ border-bottom:none; }
+    .table td .mini{
+      font-size:11px;
+      color: var(--muted2);
+      margin-top:4px;
+      line-height:1.35;
+    }
+    .status-dot{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      font-size:12px;
+      color: var(--muted);
+      white-space:nowrap;
+    }
+    .dot{
+      width:10px;height:10px;border-radius:50%;
+      background: rgba(255,255,255,.25);
+      border:1px solid rgba(255,255,255,.18);
+    }
+    .dot.ok{ background: rgba(46,229,157,.85); border-color: rgba(46,229,157,.45); }
+    .dot.warn{ background: rgba(255,209,102,.9); border-color: rgba(255,209,102,.45); }
+    .dot.bad{ background: rgba(255,92,122,.9); border-color: rgba(255,92,122,.45); }
+
+    .split{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+    .hr{
+      height:1px;
+      background: rgba(255,255,255,.10);
+      margin: 12px 0;
+    }
+    .footer{
+      padding:12px 16px;
+      border-top:1px solid var(--line);
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      align-items:center;
+      color:var(--muted2);
+      font-size:12px;
+      background: rgba(11,18,32,.18);
+    }
+    .progress{
+      display:flex; align-items:center; gap:10px;
+    }
+    .bar{
+      width:220px; height:10px; border-radius:999px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+      overflow:hidden;
+    }
+    .fill{
+      height:100%;
+      width: 35%;
+      background: linear-gradient(90deg, rgba(106,168,255,.95), rgba(139,208,255,.75), rgba(46,229,157,.65));
+      border-radius:999px;
+      box-shadow: 0 8px 18px rgba(106,168,255,.22);
+    }
+
+    /* responsive */
+    @media (max-width: 1100px){
+      .app{ grid-template-columns: 1fr; }
+      .bar{ width: 160px; }
+      .grid{ grid-template-columns: 1fr; }
+    }
+
+    /* print-ish preview */
+    .preview{
+      font-family: var(--sans);
+      background: rgba(255,255,255,.04);
+      border:1px solid rgba(255,255,255,.12);
+      border-radius: 16px;
+      padding: 12px;
+      max-height: 440px;
+      overflow:auto;
+    }
+    .preview h5{ margin:0 0 8px; font-size:13px; }
+    .preview pre{
+      margin:0;
+      white-space:pre-wrap;
+      font-size:12px;
+      line-height:1.5;
+      color: rgba(255,255,255,.86);
+    }
+    .tag{
+      display:inline-flex;
+      gap:8px;
+      align-items:center;
+      margin: 0 0 10px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.18);
+      font-size:12px;
+      color: var(--muted);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <!-- SIDEBAR -->
+    <aside class="sidebar" aria-label="Navegação do módulo AET">
+      <div class="sb-head">
+        <div class="brand">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="logo" aria-hidden="true"></div>
+            <div>
+              <h1>Módulo SST • AET (NR-17)</h1>
+              <small>Inspeção • Análise • Recomendações • Emissão</small>
+            </div>
+          </div>
+          <span class="pill">Fluxo sem retrabalho</span>
+        </div>
+
+        <div class="project-box">
+          <div class="row">
+            <div class="field">
+              <label for="projId">ID do Projeto</label>
+              <input id="projId" placeholder="AET-2026-0001" value="AET-2026-0001" />
+            </div>
+            <div class="field">
+              <label for="status">Status</label>
+              <select id="status">
+                <option>Em coleta (visita técnica)</option>
+                <option>Em análise</option>
+                <option>Em revisão</option>
+                <option>Pronto para emissão</option>
+                <option>Emitido</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="empresa">Empresa / Unidade</label>
+            <input id="empresa" placeholder="Razão social (CNPJ) • Unidade • Cidade/UF" />
+          </div>
+
+          <div class="row">
+            <div class="field">
+              <label for="cnae">CNAE</label>
+              <input id="cnae" placeholder="Ex.: 47.11-3/02" />
+            </div>
+            <div class="field">
+              <label for="gr">Grau de risco (IN)</label>
+              <select id="gr">
+                <option value="">Selecione</option>
+                <option>1</option><option>2</option><option>3</option><option>4</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="escopo">Demanda / Escopo</label>
+            <textarea id="escopo" placeholder="Ex.: Adequação NR-17, análise por GHE, foco em biomecânicos + organizacionais, etc."></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="steps" role="navigation" aria-label="Etapas do fluxo AET">
+        <div class="step active" data-step="0">
+          <div class="top">
+            <h3>1) Identificação & Escopo</h3>
+            <span class="badge ok">Base</span>
+          </div>
+          <p>Empresa, unidade, CNAE/GR, demanda, setores/funções (GHE) e planejamento da visita.</p>
+        </div>
+
+        <div class="step" data-step="1">
+          <div class="top">
+            <h3>2) Visita Técnica (Coleta)</h3>
+            <span class="badge warn">Obrigatório</span>
+          </div>
+          <p>Entrevistas, fotos/vídeos, medições (altura/alcance/mobiliário) e fatores ambientais.</p>
+        </div>
+
+        <div class="step" data-step="2">
+          <div class="top">
+            <h3>3) Tarefas: Prescrita × Real</h3>
+            <span class="badge warn">Obrigatório</span>
+          </div>
+          <p>Descrição por função/GHE: rotina, turnos, variações, eventos críticos e demandas cognitivas.</p>
+        </div>
+
+        <div class="step" data-step="3">
+          <div class="top">
+            <h3>4) Análises & Ferramentas</h3>
+            <span class="badge warn">NR-17</span>
+          </div>
+          <p>Checklists e métodos (OCRA, RULA, NIOSH, Borg, NASA-TLX etc.) e registro de resultados.</p>
+        </div>
+
+        <div class="step" data-step="4">
+          <div class="top">
+            <h3>5) Matriz de Fatores/Riscos</h3>
+            <span class="badge warn">Diagnóstico</span>
+          </div>
+          <p>Grupos: biomecânicos, mobiliário, organizacionais, ambientais, psicossociais/cognitivos.</p>
+        </div>
+
+        <div class="step" data-step="5">
+          <div class="top">
+            <h3>6) Recomendações & Plano</h3>
+            <span class="badge warn">Ação</span>
+          </div>
+          <p>Medidas, priorização, cronograma, responsáveis, evidências e critérios de aceite.</p>
+        </div>
+
+        <div class="step" data-step="6">
+          <div class="top">
+            <h3>7) Revisão, Assinatura & Emissão</h3>
+            <span class="badge">Governança</span>
+          </div>
+          <p>Controle de versão, validação interna, anexos e geração do documento final (PDF/DOCX).</p>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main" aria-label="Conteúdo do módulo">
+      <header class="main-head">
+        <div class="title">
+          <h2 id="stepTitle">1) Identificação & Escopo</h2>
+          <small id="stepSub">Cadastros mínimos e estrutura base do documento (NR-17).</small>
+        </div>
+
+        <div class="actions">
+          <button class="btn" id="btnSave" title="Salvar rascunho (simulado)">
+            💾 Salvar
+            <span class="kbd">Ctrl</span><span class="kbd">S</span>
+          </button>
+          <button class="btn primary" id="btnValidate" title="Validar campos obrigatórios (simulado)">
+            ✅ Validar
+          </button>
+          <button class="btn success" id="btnPreview" title="Gerar prévia do documento (simulado)">
+            🧾 Prévia
+          </button>
+          <button class="btn danger" id="btnReset" title="Limpar dados (simulado)">
+            ♻️ Limpar
+          </button>
+        </div>
+      </header>
+
+      <section class="content">
+        <!-- STEP 0 -->
+        <div class="panel" data-panel="0">
+          <div class="grid">
+            <div class="card">
+              <h4>Cadastro estruturado (para gerar a AET automaticamente)</h4>
+              <div class="hint">
+                Este cadastro reflete a estrutura típica de uma AET completa: <b>Identificação</b>, <b>Demanda/Objetivos</b>,
+                <b>Quadro de Setores/Funções (GHE)</b>, <b>Referências legais/técnicas</b> e as <b>Etapas (Coleta → Análise → Documento)</b>.
+                (Modelo observado no documento anexado.) :contentReference[oaicite:0]{index=0}
+              </div>
+
+              <div class="hr"></div>
+
+              <div class="split">
+                <div class="field">
+                  <label for="endereco">Endereço da unidade</label>
+                  <textarea id="endereco" placeholder="Logradouro, nº, bairro, cidade/UF, CEP"></textarea>
+                </div>
+                <div class="field">
+                  <label for="responsaveis">Responsáveis / Acompanhamento em campo</label>
+                  <textarea id="responsaveis" placeholder="Ex.: Eng. Seg., TST, gestor da área, representantes dos trabalhadores"></textarea>
+                </div>
+              </div>
+
+              <div class="row" style="margin-top:10px">
+                <div class="field">
+                  <label for="dataVisita">Data(s) prevista(s) de visita</label>
+                  <input id="dataVisita" type="date" />
+                </div>
+                <div class="field">
+                  <label for="turnos">Turnos / Horários a observar</label>
+                  <input id="turnos" placeholder="Ex.: 07:30–18:30 • escala • picos de demanda" />
+                </div>
+              </div>
+
+              <div class="field" style="margin-top:10px">
+                <label for="ghe">Quadro de Setores e Funções (GHE)</label>
+                <textarea id="ghe" placeholder="Ex.: GHE A – Gerência: Gerente, Co-gerente; GHE B – Frente de Caixa: Operador; ..."></textarea>
+                <div class="muted">Dica: cadastre por GHE para reaproveitar medições e análise por “grupo homogêneo”. :contentReference[oaicite:1]{index=1}</div>
+              </div>
+
+              <div class="field" style="margin-top:10px">
+                <label for="refs">Referências legais, normativas e técnicas aplicáveis</label>
+                <textarea id="refs" placeholder="NR-17, ABNT NBR 13962/13966, NHO-11, ISO 11226, ISO 11228-1/2/3, OCRA/Colombini, RULA, Borg, NASA-TLX, etc."></textarea>
+                <div class="muted">
+                  O modelo anexo cita um conjunto robusto de referências (NR-17 + ABNT/ISO/NHO e métodos). :contentReference[oaicite:2]{index=2}
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <h4>Checklist de completude (anti-retrabalho)</h4>
+              <div class="muted">O sistema deve travar a emissão se faltar evidência mínima.</div>
+              <div class="chips">
+                <div class="chip"><strong>Identificação:</strong> empresa, CNPJ, CNAE, GR</div>
+                <div class="chip"><strong>Demanda:</strong> NR-17 / objetivos</div>
+                <div class="chip"><strong>GHE:</strong> setores + funções</div>
+                <div class="chip"><strong>Turnos:</strong> variações/picos</div>
+                <div class="chip"><strong>Etapas:</strong> coleta → análise → entrega</div>
+                <div class="chip"><strong>Riscos:</strong> 5 grupos (biomec, mob., org., amb., psicossoc.)</div>
+                <div class="chip"><strong>Evidências:</strong> fotos/vídeos/medições</div>
+                <div class="chip"><strong>Ferramentas:</strong> OCRA/RULA/NIOSH/Borg/NASA-TLX</div>
+                <div class="chip"><strong>Plano:</strong> recomendações + cronograma + responsável</div>
+              </div>
+
+              <div class="hr"></div>
+
+              <div class="preview">
+                <div class="tag">📌 Estrutura do documento (auto)</div>
+<pre>
+• Identificação (empresa, CNAE, GR, endereço)
+• Demanda e Objetivos (NR-17)
+• Quadro de Setores e Funções (GHE)
+• Considerações legislativas / normativas / técnicas
+• Etapas: Fase 1 Coleta → Fase 2 Análise → Fase 3 Documento
+• Análises por GHE (tarefa prescrita x real + registros fotográficos)
+• Matriz de fatores/riscos (5 grupos) com embasamento e justificativas
+• Recomendações + cronograma de ações + encerramento / referências
+</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 1 -->
+        <div class="panel" data-panel="1" hidden>
+          <div class="grid">
+            <div class="card">
+              <h4>Visita Técnica — Coleta (Fase 1)</h4>
+              <div class="hint">
+                A fase de coleta deve registrar: <b>entrevistas</b>, <b>descrição de turnos/atividades</b>, <b>foto/vídeo</b>,
+                <b>medidas de alturas/alcances/mobiliário</b> e <b>fatores ambientais</b>. :contentReference[oaicite:3]{index=3}
+              </div>
+
+              <div class="hr"></div>
+
+              <div class="split">
+                <div class="field">
+                  <label for="roteiroEntrevista">Roteiro de entrevista (por função/GHE)</label>
+                  <textarea id="roteiroEntrevista" placeholder="Queixas, dor/desconforto, pausas, ritmo, metas, autonomia, demandas cognitivas, variações, eventos críticos..."></textarea>
+                </div>
+                <div class="field">
+                  <label for="observacaoDireta">Observação direta (tarefa real)</label>
+                  <textarea id="observacaoDireta" placeholder="Sequência real da tarefa, posturas, manuseio, deslocamentos, ferramentas, improvisos, gargalos..."></textarea>
+                </div>
+              </div>
+
+              <div class="row" style="margin-top:10px">
+                <div class="field">
+                  <label for="midias">Evidências (fotos/vídeos) — anexos</label>
+                  <input id="midias" type="file" multiple />
+                  <div class="muted">Sugestão: obrigar pelo menos 2 registros por posto/atividade analisada.</div>
+                </div>
+                <div class="field">
+                  <label for="layout">Planta / Croqui / Espaço físico (anexo)</label>
+                  <input id="layout" type="file" />
+                </div>
+              </div>
+
+              <div class="hr"></div>
+
+              <h4>Medições (antropometria do posto / mobiliário / alcances)</h4>
+              <table class="table" aria-label="Medições de campo">
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th>Valor</th>
+                    <th>Unidade/Observação</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Altura do tampo / bancada</td>
+                    <td><input placeholder="Ex.: 74" /></td>
+                    <td><input placeholder="cm • regulagem? bordas/quinas?" /></td>
+                  </tr>
+                  <tr>
+                    <td>Altura do assento (min–máx)</td>
+                    <td><input placeholder="Ex.: 45–55" /></td>
+                    <td><input placeholder="cm • conforme ABNT? regulagem?" /></td>
+                  </tr>
+                  <tr>
+                    <td>Alcance horizontal (uso frequente)</td>
+                    <td><input placeholder="Ex.: 40" /></td>
+                    <td><input placeholder="cm • zona ótima/ máxima" /></td>
+                  </tr>
+                  <tr>
+                    <td>Iluminância (NHO-11)</td>
+                    <td><input placeholder="Ex.: 338" /></td>
+                    <td><input placeholder="lux • ponto/altura/horário" /></td>
+                  </tr>
+                  <tr>
+                    <td>Ruído (conforto)</td>
+                    <td><input placeholder="Ex.: 61" /></td>
+                    <td><input placeholder="dB(A) • condição de medição" /></td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div class="muted" style="margin-top:8px">
+                Observação: o documento anexo registra exemplos de ruído/iluminância e necessidade de medições conforme o contexto. :contentReference[oaicite:4]{index=4}
+              </div>
+            </div>
+
+            <div class="card">
+              <h4>Controle de evidências (por GHE)</h4>
+              <div class="muted">Centraliza evidências para reaproveitar na análise e no relatório final.</div>
+
+              <div class="hr"></div>
+
+              <table class="table" aria-label="Evidências por GHE">
+                <thead>
+                  <tr>
+                    <th>GHE</th>
+                    <th>Postos/Atividades</th>
+                    <th>Evidências mínimas</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><input placeholder="Ex.: GHE A" /></td>
+                    <td><input placeholder="2 postos / 3 atividades" /></td>
+                    <td>
+                      <div class="status-dot"><span class="dot warn"></span> Fotos (mín. 2/posto)</div>
+                      <div class="status-dot"><span class="dot warn"></span> Entrevistas (mín. 1/função)</div>
+                      <div class="status-dot"><span class="dot warn"></span> Medições (se aplicável)</div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><input placeholder="Ex.: GHE B" /></td>
+                    <td><input placeholder="1 posto / 2 atividades" /></td>
+                    <td>
+                      <div class="status-dot"><span class="dot warn"></span> Fotos</div>
+                      <div class="status-dot"><span class="dot warn"></span> Entrevistas</div>
+                      <div class="status-dot"><span class="dot warn"></span> Vídeo (mov. repetitivo)</div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div class="hr"></div>
+
+              <div class="hint">
+                Boa prática: se houver <b>movimentos repetitivos</b>, registrar vídeo curto e, se aplicável, preparar entrada para
+                checklist OCRA/Colombini (tempo de ciclo, ações/min, força, postura, recuperação). :contentReference[oaicite:5]{index=5}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 2 -->
+        <div class="panel" data-panel="2" hidden>
+          <div class="grid">
+            <div class="card">
+              <h4>Tarefa Prescrita × Tarefa Real (por Função/GHE)</h4>
+              <div class="hint">
+                O modelo anexo descreve explicitamente: <b>tarefa prescrita</b> (descrição formal) e <b>tarefa real</b> (observada/relatada),
+                além de registros fotográficos por posto/atividade. :contentReference[oaicite:6]{index=6}
+              </div>
+
+              <div class="hr"></div>
+
+              <div class="row">
+                <div class="field">
+                  <label>GHE</label>
+                  <select>
+                    <option>Selecione</option>
+                    <option>GHE A</option>
+                    <option>GHE B</option>
+                    <option>GHE C</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Função</label>
+                  <input placeholder="Ex.: Operador de caixa / Repositor / Tele-vendas" />
+                </div>
+              </div>
+
+              <div class="split" style="margin-top:10px">
+                <div class="field">
+                  <label>Tarefa Prescrita (descrição formal)</label>
+                  <textarea placeholder="Atividades previstas, responsabilidades, ferramentas e padrões."></textarea>
+                </div>
+                <div class="field">
+                  <label>Tarefa Real (observada/entrevista)</label>
+                  <textarea placeholder="O que de fato ocorre: variações, improvisos, picos, interrupções, multitarefa."></textarea>
+                </div>
+              </div>
+
+              <div class="row" style="margin-top:10px">
+                <div class="field">
+                  <label>Turno/escala analisado</label>
+                  <input placeholder="Ex.: 540 min • pausas • variações" />
+                </div>
+                <div class="field">
+                  <label>Fatores críticos (picos/eventos)</label>
+                  <input placeholder="Ex.: finais de semana, auditorias, descarregamento, filas, etc." />
+                </div>
+              </div>
+
+              <div class="field" style="margin-top:10px">
+                <label>Registros fotográficos (link/arquivo)</label>
+                <input type="file" multiple />
+              </div>
+            </div>
+
+            <div class="card">
+              <h4>Mapeamento rápido de exposições (triagem)</h4>
+              <div class="muted">Use para direcionar quais ferramentas serão aplicadas no passo seguinte.</div>
+
+              <div class="hr"></div>
+
+              <table class="table" aria-label="Triagem de exposição">
+                <thead>
+                  <tr>
+                    <th>Exposição</th>
+                    <th>Existe?</th>
+                    <th>Frequência/Duração</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Postura em pé prolongada</td>
+                    <td>
+                      <select>
+                        <option>Não</option><option>Sim</option>
+                      </select>
+                    </td>
+                    <td><input placeholder="Ex.: >2h contínuas? alternância?" /></td>
+                  </tr>
+                  <tr>
+                    <td>Movimentos repetitivos (MMSS)</td>
+                    <td>
+                      <select>
+                        <option>Não</option><option>Sim</option>
+                      </select>
+                    </td>
+                    <td><input placeholder="Ex.: ações/min, tempo líquido repetitivo" /></td>
+                  </tr>
+                  <tr>
+                    <td>Levantamento/Transporte manual</td>
+                    <td>
+                      <select>
+                        <option>Não</option><option>Sim</option>
+                      </select>
+                    </td>
+                    <td><input placeholder="Ex.: peso, pega, distância, frequência" /></td>
+                  </tr>
+                  <tr>
+                    <td>Demanda cognitiva / mental</td>
+                    <td>
+                      <select>
+                        <option>Não</option><option>Sim</option>
+                      </select>
+                    </td>
+                    <td><input placeholder="Ex.: atenção/memória, multitarefa, estresse" /></td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div class="hr"></div>
+
+              <div class="hint">
+                Dica prática: se a triagem marcar “Sim”, o sistema sugere automaticamente a ferramenta (ex.: repetitivo → OCRA; levantamento → NIOSH/ISO 11228-1; postura → RULA/ISO 11226; mental → NASA-TLX). :contentReference[oaicite:7]{index=7}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 3 -->
+        <div class="panel" data-panel="3" hidden>
+          <div class="grid">
+            <div class="card">
+              <h4>Análises & Ferramentas (Fase 2)</h4>
+
+              <div class="tabs" role="tablist" aria-label="Ferramentas">
+                <div class="tab active" data-tab="ocra">OCRA (Checklist)</div>
+                <div class="tab" data-tab="niosh">NIOSH / ISO 11228-1</div>
+                <div class="tab" data-tab="rula">RULA / ISO 11226</div>
+                <div class="tab" data-tab="borg">Escala de Borg</div>
+                <div class="tab" data-tab="nasa">NASA-TLX / ERGOS</div>
+              </div>
+
+              <!-- OCRA -->
+              <div class="tool" data-tool="ocra">
+                <div class="hint">
+                  O modelo anexo inclui seção completa de <b>CHECKLIST OCRA</b> com: duração do turno, pausas, tempo líquido repetitivo,
+                  recuperação, frequência (ações/min por lado), força, postura inadequada, estereotipia e resultado final por lado. :contentReference[oaicite:8]{index=8}
+                </div>
+
+                <div class="hr"></div>
+
+                <div class="row">
+                  <div class="field">
+                    <label>Posto / Atividade</label>
+                    <input placeholder="Ex.: Operador de caixa — passar produtos na esteira" />
+                  </div>
+                  <div class="field">
+                    <label>Data da avaliação</label>
+                    <input type="date" />
+                  </div>
+                </div>
+
+                <div class="split" style="margin-top:10px">
+                  <div class="field">
+                    <label>Duração do turno (oficial / real) — min</label>
+                    <input placeholder="Ex.: 540 / 540" />
+                  </div>
+                  <div class="field">
+                    <label>Pausas (almoço / outras) — min</label>
+                    <input placeholder="Ex.: 120 + 15" />
+                  </div>
+                </div>
+
+                <div class="split" style="margin-top:10px">
+                  <div class="field">
+                    <label>Trabalho não repetitivo (oficial / real) — min</label>
+                    <input placeholder="Ex.: 180 / 150" />
+                  </div>
+                  <div class="field">
+                    <label>Tempo líquido repetitivo — min</label>
+                    <input placeholder="Ex.: 255" />
+                  </div>
+                </div>
+
+                <div class="row" style="margin-top:10px">
+                  <div class="field">
+                    <label>Recuperação (horas sem recuperação adequada)</label>
+                    <input placeholder="Ex.: 05" />
+                  </div>
+                  <div class="field">
+                    <label>Interrupções breves possíveis?</label>
+                    <select>
+                      <option>Sim</option>
+                      <option>Não</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="hr"></div>
+
+                <h4>Frequência / Força / Postura (Direita × Esquerda)</h4>
+                <table class="table" aria-label="OCRA por lado">
+                  <thead>
+                    <tr>
+                      <th>Parâmetro</th>
+                      <th>Lado direito</th>
+                      <th>Lado esquerdo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>Frequência (ações/min)</td>
+                      <td><input placeholder="Ex.: 37,5–42,4" /></td>
+                      <td><input placeholder="Ex.: 27,5–32,4" /></td>
+                    </tr>
+                    <tr>
+                      <td>Força (nível e % do tempo)</td>
+                      <td><input placeholder="Ex.: moderada • 5%" /></td>
+                      <td><input placeholder="Ex.: moderada • 5%" /></td>
+                    </tr>
+                    <tr>
+                      <td>Postura inadequada (ombro/cotovelo/mão)</td>
+                      <td><input placeholder="Ex.: mão >80% do tempo" /></td>
+                      <td><input placeholder="Ex.: mão >80% do tempo" /></td>
+                    </tr>
+                    <tr>
+                      <td>Estereotipia (tempo de ciclo / ações idênticas)</td>
+                      <td><input placeholder="Ex.: ciclo <8s, >80% tempo" /></td>
+                      <td><input placeholder="Ex.: ciclo <8s, >80% tempo" /></td>
+                    </tr>
+                    <tr>
+                      <td>Fatores adicionais</td>
+                      <td><input placeholder="Ex.: físico-mecânicos/sócio-org" /></td>
+                      <td><input placeholder="Ex.: físico-mecânicos/sócio-org" /></td>
+                    </tr>
+                    <tr>
+                      <td>Resultado (pontuação final)</td>
+                      <td><input placeholder="Ex.: 12,6" /></td>
+                      <td><input placeholder="Ex.: 10,9" /></td>
+                    </tr>
+                    <tr>
+                      <td>Classificação (risco)</td>
+                      <td>
+                        <select>
+                          <option>Muito baixo</option>
+                          <option>Baixo</option>
+                          <option selected>Médio</option>
+                          <option>Alto</option>
+                        </select>
+                      </td>
+                      <td>
+                        <select>
+                          <option selected>Muito baixo</option>
+                          <option>Baixo</option>
+                          <option>Médio</option>
+                          <option>Alto</option>
+                        </select>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                <div class="field" style="margin-top:10px">
+                  <label>Justificativa / Observações</label>
+                  <textarea placeholder="Descrever variabilidade, picos, uso de scanner, alternância de postura, etc."></textarea>
+                </div>
+              </div>
+
+              <!-- NIOSH -->
+              <div class="tool" data-tool="niosh" hidden>
+                <div class="hint">
+                  Para levantamento/transporte manual: registrar peso, distância, altura, pega, frequência e tempo.
+                  O modelo menciona suporte por ISO 11228-1 e referência à ferramenta NIOSH conforme aplicabilidade. :contentReference[oaicite:9]{index=9}
+                </div>
+                <div class="hr"></div>
+                <div class="split">
+                  <div class="field">
+                    <label>Peso (kg)</label>
+                    <input placeholder="Ex.: 12" />
+                  </div>
+                  <div class="field">
+                    <label>Frequência (levant./min)</label>
+                    <input placeholder="Ex.: 2" />
+                  </div>
+                </div>
+                <div class="split" style="margin-top:10px">
+                  <div class="field">
+                    <label>Altura inicial/final (cm)</label>
+                    <input placeholder="Ex.: 40 → 120" />
+                  </div>
+                  <div class="field">
+                    <label>Distância horizontal (cm)</label>
+                    <input placeholder="Ex.: 35" />
+                  </div>
+                </div>
+                <div class="field" style="margin-top:10px">
+                  <label>Qualidade da pega</label>
+                  <select>
+                    <option>Boa</option><option>Regular</option><option>Ruim</option>
+                  </select>
+                </div>
+                <div class="field" style="margin-top:10px">
+                  <label>Resultado (RWL/LI) — registrar</label>
+                  <input placeholder="Ex.: RWL=xx kg • LI=xx" />
+                </div>
+              </div>
+
+              <!-- RULA/ISO -->
+              <div class="tool" data-tool="rula" hidden>
+                <div class="hint">
+                  Para posturas estáticas/segmentos: registrar ângulos, tempo e repetição.
+                  O modelo anexo utiliza ISO 11226 e referencia critérios de elevação de MMSS e flexão de tronco. :contentReference[oaicite:10]{index=10}
+                </div>
+                <div class="hr"></div>
+                <div class="split">
+                  <div class="field">
+                    <label>Postura crítica (descrição)</label>
+                    <textarea placeholder="Ex.: flexão de tronco ~40° ao escanear itens no carrinho"></textarea>
+                  </div>
+                  <div class="field">
+                    <label>Tempo/Frequência</label>
+                    <textarea placeholder="Ex.: 4 flexões/min por <1h/dia; restante sem exigência"></textarea>
+                  </div>
+                </div>
+                <div class="row" style="margin-top:10px">
+                  <div class="field">
+                    <label>Pontuação RULA (se aplicada)</label>
+                    <input placeholder="Ex.: 5 (investigar e alterar)" />
+                  </div>
+                  <div class="field">
+                    <label>Classificação</label>
+                    <select>
+                      <option>Baixo</option>
+                      <option>Médio</option>
+                      <option>Alto</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Borg -->
+              <div class="tool" data-tool="borg" hidden>
+                <div class="hint">
+                  Para esforço percebido: registrar escala de Borg e % do tempo de ciclo quando aplicável.
+                  O modelo cita critérios de Borg para esforço relevante/intenso. :contentReference[oaicite:11]{index=11}
+                </div>
+                <div class="hr"></div>
+                <div class="row">
+                  <div class="field">
+                    <label>Borg (0–10)</label>
+                    <input placeholder="Ex.: 4" />
+                  </div>
+                  <div class="field">
+                    <label>% do tempo de ciclo</label>
+                    <input placeholder="Ex.: 12%" />
+                  </div>
+                </div>
+                <div class="field" style="margin-top:10px">
+                  <label>Comentário</label>
+                  <textarea placeholder="Descrever quando ocorre o esforço e o porquê."></textarea>
+                </div>
+              </div>
+
+              <!-- NASA -->
+              <div class="tool" data-tool="nasa" hidden>
+                <div class="hint">
+                  Para risco psicossocial/cognitivo: registrar exigências de atenção/memória, multitarefa, estresse e sobrecarga mental.
+                  O modelo menciona NASA-TLX/ERGOS como base de entrevista/análise qualitativa. :contentReference[oaicite:12]{index=12}
+                </div>
+                <div class="hr"></div>
+                <div class="split">
+                  <div class="field">
+                    <label>Descrição da demanda cognitiva</label>
+                    <textarea placeholder="Ex.: necessidade de atenção e memória, controle financeiro, atendimento simultâneo..."></textarea>
+                  </div>
+                  <div class="field">
+                    <label>Evidência / relatos</label>
+                    <textarea placeholder="Relatos de cansaço mental, estresse, erros, interrupções frequentes..."></textarea>
+                  </div>
+                </div>
+                <div class="row" style="margin-top:10px">
+                  <div class="field">
+                    <label>Classificação (qualitativa)</label>
+                    <select>
+                      <option>Baixa</option><option>Média</option><option>Alta</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label>Ferramenta aplicada</label>
+                    <select>
+                      <option>Entrevista (qualitativa)</option>
+                      <option>NASA-TLX</option>
+                      <option>ERGOS</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <div class="card">
+              <h4>Regras do sistema (automação)</h4>
+              <div class="muted">Sugestão de “motor” para evitar retrabalho:</div>
+              <div class="hr"></div>
+              <div class="hint">
+                <b>Se</b> triagem marcar “Mov. repetitivo”, <b>então</b> exigir OCRA (campos completos + evidência de vídeo/foto).<br>
+                <b>Se</b> marcar “Levantamento”, <b>então</b> habilitar NIOSH/ISO 11228-1 e pedir “pega + distâncias + frequência”.<br>
+                <b>Se</b> marcar “Postura estática/ângulos”, <b>então</b> sugerir ISO 11226 / RULA e exigir tempo de exposição.<br>
+                <b>Se</b> marcar “Sobrecarga mental”, <b>então</b> exigir entrevista estruturada + classificação (NASA-TLX/ERGOS opcional).<br><br>
+                Assim, a coleta “alimenta” automaticamente o relatório, inclusive os campos de <b>embasamento</b> e <b>justificativa</b> por fator/risko. :contentReference[oaicite:13]{index=13}
+              </div>
+
+              <div class="hr"></div>
+
+              <div class="preview">
+                <div class="tag">🧠 Saída esperada (auto)</div>
+<pre>
+• Ferramentas aplicadas por função/GHE
+• Resultados por lado (quando aplicável) e classificação de risco
+• Evidências vinculadas (fotos/vídeos/medições) por posto/atividade
+• Texto-base para “Entrevista/Motivo” + “Embasamento” no relatório
+</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 4 -->
+        <div class="panel" data-panel="4" hidden>
+          <div class="grid">
+            <div class="card">
+              <h4>Matriz de Fatores de Risco × Risco Ergonômico (por GHE/Função)</h4>
+              <div class="hint">
+                O modelo anexo organiza por <b>grupos</b> (biomecânicos, mobiliário/equip., organizacionais, ambientais, psicossociais/cognitivos),
+                cada item com <b>código</b>, indicação “possui/não possui risco” e “possui/não possui fator”, além de <b>Entrevista/Motivo</b> e <b>Embasamento</b>. 
+              </div>
+
+              <div class="hr"></div>
+
+              <div class="row">
+                <div class="field">
+                  <label>GHE</label>
+                  <select>
+                    <option>Selecione</option>
+                    <option>GHE A</option>
+                    <option>GHE B</option>
+                    <option>GHE C</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Função</label>
+                  <input placeholder="Ex.: Operador de caixa" />
+                </div>
+              </div>
+
+              <div class="hr"></div>
+
+              <table class="table" aria-label="Matriz de fatores e riscos">
+                <thead>
+                  <tr>
+                    <th style="width:90px">Código</th>
+                    <th>Item (fator)</th>
+                    <th style="width:150px">Risco ergonômico</th>
+                    <th style="width:160px">Fator de risco</th>
+                    <th>Entrevista/Motivo + Embasamento</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><input value="01.003" /></td>
+                    <td>
+                      Postura de pé por longos períodos
+                      <div class="mini">Grupo 1 — Biomecânicos</div>
+                    </td>
+                    <td>
+                      <select>
+                        <option>Não possui</option>
+                        <option selected>Possui (médio/alto)</option>
+                      </select>
+                    </td>
+                    <td>
+                      <select>
+                        <option>Não possui</option>
+                        <option selected>Possui</option>
+                      </select>
+                    </td>
+                    <td>
+                      <textarea placeholder="Entrevista/Motivo: ...&#10;Embasamento: NR-17 / CLT art. 199 / critério de >2h etc."></textarea>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><input value="02.002" /></td>
+                    <td>
+                      Mobiliário sem regulagens (cadeira/mesa)
+                      <div class="mini">Grupo 2 — Mobiliário e equipamentos</div>
+                    </td>
+                    <td>
+                      <select>
+                        <option>Não possui</option>
+                        <option selected>Possui</option>
+                      </select>
+                    </td>
+                    <td>
+                      <select>
+                        <option>Não possui</option>
+                        <option selected>Possui</option>
+                      </select>
+                    </td>
+                    <td>
+                      <textarea placeholder="Entrevista/Motivo: cadeira sem regulagem...&#10;Embasamento: ABNT NBR 13962/13966, NR-17."></textarea>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><input value="05.003" /></td>
+                    <td>
+                      Alto nível de concentração/atenção/memória
+                      <div class="mini">Grupo 5 — Psicossociais/Cognitivos</div>
+                    </td>
+                    <td>
+                      <select>
+                        <option>Não possui</option>
+                        <option selected>Possui</option>
+                      </select>
+                    </td>
+                    <td>
+                      <select>
+                        <option>Não possui</option>
+                        <option selected>Possui</option>
+                      </select>
+                    </td>
+                    <td>
+                      <textarea placeholder="Entrevista/Motivo: ...&#10;Embasamento: entrevista estruturada / NASA-TLX/ERGOS."></textarea>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div class="muted" style="margin-top:10px">
+                Observação: cadastre “itens padrão” por grupo (com códigos) e permita marcar “não se aplica” com justificativa para acelerar a emissão. 
+              </div>
+            </div>
+
+            <div class="card">
+              <h4>Legenda automática (relatório)</h4>
+              <div class="chips">
+                <div class="chip"><strong>Sem risco/fator</strong> — ausência</div>
+                <div class="chip"><strong>Baixo</strong> — presença leve</div>
+                <div class="chip"><strong>Médio/Alto</strong> — intervenção</div>
+              </div>
+
+              <div class="hr"></div>
+
+              <div class="hint">
+                O sistema deve gerar automaticamente os blocos de texto no formato do relatório:
+                <b>“ENTREVISTA/MOTIVO”</b> e <b>“EMBASAMENTO”</b>, pois é onde normalmente ocorre retrabalho por cópia/cola. 
+              </div>
+
+              <div class="hr"></div>
+
+              <div class="preview">
+                <div class="tag">🧾 Saída (auto) — exemplo</div>
+<pre>
+01.003 — Postura de pé por longos períodos
+Risco: Possui (médio/alto) • Fator: Possui
+Entrevista/Motivo: Relatado permanecer em pé a maior parte da jornada, com pouca alternância.
+Embasamento: Critérios de permanência prolongada + NR-17 (assentos para pausas) e boas práticas.
+</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 5 -->
+        <div class="panel" data-panel="5" hidden>
+          <div class="grid">
+            <div class="card">
+              <h4>Recomendações & Cronograma (Fase 3 — Entrega)</h4>
+              <div class="hint">
+                O modelo prevê <b>recomendações de melhoria</b> e <b>cronograma de ações</b> após o resumo da análise. :contentReference[oaicite:17]{index=17}
+              </div>
+
+              <div class="hr"></div>
+
+              <table class="table" aria-label="Plano de ação">
+                <thead>
+                  <tr>
+                    <th>Ação recomendada</th>
+                    <th>Prioridade</th>
+                    <th>Responsável</th>
+                    <th>Prazo</th>
+                    <th>Evidência / Critério de aceite</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><input placeholder="Ex.: disponibilizar assento para pausas no trabalho em pé" /></td>
+                    <td>
+                      <select>
+                        <option>Alta</option>
+                        <option selected>Média</option>
+                        <option>Baixa</option>
+                      </select>
+                    </td>
+                    <td><input placeholder="Ex.: Gerência / Facilities" /></td>
+                    <td><input type="date" /></td>
+                    <td><input placeholder="Foto do posto + OS/Nota + validação em nova inspeção" /></td>
+                  </tr>
+                  <tr>
+                    <td><input placeholder="Ex.: adequar cadeira com regulagem conforme ABNT" /></td>
+                    <td>
+                      <select>
+                        <option selected>Alta</option>
+                        <option>Média</option>
+                        <option>Baixa</option>
+                      </select>
+                    </td>
+                    <td><input placeholder="RH / Compras" /></td>
+                    <td><input type="date" /></td>
+                    <td><input placeholder="NF + checklist de ajuste + treinamento de uso" /></td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div class="field" style="margin-top:10px">
+                <label>Resumo da análise (auto + editável)</label>
+                <textarea placeholder="Resumo por GHE: principais riscos, evidências, ferramentas e pontos críticos."></textarea>
+              </div>
+            </div>
+
+            <div class="card">
+              <h4>Integração SST (PGR/PCMSO/GRO)</h4>
+              <div class="muted">
+                Boa prática: o sistema pode exportar automaticamente os “riscos ergonômicos” levantados para o GRO/PGR e orientar ações de saúde no PCMSO.
+              </div>
+              <div class="hr"></div>
+              <div class="hint">
+                No modelo, a AET “enriquece o PCMSO” e contribui para o gerenciamento de riscos dentro do GRO. :contentReference[oaicite:18]{index=18}
+              </div>
+
+              <div class="hr"></div>
+
+              <div class="preview">
+                <div class="tag">🔁 Saídas integradas (auto)</div>
+<pre>
+• Para PGR/GRO: lista de perigos/fatores, classificação, medidas e responsáveis
+• Para PCMSO: sinalização de grupos com maior risco (MMSS, lombar, mental) e necessidade de acompanhamento
+• Para Inspeções: checklist NR-17 por posto com evidências e pendências
+</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 6 -->
+        <div class="panel" data-panel="6" hidden>
+          <div class="grid">
+            <div class="card">
+              <h4>Revisão, Assinatura e Emissão</h4>
+              <div class="hint">
+                Esta etapa consolida tudo: versão, anexos, referências e geração final do documento.
+                O sistema só libera “Emitir” com validação OK (campos obrigatórios + evidências mínimas). :contentReference[oaicite:19]{index=19}
+              </div>
+
+              <div class="hr"></div>
+
+              <div class="row">
+                <div class="field">
+                  <label>Controle de versão</label>
+                  <input placeholder="Ex.: v1.0 • 2026-01-05 • Revisão interna" />
+                </div>
+                <div class="field">
+                  <label>Responsável técnico</label>
+                  <input placeholder="Nome • Registro • Assinatura digital" />
+                </div>
+              </div>
+
+              <div class="field" style="margin-top:10px">
+                <label>Anexos (fotos, vídeos, planilhas, croquis, medições)</label>
+                <input type="file" multiple />
+              </div>
+
+              <div class="hr"></div>
+
+              <div class="row">
+                <button class="btn primary" style="justify-content:center">📄 Gerar DOCX (simulado)</button>
+                <button class="btn success" style="justify-content:center">🧾 Gerar PDF (simulado)</button>
+              </div>
+
+              <div class="muted" style="margin-top:10px">
+                Sugestão: gerar automaticamente sumário, lista de anexos e referências com base no cadastro (NR/ABNT/ISO/NHO/métodos). :contentReference[oaicite:20]{index=20}
+              </div>
+            </div>
+
+            <div class="card">
+              <h4>Prévia do documento (compilação)</h4>
+              <div class="preview" id="docPreview">
+                <div class="tag">🧩 Prévia ainda não gerada</div>
+                <pre>Use o botão “Prévia” para compilar o texto com os dados cadastrados.</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <footer class="footer">
+        <div>
+          <span class="status-dot"><span class="dot warn" id="dotState"></span> <span id="stateText">Campos pendentes</span></span>
+          <span style="margin-left:10px; color:rgba(255,255,255,.75)">Auto-salvamento: <span id="autosave">desativado</span></span>
+        </div>
+        <div class="progress">
+          <span>Progresso</span>
+          <div class="bar"><div class="fill" id="progFill"></div></div>
+          <span id="progPct">35%</span>
+        </div>
+      </footer>
+    </main>
+  </div>
+
+  <script>
+    // Simple UX controller (demo-only)
+    const steps = Array.from(document.querySelectorAll(".step"));
+    const panels = Array.from(document.querySelectorAll(".panel"));
+    const stepTitle = document.getElementById("stepTitle");
+    const stepSub = document.getElementById("stepSub");
+    const progFill = document.getElementById("progFill");
+    const progPct = document.getElementById("progPct");
+    const dotState = document.getElementById("dotState");
+    const stateText = document.getElementById("stateText");
+    const autosave = document.getElementById("autosave");
+
+    const subtitles = [
+      "Cadastros mínimos e estrutura base do documento (NR-17).",
+      "Entrevistas, evidências e medições de campo por GHE/posto.",
+      "Descrição da tarefa prescrita × real para fundamentar a análise.",
+      "Aplicação de ferramentas e registro estruturado dos resultados.",
+      "Diagnóstico por item: risco/fator + entrevista/motivo + embasamento.",
+      "Plano de ação: recomendações, prazos, responsáveis e critérios de aceite.",
+      "Governança: revisão, anexos e geração do documento final."
+    ];
+
+    function setActiveStep(idx){
+      steps.forEach(s => s.classList.remove("active"));
+      steps[idx].classList.add("active");
+      panels.forEach(p => p.hidden = true);
+      panels[idx].hidden = false;
+
+      stepTitle.textContent = steps[idx].querySelector("h3").textContent;
+      stepSub.textContent = subtitles[idx] || "";
+
+      // progress (demo)
+      const pct = Math.min(100, Math.round(((idx+1)/steps.length)*100));
+      progFill.style.width = pct + "%";
+      progPct.textContent = pct + "%";
+
+      // status (demo)
+      if(idx <= 1){
+        dotState.className = "dot warn";
+        stateText.textContent = "Campos pendentes";
+      } else if(idx <= 4){
+        dotState.className = "dot warn";
+        stateText.textContent = "Em elaboração / análise";
+      } else {
+        dotState.className = "dot ok";
+        stateText.textContent = "Quase pronto para emissão";
+      }
+    }
+
+    steps.forEach((s) => {
+      s.addEventListener("click", () => setActiveStep(Number(s.dataset.step)));
+    });
+
+    // Tabs for tools
+    const tabs = Array.from(document.querySelectorAll(".tab"));
+    const tools = Array.from(document.querySelectorAll(".tool"));
+    tabs.forEach(t => t.addEventListener("click", () => {
+      tabs.forEach(x => x.classList.remove("active"));
+      t.classList.add("active");
+      const key = t.dataset.tab;
+      tools.forEach(el => el.hidden = (el.dataset.tool !== key));
+    }));
+
+    // Save/Validate/Preview/Reset (demo)
+    function toast(msg){
+      const el = document.createElement("div");
+      el.textContent = msg;
+      el.style.position="fixed";
+      el.style.bottom="18px";
+      el.style.left="50%";
+      el.style.transform="translateX(-50%)";
+      el.style.padding="10px 14px";
+      el.style.background="rgba(0,0,0,.55)";
+      el.style.border="1px solid rgba(255,255,255,.18)";
+      el.style.borderRadius="14px";
+      el.style.color="rgba(255,255,255,.92)";
+      el.style.boxShadow="0 10px 20px rgba(0,0,0,.35)";
+      el.style.zIndex="9999";
+      document.body.appendChild(el);
+      setTimeout(()=> el.remove(), 1700);
+    }
+
+    document.getElementById("btnSave").addEventListener("click", () => {
+      autosave.textContent = "ok (rascunho salvo)";
+      toast("Rascunho salvo (simulado).");
+    });
+
+    document.getElementById("btnValidate").addEventListener("click", () => {
+      const required = [
+        ["empresa","Empresa/Unidade"],
+        ["cnae","CNAE"],
+        ["gr","Grau de risco"],
+        ["escopo","Demanda/Escopo"],
+        ["ghe","Quadro GHE"]
+      ];
+      const missing = required
+        .filter(([id]) => {
+          const el = document.getElementById(id);
+          return !el || !String(el.value || "").trim();
+        })
+        .map(([,name]) => name);
+
+      if(missing.length){
+        dotState.className="dot warn";
+        stateText.textContent="Pendências: " + missing.length;
+        toast("Pendências: " + missing.join(", "));
+      } else {
+        dotState.className="dot ok";
+        stateText.textContent="Validação OK";
+        toast("Validação OK (simulado).");
+      }
+    });
+
+    document.getElementById("btnPreview").addEventListener("click", () => {
+      const empresa = document.getElementById("empresa").value || "—";
+      const cnae = document.getElementById("cnae").value || "—";
+      const gr = document.getElementById("gr").value || "—";
+      const end = document.getElementById("endereco").value || "—";
+      const escopo = document.getElementById("escopo").value || "—";
+      const ghe = document.getElementById("ghe").value || "—";
+      const refs = document.getElementById("refs").value || "—";
+      const dataVisita = document.getElementById("dataVisita").value || "—";
+      const turnos = document.getElementById("turnos").value || "—";
+
+      const txt =
+`ANÁLISE ERGONÔMICA DO TRABALHO (AET) — NR-17
+------------------------------------------------
+1. IDENTIFICAÇÃO
+Empresa/Unidade: ${empresa}
+CNAE: ${cnae} | Grau de Risco: ${gr}
+Endereço: ${end}
+
+2. DEMANDA / ESCOPO
+${escopo}
+
+3. QUADRO DE SETORES E FUNÇÕES (GHE)
+${ghe}
+
+4. PLANEJAMENTO DE VISITA TÉCNICA
+Data(s): ${dataVisita}
+Turnos/horários observados: ${turnos}
+
+5. REFERÊNCIAS LEGAIS/TÉCNICAS
+${refs}
+
+6. ETAPAS
+Fase 1 — Coleta (entrevistas, evidências, medições)
+Fase 2 — Análise (ferramentas: OCRA/RULA/NIOSH/Borg/NASA-TLX, conforme triagem)
+Fase 3 — Documento (matriz de fatores/riscos + recomendações + cronograma + anexos)
+
+(Prévia simulada: o sistema real compilará também as análises por função/GHE e o plano de ação.)`;
+
+      const box = document.getElementById("docPreview");
+      box.innerHTML = `
+        <div class="tag">🧾 Prévia gerada (simulado)</div>
+        <pre>${txt.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</pre>
+      `;
+      toast("Prévia gerada (simulado).");
+    });
+
+    document.getElementById("btnReset").addEventListener("click", () => {
+      document.querySelectorAll("input, textarea, select").forEach(el => {
+        if(el.id === "projId") return;
+        if(el.type === "file") el.value = "";
+        else if(el.tagName === "SELECT") el.selectedIndex = 0;
+        else el.value = "";
+      });
+      autosave.textContent = "desativado";
+      toast("Dados limpos (simulado).");
+      setActiveStep(0);
+    });
+
+    // Ctrl+S shortcut
+    window.addEventListener("keydown", (e) => {
+      if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s"){
+        e.preventDefault();
+        document.getElementById("btnSave").click();
+      }
+    });
+
+    // init
+    setActiveStep(0);
+  </script>
+</body>
+</html>

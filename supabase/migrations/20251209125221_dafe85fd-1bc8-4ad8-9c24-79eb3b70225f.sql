@@ -1,0 +1,1 @@
+DELETE FROM modulos WHERE nome IN ('Agenda', 'Comunicados', 'Relatórios');
