@@ -20,19 +20,12 @@ const ModulosAtivosContext = createContext<ModulosAtivosContextType | undefined>
 
 // Mapeamento de nomes de módulos do banco para IDs usados no código
 const MODULO_NOME_PARA_ID: Record<string, string> = {
-  'Toriq Training': 'toriq_train',
-  'Gestão de Treinamentos': 'toriq_train',
   'Toriq Corp': 'toriq_corp',
-  'Toriq EPI': 'gestao_epi',
-  'Gestão de EPI': 'gestao_epi',
-  'Toriq EPI - Gestão Completa': 'gestao_epi',
 };
 
 // Mapeamento inverso: ID do código para nomes do banco
 const ID_PARA_MODULO_NOMES: Record<string, string[]> = {
-  'toriq_train': ['Toriq Training', 'Gestão de Treinamentos'],
   'toriq_corp': ['Toriq Corp'],
-  'gestao_epi': ['Toriq EPI', 'Gestão de EPI', 'Toriq EPI - Gestão Completa'],
 };
 
 export function ModulosAtivosProvider({ children }: { children: ReactNode }) {

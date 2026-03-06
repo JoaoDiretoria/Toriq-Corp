@@ -73,27 +73,6 @@ export function CurrentScreenProvider({ children }: { children: ReactNode }) {
             .map(word => word.charAt(0).toUpperCase() + word.slice(1))
             .join(' ');
         }
-      } else if (telaId.startsWith('toriq-epi-')) {
-        moduloEncontrado = 'gestao_epi';
-        moduloNome = 'Gestão de EPI';
-        if (!telaNomeOverride) {
-          telaNome = telaId
-            .replace('toriq-epi-', '')
-            .split('-')
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(' ');
-        }
-      } else if (telaId.includes('treinamento') || telaId.includes('turma') || telaId.includes('prova') || telaId.includes('certificado') || telaId.includes('relatorio')) {
-        moduloEncontrado = 'toriq_train';
-        moduloNome = 'Gestão de Treinamentos';
-        // Nomes específicos para telas de visualização
-        const nomesVisualizacao: Record<string, string> = {
-          'visualizar-certificado': 'Visualizar Certificado',
-          'visualizar-relatorio': 'Visualizar Relatório',
-        };
-        if (!telaNomeOverride && nomesVisualizacao[telaId]) {
-          telaNome = nomesVisualizacao[telaId];
-        }
       } else if (['meu-perfil', 'cadastros', 'configuracoes', 'suporte'].includes(telaId)) {
         moduloEncontrado = 'perfil_empresa';
         moduloNome = 'Perfil da Empresa';

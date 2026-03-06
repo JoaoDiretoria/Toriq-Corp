@@ -1,1 +1,0 @@
-export { ToriqTrainingDashboard } from './ToriqTrainingDashboard';

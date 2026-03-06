@@ -6,7 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { 
-  Users, Briefcase, GraduationCap, 
+  Users, Briefcase, 
   Package, Heart, ArrowRight,
   Building2, FileText, Loader2, Settings, FolderPlus, Headphones
 } from 'lucide-react';
@@ -27,11 +27,6 @@ interface SSTDashboardGeralProps {
 
 const CORES_MODULOS: Record<string, { bg: string; hover: string }> = {
   'Toriq Corp': { bg: 'bg-primary', hover: 'hover:bg-primary/90' },
-  'Toriq Training': { bg: 'bg-primary', hover: 'hover:bg-primary/90' },
-  'Gestão de Treinamentos': { bg: 'bg-primary', hover: 'hover:bg-primary/90' },
-  'Toriq EPI': { bg: 'bg-primary', hover: 'hover:bg-primary/90' },
-  'Gestão de EPI': { bg: 'bg-primary', hover: 'hover:bg-primary/90' },
-  'Toriq EPI - Gestão Completa': { bg: 'bg-primary', hover: 'hover:bg-primary/90' },
   'Saúde Ocupacional': { bg: 'bg-primary', hover: 'hover:bg-primary/90' },
   'Gestão de Terceiros': { bg: 'bg-primary', hover: 'hover:bg-primary/90' },
 };
@@ -78,11 +73,6 @@ export function SSTDashboardGeral({ onNavigate, modulosAtivos }: SSTDashboardGer
   const getModuloIcon = (nome: string) => {
     const map: Record<string, any> = {
       'Toriq Corp': Briefcase,
-      'Toriq Training': GraduationCap,
-      'Gestão de Treinamentos': GraduationCap,
-      'Toriq EPI': Package,
-      'Gestão de EPI': Package,
-      'Toriq EPI - Gestão Completa': Package,
       'Saúde Ocupacional': Heart,
       'Gestão de Terceiros': Users,
       'Gestão de Documentos': FileText,
@@ -93,11 +83,6 @@ export function SSTDashboardGeral({ onNavigate, modulosAtivos }: SSTDashboardGer
   const getModuloDashboard = (nome: string) => {
     const map: Record<string, string> = {
       'Toriq Corp': 'toriq-corp-dashboard',
-      'Toriq Training': 'toriq-training-dashboard',
-      'Gestão de Treinamentos': 'toriq-training-dashboard',
-      'Toriq EPI': 'toriq-epi-dashboard',
-      'Gestão de EPI': 'toriq-epi-dashboard',
-      'Toriq EPI - Gestão Completa': 'toriq-epi-dashboard',
       'Saúde Ocupacional': 'clientes',
       'Gestão de Terceiros': 'clientes',
     };
@@ -113,11 +98,6 @@ export function SSTDashboardGeral({ onNavigate, modulosAtivos }: SSTDashboardGer
     // Mapear nome do módulo para o ID usado no sistema de permissões
     const moduloIdMap: Record<string, string> = {
       'Toriq Corp': 'toriq_corp',
-      'Toriq Training': 'toriq_train',
-      'Gestão de Treinamentos': 'toriq_train',
-      'Toriq EPI': 'gestao_epi',
-      'Gestão de EPI': 'gestao_epi',
-      'Toriq EPI - Gestão Completa': 'gestao_epi',
     };
     
     const moduloId = moduloIdMap[nomeModulo];

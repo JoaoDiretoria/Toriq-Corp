@@ -17,42 +17,21 @@ import Dashboard from "./pages/Dashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import SSTDashboard from "./pages/SSTDashboard";
 import ClienteDashboard from "./pages/ClienteDashboard";
-import ParceiraDashboard from "./pages/ParceiraDashboard";
 import ModuloPage from "./pages/ModuloPage";
-import GestaoEPI from "./pages/modulos/GestaoEPI";
 import SaudeOcupacional from "./pages/modulos/SaudeOcupacional";
-import GestaoTreinamentos from "./pages/modulos/GestaoTreinamentos";
 import GestaoTerceiros from "./pages/modulos/GestaoTerceiros";
-import GestaoTurmas from "./pages/modulos/GestaoTurmas";
-import DetalhesTurma from "./pages/modulos/DetalhesTurma";
-import GerenciarTurma from "./pages/modulos/GerenciarTurma";
-import AvaliacaoReacao from "./pages/modulos/AvaliacaoReacao";
 import ColaboradorDetalhes from "./pages/modulos/ColaboradorDetalhes";
 import ClienteDetalhesPage from "./pages/sst/ClienteDetalhesPage";
 import ResetPassword from "./pages/ResetPassword";
 import AlterarSenha from "./pages/AlterarSenha";
 import Logout from "./pages/Logout";
-import ProvaTurma from "./pages/public/ProvaTurma";
-import CadastroColaboradorTurma from "./pages/public/CadastroColaboradorTurma";
-import MarcarPresencaTurma from "./pages/public/MarcarPresencaTurma";
-import InstrutorDashboard from "./pages/instrutor/InstrutorDashboard";
-import InstrutorGerenciarTurma from "./pages/instrutor/InstrutorGerenciarTurma";
-import VisualizarCertificado from "./pages/certificado/VisualizarCertificado";
-import VisualizarRelatorio from "./pages/relatorio/VisualizarRelatorio";
-import VisualizarRelatorioPresencas from "./pages/relatorio/VisualizarRelatorioPresencas";
-import VisualizarRelatorioSinistros from "./pages/relatorio/VisualizarRelatorioSinistros";
-import VisualizarRelatorioAuditoria from "./pages/relatorio/VisualizarRelatorioAuditoria";
 import PropostaWeb from "./pages/public/PropostaWeb";
-import CadastroInstrutor from "./pages/public/CadastroInstrutor";
-import ValidacaoDigitalCertificado from "./pages/public/ValidacaoDigitalCertificado";
 import BlogList from "./pages/public/BlogList";
 import BlogPost from "./pages/public/BlogPost";
 import PesquisasList from "./pages/public/PesquisasList";
 import PesquisaVotar from "./pages/public/PesquisaVotar";
 import Newsletter from "./pages/public/Newsletter";
 import TrabalheConosco from "./pages/public/TrabalheConosco";
-import ClienteVisualizarTurma from "./pages/cliente/ClienteVisualizarTurma";
-import { ParceiraVisualizarTurma } from "./components/parceira/ParceiraVisualizarTurma";
 import NotFound from "./pages/NotFound";
 import SuporteTickets from "./pages/shared/SuporteTickets";
 import { FloatingSupportWidget } from "./components/shared/support";
@@ -95,41 +74,13 @@ const App = () => (
             <Route path="/admin" element={<RequireSenhaAlterada><AdminDashboard /></RequireSenhaAlterada>} />
             <Route path="/sst" element={<RequireSenhaAlterada><SSTDashboard /></RequireSenhaAlterada>} />
             <Route path="/cliente" element={<RequireSenhaAlterada><ClienteDashboard /></RequireSenhaAlterada>} />
-            <Route path="/parceira" element={<RequireSenhaAlterada><ParceiraDashboard /></RequireSenhaAlterada>} />
             <Route path="/modulos/:moduloSlug" element={<RequireSenhaAlterada><ModuloPage /></RequireSenhaAlterada>} />
-            <Route path="/modulos/gestao-epi" element={<RequireSenhaAlterada><GestaoEPI /></RequireSenhaAlterada>} />
             <Route path="/modulos/saude-ocupacional" element={<RequireSenhaAlterada><SaudeOcupacional /></RequireSenhaAlterada>} />
-            <Route path="/modulos/treinamentos" element={<RequireSenhaAlterada><GestaoTreinamentos /></RequireSenhaAlterada>} />
-            <Route path="/modulos/gestao-turmas" element={<RequireSenhaAlterada><GestaoTurmas /></RequireSenhaAlterada>} />
-            <Route path="/modulos/gestao-turmas/:turmaId" element={<RequireSenhaAlterada><GerenciarTurma /></RequireSenhaAlterada>} />
-            <Route path="/modulos/avaliacao-reacao" element={<RequireSenhaAlterada><AvaliacaoReacao /></RequireSenhaAlterada>} />
             <Route path="/modulos/terceiros" element={<RequireSenhaAlterada><GestaoTerceiros /></RequireSenhaAlterada>} />
             <Route path="/colaborador/:colaboradorId" element={<RequireSenhaAlterada><ColaboradorDetalhes /></RequireSenhaAlterada>} />
             <Route path="/sst/cliente/:clienteId" element={<RequireSenhaAlterada><ClienteDetalhesPage /></RequireSenhaAlterada>} />
-            {/* Rotas Públicas */}
-            <Route path="/prova-turma/:turmaId" element={<ProvaTurma />} />
-            <Route path="/cadastro-turma/:turmaId" element={<CadastroColaboradorTurma />} />
-            <Route path="/presenca-turma/:turmaId" element={<MarcarPresencaTurma />} />
-            {/* Rotas do Instrutor */}
-            <Route path="/instrutor" element={<RequireSenhaAlterada><InstrutorDashboard /></RequireSenhaAlterada>} />
-            <Route path="/instrutor/turma/:turmaId" element={<RequireSenhaAlterada><InstrutorGerenciarTurma /></RequireSenhaAlterada>} />
-            {/* Rota do Cliente - Visualizar Turma */}
-            <Route path="/cliente/turma/:turmaId" element={<RequireSenhaAlterada><ClienteVisualizarTurma /></RequireSenhaAlterada>} />
-            {/* Rota da Empresa Parceira - Visualizar Turma */}
-            <Route path="/parceira/turmas/:turmaId" element={<RequireSenhaAlterada><ParceiraVisualizarTurma /></RequireSenhaAlterada>} />
-            {/* Rota de Certificado */}
-            <Route path="/certificado/visualizar" element={<VisualizarCertificado />} />
-            {/* Rota de Relatório */}
-            <Route path="/relatorio/visualizar" element={<VisualizarRelatorio />} />
-            <Route path="/relatorio/presencas" element={<VisualizarRelatorioPresencas />} />
-            <Route path="/relatorio/sinistros" element={<VisualizarRelatorioSinistros />} />
-            <Route path="/relatorio/auditoria" element={<VisualizarRelatorioAuditoria />} />
             {/* Rota de Proposta Web */}
             <Route path="/proposta/:propostaId" element={<PropostaWeb />} />
-            {/* Rota de Validação Digital de Certificado */}
-            <Route path="/validacao-certificado/:token" element={<ValidacaoDigitalCertificado />} />
-            {/* Rota de Cadastro de Instrutor */}
-            <Route path="/cadastro-instrutor/:token" element={<CadastroInstrutor />} />
             {/* Rota de Suporte */}
             <Route path="/suporte" element={<SuporteTickets />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

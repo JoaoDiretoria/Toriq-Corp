@@ -47,30 +47,6 @@ const SECAO_PARA_PERMISSAO: Record<string, { modulo_id: string; pagina_id: strin
   'toriq-corp-controle-equipamentos': { modulo_id: 'toriq_corp', pagina_id: 'toriq_corp_controle_equipamentos' },
   'toriq-corp-configuracoes': { modulo_id: 'toriq_corp', pagina_id: 'toriq_corp_configuracoes' },
 
-  // Toriq Train (Gestão de Treinamentos) - Todas as páginas do módulo
-  'toriq-training-dashboard': { modulo_id: 'toriq_train', pagina_id: 'toriq_training_dashboard' },
-  'solicitacoes-treinamentos': { modulo_id: 'toriq_train', pagina_id: 'solicitacoes_treinamento' },
-  'agenda-treinamentos': { modulo_id: 'toriq_train', pagina_id: 'agenda_treinamentos' },
-  'gestao-turmas': { modulo_id: 'toriq_train', pagina_id: 'gestao_turmas' },
-  'provas': { modulo_id: 'toriq_train', pagina_id: 'provas' },
-  'declaracao-reorientacao': { modulo_id: 'toriq_train', pagina_id: 'declaracao_reori' },
-  'avaliacao-reacao': { modulo_id: 'toriq_train', pagina_id: 'avaliacao_reacao' },
-  'nr': { modulo_id: 'toriq_train', pagina_id: 'nr' },
-  'catalogo-treinamentos': { modulo_id: 'toriq_train', pagina_id: 'treinamentos' },
-  'matriz-treinamentos': { modulo_id: 'toriq_train', pagina_id: 'matriz_treinamentos' },
-  'grupos-homogeneos': { modulo_id: 'toriq_train', pagina_id: 'grupos_homogeneos' },
-  'instrutores': { modulo_id: 'toriq_train', pagina_id: 'instrutores' },
-  'empresas-parceiras': { modulo_id: 'toriq_train', pagina_id: 'empresas_parceiras' },
-  'modelo-relatorio': { modulo_id: 'toriq_train', pagina_id: 'modelo_relatorio' },
-
-  // Toriq EPI (Gestão de EPI) - Todas as páginas do módulo
-  'toriq-epi-dashboard': { modulo_id: 'gestao_epi', pagina_id: 'toriq_epi_dashboard' },
-  'toriq-epi-catalogo': { modulo_id: 'gestao_epi', pagina_id: 'toriq_epi_catalogo' },
-  'toriq-epi-estoque': { modulo_id: 'gestao_epi', pagina_id: 'toriq_epi_estoque' },
-  'toriq-epi-entregas': { modulo_id: 'gestao_epi', pagina_id: 'toriq_epi_entregas' },
-  'toriq-epi-ficha': { modulo_id: 'gestao_epi', pagina_id: 'toriq_epi_ficha' },
-  'toriq-epi-devolucoes': { modulo_id: 'gestao_epi', pagina_id: 'toriq_epi_devolucoes' },
-  'toriq-epi-relatorios': { modulo_id: 'gestao_epi', pagina_id: 'toriq_epi_relatorios' },
 };
 
 // Mapeamento de módulos para suas seções
@@ -80,16 +56,6 @@ const MODULO_SECOES: Record<string, string[]> = {
     'toriq-corp-tarefas', 'toriq-corp-comercial', 'toriq-corp-contratos', 'toriq-corp-setores',
     'toriq-corp-administrativo', 'toriq-corp-financeiro', 'toriq-corp-tecnico', 'toriq-corp-marketing', 
     'toriq-corp-controle-frota', 'toriq-corp-controle-equipamentos', 'toriq-corp-configuracoes'
-  ],
-  'toriq_train': [
-    'toriq-training-dashboard', 'solicitacoes-treinamentos', 'agenda-treinamentos', 'gestao-turmas', 'provas', 
-    'declaracao-reorientacao', 'avaliacao-reacao', 'nr', 
-    'catalogo-treinamentos', 'matriz-treinamentos', 'grupos-homogeneos',
-    'instrutores', 'empresas-parceiras', 'modelo-relatorio'
-  ],
-  'gestao_epi': [
-    'toriq-epi-dashboard', 'toriq-epi-catalogo', 'toriq-epi-estoque',
-    'toriq-epi-entregas', 'toriq-epi-ficha', 'toriq-epi-devolucoes', 'toriq-epi-relatorios'
   ],
 };
 
@@ -195,8 +161,6 @@ export function usePermissoes() {
   // Mapeamento de ID de módulo para UUID (baseado na tabela modulos)
   const MODULO_ID_PARA_UUID: Record<string, string> = {
     'toriq_corp': '05b252ad-4267-4b26-8612-7b8903615b6c',
-    'toriq_train': 'b62a78e6-c289-453c-a6d9-306e646627b1',
-    'gestao_epi': '09813793-95e7-4e35-a51f-14ef86009ef2',
     'saude_ocupacional': 'ae7578b5-2f80-460c-ae44-f79c6ea827d8',
     'gestao_terceiros': '2353de90-96c9-41f7-aaa8-8c39ce0e6329',
     'gestao_documentos': 'aaaa1111-1111-1111-1111-111111111111',

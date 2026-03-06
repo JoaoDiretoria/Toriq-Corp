@@ -26,11 +26,7 @@ export interface ModuloConfig {
 
 // Mapeamento de nomes de módulos do banco para IDs usados no código
 export const MODULO_NOME_PARA_CODIGO: Record<string, string> = {
-  'Toriq Training': 'toriq_train',
-  'Gestão de Treinamentos': 'toriq_train',
   'Toriq Corp': 'toriq_corp',
-  'Toriq EPI': 'gestao_epi',
-  'Gestão de EPI': 'gestao_epi',
 };
 
 // Configuração completa de módulos e suas telas
@@ -75,51 +71,6 @@ export const MODULOS_CONFIG: ModuloConfig[] = [
       { id: 'toriq-corp-controle-frota', nome: 'Controle da Frota', icone: 'Car' },
       { id: 'toriq-corp-controle-equipamentos', nome: 'Controle de Equipamentos', icone: 'HardHat' },
       { id: 'toriq-corp-configuracoes', nome: 'Configurações Corp', icone: 'Settings' },
-    ]
-  },
-  {
-    id: 'toriq_train',
-    nome: 'Toriq Training',
-    icone: 'GraduationCap',
-    descricao: 'Gestão completa de treinamentos e capacitações',
-    telas: [
-      { id: 'toriq-training-dashboard', nome: 'Dashboard Training', icone: 'TrendingUp' },
-      { id: 'solicitacoes-treinamentos', nome: 'Solicitação de Treinamento', icone: 'ClipboardList' },
-      { id: 'agenda-treinamentos', nome: 'Agenda de Treinamentos', icone: 'CalendarDays' },
-      { id: 'gestao-turmas', nome: 'Gestão de Turmas', icone: 'FileCheck' },
-      { 
-        id: 'cadastros-training', 
-        nome: 'Cadastros Training', 
-        icone: 'FolderPlus',
-        descricao: 'Cadastros do módulo de treinamentos',
-        subTelas: [
-          { id: 'nr', nome: 'NR', icone: 'FileText' },
-          { id: 'catalogo-treinamentos', nome: 'Treinamentos', icone: 'BookOpen' },
-          { id: 'matriz-treinamentos', nome: 'Matriz de Treinamentos', icone: 'Grid3X3' },
-          { id: 'grupos-homogeneos', nome: 'Grupo Homogêneo', icone: 'Users' },
-          { id: 'declaracao-reorientacao', nome: 'Declaração de Reorientação', icone: 'FileText' },
-          { id: 'modelo-relatorio', nome: 'Modelo Relatório', icone: 'FileText' },
-          { id: 'avaliacao-reacao', nome: 'Avaliação de Reação', icone: 'ClipboardList' },
-          { id: 'provas', nome: 'Provas', icone: 'ListChecks' },
-          { id: 'instrutores', nome: 'Instrutores', icone: 'UserCheck' },
-          { id: 'empresas-parceiras', nome: 'Empresas Parceiras', icone: 'Building' },
-        ]
-      },
-    ]
-  },
-  {
-    id: 'gestao_epi',
-    nome: 'Toriq EPI',
-    icone: 'Shield',
-    descricao: 'Gestão completa de Equipamentos de Proteção Individual',
-    telas: [
-      { id: 'toriq-epi-dashboard', nome: 'Dashboard EPI', icone: 'TrendingUp' },
-      { id: 'toriq-epi-catalogo', nome: 'Cadastro de EPI', icone: 'Package' },
-      { id: 'toriq-epi-estoque', nome: 'Estoque', icone: 'ClipboardList' },
-      { id: 'toriq-epi-entregas', nome: 'Entregas', icone: 'FileCheck' },
-      { id: 'toriq-epi-ficha', nome: 'Ficha de EPI', icone: 'FileText' },
-      { id: 'toriq-epi-devolucoes', nome: 'Devoluções', icone: 'UsersRound' },
-      { id: 'toriq-epi-relatorios', nome: 'Relatórios', icone: 'FileText' },
     ]
   },
 ];

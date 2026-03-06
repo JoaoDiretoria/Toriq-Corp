@@ -224,39 +224,6 @@ const MODULOS_SISTEMA_BASE: Modulo[] = [
       // Setores dinâmicos serão adicionados aqui
     ]
   },
-  {
-    id: 'toriq_train',
-    nome: 'Toriq Training (Gestão de Treinamentos)',
-    paginas: [
-      { id: 'toriq_training_dashboard', nome: 'Dashboard' },
-      { id: 'solicitacoes_treinamento', nome: 'Solicitações de Treinamento' },
-      { id: 'agenda_treinamentos', nome: 'Agenda de Treinamentos' },
-      { id: 'gestao_turmas', nome: 'Gestão de Turmas' },
-      { id: 'provas', nome: 'Provas' },
-      { id: 'declaracao_reori', nome: 'Declaração de Reorientação' },
-      { id: 'avaliacao_reacao', nome: 'Avaliação de Reação' },
-      { id: 'nr', nome: 'NR' },
-      { id: 'treinamentos', nome: 'Catálogo de Treinamentos' },
-      { id: 'matriz_treinamentos', nome: 'Matriz de Treinamentos' },
-      { id: 'grupos_homogeneos', nome: 'Grupos Homogêneos' },
-      { id: 'instrutores', nome: 'Instrutores' },
-      { id: 'empresas_parceiras', nome: 'Empresas Parceiras' },
-      { id: 'modelo_relatorio', nome: 'Modelo de Relatório' },
-    ]
-  },
-  {
-    id: 'gestao_epi',
-    nome: 'Toriq EPI (Gestão de EPI)',
-    paginas: [
-      { id: 'toriq_epi_dashboard', nome: 'Dashboard' },
-      { id: 'toriq_epi_catalogo', nome: 'Catálogo de EPI' },
-      { id: 'toriq_epi_estoque', nome: 'Estoque' },
-      { id: 'toriq_epi_entregas', nome: 'Entregas' },
-      { id: 'toriq_epi_ficha', nome: 'Ficha de EPI' },
-      { id: 'toriq_epi_devolucoes', nome: 'Devoluções' },
-      { id: 'toriq_epi_relatorios', nome: 'Relatórios' },
-    ]
-  },
 ];
 
 // Função para gerar módulos com setores dinâmicos

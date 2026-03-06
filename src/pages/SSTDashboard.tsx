@@ -8,26 +8,11 @@ import { useModulosAtivos } from '@/hooks/useModulosAtivos';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { SSTSidebar } from '@/components/sst/SSTSidebar';
 import { SSTClientes } from '@/components/sst/SSTClientes';
-import { SSTNormasRegulamentadoras } from '@/components/sst/SSTNormasRegulamentadoras';
-import { SSTEmpresasParceiras } from '@/components/sst/SSTEmpresasParceiras';
 import { SSTPerfilEmpresa } from '@/components/sst/SSTPerfilEmpresa';
 import { SSTMeuPerfil } from '@/components/sst/SSTMeuPerfil';
 import { SSTUsuarios } from '@/components/sst/SSTUsuarios';
-import { SSTSolicitacoesTreinamentos } from '@/components/sst/SSTSolicitacoesTreinamentos';
-import { SSTAgendaTreinamentos } from '@/components/sst/SSTAgendaTreinamentos';
-import { SSTProvas } from '@/components/sst/SSTProvas';
-import { SSTDeclaracaoReorientacao } from '@/components/sst/SSTDeclaracaoReorientacao';
-import GestaoEPI from '@/pages/modulos/GestaoEPI';
 import SaudeOcupacional from '@/pages/modulos/SaudeOcupacional';
-import GestaoTreinamentos from '@/pages/modulos/GestaoTreinamentos';
 import GestaoTerceiros from '@/pages/modulos/GestaoTerceiros';
-import GestaoTurmas from '@/pages/modulos/GestaoTurmas';
-import CatalogoTreinamentos from '@/pages/modulos/CatalogoTreinamentos';
-import MatrizTreinamentos from '@/pages/modulos/MatrizTreinamentos';
-import GruposHomogeneos from '@/pages/modulos/GruposHomogeneos';
-import Instrutores from '@/pages/modulos/Instrutores';
-import AvaliacaoReacao from '@/pages/modulos/AvaliacaoReacao';
-import { SSTModeloRelatorio } from '@/components/sst/SSTModeloRelatorio';
 import { SSTInformacoesEmpresa } from '@/components/sst/SSTInformacoesEmpresa';
 import { SSTConfiguracoes } from '@/components/sst/SSTConfiguracoes';
 import { SSTCadastros } from '@/components/sst/SSTCadastros';
@@ -55,16 +40,6 @@ import { ToriqCorpFinanceiroDashboard } from '@/components/sst/toriq-corp/ToriqC
 import { ToriqCorpContasReceber } from '@/components/sst/toriq-corp/ToriqCorpContasReceber';
 import { SSTContasPagar } from '@/components/sst/toriq-corp/SSTContasPagar';
 import { SSTFluxoCaixa } from '@/components/sst/toriq-corp/SSTFluxoCaixa';
-import {
-  ToriqEPIDashboard,
-  ToriqEPICatalogo,
-  ToriqEPIEstoque,
-  ToriqEPIEntregas,
-  ToriqEPIFicha,
-  ToriqEPIDevolucoes,
-  ToriqEPIRelatorios
-} from '@/components/sst/toriq-epi';
-import { ToriqTrainingDashboard } from '@/components/sst/toriq-training';
 import { supabase } from '@/integrations/supabase/client';
 
 interface Modulo {
@@ -100,29 +75,6 @@ const SECAO_PARA_MODULO: Record<string, string> = {
   'toriq-corp-controle-frota': 'toriq_corp',
   'toriq-corp-controle-equipamentos': 'toriq_corp',
   'toriq-corp-configuracoes': 'toriq_corp',
-  // Toriq Training
-  'toriq-training-dashboard': 'toriq_train',
-  'solicitacoes-treinamentos': 'toriq_train',
-  'agenda-treinamentos': 'toriq_train',
-  'gestao-turmas': 'toriq_train',
-  'provas': 'toriq_train',
-  'declaracao-reorientacao': 'toriq_train',
-  'avaliacao-reacao': 'toriq_train',
-  'nr': 'toriq_train',
-  'catalogo-treinamentos': 'toriq_train',
-  'matriz-treinamentos': 'toriq_train',
-  'grupos-homogeneos': 'toriq_train',
-  'instrutores': 'toriq_train',
-  'empresas-parceiras': 'toriq_train',
-  'modelo-relatorio': 'toriq_train',
-  // Toriq EPI
-  'toriq-epi-dashboard': 'gestao_epi',
-  'toriq-epi-catalogo': 'gestao_epi',
-  'toriq-epi-estoque': 'gestao_epi',
-  'toriq-epi-entregas': 'gestao_epi',
-  'toriq-epi-ficha': 'gestao_epi',
-  'toriq-epi-devolucoes': 'gestao_epi',
-  'toriq-epi-relatorios': 'gestao_epi',
 };
 
 const SSTDashboard = () => {
@@ -336,12 +288,8 @@ const SSTDashboard = () => {
 
   const renderModuloComponent = (rota: string) => {
     switch (rota) {
-      case '/modulos/gestao-epi':
-        return <GestaoEPI />;
       case '/modulos/saude-ocupacional':
         return <SaudeOcupacional />;
-      case '/modulos/treinamentos':
-        return <GestaoTreinamentos />;
       case '/modulos/terceiros':
         return <GestaoTerceiros />;
       default:
@@ -363,30 +311,6 @@ const SSTDashboard = () => {
       return <SSTClientes />;
     }
 
-    if (activeSection === 'nr') {
-      return <SSTNormasRegulamentadoras />;
-    }
-
-    if (activeSection === 'catalogo-treinamentos') {
-      return <CatalogoTreinamentos />;
-    }
-
-    if (activeSection === 'matriz-treinamentos') {
-      return <MatrizTreinamentos />;
-    }
-
-    if (activeSection === 'grupos-homogeneos') {
-      return <GruposHomogeneos />;
-    }
-
-    if (activeSection === 'instrutores') {
-      return <Instrutores />;
-    }
-
-    if (activeSection === 'empresas-parceiras') {
-      return <SSTEmpresasParceiras />;
-    }
-
     if (activeSection === 'perfil-empresa') {
       return <SSTPerfilEmpresa />;
     }
@@ -397,35 +321,6 @@ const SSTDashboard = () => {
 
     if (activeSection === 'usuarios') {
       return <SSTUsuarios />;
-    }
-
-    if (activeSection === 'solicitacoes-treinamentos') {
-      return <SSTSolicitacoesTreinamentos />;
-    }
-
-    if (activeSection === 'agenda-treinamentos') {
-      return <SSTAgendaTreinamentos />;
-    }
-
-    if (activeSection === 'gestao-turmas') {
-      const searchFromUrl = searchParams.get('search') || '';
-      return <GestaoTurmas initialSearch={searchFromUrl} />;
-    }
-
-    if (activeSection === 'provas') {
-      return <SSTProvas />;
-    }
-
-    if (activeSection === 'declaracao-reorientacao') {
-      return <SSTDeclaracaoReorientacao />;
-    }
-
-    if (activeSection === 'avaliacao-reacao') {
-      return <AvaliacaoReacao />;
-    }
-
-    if (activeSection === 'modelo-relatorio') {
-      return <SSTModeloRelatorio />;
     }
 
     
@@ -551,40 +446,6 @@ const SSTDashboard = () => {
           onNavigateToSetor={(setorId) => setActiveSection(`setor-${setorId}`)} 
         />
       );
-    }
-
-    // ========== TORIQ TRAINING ==========
-    if (activeSection === 'toriq-training-dashboard') {
-      return <ToriqTrainingDashboard onNavigate={setActiveSection} />;
-    }
-
-    // ========== TORIQ EPI ==========
-    if (activeSection === 'toriq-epi-dashboard') {
-      return <ToriqEPIDashboard />;
-    }
-
-    if (activeSection === 'toriq-epi-catalogo') {
-      return <ToriqEPICatalogo />;
-    }
-
-    if (activeSection === 'toriq-epi-estoque') {
-      return <ToriqEPIEstoque />;
-    }
-
-    if (activeSection === 'toriq-epi-entregas') {
-      return <ToriqEPIEntregas />;
-    }
-
-    if (activeSection === 'toriq-epi-ficha') {
-      return <ToriqEPIFicha />;
-    }
-
-    if (activeSection === 'toriq-epi-devolucoes') {
-      return <ToriqEPIDevolucoes />;
-    }
-
-    if (activeSection === 'toriq-epi-relatorios') {
-      return <ToriqEPIRelatorios />;
     }
 
     // ========== SETORES PERSONALIZADOS ==========
