@@ -81,12 +81,12 @@ interface EmpresaModulo {
 }
 
 const tiposEmpresa = [
-  { value: 'sst', label: 'SST' },
+  { value: 'cliente_final', label: 'Cliente' },
   { value: 'lead', label: 'Lead' },
 ];
 
 // Tipos visíveis para o admin Toriq (exclui cliente_final e empresa_parceira)
-const TIPOS_VISIVEIS = ['sst', 'lead'];
+const TIPOS_VISIVEIS = ['cliente_final', 'lead'];
 
 const estados = [
   'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG',

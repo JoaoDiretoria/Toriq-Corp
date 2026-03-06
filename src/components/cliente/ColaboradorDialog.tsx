@@ -188,51 +188,9 @@ export function ColaboradorDialog({
 
   const empresaSstId = clienteSst?.empresa_sst_id;
 
-  const { data: gruposHomogeneos } = useQuery({
-    queryKey: ['grupos-homogeneos', empresaSstId],
-    queryFn: async () => {
-      if (!empresaSstId) return [];
-      const { data, error } = await supabase
-        .from('grupos_homogeneos')
-        .select('id, nome')
-        .eq('empresa_id', empresaSstId)
-        .eq('ativo', true)
-        .order('nome');
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!empresaSstId,
-  });
-
-  // Buscar treinamentos disponíveis da empresa SST
-  const { data: treinamentos } = useQuery({
-    queryKey: ['treinamentos-catalogo', empresaSstId],
-    queryFn: async () => {
-      if (!empresaSstId) return [];
-      const { data, error } = await supabase
-        .from('catalogo_treinamentos')
-        .select('id, nome, norma')
-        .eq('empresa_id', empresaSstId)
-        .order('norma');
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!empresaSstId,
-  });
-
-  // Buscar treinamentos vinculados aos grupos homogêneos
-  const { data: gruposTreinamentos } = useQuery({
-    queryKey: ['grupos-homogeneos-treinamentos', empresaSstId],
-    queryFn: async () => {
-      if (!empresaSstId) return [];
-      const { data, error } = await supabase
-        .from('grupos_homogeneos_treinamentos')
-        .select('grupo_homogeneo_id, treinamento_id');
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!empresaSstId,
-  });
+  const gruposHomogeneos: any[] = [];
+  const treinamentos: any[] = [];
+  const gruposTreinamentos: any[] = [];
 
   const form = useForm<ColaboradorFormData>({
     resolver: zodResolver(colaboradorSchema),

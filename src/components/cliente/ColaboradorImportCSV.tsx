@@ -107,35 +107,8 @@ export function ColaboradorImportCSV({ open, onOpenChange }: ColaboradorImportCS
 
   const empresaSstId = clienteSst?.empresa_sst_id;
 
-  // Buscar grupos homogêneos para mapear nomes → IDs
-  const { data: gruposHomogeneos } = useQuery({
-    queryKey: ['grupos-homogeneos-import', empresaSstId],
-    queryFn: async () => {
-      if (!empresaSstId) return [];
-      const { data, error } = await supabase
-        .from('grupos_homogeneos')
-        .select('id, nome')
-        .eq('empresa_id', empresaSstId)
-        .eq('ativo', true);
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!empresaSstId && open,
-  });
-
-  // Buscar treinamentos dos grupos homogêneos para auto-associar
-  const { data: gruposTreinamentos } = useQuery({
-    queryKey: ['grupos-homogeneos-treinamentos-import', empresaSstId],
-    queryFn: async () => {
-      if (!empresaSstId) return [];
-      const { data, error } = await supabase
-        .from('grupos_homogeneos_treinamentos')
-        .select('grupo_homogeneo_id, treinamento_id');
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!empresaSstId && open,
-  });
+  const gruposHomogeneos: any[] = [];
+  const gruposTreinamentos: any[] = [];
 
   const validateCPF = (cpf: string): boolean => {
     const cleaned = cpf.replace(/\D/g, '');

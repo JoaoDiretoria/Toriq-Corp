@@ -206,17 +206,7 @@ export function ColaboradorDetalhesDialog({ colaborador, open, onOpenChange }: C
       // Buscar treinamentos necessários baseado no grupo homogêneo
       let treinamentosDoGrupo: any[] = [];
       
-      if (colaborador.grupo_homogeneo_id) {
-        const { data: grupoTreinamentos } = await (supabase as any)
-          .from('grupos_homogeneos_treinamentos')
-          .select(`
-            treinamento_id,
-            treinamento:catalogo_treinamentos(id, nome, norma, validade, ch_formacao, ch_reciclagem)
-          `)
-          .eq('grupo_homogeneo_id', colaborador.grupo_homogeneo_id);
-        
-        treinamentosDoGrupo = grupoTreinamentos || [];
-      }
+      treinamentosDoGrupo = [];
 
       // Buscar treinamentos realizados pelo colaborador
       const { data: realizados, error: realizadosError } = await (supabase as any)

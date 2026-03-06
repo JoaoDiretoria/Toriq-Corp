@@ -250,7 +250,7 @@ export function AdminColaboradores() {
     try {
       const { data, error } = await supabase
         .from('colaboradores')
-        .select('*, grupo_homogeneo:grupos_homogeneos(nome)')
+        .select('*')
         .eq('empresa_id', empresaId)
         .order('nome');
       
@@ -269,20 +269,7 @@ export function AdminColaboradores() {
   };
 
   const fetchGruposHomogeneos = async () => {
-    if (!empresaId) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('grupos_homogeneos')
-        .select('id, nome')
-        .eq('empresa_id', empresaId)
-        .order('nome');
-      
-      if (error) throw error;
-      setGruposHomogeneos(data || []);
-    } catch (error) {
-      console.error('Erro ao buscar grupos homogêneos:', error);
-    }
+    setGruposHomogeneos([]);
   };
 
   const fetchSetores = async () => {

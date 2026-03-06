@@ -125,8 +125,7 @@ const ColaboradorDetalhes = () => {
       const { data, error } = await supabase
         .from('colaboradores')
         .select(`
-          *,
-          grupo_homogeneo:grupos_homogeneos(id, nome)
+          *
         `)
         .eq('id', colaboradorId)
         .single();
@@ -141,23 +140,7 @@ const ColaboradorDetalhes = () => {
     retry: false,
   });
 
-  // Buscar treinamentos do grupo homogêneo
-  const { data: treinamentosGH } = useQuery({
-    queryKey: ['treinamentos-gh', colaborador?.grupo_homogeneo_id],
-    queryFn: async () => {
-      if (!colaborador?.grupo_homogeneo_id) return [];
-      const { data, error } = await supabase
-        .from('grupos_homogeneos_treinamentos')
-        .select(`
-          treinamento_id,
-          catalogo_treinamentos(id, nome, norma, ch_formacao, ch_reciclagem, validade)
-        `)
-        .eq('grupo_homogeneo_id', colaborador.grupo_homogeneo_id);
-      if (error) throw error;
-      return (data || []).map((item: any) => item.catalogo_treinamentos) as TreinamentoNecessario[];
-    },
-    enabled: !!colaborador?.grupo_homogeneo_id,
-  });
+  const treinamentosGH: any[] = [];
 
   // Buscar treinamentos NECESSÁRIOS selecionados individualmente para o colaborador
   const { data: treinamentosIndividuais } = useQuery({

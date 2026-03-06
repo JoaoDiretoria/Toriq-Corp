@@ -82,12 +82,7 @@ export function ClienteColaboradores() {
       const { data, error } = await supabase
         .from('colaboradores')
         .select(`
-          *,
-          grupo_homogeneo:grupos_homogeneos(id, nome),
-          treinamentos:colaboradores_treinamentos(
-            treinamento_id,
-            catalogo_treinamentos(id, nome, norma)
-          )
+          *
         `)
         .eq('empresa_id', profile.empresa_id)
         .order('nome');

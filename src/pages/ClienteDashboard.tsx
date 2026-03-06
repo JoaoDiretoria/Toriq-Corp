@@ -11,14 +11,10 @@ import { ClientePerfil } from '@/components/cliente/ClientePerfil';
 import { ClienteColaboradores } from '@/components/cliente/ClienteColaboradores';
 import { ClienteSetores } from '@/components/cliente/ClienteSetores';
 import { ClienteCargos } from '@/components/cliente/ClienteCargos';
-import { ClienteSolicitacaoTreinamento } from '@/components/cliente/ClienteSolicitacaoTreinamento';
 import { ClienteMeuPerfil } from '@/components/cliente/ClienteMeuPerfil';
-import { ClienteTurmas } from '@/components/cliente/ClienteTurmas';
-import { ClienteRelatoriosCertificados } from '@/components/cliente/ClienteRelatoriosCertificados';
-import { ClienteControleValidade } from '@/components/cliente/ClienteControleValidade';
 import SuporteTickets from '@/pages/shared/SuporteTickets';
 
-export type ClienteSection = 'modulos' | 'financeiro' | 'perfil' | 'colaboradores' | 'setores' | 'cargos' | 'solicitacao-treinamento' | 'meu-perfil' | 'turmas' | 'relatorios-certificados' | 'controle-validade' | 'suporte';
+export type ClienteSection = 'modulos' | 'financeiro' | 'perfil' | 'colaboradores' | 'setores' | 'cargos' | 'meu-perfil' | 'suporte';
 
 const ClienteDashboard = () => {
   const { user, profile, loading } = useAuth();
@@ -79,16 +75,8 @@ const ClienteDashboard = () => {
         return <ClienteFinanceiro />;
       case 'perfil':
         return <ClientePerfil />;
-      case 'solicitacao-treinamento':
-        return <ClienteSolicitacaoTreinamento />;
       case 'meu-perfil':
         return <ClienteMeuPerfil />;
-      case 'turmas':
-        return <ClienteTurmas />;
-      case 'relatorios-certificados':
-        return <ClienteRelatoriosCertificados />;
-      case 'controle-validade':
-        return <ClienteControleValidade />;
       case 'suporte':
         return <SuporteTickets />;
       default:

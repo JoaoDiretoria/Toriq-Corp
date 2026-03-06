@@ -1,7 +1,7 @@
 # Contexto Ativo
 
-**Última atualização:** 23/01/2026 13:22
-**Projeto Supabase:** `xraggzqaddfiymqgrtha` (Vertical on SST - us-east-2 - ACTIVE_HEALTHY)
+**Última atualização:** 05/03/2026 23:30
+**Projeto Supabase:** `bsvtgdtsbrjdwdnpirzb` (Torq Corp - us-east-2 - ACTIVE_HEALTHY)
 
 ## Stack Técnico
 | Categoria | Tecnologias |
