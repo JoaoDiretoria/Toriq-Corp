@@ -30,9 +30,10 @@ import { AdminBlogList } from '@/components/admin/blog';
 import { AdminPesquisasList } from '@/components/admin/pesquisas';
 import { AdminNewsletterList } from '@/components/admin/newsletter';
 import { AdminVagas } from '@/components/admin/vagas';
+import { Agenda } from '@/components/shared/Agenda';
 import { useState } from 'react';
 
-type AdminSection = 'dashboard' | 'empresas' | 'usuarios' | 'colaboradores' | 'servicos' | 'modulos' | 'tarefas' | 'comercial-dashboard' | 'comercial' | 'comercial-prospeccao' | 'comercial-pos-venda' | 'comercial-cross-selling' | 'financeiro' | 'financeiro-dashboard' | 'financeiro-cadastros' | 'financeiro-contas-receber' | 'financeiro-contas-pagar' | 'financeiro-fluxo-caixa' | 'financeiro-dre' | 'estatisticas' | 'suporte' | 'conteudo-blogs' | 'conteudo-pesquisas' | 'conteudo-newsletter' | 'conteudo-vagas';
+type AdminSection = 'dashboard' | 'empresas' | 'usuarios' | 'colaboradores' | 'servicos' | 'modulos' | 'tarefas' | 'agenda' | 'comercial-dashboard' | 'comercial' | 'comercial-prospeccao' | 'comercial-pos-venda' | 'comercial-cross-selling' | 'financeiro' | 'financeiro-dashboard' | 'financeiro-cadastros' | 'financeiro-contas-receber' | 'financeiro-contas-pagar' | 'financeiro-fluxo-caixa' | 'financeiro-dre' | 'estatisticas' | 'suporte' | 'conteudo-blogs' | 'conteudo-pesquisas' | 'conteudo-newsletter' | 'conteudo-vagas';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -89,6 +90,8 @@ const AdminDashboard = () => {
         return <AdminModulos />;
       case 'tarefas':
         return <AdminTarefas />;
+      case 'agenda':
+        return <Agenda modoAdmin={true} />;
       case 'comercial-dashboard':
         return <AdminComercialDashboard />;
       case 'comercial':
@@ -139,6 +142,7 @@ const AdminDashboard = () => {
       servicos: 'Serviços',
       modulos: 'Módulos',
       tarefas: 'Tarefas',
+      agenda: 'Agenda',
       'comercial-dashboard': 'Dashboard Comercial',
       comercial: 'Funil - CLOSER',
       'comercial-prospeccao': 'SDR - Prospecção',

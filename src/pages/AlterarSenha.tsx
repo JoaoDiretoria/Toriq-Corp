@@ -70,30 +70,19 @@ export default function AlterarSenha() {
 
       if (profileError) {
         console.error('Erro ao atualizar profile:', profileError);
-        // Não bloquear - senha já foi alterada
+        throw new Error('Erro ao atualizar perfil');
       }
 
       toast.success('Senha alterada com sucesso! Redirecionando...');
       
-      // Usar window.location para forçar reload completo
-      // Isso garante que o profile seja recarregado com senha_alterada = true
-      let redirectUrl = '/';
-      if (profile?.role === 'instrutor') {
-        redirectUrl = '/instrutor';
-      } else if (profile?.role === 'empresa_sst') {
-        redirectUrl = '/sst';
-      } else if (profile?.role === 'cliente_final') {
-        redirectUrl = '/cliente';
-      } else if (profile?.role === 'empresa_parceira') {
-        redirectUrl = '/parceira';
-      } else if (profile?.role === 'admin_vertical') {
-        redirectUrl = '/admin';
-      }
+      // Fazer logout e login novamente para recarregar o profile com senha_alterada = true
+      // Isso garante que o RequireSenhaAlterada não bloqueie mais o acesso
+      await supabase.auth.signOut();
       
-      // Pequeno delay para o toast aparecer e depois redirecionar
+      // Pequeno delay para o toast aparecer e depois redirecionar para login
       setTimeout(() => {
-        window.location.href = redirectUrl;
-      }, 500);
+        window.location.href = '/auth';
+      }, 1000);
     } catch (error: any) {
       console.error('Erro ao alterar senha:', error);
       toast.error(error.message || 'Erro ao alterar senha');

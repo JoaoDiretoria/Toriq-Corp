@@ -78,9 +78,9 @@ const Auth = () => {
       if (profile.role === 'admin_vertical') {
         navigate('/admin', { replace: true });
       } else if (profile.role === 'empresa_sst') {
-        navigate('/sst', { replace: true });
+        navigate('/toriqcorp', { replace: true });
       } else if (profile.role === 'cliente_final') {
-        navigate('/cliente', { replace: true });
+        navigate('/toriqcorp', { replace: true });
       } else if (profile.role === 'empresa_parceira') {
         navigate('/parceira', { replace: true });
       } else if ((profile.role as string) === 'instrutor') {

@@ -35,6 +35,8 @@ interface Empresa {
   id: string;
   nome: string;
   tipo: 'vertical_on' | 'sst' | 'cliente_final' | 'empresa_parceira';
+  cidade?: string | null;
+  estado?: string | null;
 }
 
 interface AuthContextType {

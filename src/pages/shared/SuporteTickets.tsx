@@ -1246,7 +1246,7 @@ export default function SuporteTickets() {
                         <div className="flex items-center gap-2">
                           <p className="font-medium">{selectedTicket.solicitante_nome}</p>
                           <Badge variant="outline" className="text-[10px]">
-                            {selectedTicket.role_solicitante === 'empresa_sst' ? 'Empresa SST' :
+                            {selectedTicket.role_solicitante === 'empresa_sst' ? 'Colaborador' :
                              selectedTicket.role_solicitante === 'cliente_final' ? 'Cliente' :
                              selectedTicket.role_solicitante === 'instrutor' ? 'Instrutor' :
                              selectedTicket.role_solicitante === 'empresa_parceira' ? 'Parceiro' :

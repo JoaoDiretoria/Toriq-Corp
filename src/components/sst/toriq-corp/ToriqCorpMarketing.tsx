@@ -16,7 +16,7 @@ export function ToriqCorpMarketing({ onNavigateToFunil, onBack }: ToriqCorpMarke
   return (
     <SetorDashboard
       titulo="Marketing"
-      descricao="Gestão de marketing da empresa SST - campanhas, mídias sociais e estratégias"
+      descricao="Gestão de marketing - campanhas, mídias sociais e estratégias"
       setorNome="Marketing"
       icon={Megaphone}
       onNavigateToFunil={handleNavigateToFunil}

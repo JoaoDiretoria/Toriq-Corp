@@ -60,13 +60,13 @@ const Dashboard = () => {
     if (!loading && profile?.role === 'admin_vertical') {
       navigate('/admin');
     }
-    // Redirect empresa_sst to SST dashboard
+    // Redirect empresa_sst to Toriq Corp dashboard
     if (!loading && profile?.role === 'empresa_sst') {
-      navigate('/sst');
+      navigate('/toriqcorp');
     }
-    // Redirect cliente_final to cliente dashboard
+    // Redirect cliente_final to Toriq Corp dashboard
     if (!loading && profile?.role === 'cliente_final') {
-      navigate('/cliente');
+      navigate('/toriqcorp');
     }
     // Redirect empresa_parceira to parceira dashboard
     if (!loading && profile?.role === 'empresa_parceira') {

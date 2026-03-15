@@ -16,7 +16,7 @@ export function ToriqCorpComercial({ onNavigateToFunil, onBack }: ToriqCorpComer
   return (
     <SetorDashboard
       titulo="Comercial"
-      descricao="Gestão comercial da empresa SST - vendas e relacionamento com clientes"
+      descricao="Gestão comercial - vendas e relacionamento com clientes"
       setorNome="Comercial"
       icon={TrendingUp}
       onNavigateToFunil={handleNavigateToFunil}

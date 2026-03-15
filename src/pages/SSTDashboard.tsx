@@ -41,6 +41,7 @@ import { ToriqCorpContasReceber } from '@/components/sst/toriq-corp/ToriqCorpCon
 import { SSTContasPagar } from '@/components/sst/toriq-corp/SSTContasPagar';
 import { SSTFluxoCaixa } from '@/components/sst/toriq-corp/SSTFluxoCaixa';
 import { supabase } from '@/integrations/supabase/client';
+import { Agenda } from '@/components/shared/Agenda';
 
 interface Modulo {
   id: string;
@@ -113,7 +114,7 @@ const SSTDashboard = () => {
 
   // Atualizar tela atual quando a seção mudar
   useEffect(() => {
-    setCurrentScreen(activeSection, 'sst');
+    setCurrentScreen(activeSection, 'toriqcorp');
   }, [activeSection, setCurrentScreen]);
   const [modulosAtivos, setModulosAtivos] = useState<Modulo[]>([]);
   const [loadingModulos, setLoadingModulos] = useState(true);
@@ -132,7 +133,7 @@ const SSTDashboard = () => {
   }, [user, loading, navigate, profile]);
 
   useEffect(() => {
-    if (!loading && profile && profile.role !== 'empresa_sst') {
+    if (!loading && profile && profile.role !== 'empresa_sst' && profile.role !== 'cliente_final') {
       if (profile.role === 'admin_vertical') {
         navigate('/admin');
       } else {
@@ -280,7 +281,7 @@ const SSTDashboard = () => {
     );
   }
 
-  const canAccess = profile?.role === 'empresa_sst';
+  const canAccess = profile?.role === 'empresa_sst' || profile?.role === 'cliente_final';
   
   if (!profile || !canAccess) {
     return null;
@@ -344,6 +345,10 @@ const SSTDashboard = () => {
 
     if (activeSection === 'suporte') {
       return <SuporteTickets />;
+    }
+
+    if (activeSection === 'agenda') {
+      return <Agenda />;
     }
 
     // ========== TORIQ CORP ==========

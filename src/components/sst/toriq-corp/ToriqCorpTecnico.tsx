@@ -16,7 +16,7 @@ export function ToriqCorpTecnico({ onNavigateToFunil, onBack }: ToriqCorpTecnico
   return (
     <SetorDashboard
       titulo="Técnico"
-      descricao="Gestão técnica da empresa SST - laudos e documentos"
+      descricao="Gestão técnica - laudos e documentos"
       setorNome="Técnico"
       icon={Wrench}
       onNavigateToFunil={handleNavigateToFunil}

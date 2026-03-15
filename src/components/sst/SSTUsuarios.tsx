@@ -603,7 +603,7 @@ export function SSTUsuarios() {
       case 'admin_vertical':
         return <Badge variant="destructive">Admin Toriq</Badge>;
       case 'empresa_sst':
-        return <Badge variant="default">Empresa SST</Badge>;
+        return <Badge variant="default">Colaborador</Badge>;
       case 'cliente_final':
         return <Badge variant="secondary">Cliente Final</Badge>;
       case 'empresa_parceira':

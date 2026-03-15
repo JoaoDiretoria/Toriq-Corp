@@ -705,6 +705,13 @@ export function AdminEmpresas() {
         throw new Error('Erro ao cadastrar empresa: não foi possível recuperar os dados da empresa criada. Verifique as permissões.');
       }
 
+      // Ativar módulo Toriq Corp automaticamente para toda nova empresa
+      await supabase.from('empresas_modulos').insert({
+        empresa_id: empresaData.id,
+        modulo_id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+        ativo: true,
+      });
+
       // Save contatos if any
       if (contatos.length > 0 && empresaData) {
         const contatosToInsert = contatos.map(c => ({
@@ -1099,7 +1106,7 @@ export function AdminEmpresas() {
   const getTipoBadge = (tipo: string) => {
     switch (tipo) {
       case 'sst':
-        return <Badge variant="default">SST</Badge>;
+        return <Badge variant="default">Toriq Corp</Badge>;
       case 'vertical_on':
         return <Badge className="bg-primary hover:bg-primary/90">Toriq</Badge>;
       case 'empresa_parceira':

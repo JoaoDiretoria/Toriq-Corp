@@ -103,7 +103,7 @@ interface FunilCard {
   data_conclusao?: string | null;
   prioridade: 'baixa' | 'media' | 'alta' | 'urgente';
   ordem: number;
-  cliente?: { nome: string } | null;
+  cliente?: { nome: string; cnpj?: string | null; email?: string | null; telefone?: string | null; responsavel?: string | null; cidade?: string | null; estado?: string | null } | null;
   responsavel?: { nome: string } | null;
   status_negocio?: 'perdido' | 'em_andamento' | 'aceito' | 'ganho' | null;
   acoes_rapidas_config?: Record<string, boolean> | null;
@@ -138,6 +138,7 @@ interface Atividade {
   usuario_id: string | null;
   usuario?: { nome: string } | null;
   responsavel_id?: string | null;
+  proposta_aprovada?: boolean | null;
 }
 
 interface Movimentacao {
@@ -1609,6 +1610,7 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
       card_titulo?: string;
       status_anterior?: string;
       status_novo?: string;
+      quantidade_kits?: number;
     }
   ) => {
     try {
@@ -2299,7 +2301,7 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
         return;
       }
       // Remover duplicatas usando Set
-      const etiquetaIds = [...new Set((data || []).map((d: any) => d.etiqueta_id))];
+      const etiquetaIds = [...new Set((data || []).map((d: any) => d.etiqueta_id))] as string[];
       setCardEtiquetas(etiquetaIds);
     } catch (error) {
       console.error('Erro ao carregar etiquetas do card:', error);
@@ -7321,7 +7323,7 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
                         <Calculator className={`h-5 w-5 ${calculadoraSelecionada === 'mensal' ? 'text-green-600' : 'text-purple-600'}`} />
                       </div>
                       <div>
-                        <h4 className={`font-medium text-sm ${calculadoraSelecionada === 'mensal' ? 'text-green-700' : ''}`}>Calculadora para Serviços de SST</h4>
+                        <h4 className={`font-medium text-sm ${calculadoraSelecionada === 'mensal' ? 'text-green-700' : ''}`}>Calculadora para Serviços</h4>
                         <p className="text-xs text-muted-foreground">Calcular orçamento de serviços</p>
                       </div>
                     </div>
@@ -7624,7 +7626,7 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
                       <div className="flex items-center justify-between mb-2">
                         <h5 className="text-xs font-semibold text-green-600 flex items-center gap-1">
                           <Calculator className="h-3 w-3" />
-                          Calculadora para Serviços de SST
+                          Calculadora para Serviços
                         </h5>
                         {orcamentoServicosSSTSalvo && (
                           <Button
@@ -8763,7 +8765,6 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
               dadosCalculadora={orcamentosClientePorCard[viewingCard?.id || ''] || null}
               clienteNome={viewingCard?.cliente?.nome || viewingCard?.titulo || ''}
               clienteCidade={viewingCard?.cliente?.cidade || ''}
-              clienteContato={viewingCard?.cliente?.responsavel || ''}
               clienteInfo={{
                 nome: viewingCard?.cliente?.nome || viewingCard?.titulo || '',
                 razaoSocial: viewingCard?.cliente?.nome || '',
@@ -8781,7 +8782,6 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
               dadosOrcamento={orcamentoServicosSSTSalvo}
               clienteNome={viewingCard?.cliente?.nome || viewingCard?.titulo || ''}
               clienteCidade={viewingCard?.cliente?.cidade || ''}
-              clienteContato={viewingCard?.cliente?.responsavel || ''}
               clienteInfo={{
                 nome: viewingCard?.cliente?.nome || viewingCard?.titulo || '',
                 razaoSocial: viewingCard?.cliente?.nome || '',

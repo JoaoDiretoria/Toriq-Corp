@@ -14,14 +14,14 @@ import {
   SidebarFooter,
 } from '@/components/ui/sidebar';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Building2, Users, TrendingUp, DollarSign, LogOut, Shield, Package, ChevronDown, UserSearch, Zap, LayoutDashboard, UserCog, HeartHandshake, ClipboardList, Receipt, CreditCard, FileBarChart, Wallet, CheckSquare, BarChart3, Database, Headphones, PenTool, FileText, Mail, Briefcase } from 'lucide-react';
+import { Building2, Users, TrendingUp, DollarSign, LogOut, Shield, Package, ChevronDown, UserSearch, Zap, LayoutDashboard, UserCog, HeartHandshake, ClipboardList, Receipt, CreditCard, FileBarChart, Wallet, CheckSquare, BarChart3, Database, Headphones, PenTool, FileText, Mail, Briefcase, CalendarDays } from 'lucide-react';
 import { NotificationPopover } from '@/components/shared/notifications';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
-type AdminSection = 'dashboard' | 'empresas' | 'usuarios' | 'colaboradores' | 'servicos' | 'modulos' | 'tarefas' | 'comercial-dashboard' | 'comercial' | 'comercial-prospeccao' | 'comercial-pos-venda' | 'comercial-cross-selling' | 'financeiro' | 'financeiro-dashboard' | 'financeiro-cadastros' | 'financeiro-contas-receber' | 'financeiro-contas-pagar' | 'financeiro-fluxo-caixa' | 'financeiro-dre' | 'estatisticas' | 'suporte' | 'conteudo-blogs' | 'conteudo-pesquisas' | 'conteudo-newsletter' | 'conteudo-vagas';
+type AdminSection = 'dashboard' | 'empresas' | 'usuarios' | 'colaboradores' | 'servicos' | 'modulos' | 'tarefas' | 'agenda' | 'comercial-dashboard' | 'comercial' | 'comercial-prospeccao' | 'comercial-pos-venda' | 'comercial-cross-selling' | 'financeiro' | 'financeiro-dashboard' | 'financeiro-cadastros' | 'financeiro-contas-receber' | 'financeiro-contas-pagar' | 'financeiro-fluxo-caixa' | 'financeiro-dre' | 'estatisticas' | 'suporte' | 'conteudo-blogs' | 'conteudo-pesquisas' | 'conteudo-newsletter' | 'conteudo-vagas';
 
 interface AdminSidebarProps {
   activeSection: AdminSection;
@@ -173,6 +173,18 @@ export function AdminSidebar({ activeSection, onSectionChange }: AdminSidebarPro
                         >
                           <CheckSquare className="h-4 w-4" />
                           <span>Tarefas</span>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+
+                      {/* Agenda */}
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton
+                          onClick={() => onSectionChange('agenda')}
+                          isActive={activeSection === 'agenda'}
+                          className="cursor-pointer"
+                        >
+                          <CalendarDays className="h-4 w-4" />
+                          <span>Agenda</span>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                       

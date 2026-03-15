@@ -273,7 +273,7 @@ export function PropostaComercialServicosSSTEditor({ onClose, dadosOrcamento, cl
     clienteDistancia: pe?.cliente_distancia?.toString() ?? '',
     dataProposta: pe?.data_proposta ?? todayISO(),
     validadeDias: pe?.validade_dias?.toString() ?? '10',
-    titulo: pe?.titulo ?? 'Proposta Comercial • Serviços de SST',
+    titulo: pe?.titulo ?? 'Proposta Comercial • Serviços Toriq Corp',
     tituloServicos: pe?.titulo_servicos ?? '1) Serviços oferecidos',
     tituloDores: pe?.titulo_dores ?? '2) Dores que resolvemos',
     tituloSolucoes: pe?.titulo_solucoes ?? '3) O que você ganha',
@@ -283,7 +283,7 @@ export function PropostaComercialServicosSSTEditor({ onClose, dadosOrcamento, cl
     tituloInfos: pe?.titulo_infos ?? '7) Informações adicionais',
     tituloPassos: pe?.titulo_passos ?? '8) Próximos passos',
     descricao: pe?.descricao ?? 'Proposta de serviços de Segurança e Saúde no Trabalho com entrega profissional e documentação completa.',
-    servicos: pe?.servicos ?? 'Serviços de SST • Consultoria Especializada',
+    servicos: pe?.servicos ?? 'Serviços Toriq Corp • Consultoria Especializada',
     publico: pe?.publico ?? 'Empresas que precisam de conformidade com NRs',
     dores: pe?.dores ?? '- Falta de conformidade com normas regulamentadoras\n- Riscos de autuações e multas trabalhistas\n- Dificuldade em manter documentação atualizada\n- Ausência de gestão de riscos ocupacionais',
     solucoes: pe?.solucoes ?? '- Conformidade total com legislação vigente\n- Documentação técnica completa e atualizada\n- Redução de riscos de acidentes e doenças\n- Suporte técnico especializado contínuo',
@@ -792,7 +792,7 @@ export function PropostaComercialServicosSSTEditor({ onClose, dadosOrcamento, cl
             </Card>
 
             <Card>
-              <CardHeader className="py-3"><CardTitle className="text-sm flex items-center gap-2"><Briefcase className="h-4 w-4" />Empresa SST (Emitente)</CardTitle></CardHeader>
+              <CardHeader className="py-3"><CardTitle className="text-sm flex items-center gap-2"><Briefcase className="h-4 w-4" />Empresa Emitente</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div><Label className="text-xs">Nome</Label><Input value={empresaSST.nome} onChange={(e) => setEmpresaSST(prev => ({ ...prev, nome: e.target.value }))} placeholder="Nome da empresa" className="h-8 text-sm" /></div>
@@ -899,7 +899,7 @@ export function PropostaComercialServicosSSTEditor({ onClose, dadosOrcamento, cl
                       {(formData.clienteEndereco || formData.clienteCidade) && <div><span className="opacity-60">End:</span> {[formData.clienteEndereco, formData.clienteBairro, formData.clienteCidade, formData.clienteUf].filter(Boolean).join(', ')}</div>}
                     </div>
                     <div className="text-[9px] space-y-0.5">
-                      <h4 className="font-bold text-[10px] mb-1" style={{ color: '#f97316' }}>Empresa SST</h4>
+                      <h4 className="font-bold text-[10px] mb-1" style={{ color: '#f97316' }}>Empresa</h4>
                       <div><span className="opacity-60">Nome Fantasia:</span> {empresaSST.nome || '—'}</div>
                       {empresaSST.cnpj && <div><span className="opacity-60">CNPJ:</span> {maskCNPJ(empresaSST.cnpj)}</div>}
                     </div>
@@ -941,7 +941,7 @@ export function PropostaComercialServicosSSTEditor({ onClose, dadosOrcamento, cl
                   {/* Footer */}
                   <div className="mt-auto pt-3 border-t border-gray-200 flex justify-between items-end text-[8px] opacity-50">
                     <span>Página 1 de {totalPages}</span>
-                    <div className="text-right"><div className="font-medium">{empresaSST.nome || 'Empresa SST'}</div>{empresaSST.cnpj && <div>CNPJ: {empresaSST.cnpj}</div>}</div>
+                    <div className="text-right"><div className="font-medium">{empresaSST.nome || 'Empresa'}</div>{empresaSST.cnpj && <div>CNPJ: {empresaSST.cnpj}</div>}</div>
                   </div>
                 </div>
               )}

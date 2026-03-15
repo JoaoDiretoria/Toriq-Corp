@@ -22,8 +22,8 @@ import '@/components/landing/landing.css';
 const modules = [
   {
     icon: Shield,
-    title: 'Gestão de SST',
-    description: 'Controle completo de documentação, laudos e conformidade legal em SST.'
+    title: 'Gestão Empresarial Completa',
+    description: 'Controle completo de processos, documentação, conformidade e operações da empresa.'
   },
   {
     icon: GraduationCap,
@@ -101,9 +101,7 @@ const SobreNos = () => {
               </h1>
               
               <p className="text-base sm:text-lg md:text-xl text-muted-foreground leading-relaxed px-2 sm:px-0">
-                A TORIQ é uma empresa de tecnologia especializada no desenvolvimento de sistemas 
-                para empresas de <strong className="text-foreground">Saúde e Segurança do Trabalho (SST)</strong> e 
-                gestão corporativa. Criamos soluções digitais que auxiliam empresas a organizar processos, 
+                A TORIQ Corp é uma plataforma de gestão empresarial completa, desenvolvida para organizar processos, 
                 centralizar informações e garantir mais controle, eficiência e conformidade legal em suas operações.
               </p>
             </div>
@@ -118,7 +116,7 @@ const SobreNos = () => {
                 <span className="text-gradient">Fundação</span>
               </h2>
               <p className="text-lg text-muted-foreground leading-relaxed">
-                A TORIQ foi fundada com o propósito de simplificar a gestão de SST e processos empresariais, 
+                A TORIQ Corp foi fundada com o propósito de simplificar a gestão empresarial, 
                 oferecendo uma plataforma moderna, confiável e adaptável. Desde sua fundação, a empresa investe 
                 no desenvolvimento contínuo de soluções tecnológicas voltadas à praticidade, organização e 
                 tomada de decisão estratégica.
@@ -141,9 +139,9 @@ const SobreNos = () => {
                 <span className="text-gradient">Objetivos</span>
               </h2>
               <p className="text-lg text-muted-foreground mb-8">
-                Nosso principal objetivo é fornecer sistemas eficientes e flexíveis que apoiem empresas de SST 
-                e organizações em geral na gestão de suas rotinas, reduzindo retrabalho, aumentando o controle 
-                e promovendo maior segurança e produtividade.
+                Nosso principal objetivo é fornecer sistemas eficientes e flexíveis que apoiem empresas 
+                na gestão de suas rotinas, reduzindo retrabalho, aumentando o controle 
+                e promovendo maior produtividade e organização.
               </p>
               
               <div className="grid sm:grid-cols-2 gap-4">
@@ -217,8 +215,8 @@ const SobreNos = () => {
                   </div>
                   <h3 className="text-xl font-bold mb-4">Missão</h3>
                   <p className="text-muted-foreground">
-                    Desenvolver soluções tecnológicas que simplifiquem a gestão de SST e processos empresariais, 
-                    contribuindo para a eficiência, organização e conformidade das empresas.
+                    Desenvolver soluções tecnológicas que simplifiquem a gestão empresarial, 
+                    contribuindo para a eficiência, organização e crescimento das empresas.
                   </p>
                 </div>
 

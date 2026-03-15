@@ -24,7 +24,7 @@ export function ToriqCorpFinanceiro({ onNavigate }: ToriqCorpFinanceiroProps) {
         </div>
         <div>
           <h1 className="text-3xl font-bold">Financeiro</h1>
-          <p className="text-muted-foreground">Gestão financeira da empresa SST</p>
+          <p className="text-muted-foreground">Gestão financeira da empresa</p>
         </div>
       </div>
 

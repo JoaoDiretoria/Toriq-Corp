@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
         );
       }
 
-      const siteUrl = Deno.env.get('SITE_URL') || 'https://app.toriq.com.br';
+      const siteUrl = Deno.env.get('SITE_URL') || 'https://toriqcorp.com.br';
       const finalRedirectTo = redirectTo || `${siteUrl}/reset-password`;
 
       // Usar a API REST do Supabase Auth para enviar email de recuperação

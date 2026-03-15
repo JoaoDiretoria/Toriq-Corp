@@ -58,7 +58,10 @@ import {
   Loader2,
   ScanFace,
   Keyboard,
-  CheckCircle
+  CheckCircle,
+  Video,
+  ExternalLink,
+  Unlink
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -632,6 +635,12 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
   // Estado para Reconhecimento Facial
   const [showReconhecimentoFacial, setShowReconhecimentoFacial] = useState(false);
 
+  // Estados para Google Meet
+  const [googleMeetToken, setGoogleMeetToken] = useState<{ google_email: string; atualizado_em: string } | null>(null);
+  const [loadingGoogleMeet, setLoadingGoogleMeet] = useState(false);
+  const [conectandoGoogleMeet, setConectandoGoogleMeet] = useState(false);
+  const [desconectandoGoogleMeet, setDesconectandoGoogleMeet] = useState(false);
+
   // Estados para Logs de Acesso
   const [logsDialogOpen, setLogsDialogOpen] = useState(false);
   const [accessLogs, setAccessLogs] = useState<AccessLog[]>([]);
@@ -649,6 +658,63 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
     usuariosAtivos: 0,
     dispositivosUnicos: 0
   });
+
+  // Carregar status Google Meet
+  const loadGoogleMeetStatus = useCallback(async () => {
+    if (!empresaId) return;
+    setLoadingGoogleMeet(true);
+    try {
+      const { data } = await (supabase as any)
+        .from('google_oauth_tokens')
+        .select('google_email, atualizado_em')
+        .eq('empresa_id', empresaId)
+        .maybeSingle();
+      setGoogleMeetToken(data || null);
+    } catch (_) {
+    } finally {
+      setLoadingGoogleMeet(false);
+    }
+  }, [empresaId]);
+
+  const conectarGoogleMeet = async () => {
+    setConectandoGoogleMeet(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const supabaseUrl = (supabase as any).supabaseUrl as string;
+      const res = await fetch(`${supabaseUrl}/functions/v1/google-meet-oauth`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({}),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Erro ao iniciar autenticação');
+      window.open(json.auth_url, '_blank', 'width=600,height=700,scrollbars=yes');
+      toast({ title: 'Janela de autorização aberta', description: 'Após autorizar no Google, clique em "Recarregar status" abaixo.' });
+    } catch (e: any) {
+      toast({ title: 'Erro ao conectar Google Meet', description: e.message, variant: 'destructive' });
+    } finally {
+      setConectandoGoogleMeet(false);
+    }
+  };
+
+  const desconectarGoogleMeet = async () => {
+    if (!empresaId) return;
+    if (!confirm('Desconectar o Google Meet desta empresa? Os colaboradores não poderão mais gerar links automaticamente.')) return;
+    setDesconectandoGoogleMeet(true);
+    try {
+      await (supabase as any)
+        .from('google_oauth_tokens')
+        .delete()
+        .eq('empresa_id', empresaId);
+      setGoogleMeetToken(null);
+      toast({ title: 'Google Meet desconectado' });
+    } catch (e: any) {
+      toast({ title: 'Erro ao desconectar', description: e.message, variant: 'destructive' });
+    } finally {
+      setDesconectandoGoogleMeet(false);
+    }
+  };
 
   // Carregar configurações da empresa do Supabase
   const loadConfiguracoes = async () => {
@@ -1459,8 +1525,9 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
     }
     if (activeSection === 'integracao' && empresaId) {
       loadIntegracaoEsocial();
+      loadGoogleMeetStatus();
     }
-  }, [activeSection, empresaId]);
+  }, [activeSection, empresaId, loadGoogleMeetStatus]);
 
   const loadTodasPermissoesSalvas = async (setoresList: Setor[]) => {
     if (setoresList.length === 0) return;
@@ -2403,6 +2470,70 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
                     </div>
                   </div>
                   <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Disponível</Badge>
+                </div>
+
+                {/* Google Meet */}
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <Video className="h-5 w-5 text-blue-600" />
+                    <div>
+                      <Label>Google Meet</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Conecte a conta Google da empresa para gerar links de reunião automaticamente
+                      </p>
+                      {googleMeetToken && (
+                        <p className="text-xs text-blue-600 mt-1 flex items-center gap-1">
+                          <CheckCircle className="h-3 w-3" />
+                          Conectado como <strong className="ml-1">{googleMeetToken.google_email}</strong>
+                          <span className="text-muted-foreground ml-1">
+                            · atualizado {format(new Date(googleMeetToken.atualizado_em), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                          </span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {loadingGoogleMeet ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    ) : googleMeetToken ? (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={loadGoogleMeetStatus}
+                          className="text-xs h-8"
+                        >
+                          <RefreshCw className="h-3 w-3 mr-1" /> Recarregar
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={desconectarGoogleMeet}
+                          disabled={desconectandoGoogleMeet}
+                          className="text-xs h-8 text-destructive hover:text-destructive"
+                        >
+                          <Unlink className="h-3 w-3 mr-1" />
+                          {desconectandoGoogleMeet ? 'Desconectando...' : 'Desconectar'}
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={conectarGoogleMeet}
+                        disabled={conectandoGoogleMeet}
+                        className="text-xs h-8 bg-blue-600 hover:bg-blue-700 text-white"
+                      >
+                        <ExternalLink className="h-3 w-3 mr-1" />
+                        {conectandoGoogleMeet ? 'Abrindo...' : 'Conectar Google'}
+                      </Button>
+                    )}
+                    {!googleMeetToken && !loadingGoogleMeet && (
+                      <Badge variant="outline" className="text-muted-foreground">Não conectado</Badge>
+                    )}
+                    {googleMeetToken && (
+                      <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">Conectado</Badge>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

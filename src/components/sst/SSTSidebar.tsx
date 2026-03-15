@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, LogOut, Package, Shield, Heart, GraduationCap, Building2, FileText, Building, ChevronDown, Settings, User, Building as BuildingIcon, UsersRound, ClipboardList, Briefcase, TrendingUp, DollarSign, GitBranch, CheckSquare, FileSignature, HardHat, FolderPlus, Receipt, Wallet, Car, Headphones, LayoutDashboard, PanelLeftClose, PanelLeft, Search } from 'lucide-react';
+import { Users, LogOut, Package, Shield, Heart, GraduationCap, Building2, FileText, Building, ChevronDown, Settings, User, Building as BuildingIcon, UsersRound, ClipboardList, Briefcase, TrendingUp, DollarSign, GitBranch, CheckSquare, FileSignature, HardHat, FolderPlus, Receipt, Wallet, Car, Headphones, LayoutDashboard, PanelLeftClose, PanelLeft, Search, CalendarDays } from 'lucide-react';
 import { NotificationPopover } from '@/components/shared/notifications';
 import { QuickSearch, useQuickSearch, TelaItem } from '@/components/shared/QuickSearch';
 import { useNavigate } from 'react-router-dom';
@@ -224,6 +224,7 @@ export function SSTSidebar({ activeSection, onSectionChange, modulosAtivos, load
       if (telaVisivel('meu-perfil')) telas.push({ id: 'meu-perfil', nome: 'Meu Perfil', icone: 'User', categoria: 'Perfil da Empresa' });
       if (telaVisivel('cadastros')) telas.push({ id: 'cadastros', nome: 'Cadastro', icone: 'FolderPlus', categoria: 'Perfil da Empresa' });
       telas.push({ id: 'suporte', nome: 'Suporte', icone: 'Headphones', categoria: 'Perfil da Empresa' });
+      telas.push({ id: 'agenda', nome: 'Agenda', icone: 'CalendarDays', categoria: 'Perfil da Empresa' });
     }
     
     // Toriq Corp
@@ -340,7 +341,7 @@ export function SSTSidebar({ activeSection, onSectionChange, modulosAtivos, load
                 </div>
               </div>
               <div className="flex flex-col gap-1">
-                <h2 className="text-lg font-semibold">Painel SST</h2>
+                <h2 className="text-lg font-semibold">{profile?.role === 'cliente_final' ? 'Minha Empresa' : 'Painel Toriq Corp'}</h2>
                 <p className="text-sm text-muted-foreground">{empresa?.nome || 'Empresa não vinculada'}</p>
                 <p className="text-xs text-muted-foreground">{profile?.nome}</p>
               </div>
@@ -394,6 +395,19 @@ export function SSTSidebar({ activeSection, onSectionChange, modulosAtivos, load
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
                         )}
+                        {/* Colaboradores */}
+                        {telaVisivel('usuarios') && (
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton
+                              onClick={() => onSectionChange('usuarios')}
+                              isActive={activeSection === 'usuarios'}
+                              className="cursor-pointer"
+                            >
+                              <Users className="h-4 w-4" />
+                              <span>Colaboradores</span>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        )}
                         {/* Cadastro */}
                         {telaVisivel('cadastros') && (
                           <SidebarMenuSubItem>
@@ -420,6 +434,17 @@ export function SSTSidebar({ activeSection, onSectionChange, modulosAtivos, load
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
                         )}
+                        {/* Agenda - sempre visível */}
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton
+                            onClick={() => onSectionChange('agenda')}
+                            isActive={activeSection === 'agenda'}
+                            className="cursor-pointer"
+                          >
+                            <CalendarDays className="h-4 w-4" />
+                            <span>Agenda</span>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
                         {/* Suporte - sempre visível */}
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton
@@ -438,11 +463,7 @@ export function SSTSidebar({ activeSection, onSectionChange, modulosAtivos, load
               )}
 
               {/* ========== MÓDULO TORIQ CORP ========== */}
-              {moduloVisivelEContratado('toriq_corp') && moduloTemTelasVisiveis([
-                'toriq-corp-tarefas', 'toriq-corp-contratos', 'toriq-corp-setores',
-                'toriq-corp-financeiro', 'toriq-corp-controle-frota',
-                'toriq-corp-controle-equipamentos', 'toriq-corp-configuracoes'
-              ]) && (
+              {moduloVisivelEContratado('toriq_corp') && (
                 <Collapsible defaultOpen className="group/collapsible-corp">
                   <SidebarMenuItem>
                     <CollapsibleTrigger asChild>

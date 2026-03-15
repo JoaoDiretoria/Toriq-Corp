@@ -159,7 +159,8 @@ export function CurrentScreenProvider({ children }: { children: ReactNode }) {
       if (typeof window !== 'undefined') {
         const path = window.location.pathname;
         if (path.includes('/admin')) painelFinal = 'admin';
-        else if (path.includes('/sst')) painelFinal = 'sst';
+        else if (path.includes('/toriqcorp')) painelFinal = 'toriqcorp';
+        else if (path.includes('/sst')) painelFinal = 'toriqcorp';
         else if (path.includes('/cliente')) painelFinal = 'cliente';
         else if (path.includes('/instrutor')) painelFinal = 'instrutor';
         else if (path.includes('/parceira')) painelFinal = 'parceira';

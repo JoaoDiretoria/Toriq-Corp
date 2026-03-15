@@ -110,10 +110,46 @@
 | `src/App.tsx` | Rota `/sst/cliente/:clienteId` adicionada | ✅ |
 | `src/components/sst/SSTClientes.tsx` | Click no nome da empresa agora navega para página ao invés de abrir dialog | ✅ |
 
+### Sistema de Agenda com Compartilhamento (15/03/2026)
+| Componente | Descrição | Status |
+|-----------|-----------|--------|
+| `supabase/migrations/20260315_create_agenda_system.sql` | Tabelas `agenda_eventos` + `agenda_compartilhamentos` com RLS completo | ✅ |
+| `src/components/shared/Agenda.tsx` | Componente completo: vis. Mês/Semana/Dia/Lista, criar/editar/excluir evento, compartilhar com colaboradores, filtros | ✅ |
+| `src/components/sst/SSTSidebar.tsx` | Item "Agenda" adicionado em "Perfil da Empresa" + QuickSearch | ✅ |
+| `src/components/admin/AdminSidebar.tsx` | Item "Agenda" adicionado após "Tarefas" | ✅ |
+| `src/pages/SSTDashboard.tsx` | Case `agenda` renderiza `<Agenda />` | ✅ |
+| `src/pages/AdminDashboard.tsx` | Case `agenda` renderiza `<Agenda modoAdmin={true} />` (admin vê tudo) | ✅ |
+
+**Regras de visibilidade da Agenda:**
+- `privado` — só o criador vê
+- `compartilhado` — criador seleciona colaboradores individualmente
+- `empresa` — todos da empresa veem
+- Admin (`empresa_sst`, `admin_vertical`, `cliente_final` sem setor) vê todos os eventos da empresa
+
+### Correções da sessão (15/03/2026)
+| Arquivo/Banco | Correção | Status |
+|---------------|----------|--------|
+| `profiles` RLS | Policy `profiles_update_own` — authenticated atualiza próprio perfil | ✅ |
+| `empresas` RLS | Policy `empresas_select_all_authenticated` — usuário vê empresa do próprio profile | ✅ |
+| `src/pages/Auth.tsx` | `cliente_final` redireciona para `/sst` ao invés de `/cliente` | ✅ |
+| `src/pages/Dashboard.tsx` | `cliente_final` redireciona para `/sst` ao invés de `/cliente` | ✅ |
+| `src/pages/SSTDashboard.tsx` | Guard e `canAccess` agora aceitam `cliente_final` | ✅ |
+| `src/hooks/usePermissoes.tsx` | `cliente_final` sem `setor_id` tratado como `isAdmin=true` | ✅ |
+| `src/components/sst/SSTSidebar.tsx` | Header mostra "Minha Empresa" para `cliente_final` | ✅ |
+| `modulos` (banco) | Módulo "Toriq Corp" criado (id: `a1b2c3d4-e5f6-7890-abcd-ef1234567890`) | ✅ |
+| `empresas_modulos` (banco) | Toriq Corp ativado para empresa `93f2c26c` (Lucas Silva de Franca) | ✅ |
+| `supabase/functions/admin-create-user` | Domínio corrigido para `toriqcorp.com.br`, verificação email via `profiles` | ✅ v2 |
+| `supabase/functions/admin-update-user` | Domínio corrigido para `toriqcorp.com.br` | ✅ v2 |
+| `src/pages/AlterarSenha.tsx` | Logout após alterar senha + redirect para `/auth` | ✅ |
+| Vertical SST — `modulos` banco | Rotas de Toriq Corp e Toriq Training → `https://toriqcorp.com.br/sst` | ✅ |
+| `email-templates/` | 6 templates HTML criados com identidade TORIQ Corp | ✅ |
+
 ## Próximo Passo
-- [ ] Atualizar edge function `validacao-digital-certificado` no Supabase para retornar campo `observacoes` da tabela `colaboradores_certificados`
+- [ ] Confirmar URL correta do módulo Toriq EPI no Vertical SST (`/modulos/gestao-epi` ainda relativa)
+- [ ] Atualizar edge function `validacao-digital-certificado` no Supabase para retornar campo `observacoes`
 - [ ] Testar fluxo completo de assinatura ICP-Brasil (individual + lote)
 - [ ] Habilitar "Leaked Password Protection" no Dashboard Supabase
+- [ ] Configurar SMTP para projeto `xraggzqaddfiymqgrtha` (Vertical SST) no Dashboard Supabase
 
 ## Documentação de Testes
 - `docs/issues supabase/ROTEIRO_TESTES_DETALHADO.md` - Roteiro completo e executável (v2.0)

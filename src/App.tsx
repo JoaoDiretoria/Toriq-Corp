@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { EmpresaModeProvider } from "@/hooks/useEmpresaMode";
 import { ModulosAtivosProvider } from "@/hooks/useModulosAtivos";
@@ -72,13 +72,15 @@ const App = () => (
             <Route path="/sair" element={<Logout />} />
             <Route path="/dashboard" element={<RequireSenhaAlterada><Dashboard /></RequireSenhaAlterada>} />
             <Route path="/admin" element={<RequireSenhaAlterada><AdminDashboard /></RequireSenhaAlterada>} />
-            <Route path="/sst" element={<RequireSenhaAlterada><SSTDashboard /></RequireSenhaAlterada>} />
+            <Route path="/toriqcorp" element={<RequireSenhaAlterada><SSTDashboard /></RequireSenhaAlterada>} />
+            <Route path="/sst" element={<Navigate to="/toriqcorp" replace />} />
             <Route path="/cliente" element={<RequireSenhaAlterada><ClienteDashboard /></RequireSenhaAlterada>} />
             <Route path="/modulos/:moduloSlug" element={<RequireSenhaAlterada><ModuloPage /></RequireSenhaAlterada>} />
             <Route path="/modulos/saude-ocupacional" element={<RequireSenhaAlterada><SaudeOcupacional /></RequireSenhaAlterada>} />
             <Route path="/modulos/terceiros" element={<RequireSenhaAlterada><GestaoTerceiros /></RequireSenhaAlterada>} />
             <Route path="/colaborador/:colaboradorId" element={<RequireSenhaAlterada><ColaboradorDetalhes /></RequireSenhaAlterada>} />
-            <Route path="/sst/cliente/:clienteId" element={<RequireSenhaAlterada><ClienteDetalhesPage /></RequireSenhaAlterada>} />
+            <Route path="/toriqcorp/cliente/:clienteId" element={<RequireSenhaAlterada><ClienteDetalhesPage /></RequireSenhaAlterada>} />
+            <Route path="/sst/cliente/:clienteId" element={<Navigate to="/toriqcorp/cliente/:clienteId" replace />} />
             {/* Rota de Proposta Web */}
             <Route path="/proposta/:propostaId" element={<PropostaWeb />} />
             {/* Rota de Suporte */}

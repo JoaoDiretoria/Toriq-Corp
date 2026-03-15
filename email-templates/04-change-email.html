@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirme seu novo email - TORIQ</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #0a0a0a;">
+    <table role="presentation" style="width: 100%; border-collapse: collapse;">
+        <tr>
+            <td align="center" style="padding: 40px 20px;">
+                <table role="presentation" style="width: 100%; max-width: 600px; border-collapse: collapse; background-color: #1a1a1a; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);">
+                    <!-- Header com logo -->
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #16E17A 0%, #0B5D4A 100%); padding: 40px 30px; text-align: center;">
+                            <h1 style="margin: 0; color: #000000; font-size: 32px; font-weight: 700; letter-spacing: -0.5px;">TORIQ Corp</h1>
+                            <p style="margin: 10px 0 0 0; color: #000000; font-size: 14px; opacity: 0.9;">Plataforma de Gestão Empresarial</p>
+                        </td>
+                    </tr>
+                    
+                    <!-- Conteúdo -->
+                    <tr>
+                        <td style="padding: 40px 30px; color: #e5e5e5;">
+                            <h2 style="margin: 0 0 20px 0; color: #16E17A; font-size: 24px; font-weight: 600;">Confirme seu novo email</h2>
+                            
+                            <p style="margin: 0 0 20px 0; font-size: 16px; line-height: 1.6; color: #b3b3b3;">
+                                Olá! Você solicitou a alteração do email da sua conta TORIQ.
+                            </p>
+                            
+                            <p style="margin: 0 0 30px 0; font-size: 16px; line-height: 1.6; color: #b3b3b3;">
+                                Para confirmar esta alteração, clique no botão abaixo:
+                            </p>
+                            
+                            <!-- Botão CTA -->
+                            <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                                <tr>
+                                    <td align="center" style="padding: 0 0 30px 0;">
+                                        <a href="{{ .ConfirmationURL }}" style="display: inline-block; background: linear-gradient(135deg, #16E17A 0%, #0B5D4A 100%); color: #000000; text-decoration: none; padding: 16px 40px; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(22, 225, 122, 0.3);">
+                                            Confirmar novo email
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+                            
+                            <p style="margin: 0 0 10px 0; font-size: 14px; line-height: 1.6; color: #808080;">
+                                Ou copie e cole este link no seu navegador:
+                            </p>
+                            
+                            <p style="margin: 0 0 30px 0; font-size: 13px; line-height: 1.6; color: #16E17A; word-break: break-all; background-color: #0f0f0f; padding: 12px; border-radius: 6px; border-left: 3px solid #16E17A;">
+                                {{ .ConfirmationURL }}
+                            </p>
+                            
+                            <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #808080;">
+                                Este link expira em 24 horas.
+                            </p>
+                        </td>
+                    </tr>
+                    
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #0f0f0f; padding: 30px; text-align: center; border-top: 1px solid #2a2a2a;">
+                            <p style="margin: 0 0 10px 0; font-size: 13px; color: #666666;">
+                                Se você não solicitou esta alteração, entre em contato imediatamente.
+                            </p>
+                            <p style="margin: 0; font-size: 12px; color: #4d4d4d;">
+                                © 2026 TORIQ Corp. Todos os direitos reservados.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

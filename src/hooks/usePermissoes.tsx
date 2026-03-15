@@ -95,6 +95,12 @@ export function usePermissoes() {
         setIsAdminVertical(false);
       }
 
+      // cliente_final SEM setor_id tem acesso total à sua empresa
+      if ((profile.role as string) === 'cliente_final' && !setorId) {
+        setIsAdmin(true);
+        setIsAdminVertical(false);
+      }
+
       // Carregar módulos e telas liberadas para a empresa
       if (empresaId) {
         try {
@@ -125,9 +131,9 @@ export function usePermissoes() {
       }
 
       // Se o usuário não tem setor, não tem permissões específicas (bloqueia tudo)
-      // Exceto empresa_sst e admin_vertical que têm acesso total
+      // Exceto empresa_sst, admin_vertical e cliente_final que têm acesso total à sua empresa
       const roleStr = profile.role as string;
-      const isAdminOrSST = roleStr === 'empresa_sst' || roleStr === 'admin_vertical';
+      const isAdminOrSST = roleStr === 'empresa_sst' || roleStr === 'admin_vertical' || roleStr === 'cliente_final';
       if (!setorId && !isAdminOrSST) {
         setPermissoes([]);
         setLoading(false);
@@ -160,7 +166,7 @@ export function usePermissoes() {
 
   // Mapeamento de ID de módulo para UUID (baseado na tabela modulos)
   const MODULO_ID_PARA_UUID: Record<string, string> = {
-    'toriq_corp': '05b252ad-4267-4b26-8612-7b8903615b6c',
+    'toriq_corp': 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
     'saude_ocupacional': 'ae7578b5-2f80-460c-ae44-f79c6ea827d8',
     'gestao_terceiros': '2353de90-96c9-41f7-aaa8-8c39ce0e6329',
     'gestao_documentos': 'aaaa1111-1111-1111-1111-111111111111',
@@ -190,6 +196,16 @@ export function usePermissoes() {
   const telaLiberada = useCallback((telaId: string): boolean => {
     // Admin Vertical sempre tem acesso total
     if (isAdminVertical) return true;
+
+    // Admin da empresa (empresa_sst/cliente_final sem setor) tem acesso a todas as telas
+    // dos módulos que a empresa tem ativos
+    if (isAdmin) {
+      if (TELAS_PERFIL_EMPRESA.includes(telaId)) return true;
+      if (telaId.startsWith('setor-')) return moduloAtivoParaEmpresa('toriq_corp');
+      const mapeamentoAdmin = SECAO_PARA_PERMISSAO[telaId];
+      if (mapeamentoAdmin) return moduloAtivoParaEmpresa(mapeamentoAdmin.modulo_id);
+      return true;
+    }
     
     // Telas do Perfil da Empresa são sempre liberadas para a empresa (módulo padrão)
     if (TELAS_PERFIL_EMPRESA.includes(telaId)) return true;
@@ -210,11 +226,21 @@ export function usePermissoes() {
     if (telaConfig && telaConfig.ativo) {
       return moduloAtivoParaEmpresa(telaConfig.modulo_id);
     }
+
+    // Se a tela pertence a um módulo que está ativo mas não tem telas configuradas individualmente,
+    // libera a tela automaticamente (módulo ativo = todas as telas do módulo liberadas)
+    const mapeamentoTela = SECAO_PARA_PERMISSAO[telaId];
+    if (mapeamentoTela) {
+      const moduloDaTela = mapeamentoTela.modulo_id;
+      const moduloAtivo = moduloAtivoParaEmpresa(moduloDaTela);
+      const telasDoModuloConfiguradas = telasEmpresa.some(t => t.modulo_id === (MODULO_ID_PARA_UUID[moduloDaTela] || moduloDaTela));
+      if (moduloAtivo && !telasDoModuloConfiguradas) return true;
+    }
     
     // Se a tela não está na lista de telas liberadas, NÃO libera
-    // Mesmo para admin da empresa SST, ele só pode ver o que a Toriq liberou
+    // Mesmo para admin da empresa, ele só pode ver o que a Toriq liberou
     return false;
-  }, [isAdminVertical, telasEmpresa, modulosEmpresa, moduloAtivoParaEmpresa]);
+  }, [isAdmin, isAdminVertical, telasEmpresa, modulosEmpresa, moduloAtivoParaEmpresa]);
 
   // Verifica se o usuário pode visualizar uma seção
   // Combina: permissões do setor + telas liberadas da empresa

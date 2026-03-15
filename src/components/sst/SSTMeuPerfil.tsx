@@ -404,7 +404,7 @@ export function SSTMeuPerfil() {
       case 'admin_vertical':
         return <Badge variant="destructive">Admin Toriq</Badge>;
       case 'empresa_sst':
-        return <Badge variant="default">Empresa SST</Badge>;
+        return <Badge variant="default">Colaborador</Badge>;
       case 'cliente_final':
         return <Badge variant="secondary">Cliente Final</Badge>;
       default:
@@ -515,7 +515,7 @@ export function SSTMeuPerfil() {
                 <div className="space-y-2">
                   <Label>Tipo</Label>
                   <Input
-                    value={empresa.tipo === 'sst' ? 'Empresa SST' : empresa.tipo}
+                    value={empresa.tipo === 'sst' ? 'Toriq Corp' : empresa.tipo}
                     disabled
                     className={cn(inputBaseStyles, 'cursor-not-allowed')}
                   />

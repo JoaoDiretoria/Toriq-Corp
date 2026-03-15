@@ -16,7 +16,7 @@ export function ToriqCorpAdministrativo({ onNavigateToFunil, onBack }: ToriqCorp
   return (
     <SetorDashboard
       titulo="Administrativo"
-      descricao="Gestão administrativa da empresa SST - documentos e processos internos"
+      descricao="Gestão administrativa - documentos e processos internos"
       setorNome="Administrativo"
       icon={ClipboardList}
       onNavigateToFunil={handleNavigateToFunil}

@@ -160,7 +160,7 @@ export function SSTPerfilEmpresa() {
             <div>
               <CardTitle>{empresaInfo.nome}</CardTitle>
               <CardDescription className="flex items-center gap-2">
-                <Badge variant="outline">{empresaInfo.tipo === 'sst' ? 'Empresa SST' : empresaInfo.tipo}</Badge>
+                <Badge variant="outline">{empresaInfo.tipo === 'sst' ? 'Toriq Corp' : empresaInfo.tipo}</Badge>
                 {empresaInfo.cnpj && <span>CNPJ: {empresaInfo.cnpj}</span>}
               </CardDescription>
             </div>

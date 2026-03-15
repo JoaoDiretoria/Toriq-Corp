@@ -58,7 +58,7 @@ interface EmpresasImportExportProps {
 const TEMPLATE_COLUMNS = [
   { key: 'razao_social', label: 'Razão Social', required: true },
   { key: 'nome_fantasia', label: 'Nome Fantasia', required: false },
-  { key: 'tipo', label: 'Tipo (sst ou lead)', required: true },
+  { key: 'tipo', label: 'Tipo (toriqcorp ou lead)', required: true },
   { key: 'cnpj', label: 'CNPJ', required: false },
   { key: 'email', label: 'E-mail', required: false },
   { key: 'telefone', label: 'Telefone', required: false },
@@ -248,11 +248,11 @@ export function EmpresasImportExport({ empresas, onImportSuccess }: EmpresasImpo
     }
 
     // Validar Tipo obrigatório
-    const tipo = data['Tipo (sst ou lead)']?.toString().trim().toLowerCase();
+    const tipo = data['Tipo (toriqcorp ou lead)']?.toString().trim().toLowerCase();
     if (!tipo) {
-      errors.push('Tipo é obrigatório (sst ou lead)');
-    } else if (!['sst', 'lead'].includes(tipo)) {
-      errors.push('Tipo deve ser "sst" ou "lead"');
+      errors.push('Tipo é obrigatório (toriqcorp ou lead)');
+    } else if (!['sst', 'toriqcorp', 'lead'].includes(tipo)) {
+      errors.push('Tipo deve ser "toriqcorp" ou "lead"');
     }
 
     // Validar Porte
@@ -432,7 +432,7 @@ export function EmpresasImportExport({ empresas, onImportSuccess }: EmpresasImpo
     const data = empresas.map(empresa => ({
       'Razão Social': empresa.razao_social || empresa.nome || '',
       'Nome Fantasia': empresa.nome_fantasia || '',
-      'Tipo (sst ou lead)': empresa.tipo || '',
+      'Tipo (toriqcorp ou lead)': empresa.tipo === 'sst' ? 'toriqcorp' : (empresa.tipo || ''),
       'CNPJ': empresa.cnpj || '',
       'E-mail': empresa.email || '',
       'Telefone': empresa.telefone || '',
@@ -480,7 +480,7 @@ export function EmpresasImportExport({ empresas, onImportSuccess }: EmpresasImpo
     const exampleRow: Record<string, string> = {
       'Razão Social': 'Empresa Exemplo LTDA',
       'Nome Fantasia': 'Exemplo',
-      'Tipo (sst ou lead)': 'sst',
+      'Tipo (toriqcorp ou lead)': 'toriqcorp',
       'CNPJ': '00.000.000/0001-00',
       'E-mail': 'contato@empresa.com',
       'Telefone': '(11) 99999-9999',
@@ -606,7 +606,8 @@ export function EmpresasImportExport({ empresas, onImportSuccess }: EmpresasImpo
       const row = validRows[i];
       
       try {
-        const tipo = row.data['Tipo (sst ou lead)']?.toString().trim().toLowerCase();
+        const tipoRaw = row.data['Tipo (toriqcorp ou lead)']?.toString().trim().toLowerCase();
+        const tipo = tipoRaw === 'toriqcorp' ? 'sst' : tipoRaw;
         const razaoSocial = row.data['Razão Social']?.toString().trim();
         
         const empresaData = {
@@ -651,9 +652,9 @@ export function EmpresasImportExport({ empresas, onImportSuccess }: EmpresasImpo
             principal: true,
           };
 
-          await supabase
+          await (supabase as any)
             .from('empresa_contatos')
-            .insert(contatoData as any);
+            .insert(contatoData);
         }
 
         results.success++;

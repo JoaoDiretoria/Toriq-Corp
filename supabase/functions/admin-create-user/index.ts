@@ -163,10 +163,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Check if email already exists
-    const { data: existingUsers } = await adminClient.auth.admin.listUsers();
-    const emailExists = existingUsers?.users?.some(u => u.email === email);
-    if (emailExists) {
+    // Check if email already exists via profiles table (mais eficiente que listUsers)
+    const { data: existingProfile } = await adminClient
+      .from('profiles')
+      .select('id')
+      .eq('email', email.toLowerCase().trim())
+      .maybeSingle();
+    if (existingProfile) {
       return new Response(
         JSON.stringify({ error: 'Este email já está cadastrado' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -182,7 +185,7 @@ Deno.serve(async (req) => {
       console.log('Sending invite to:', email, nome, role, empresa_id);
       
       // Get site URL for redirect
-      const siteUrl = Deno.env.get('SITE_URL') || 'https://toriq.com.br';
+      const siteUrl = Deno.env.get('SITE_URL') || 'https://toriqcorp.com.br';
       
       // Redirecionar para / (Index) que vai processar o token e redirecionar para /alterar-senha
       const result = await adminClient.auth.admin.inviteUserByEmail(email, {
