@@ -524,8 +524,8 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
     switch (role) {
       case 'admin_vertical':
         return <Badge className="bg-purple-500">Admin Toriq</Badge>;
-      case 'empresa_sst':
-        return <Badge variant="default">SST</Badge>;
+      case 'cliente_torq':
+        return <Badge variant="default">Toriq</Badge>;
       case 'empresa_parceira':
         return <Badge className="bg-orange-500">Parceira</Badge>;
       default:
@@ -659,7 +659,7 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
                             Admins
                           </div>
                           <p className="text-2xl font-bold">
-                            {usuarios.filter(u => u.role === 'admin_vertical' || u.role === 'empresa_sst').length}
+                            {usuarios.filter(u => u.role === 'admin_vertical' || u.role === 'cliente_torq').length}
                           </p>
                         </div>
                         <div className="text-center p-3 bg-muted/50 rounded-lg">

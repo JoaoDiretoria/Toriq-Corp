@@ -42,14 +42,14 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Check if user has permission (admin_vertical or empresa_sst)
+    // Check if user has permission (admin_vertical ou cliente_torq)
     const { data: profile, error: profileError } = await adminClient
       .from('profiles')
       .select('role, empresa_id')
       .eq('id', currentUser.id)
       .single();
 
-    if (profileError || !['admin_vertical', 'empresa_sst'].includes(profile?.role)) {
+    if (profileError || !['admin_vertical', 'cliente_torq'].includes(profile?.role)) {
       console.log('User does not have permission:', profileError, profile);
       return new Response(
         JSON.stringify({ error: 'Sem permissão para criar usuários' }),
@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
     }
 
     // Validate role
-    const validRoles = ['admin_vertical', 'empresa_sst', 'cliente_final', 'empresa_parceira', 'instrutor'];
+    const validRoles = ['admin_vertical', 'cliente_torq', 'cliente_final', 'empresa_parceira', 'instrutor'];
     if (!validRoles.includes(role)) {
       return new Response(
         JSON.stringify({ error: 'Role inválida' }),
@@ -86,27 +86,27 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Validação específica para empresa_sst
-    if (profile.role === 'empresa_sst') {
-      // empresa_sst pode criar usuários empresa_sst (funcionários), cliente_final, empresa_parceira ou instrutor
-      if (!['empresa_sst', 'cliente_final', 'empresa_parceira', 'instrutor'].includes(role)) {
-        console.log('empresa_sst tried to create invalid user type:', role);
+    // Validação específica para cliente_torq
+    if (profile.role === 'cliente_torq') {
+      // cliente_torq pode criar usuários cliente_torq (funcionários), cliente_final, empresa_parceira ou instrutor
+      if (!['cliente_torq', 'cliente_final', 'empresa_parceira', 'instrutor'].includes(role)) {
+        console.log('cliente_torq tried to create invalid user type:', role);
         return new Response(
-          JSON.stringify({ error: 'Empresas SST só podem criar usuários do tipo empresa_sst, cliente_final, empresa_parceira ou instrutor' }),
+          JSON.stringify({ error: 'Sem permissão para criar usuários com este tipo' }),
           { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       
-      // Se está criando um funcionário (empresa_sst), deve ser na mesma empresa
-      if (role === 'empresa_sst') {
+      // Se está criando um funcionário (cliente_torq), deve ser na mesma empresa
+      if (role === 'cliente_torq') {
         if (empresa_id !== profile.empresa_id) {
-          console.log('empresa_sst tried to create employee for different company');
+          console.log('cliente_torq tried to create employee for different company');
           return new Response(
             JSON.stringify({ error: 'Você só pode criar funcionários para sua própria empresa' }),
             { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
-        console.log('empresa_sst creating employee for own company:', empresa_id);
+        console.log('cliente_torq creating employee for own company:', empresa_id);
       }
       
       // Verificar se a empresa_id foi informada
@@ -127,14 +127,14 @@ Deno.serve(async (req) => {
           .maybeSingle();
           
         if (clienteError || !clienteRelation) {
-          console.log('empresa_sst tried to create user for non-client company:', empresa_id, clienteError);
+          console.log('cliente_torq tried to create user for non-client company:', empresa_id, clienteError);
           return new Response(
-            JSON.stringify({ error: 'Esta empresa não é cliente da sua empresa SST' }),
+            JSON.stringify({ error: 'Esta empresa não é cliente da sua empresa' }),
             { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
         
-        console.log('empresa_sst creating cliente_final for client company:', empresa_id);
+        console.log('cliente_torq creating cliente_final for client company:', empresa_id);
       }
       
       // Validação para empresa_parceira
@@ -147,19 +147,19 @@ Deno.serve(async (req) => {
           .maybeSingle();
           
         if (parceiraError || !parceiraRelation) {
-          console.log('empresa_sst tried to create user for non-partner company:', empresa_id, parceiraError);
+          console.log('cliente_torq tried to create user for non-partner company:', empresa_id, parceiraError);
           return new Response(
-            JSON.stringify({ error: 'Esta empresa não é parceira da sua empresa SST' }),
+            JSON.stringify({ error: 'Esta empresa não é parceira da sua empresa' }),
             { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
         
-        console.log('empresa_sst creating empresa_parceira for partner company:', empresa_id);
+        console.log('cliente_torq creating empresa_parceira for partner company:', empresa_id);
       }
       
-      // Validação para instrutor - deve pertencer à mesma empresa SST
+      // Validação para instrutor
       if (role === 'instrutor') {
-        console.log('empresa_sst creating instrutor for company:', empresa_id);
+        console.log('cliente_torq creating instrutor for company:', empresa_id);
       }
     }
 

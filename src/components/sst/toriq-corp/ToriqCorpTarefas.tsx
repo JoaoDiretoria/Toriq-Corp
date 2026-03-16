@@ -289,12 +289,12 @@ export function ToriqCorpTarefas({ onNavigate }: ToriqCorpTarefasProps) {
 
   const loadUsuarios = async () => {
     try {
-      // Buscar apenas usuários SST da empresa (role = 'empresa_sst')
+      // Buscar apenas usuários da empresa (role = 'cliente_torq')
       let query = (supabase as any)
         .from('profiles')
         .select('id, nome, grupo_acesso, setor:setores(nome)')
         .eq('empresa_id', empresaId)
-        .eq('role', 'empresa_sst')
+        .eq('role', 'cliente_torq')
         .order('nome');
 
       // Aplicar filtro de hierarquia para usuários visíveis

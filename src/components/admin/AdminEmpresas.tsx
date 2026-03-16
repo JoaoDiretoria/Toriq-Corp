@@ -670,7 +670,7 @@ export function AdminEmpresas() {
       // Determine the role based on company type
       const roleMap: { [key: string]: string } = {
         'cliente_final': 'cliente_final',
-        'sst': 'empresa_sst',
+        'sst': 'cliente_torq',
         'vertical_on': 'admin_vertical',
         'empresa_parceira': 'empresa_parceira',
       };
@@ -920,7 +920,7 @@ export function AdminEmpresas() {
     if (criarAdminEdit) {
       const roleMap: { [key: string]: string } = {
         'cliente_final': 'cliente_final',
-        'sst': 'empresa_sst',
+        'sst': 'cliente_torq',
         'vertical_on': 'admin_vertical',
         'empresa_parceira': 'empresa_parceira',
       };
@@ -937,8 +937,8 @@ export function AdminEmpresas() {
           email: adminDataEdit.email,
           password: adminDataEdit.password,
           nome: adminDataEdit.nome,
-          role: roleMap[formData.tipo] || 'cliente_final',
-          empresa_id: selectedEmpresa.id,
+          role: roleMap[selectedEmpresa?.tipo || ''] || 'cliente_final',
+          empresa_id: selectedEmpresa?.id,
           send_invite: true,
         }),
       });

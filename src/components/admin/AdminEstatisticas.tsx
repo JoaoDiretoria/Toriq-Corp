@@ -163,7 +163,7 @@ export function AdminEstatisticas() {
         .select('*', { count: 'exact', head: true });
 
       // Total de colaboradores em turmas
-      const { count: totalColaboradores } = await supabase
+      const { count: totalColaboradores } = await (supabase as any)
         .from('turmas_treinamento_colaboradores')
         .select('*', { count: 'exact', head: true });
 
@@ -360,8 +360,8 @@ export function AdminEstatisticas() {
     switch (role) {
       case 'admin_vertical':
         return <Badge className="bg-purple-500">Admin Toriq</Badge>;
-      case 'empresa_sst':
-        return <Badge className="bg-blue-500">SST</Badge>;
+      case 'cliente_torq':
+        return <Badge className="bg-blue-500">Toriq</Badge>;
       case 'cliente_final':
         return <Badge className="bg-green-500">Cliente</Badge>;
       case 'empresa_parceira':
@@ -647,7 +647,7 @@ export function AdminEstatisticas() {
                 <User className="h-4 w-4 text-blue-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{usuarios.filter(u => u.role === 'empresa_sst').length}</div>
+                <div className="text-2xl font-bold">{usuarios.filter(u => u.role === 'cliente_torq').length}</div>
               </CardContent>
             </Card>
             <Card>

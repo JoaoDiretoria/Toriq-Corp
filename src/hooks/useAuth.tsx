@@ -19,7 +19,7 @@ interface Profile {
   id: string;
   email: string;
   nome: string;
-  role: 'admin_vertical' | 'empresa_sst' | 'cliente_final' | 'empresa_parceira' | 'instrutor';
+  role: 'admin_vertical' | 'cliente_torq' | 'cliente_final' | 'empresa_parceira' | 'instrutor';
   empresa_id: string | null;
   instrutor_id?: string | null;
   primeiro_acesso?: boolean;
@@ -236,7 +236,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setProfile(null);
             setEmpresa(null);
             // Redirecionar para login com mensagem
-            window.location.href = '/auth?message=' + encodeURIComponent(newData.motivo_desativacao || 'Seu acesso foi desativado.');
+            window.location.replace('/auth?message=' + encodeURIComponent(newData.motivo_desativacao || 'Seu acesso foi desativado.'));
           }
         }
       )

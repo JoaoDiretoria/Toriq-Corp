@@ -77,7 +77,7 @@ const Auth = () => {
       // Redirecionar baseado no role do usuário
       if (profile.role === 'admin_vertical') {
         navigate('/admin', { replace: true });
-      } else if (profile.role === 'empresa_sst') {
+      } else if (profile.role === 'cliente_torq') {
         navigate('/toriqcorp', { replace: true });
       } else if (profile.role === 'cliente_final') {
         navigate('/toriqcorp', { replace: true });

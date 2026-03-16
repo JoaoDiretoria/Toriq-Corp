@@ -305,7 +305,7 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
   function podeEditar(ev: AgendaEvento): boolean {
     if (ev.criado_por === user?.id) return true;
     if (modoAdmin && profile?.role === 'admin_vertical') return true;
-    if (profile?.role === 'empresa_sst' || profile?.role === 'cliente_final') return true;
+    if (profile?.role === 'cliente_torq' || profile?.role === 'cliente_final') return true;
     return ev.compartilhamentos?.some(
       c => c.compartilhado_com === user?.id && c.pode_editar
     ) ?? false;

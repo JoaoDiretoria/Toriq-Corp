@@ -46,7 +46,7 @@ import { useCurrentScreen } from '@/hooks/useCurrentScreen';
 
 const ROLE_LABELS: Record<string, { label: string; color: string }> = {
   admin_vertical: { label: 'Admin Vertical', color: 'bg-purple-100 text-purple-700' },
-  empresa_sst: { label: 'Empresa SST', color: 'bg-blue-100 text-blue-700' },
+  cliente_torq: { label: 'Cliente Toriq', color: 'bg-blue-100 text-blue-700' },
   cliente_final: { label: 'Cliente', color: 'bg-green-100 text-green-700' },
   empresa_parceira: { label: 'Parceiro', color: 'bg-orange-100 text-orange-700' },
   instrutor: { label: 'Instrutor', color: 'bg-cyan-100 text-cyan-700' },
@@ -243,7 +243,7 @@ export function FloatingSupportWidget({ className }: FloatingSupportWidgetProps)
       'empresa_parceira': { modulo: 'portal_parceiro', moduloNome: 'Portal Parceiro' },
       'cliente_final': { modulo: 'portal_cliente', moduloNome: 'Portal do Cliente' },
       'admin_vertical': { modulo: 'admin', moduloNome: 'Painel Admin' },
-      'empresa_sst': { modulo: 'painel_sst', moduloNome: 'Painel SST' },
+      'cliente_torq': { modulo: 'painel_sst', moduloNome: 'Painel SST' },
     };
     
     const moduloInfo = roleToModulo[role] || { modulo: '', moduloNome: 'Não identificado' };
@@ -893,7 +893,7 @@ export function FloatingSupportWidget({ className }: FloatingSupportWidgetProps)
       // empresa_parceira -> vai para empresa SST que criou a parceira
       let empresaDestinoId: string | null = null;
       
-      if (profile.role === 'empresa_sst') {
+      if (profile.role === 'cliente_torq') {
         // Empresa SST -> ticket vai para admin global (Toriq)
         empresaDestinoId = null;
       } else if (profile.role === 'instrutor') {

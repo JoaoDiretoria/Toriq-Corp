@@ -84,7 +84,7 @@ export function ResponsavelSelectorModal({
         .from('profiles')
         .select('id, nome, email, role, grupo_acesso', { count: 'exact' })
         .eq('empresa_id', empresaId)
-        .eq('role', 'empresa_sst') // Apenas usuários da empresa SST (não instrutores/parceiros/clientes)
+        .eq('role', 'cliente_torq') // Apenas usuários da empresa (não instrutores/parceiros/clientes)
         .order('nome', { ascending: true });
 
       // Filtrar por usuários visíveis (baseado na hierarquia)

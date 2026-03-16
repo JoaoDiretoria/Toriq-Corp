@@ -94,7 +94,7 @@ const SaudeOcupacional = () => {
   }, [user, loading, navigate]);
 
   useEffect(() => {
-    if (!loading && profile && !['empresa_sst', 'cliente_final', 'admin_vertical'].includes(profile.role)) {
+    if (!loading && profile && !['cliente_torq', 'cliente_final', 'admin_vertical'].includes(profile.role)) {
       navigate('/');
     }
   }, [profile, loading, navigate]);
@@ -244,7 +244,7 @@ const SaudeOcupacional = () => {
   const examesVencidos = exames.filter(e => calcularValidade(e.data_exame, e.validade_dias).vencido).length;
 
   const handleVoltar = () => {
-    if (profile?.role === 'empresa_sst') {
+    if (profile?.role === 'cliente_torq') {
       navigate('/sst');
     } else if (profile?.role === 'cliente_final') {
       navigate('/cliente');

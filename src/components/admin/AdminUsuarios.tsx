@@ -38,7 +38,7 @@ interface Profile {
   id: string;
   nome: string;
   email: string;
-  role: 'admin_vertical' | 'empresa_sst' | 'cliente_final';
+  role: 'admin_vertical' | 'cliente_torq' | 'cliente_final' | 'empresa_parceira' | 'instrutor';
   empresa_id: string | null;
 }
 
@@ -49,7 +49,7 @@ interface Empresa {
 
 const roles = [
   { value: 'admin_vertical', label: 'Admin Toriq', description: 'Administrador da plataforma (acesso total)' },
-  { value: 'empresa_sst', label: 'Admin Empresa SST', description: 'Administrador de uma empresa SST' },
+  { value: 'cliente_torq', label: 'Admin Empresa', description: 'Administrador de uma empresa Toriq' },
   { value: 'cliente_final', label: 'Cliente Final', description: 'Usuário de uma empresa cliente' },
 ];
 
@@ -122,8 +122,8 @@ export function AdminUsuarios() {
     switch (role) {
       case 'admin_vertical':
         return <Badge className="bg-primary text-primary-foreground">Admin Toriq</Badge>;
-      case 'empresa_sst':
-        return <Badge variant="secondary">Empresa SST</Badge>;
+      case 'cliente_torq':
+        return <Badge variant="secondary">Empresa Toriq</Badge>;
       case 'cliente_final':
         return <Badge variant="outline">Cliente Final</Badge>;
       default:
@@ -247,7 +247,7 @@ export function AdminUsuarios() {
       .update({
         nome: formData.nome,
         email: formData.email,
-        role: formData.role as 'admin_vertical' | 'empresa_sst' | 'cliente_final',
+        role: formData.role as 'admin_vertical' | 'cliente_torq' | 'cliente_final',
         empresa_id: formData.empresa_id || null,
       })
       .eq('id', selectedProfile.id);

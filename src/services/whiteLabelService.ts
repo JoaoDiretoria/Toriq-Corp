@@ -281,8 +281,8 @@ export async function loadAndApplyFromDB(
       empresaSstId = empresaId;
       log('Instrutor detectado, usando empresa_id diretamente:', empresaSstId);
     }
-    // Para empresa_sst, ela mesma é a SST
-    else if (userRole === 'empresa_sst' && empresaId) {
+    // Para cliente_torq, ela mesma é a SST
+    else if (userRole === 'cliente_torq' && empresaId) {
       empresaSstId = empresaId;
       log('Empresa SST detectada, usando empresa_id diretamente:', empresaSstId);
     }

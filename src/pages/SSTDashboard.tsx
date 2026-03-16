@@ -133,7 +133,7 @@ const SSTDashboard = () => {
   }, [user, loading, navigate, profile]);
 
   useEffect(() => {
-    if (!loading && profile && profile.role !== 'empresa_sst' && profile.role !== 'cliente_final') {
+    if (!loading && profile && profile.role !== 'cliente_torq' && profile.role !== 'cliente_final') {
       if (profile.role === 'admin_vertical') {
         navigate('/admin');
       } else {
@@ -281,7 +281,7 @@ const SSTDashboard = () => {
     );
   }
 
-  const canAccess = profile?.role === 'empresa_sst' || profile?.role === 'cliente_final';
+  const canAccess = profile?.role === 'cliente_torq' || profile?.role === 'cliente_final';
   
   if (!profile || !canAccess) {
     return null;

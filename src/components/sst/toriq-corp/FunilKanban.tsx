@@ -2064,7 +2064,7 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
         .from('profiles')
         .select('id, nome')
         .eq('empresa_id', empresaId)
-        .eq('role', 'empresa_sst')
+        .eq('role', 'cliente_torq')
         .order('nome');
 
       if (error) throw error;

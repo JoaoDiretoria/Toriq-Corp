@@ -91,7 +91,7 @@ export function SSTUsuarios() {
     cidade: '',
     uf: '',
     senha: '',
-    role: 'empresa_sst',
+    role: 'cliente_torq',
     setor_id: '',
     grupo_acesso: '',
     gestor_id: ''
@@ -120,7 +120,7 @@ export function SSTUsuarios() {
         .from('profiles')
         .select('id, nome, email, telefone, cpf, cep, logradouro, numero, complemento, bairro, cidade, uf, role, setor_id, grupo_acesso, gestor_id, created_at, ativo')
         .eq('empresa_id', empresaId)
-        .eq('role', 'empresa_sst'); // Apenas funcionários da empresa SST
+        .eq('role', 'cliente_torq'); // Apenas funcionários da empresa
 
       // Aplicar filtro de hierarquia se não for administrador
       // Se o filtro retornar vazio, significa que é administrador e vê todos
@@ -366,7 +366,7 @@ export function SSTUsuarios() {
         cidade: usuario.cidade || '',
         uf: usuario.uf || '',
         senha: '',
-        role: usuario.role || 'empresa_sst',
+        role: usuario.role || 'cliente_torq',
         setor_id: usuario.setor_id || '',
         grupo_acesso: usuario.grupo_acesso || '',
         gestor_id: usuario.gestor_id || ''
@@ -386,7 +386,7 @@ export function SSTUsuarios() {
         cidade: '',
         uf: '',
         senha: '',
-        role: 'empresa_sst',
+        role: 'cliente_torq',
         setor_id: '',
         grupo_acesso: '',
         gestor_id: ''
@@ -477,7 +477,20 @@ export function SSTUsuarios() {
 
         if (response.error) {
           console.error('Edge function error:', response.error);
-          throw new Error(response.error.message || 'Erro ao criar usuário');
+          // FunctionsHttpError guarda o body em context — tentar extrair mensagem real
+          const ctx = (response.error as any)?.context;
+          let mensagemReal = response.error.message || 'Erro ao criar usuário';
+          try {
+            if (ctx instanceof Response) {
+              const body = await ctx.json();
+              mensagemReal = body?.error || mensagemReal;
+            } else if (typeof ctx === 'object' && ctx?.error) {
+              mensagemReal = ctx.error;
+            }
+          } catch (_) {}
+          // Se response.data também tem erro (retorno da função)
+          if (response.data?.error) mensagemReal = response.data.error;
+          throw new Error(mensagemReal);
         }
 
         if (response.data?.error) {
@@ -602,7 +615,7 @@ export function SSTUsuarios() {
     switch (role) {
       case 'admin_vertical':
         return <Badge variant="destructive">Admin Toriq</Badge>;
-      case 'empresa_sst':
+      case 'cliente_torq':
         return <Badge variant="default">Colaborador</Badge>;
       case 'cliente_final':
         return <Badge variant="secondary">Cliente Final</Badge>;
@@ -632,7 +645,7 @@ export function SSTUsuarios() {
     switch (role) {
       case 'admin_vertical':
         return 'Admin Toriq';
-      case 'empresa_sst':
+      case 'cliente_torq':
         return 'Toriq Corp';
       case 'cliente_final':
         return 'Portal Cliente';
@@ -968,7 +981,7 @@ export function SSTUsuarios() {
                 </p>
               )}
             </div>
-            {/* Tipo de Acesso removido - usuários internos sempre são empresa_sst */}
+            {/* Tipo de Acesso removido - usuários internos sempre são cliente_torq */}
             {/* O que diferencia é o Setor + Grupo de Acesso + Permissões configuradas */}
             <div className="space-y-2">
               <Label htmlFor="grupo_acesso">Grupo de Acesso</Label>

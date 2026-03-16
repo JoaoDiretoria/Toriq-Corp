@@ -41,7 +41,7 @@ const ClienteDashboard = () => {
     if (!loading && profile) {
       if (profile.role === 'admin_vertical') {
         navigate('/admin');
-      } else if (profile.role === 'empresa_sst') {
+      } else if (profile.role === 'cliente_torq') {
         navigate('/sst');
       }
     }

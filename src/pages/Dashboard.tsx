@@ -60,8 +60,8 @@ const Dashboard = () => {
     if (!loading && profile?.role === 'admin_vertical') {
       navigate('/admin');
     }
-    // Redirect empresa_sst to Toriq Corp dashboard
-    if (!loading && profile?.role === 'empresa_sst') {
+    // Redirect cliente_torq to Toriq Corp dashboard
+    if (!loading && profile?.role === 'cliente_torq') {
       navigate('/toriqcorp');
     }
     // Redirect cliente_final to Toriq Corp dashboard

@@ -134,7 +134,8 @@ export function SSTMeuPerfil() {
     setUploadingLogo(true);
     try {
       // Nome do arquivo: empresa_id + extensão
-      const fileExt = file.name.split('.').pop();
+      const rawExt = file.name.split('.').pop() || 'jpg';
+      const fileExt = rawExt.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
       const fileName = `${empresaId}/logo.${fileExt}`;
 
       // Upload para o storage
@@ -403,7 +404,7 @@ export function SSTMeuPerfil() {
     switch (role) {
       case 'admin_vertical':
         return <Badge variant="destructive">Admin Toriq</Badge>;
-      case 'empresa_sst':
+      case 'cliente_torq':
         return <Badge variant="default">Colaborador</Badge>;
       case 'cliente_final':
         return <Badge variant="secondary">Cliente Final</Badge>;

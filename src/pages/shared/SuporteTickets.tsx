@@ -163,8 +163,8 @@ export default function SuporteTickets() {
   const { profile, user } = useAuth();
   const { isAdministrador, loading: loadingHierarquia } = useHierarquia();
   const isAdmin = profile?.role === 'admin_vertical';
-  const isSST = profile?.role === 'empresa_sst';
-  // Administrador da empresa SST pode gerenciar tickets de todos os usuários da empresa
+  const isSST = profile?.role === 'cliente_torq';
+  // Administrador da empresa pode gerenciar tickets de todos os usuários da empresa
   const canManageTickets = isAdmin || (isSST && isAdministrador);
   
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -261,9 +261,9 @@ export default function SuporteTickets() {
       
       // Filtrar tickets baseado na role do usuário e hierarquia
       if (profile?.role === 'admin_vertical') {
-        // Admin global vê apenas tickets de empresa_sst (empresa_destino_id = NULL)
+        // Admin global vê apenas tickets de cliente_torq (empresa_destino_id = NULL)
         query = query.is('empresa_destino_id', null);
-      } else if (profile?.role === 'empresa_sst') {
+      } else if (profile?.role === 'cliente_torq') {
         if (isAdministrador) {
           // Administrador da empresa SST vê todos os tickets da empresa (para resolver)
           // Tickets destinados à empresa OU criados por usuários da empresa
@@ -1246,7 +1246,7 @@ export default function SuporteTickets() {
                         <div className="flex items-center gap-2">
                           <p className="font-medium">{selectedTicket.solicitante_nome}</p>
                           <Badge variant="outline" className="text-[10px]">
-                            {selectedTicket.role_solicitante === 'empresa_sst' ? 'Colaborador' :
+                            {selectedTicket.role_solicitante === 'cliente_torq' ? 'Colaborador' :
                              selectedTicket.role_solicitante === 'cliente_final' ? 'Cliente' :
                              selectedTicket.role_solicitante === 'instrutor' ? 'Instrutor' :
                              selectedTicket.role_solicitante === 'empresa_parceira' ? 'Parceiro' :

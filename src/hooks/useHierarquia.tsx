@@ -72,8 +72,8 @@ export function useHierarquia(): UseHierarquiaReturn {
         return;
       }
 
-      // Administrador da empresa OU empresa_sst sem grupo definido vê todos da empresa
-      // (empresa_sst sem grupo_acesso é o dono/admin da empresa - comportamento legado)
+      // Administrador da empresa OU cliente_torq sem grupo definido vê todos da empresa
+      // (cliente_torq sem grupo_acesso é o dono/admin da empresa - comportamento legado)
       if ((grupoAcesso === 'administrador' || !grupoAcesso) && empresa?.id) {
         const { data: usuariosEmpresa } = await (supabase as any)
           .from('profiles')
@@ -144,8 +144,8 @@ export function useHierarquia(): UseHierarquiaReturn {
 
   const grupoAcesso = profileCompleto?.grupo_acesso || null;
   const isAdminVertical = profile?.role === 'admin_vertical';
-  // empresa_sst sem grupo_acesso é considerado administrador (dono da empresa)
-  const isAdministrador = isAdminVertical || grupoAcesso === 'administrador' || (!grupoAcesso && profile?.role === 'empresa_sst');
+  // cliente_torq sem grupo_acesso é considerado administrador (dono da empresa)
+  const isAdministrador = isAdminVertical || grupoAcesso === 'administrador' || (!grupoAcesso && profile?.role === 'cliente_torq');
   const isGestor = grupoAcesso === 'gestor';
   const isColaborador = grupoAcesso === 'colaborador';
 

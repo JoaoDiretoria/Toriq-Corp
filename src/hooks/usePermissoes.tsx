@@ -88,9 +88,9 @@ export function usePermissoes() {
         return;
       }
 
-      // empresa_sst SEM setor_id tem acesso total (é o dono/admin da empresa)
+      // cliente_torq SEM setor_id tem acesso total (é o dono/admin da empresa)
       // MAS ainda precisa respeitar as telas liberadas para a empresa
-      if (profile.role === 'empresa_sst' && !setorId) {
+      if (profile.role === 'cliente_torq' && !setorId) {
         setIsAdmin(true);
         setIsAdminVertical(false);
       }
@@ -131,9 +131,9 @@ export function usePermissoes() {
       }
 
       // Se o usuário não tem setor, não tem permissões específicas (bloqueia tudo)
-      // Exceto empresa_sst, admin_vertical e cliente_final que têm acesso total à sua empresa
+      // Exceto cliente_torq, admin_vertical e cliente_final que têm acesso total à sua empresa
       const roleStr = profile.role as string;
-      const isAdminOrSST = roleStr === 'empresa_sst' || roleStr === 'admin_vertical' || roleStr === 'cliente_final';
+      const isAdminOrSST = roleStr === 'cliente_torq' || roleStr === 'admin_vertical' || roleStr === 'cliente_final';
       if (!setorId && !isAdminOrSST) {
         setPermissoes([]);
         setLoading(false);
@@ -197,7 +197,7 @@ export function usePermissoes() {
     // Admin Vertical sempre tem acesso total
     if (isAdminVertical) return true;
 
-    // Admin da empresa (empresa_sst/cliente_final sem setor) tem acesso a todas as telas
+    // Admin da empresa (cliente_torq/cliente_final sem setor) tem acesso a todas as telas
     // dos módulos que a empresa tem ativos
     if (isAdmin) {
       if (TELAS_PERFIL_EMPRESA.includes(telaId)) return true;

@@ -93,7 +93,7 @@ export function ClienteMeuPerfil() {
   const getRoleLabel = (role: string) => {
     const roles: Record<string, { label: string; color: string }> = {
       'admin_vertical': { label: 'Administrador Toriq', color: 'bg-primary/10 text-primary' },
-      'empresa_sst': { label: 'Empresa SST', color: 'bg-primary/10 text-primary' },
+      'cliente_torq': { label: 'Empresa Toriq', color: 'bg-primary/10 text-primary' },
       'cliente_final': { label: 'Cliente', color: 'bg-success/10 text-success' },
       'empresa_parceira': { label: 'Empresa Parceira', color: 'bg-warning/10 text-warning' },
       'instrutor': { label: 'Instrutor', color: 'bg-warning/10 text-warning' },

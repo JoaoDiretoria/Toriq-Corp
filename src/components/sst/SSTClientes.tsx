@@ -634,7 +634,7 @@ export function SSTClientes({ empresaIdOverride }: SSTClientesProps = {}) {
       .from('profiles')
       .select('id, nome, email, role')
       .eq('empresa_id', empresaId)
-      .eq('role', 'empresa_sst')
+      .eq('role', 'cliente_torq')
       .order('nome');
 
     if (error) {
