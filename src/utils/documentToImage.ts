@@ -125,7 +125,8 @@ export const convertDocxToJpg = async (file: File, quality: number = 0.85): Prom
         font-size: 14px;
         line-height: 1.6;
       `;
-      container.innerHTML = html;
+      const parsed = new DOMParser().parseFromString(html, 'text/html');
+      container.appendChild(parsed.body.firstChild ?? parsed.documentElement);
       document.body.appendChild(container);
       
       // Usar html2canvas para capturar
