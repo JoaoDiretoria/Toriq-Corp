@@ -72,6 +72,10 @@ import {
   Building2,
   Mail,
   CheckCircle2,
+  Settings,
+  ShieldCheck,
+  ShieldOff,
+  UserCheck,
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
@@ -79,7 +83,7 @@ import { cn } from '@/lib/utils';
 // ── Tipos ──────────────────────────────────────────────────────────────────────
 interface Profile {
   id: string;
-  nome_completo: string | null;
+  nome: string | null;
   email: string | null;
   role: string;
   setor_id: string | null;
@@ -116,6 +120,14 @@ interface AgendaEvento {
   created_at: string;
   criador?: Profile;
   compartilhamentos?: AgendaCompartilhamento[];
+}
+
+interface AgendaPermissao {
+  id: string;
+  dono_id: string;
+  usuario_id: string;
+  pode_criar_eventos: boolean;
+  usuario?: Profile;
 }
 
 interface AgendaCompartilhamento {
@@ -185,6 +197,15 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
   const [visualizacao, setVisualizacao] = useState<VisualizacaoTipo>('mes');
   const [filtro, setFiltro] = useState<FiltroVisibilidade>('todos');
 
+  // ── Agendas ─────────────────────────────────────────────────────────────────
+  const [agendaSelecionada, setAgendaSelecionada] = useState<Profile | null>(null); // null = minha
+  const [minhaAgendaBloqueada, setMinhaAgendaBloqueada] = useState(false);
+  const [agendasComAcesso, setAgendasComAcesso] = useState<Profile[]>([]); // colegas que me deram acesso
+  const [permissoesMinhaAgenda, setPermissoesMinhaAgenda] = useState<AgendaPermissao[]>([]); // quem tem acesso à minha
+  const [dialogPermissoes, setDialogPermissoes] = useState(false);
+  const [salvandoPermissao, setSalvandoPermissao] = useState(false);
+  const [buscarPermissao, setBuscarPermissao] = useState('');
+
   // Dados
   const [eventos, setEventos] = useState<AgendaEvento[]>([]);
   const [usuarios, setUsuarios] = useState<Profile[]>([]);
@@ -223,6 +244,102 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
   const [form, setForm] = useState(FORM_INICIAL);
   const [salvando, setSalvando] = useState(false);
 
+  // ── Carregar Permissões de Agenda ─────────────────────────────────────────
+  const carregarPermissoes = useCallback(async () => {
+    if (!user?.id || !empresa?.id) return;
+
+    // Carregar meu status de bloqueio
+    const { data: profData } = await (supabase as any)
+      .from('profiles')
+      .select('agenda_bloqueada')
+      .eq('id', user.id)
+      .single();
+    if (profData) setMinhaAgendaBloqueada(profData.agenda_bloqueada ?? false);
+
+    // Quem tem acesso à minha agenda
+    const { data: minhasPerms } = await (supabase as any)
+      .from('agenda_permissoes')
+      .select('id, dono_id, usuario_id, pode_criar_eventos, usuario:profiles!agenda_permissoes_usuario_id_fkey(id, nome, email, role, setor_id)')
+      .eq('dono_id', user.id);
+    if (minhasPerms) setPermissoesMinhaAgenda(minhasPerms);
+
+    // Agendas de colegas que me deram acesso (não bloqueadas)
+    const { data: acessos } = await (supabase as any)
+      .from('agenda_permissoes')
+      .select('dono_id, pode_criar_eventos, dono:profiles!agenda_permissoes_dono_id_fkey(id, nome, email, role, setor_id, agenda_bloqueada)')
+      .eq('usuario_id', user.id)
+      .eq('empresa_id', empresa.id);
+
+    if (acessos) {
+      const liberadas = acessos
+        .filter((a: any) => !a.dono?.agenda_bloqueada)
+        .map((a: any) => ({ ...a.dono, pode_criar_eventos: a.pode_criar_eventos }));
+      setAgendasComAcesso(liberadas);
+    }
+  }, [user?.id, empresa?.id]);
+
+  // ── Bloquear/Desbloquear minha agenda ─────────────────────────────────────
+  const toggleBloqueioAgenda = async () => {
+    const novoStatus = !minhaAgendaBloqueada;
+    const { error } = await (supabase as any)
+      .from('profiles')
+      .update({ agenda_bloqueada: novoStatus })
+      .eq('id', user?.id);
+    if (error) {
+      toast({ title: 'Erro ao alterar status da agenda', variant: 'destructive' });
+      return;
+    }
+    setMinhaAgendaBloqueada(novoStatus);
+    // Se agenda foi bloqueada, voltar para minha agenda
+    if (novoStatus && agendaSelecionada === null) {
+      toast({ title: 'Sua agenda foi bloqueada', description: 'Outros usuários não podem mais ver sua agenda.' });
+    } else if (!novoStatus) {
+      toast({ title: 'Sua agenda foi liberada', description: 'Usuários com permissão podem ver sua agenda.' });
+    }
+  };
+
+  // ── Gerenciar permissão de colega na minha agenda ─────────────────────────
+  const togglePermissaoColega = async (usuarioId: string, podeCriar: boolean) => {
+    if (!user?.id || !empresa?.id) return;
+    setSalvandoPermissao(true);
+    try {
+      const jaExiste = permissoesMinhaAgenda.find(p => p.usuario_id === usuarioId);
+      if (jaExiste) {
+        // Atualizar pode_criar_eventos
+        await (supabase as any)
+          .from('agenda_permissoes')
+          .update({ pode_criar_eventos: podeCriar })
+          .eq('id', jaExiste.id);
+      } else {
+        await (supabase as any)
+          .from('agenda_permissoes')
+          .insert({ dono_id: user.id, usuario_id: usuarioId, empresa_id: empresa.id, pode_criar_eventos: podeCriar });
+      }
+      await carregarPermissoes();
+      toast({ title: 'Permissão salva!' });
+    } catch (e: any) {
+      toast({ title: 'Erro ao salvar permissão', description: e.message, variant: 'destructive' });
+    } finally {
+      setSalvandoPermissao(false);
+    }
+  };
+
+  const removerPermissaoColega = async (permissaoId: string) => {
+    setSalvandoPermissao(true);
+    try {
+      await (supabase as any)
+        .from('agenda_permissoes')
+        .delete()
+        .eq('id', permissaoId);
+      await carregarPermissoes();
+      toast({ title: 'Acesso removido' });
+    } catch (e: any) {
+      toast({ title: 'Erro ao remover acesso', description: e.message, variant: 'destructive' });
+    } finally {
+      setSalvandoPermissao(false);
+    }
+  };
+
   // ── Carregar Clientes SST ────────────────────────────────────────────────
   const carregarClientes = useCallback(async () => {
     if (!empresa?.id) return;
@@ -239,10 +356,10 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
     if (!empresa?.id) return;
     const { data } = await (supabase as any)
       .from('profiles')
-      .select('id, nome_completo, email, role, setor_id')
+      .select('id, nome, email, role, setor_id')
       .eq('empresa_id', empresa.id)
       .neq('id', user?.id)
-      .order('nome_completo');
+      .order('nome');
     if (data) setUsuarios(data);
   }, [empresa?.id, user?.id]);
 
@@ -255,15 +372,20 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
         .from('agenda_eventos')
         .select(`
           *,
-          criador:profiles!agenda_eventos_criado_por_fkey(id, nome_completo, email, role, setor_id),
+          criador:profiles!agenda_eventos_criado_por_fkey(id, nome, email, role, setor_id),
           compartilhamentos:agenda_compartilhamentos(
             id, evento_id, compartilhado_com, compartilhado_por, pode_editar,
-            usuario:profiles!agenda_compartilhamentos_compartilhado_com_fkey(id, nome_completo, email, role, setor_id)
+            usuario:profiles!agenda_compartilhamentos_compartilhado_com_fkey(id, nome, email, role, setor_id)
           )
         `)
         .eq('empresa_id', empresa.id)
         .eq('status', 'ativo')
         .order('data_inicio', { ascending: true });
+
+      // Se visualizando agenda de colega, filtrar por criado_por
+      if (agendaSelecionada) {
+        query = query.eq('criado_por', agendaSelecionada.id);
+      }
 
       const { data, error } = await query;
       if (error) throw error;
@@ -273,16 +395,19 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
     } finally {
       setLoading(false);
     }
-  }, [empresa?.id, toast]);
+  }, [empresa?.id, toast, agendaSelecionada]);
 
   useEffect(() => {
     carregarEventos();
     carregarUsuarios();
     carregarClientes();
-  }, [carregarEventos, carregarUsuarios, carregarClientes]);
+    carregarPermissoes();
+  }, [carregarEventos, carregarUsuarios, carregarClientes, carregarPermissoes]);
 
-  // ── Filtrar Eventos ────────────────────────────────────────────────────────
+  // ── Filtrar Eventos ───────────────────────────────────────────────────────
   const eventosFiltrados = eventos.filter(ev => {
+    // Ao visualizar agenda de colega: ocultar eventos de bloqueio (privados do dono)
+    if (agendaSelecionada && ev.tipo === 'bloqueio') return false;
     if (filtro === 'meus') return ev.criado_por === user?.id;
     if (filtro === 'compartilhados') {
       return ev.criado_por !== user?.id && (
@@ -292,6 +417,9 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
     }
     return true;
   });
+
+  // ── Verificar se posso criar na agenda selecionada ──────────────────────────
+  const podeCriarNaAgenda = !agendaSelecionada || (agendaSelecionada as any).pode_criar_eventos === true;
 
   // ── Eventos do Dia ─────────────────────────────────────────────────────────
   function eventosNoDia(dia: Date): AgendaEvento[] {
@@ -345,7 +473,7 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
         cliente_email: form.cliente_email || null,
         cliente_nome: form.cliente_nome || null,
         empresa_id: empresa?.id,
-        criado_por: user?.id,
+        criado_por: agendaSelecionada?.id || user?.id,
       };
 
       if (eventoSelecionado && modoEdicao) {
@@ -443,6 +571,10 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
 
   // ── Abrir formulário ───────────────────────────────────────────────────────
   const abrirNovoEvento = (dia?: Date) => {
+    if (!podeCriarNaAgenda) {
+      toast({ title: 'Sem permissão', description: `Você não tem permissão para criar eventos na agenda de ${agendaSelecionada?.nome}.`, variant: 'destructive' });
+      return;
+    }
     const base = dia || new Date();
     setForm({
       ...FORM_INICIAL,
@@ -544,7 +676,11 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
         return;
       }
       setForm(f => ({ ...f, meet_link: json.meet_link }));
-      toast({ title: 'Link do Meet gerado!', description: json.meet_link });
+      if (json.needs_reauth) {
+        toast({ title: 'Link do Meet gerado!', description: 'Reconecte o Google Meet em Configurações → Integrações para que qualquer participante possa entrar sem aguardar o host.' });
+      } else {
+        toast({ title: 'Link do Meet gerado!', description: json.open_access ? 'Qualquer convidado pode entrar diretamente, sem precisar do host.' : json.meet_link });
+      }
     } catch (e: any) {
       toast({ title: 'Erro ao gerar link Meet', description: e.message, variant: 'destructive' });
     } finally {
@@ -770,7 +906,7 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
               <VisIcon className="h-3 w-3 text-muted-foreground" />
               {!isMeu && (
                 <Badge variant="secondary" className="text-xs h-4 px-1">
-                  {ev.criador?.nome_completo?.split(' ')[0]}
+                  {ev.criador?.nome?.split(' ')[0]}
                 </Badge>
               )}
             </div>
@@ -813,7 +949,7 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
 
   // ── Usuários filtrados para busca ──────────────────────────────────────────
   const usuariosFiltradosBusca = usuarios.filter(u =>
-    !buscarUsuario || u.nome_completo?.toLowerCase().includes(buscarUsuario.toLowerCase()) || u.email?.toLowerCase().includes(buscarUsuario.toLowerCase())
+    !buscarUsuario || u.nome?.toLowerCase().includes(buscarUsuario.toLowerCase()) || u.email?.toLowerCase().includes(buscarUsuario.toLowerCase())
   );
 
   // ── Render Principal ───────────────────────────────────────────────────────
@@ -821,26 +957,91 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <h2 className="text-xl font-semibold">Agenda</h2>
-          {modoAdmin && (
-            <Badge variant="secondary" className="text-xs">Visão Geral</Badge>
+          {modoAdmin && <Badge variant="secondary" className="text-xs">Visão Geral</Badge>}
+
+          {/* Dropdown de agendas */}
+          <Select
+            value={agendaSelecionada?.id ?? 'minha'}
+            onValueChange={v => {
+              if (v === 'minha') { setAgendaSelecionada(null); }
+              else { setAgendaSelecionada(agendasComAcesso.find(a => a.id === v) ?? null); }
+            }}
+          >
+            <SelectTrigger className="h-7 w-44 text-xs border-dashed">
+              <CalendarDays className="h-3 w-3 mr-1 shrink-0" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="minha">
+                <span className="flex items-center gap-1.5">
+                  {minhaAgendaBloqueada
+                    ? <ShieldOff className="h-3 w-3 text-red-500" />
+                    : <ShieldCheck className="h-3 w-3 text-green-500" />}
+                  Minha Agenda
+                </span>
+              </SelectItem>
+              {agendasComAcesso.map(a => (
+                <SelectItem key={a.id} value={a.id}>
+                  <span className="flex items-center gap-1.5">
+                    <UserCheck className="h-3 w-3 text-blue-500" />
+                    {a.nome?.split(' ')[0]}
+                    {(a as any).pode_criar_eventos && <span className="text-xs text-muted-foreground">(criar)</span>}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Badge de agenda alheia */}
+          {agendaSelecionada && (
+            <Badge variant="outline" className="text-xs gap-1 border-blue-300 text-blue-700">
+              <UserCheck className="h-3 w-3" />
+              {agendaSelecionada.nome?.split(' ')[0]}
+              <button onClick={() => setAgendaSelecionada(null)} className="ml-1 hover:text-red-500">
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
           )}
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Filtro */}
-          <Select value={filtro} onValueChange={v => setFiltro(v as FiltroVisibilidade)}>
-            <SelectTrigger className="h-8 w-44 text-xs">
-              <Filter className="h-3 w-3 mr-1" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos os eventos</SelectItem>
-              <SelectItem value="meus">Meus eventos</SelectItem>
-              <SelectItem value="compartilhados">Compartilhados comigo</SelectItem>
-            </SelectContent>
-          </Select>
+          {/* Filtro — só na minha agenda */}
+          {!agendaSelecionada && (
+            <Select value={filtro} onValueChange={v => setFiltro(v as FiltroVisibilidade)}>
+              <SelectTrigger className="h-8 w-44 text-xs">
+                <Filter className="h-3 w-3 mr-1" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os eventos</SelectItem>
+                <SelectItem value="meus">Meus eventos</SelectItem>
+                <SelectItem value="compartilhados">Compartilhados comigo</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+
+          {/* Bloquear/Desbloquear minha agenda */}
+          {!agendaSelecionada && (
+            <Button
+              size="sm"
+              variant={minhaAgendaBloqueada ? 'destructive' : 'outline'}
+              className="h-8 text-xs"
+              onClick={toggleBloqueioAgenda}
+              title={minhaAgendaBloqueada ? 'Sua agenda está bloqueada — clique para liberar' : 'Sua agenda está aberta — clique para bloquear'}
+            >
+              {minhaAgendaBloqueada ? <ShieldOff className="h-3.5 w-3.5 mr-1" /> : <ShieldCheck className="h-3.5 w-3.5 mr-1" />}
+              {minhaAgendaBloqueada ? 'Bloqueada' : 'Aberta'}
+            </Button>
+          )}
+
+          {/* Gerenciar permissões */}
+          {!agendaSelecionada && (
+            <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setDialogPermissoes(true)}>
+              <Settings className="h-3.5 w-3.5 mr-1" /> Permissões
+            </Button>
+          )}
 
           {/* Visualização */}
           <div className="flex rounded-md border overflow-hidden">
@@ -860,8 +1061,9 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
             ))}
           </div>
 
-          <Button size="sm" onClick={() => abrirNovoEvento()}>
-            <Plus className="h-4 w-4 mr-1" /> Novo Evento
+          <Button size="sm" onClick={() => abrirNovoEvento()} disabled={!podeCriarNaAgenda}>
+            <Plus className="h-4 w-4 mr-1" />
+            {agendaSelecionada ? `Evento p/ ${agendaSelecionada.nome?.split(' ')[0]}` : 'Novo Evento'}
           </Button>
         </div>
       </div>
@@ -1047,10 +1249,10 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
               {/* Criador */}
               <div className="flex items-center gap-2 pt-2 border-t">
                 <Avatar className="h-6 w-6">
-                  <AvatarFallback className="text-xs">{iniciais(eventoSelecionado.criador?.nome_completo ?? null)}</AvatarFallback>
+                  <AvatarFallback className="text-xs">{iniciais(eventoSelecionado.criador?.nome ?? null)}</AvatarFallback>
                 </Avatar>
                 <span className="text-xs text-muted-foreground">
-                  Criado por <strong>{eventoSelecionado.criador?.nome_completo ?? 'Desconhecido'}</strong>
+                  Criado por <strong>{eventoSelecionado.criador?.nome ?? 'Desconhecido'}</strong>
                 </span>
               </div>
 
@@ -1061,7 +1263,7 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
                   <div className="flex flex-wrap gap-1">
                     {eventoSelecionado.compartilhamentos?.map(c => (
                       <Badge key={c.id} variant="secondary" className="text-xs">
-                        {c.usuario?.nome_completo?.split(' ')[0] ?? 'Usuário'}
+                        {c.usuario?.nome?.split(' ')[0] ?? 'Usuário'}
                       </Badge>
                     ))}
                   </div>
@@ -1317,6 +1519,44 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
               <p className="text-xs text-muted-foreground mt-1">
                 {VISIBILIDADE_CONFIG[form.visibilidade as keyof typeof VISIBILIDADE_CONFIG]?.desc}
               </p>
+
+              {/* Seletor de usuários quando visibilidade = compartilhado */}
+              {form.visibilidade === 'compartilhado' && (
+                <div className="mt-2 flex flex-col gap-2">
+                  <Input
+                    placeholder="Buscar colaborador..."
+                    value={buscarUsuario}
+                    onChange={e => setBuscarUsuario(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                  <ScrollArea className="h-36 border rounded-md p-2">
+                    {usuariosFiltradosBusca.length === 0 ? (
+                      <p className="text-xs text-muted-foreground text-center py-4">Nenhum colaborador encontrado</p>
+                    ) : (
+                      <div className="flex flex-col gap-1">
+                        {usuariosFiltradosBusca.map(u => (
+                          <div
+                            key={u.id}
+                            className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer"
+                            onClick={() => setUsuariosSelecionados(prev =>
+                              prev.includes(u.id) ? prev.filter(id => id !== u.id) : [...prev, u.id]
+                            )}
+                          >
+                            <Checkbox checked={usuariosSelecionados.includes(u.id)} onCheckedChange={() => {}} />
+                            <Avatar className="h-5 w-5">
+                              <AvatarFallback className="text-xs">{iniciais(u.nome)}</AvatarFallback>
+                            </Avatar>
+                            <span className="text-xs truncate flex-1">{u.nome}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </ScrollArea>
+                  {usuariosSelecionados.length > 0 && (
+                    <p className="text-xs text-muted-foreground">{usuariosSelecionados.length} selecionado(s)</p>
+                  )}
+                </div>
+              )}
             </div>
             )}
           </div>
@@ -1372,10 +1612,10 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
                       >
                         <Checkbox checked={usuariosSelecionados.includes(u.id)} onCheckedChange={() => {}} />
                         <Avatar className="h-6 w-6">
-                          <AvatarFallback className="text-xs">{iniciais(u.nome_completo)}</AvatarFallback>
+                          <AvatarFallback className="text-xs">{iniciais(u.nome)}</AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{u.nome_completo}</p>
+                          <p className="text-sm font-medium truncate">{u.nome}</p>
                           <p className="text-xs text-muted-foreground truncate">{u.email}</p>
                         </div>
                       </div>
@@ -1403,6 +1643,148 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
             </Button>
             <Button onClick={salvarCompartilhamento} disabled={salvando}>
               {salvando ? 'Salvando...' : 'Confirmar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Dialog: Gerenciar Permissões de Agenda ────────────────────────── */}
+      <Dialog open={dialogPermissoes} onOpenChange={setDialogPermissoes}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              Permissões da Minha Agenda
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-4">
+            {/* Status da agenda */}
+            <div className={cn(
+              'flex items-center justify-between p-3 rounded-lg border',
+              minhaAgendaBloqueada ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'
+            )}>
+              <div className="flex items-center gap-2">
+                {minhaAgendaBloqueada
+                  ? <ShieldOff className="h-4 w-4 text-red-600" />
+                  : <ShieldCheck className="h-4 w-4 text-green-600" />}
+                <div>
+                  <p className="text-sm font-medium">
+                    {minhaAgendaBloqueada ? 'Agenda Bloqueada' : 'Agenda Aberta'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {minhaAgendaBloqueada
+                      ? 'Ninguém pode ver sua agenda'
+                      : 'Usuários com permissão podem ver sua agenda'}
+                  </p>
+                </div>
+              </div>
+              <Button size="sm" variant="outline" className="text-xs h-7" onClick={toggleBloqueioAgenda}>
+                {minhaAgendaBloqueada ? 'Liberar' : 'Bloquear'}
+              </Button>
+            </div>
+
+            {/* Quem tem acesso */}
+            <div>
+              <p className="text-sm font-medium mb-2 flex items-center gap-1.5">
+                <UserCheck className="h-4 w-4" /> Quem pode ver minha agenda
+              </p>
+
+              {permissoesMinhaAgenda.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-3">
+                  Nenhum colega tem acesso à sua agenda ainda.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-1 mb-2">
+                  {permissoesMinhaAgenda.map(p => (
+                    <div key={p.id} className="flex items-center justify-between p-2 rounded border text-sm">
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-6 w-6">
+                          <AvatarFallback className="text-xs">{iniciais(p.usuario?.nome ?? null)}</AvatarFallback>
+                        </Avatar>
+                        <span className="text-xs">{p.usuario?.nome}</span>
+                        {p.pode_criar_eventos && (
+                          <Badge variant="secondary" className="text-xs h-4 px-1">pode criar</Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 text-xs px-2"
+                          disabled={salvandoPermissao}
+                          onClick={() => togglePermissaoColega(p.usuario_id, !p.pode_criar_eventos)}
+                        >
+                          {p.pode_criar_eventos ? 'Só ver' : 'Criar tbm'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                          disabled={salvandoPermissao}
+                          onClick={() => removerPermissaoColega(p.id)}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Adicionar colega */}
+              <div className="mt-2">
+                <p className="text-xs text-muted-foreground mb-1">Dar acesso a um colega:</p>
+                <Input
+                  placeholder="Buscar colega..."
+                  value={buscarPermissao}
+                  onChange={e => setBuscarPermissao(e.target.value)}
+                  className="h-8 text-xs mb-1"
+                />
+                <ScrollArea className="h-32 border rounded-md p-1">
+                  {usuarios
+                    .filter(u =>
+                      !permissoesMinhaAgenda.some(p => p.usuario_id === u.id) &&
+                      (!buscarPermissao || u.nome?.toLowerCase().includes(buscarPermissao.toLowerCase()))
+                    )
+                    .map(u => (
+                      <div key={u.id} className="flex items-center justify-between p-1.5 rounded hover:bg-muted">
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-5 w-5">
+                            <AvatarFallback className="text-xs">{iniciais(u.nome)}</AvatarFallback>
+                          </Avatar>
+                          <span className="text-xs">{u.nome}</span>
+                        </div>
+                        <div className="flex gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 text-xs px-2"
+                            disabled={salvandoPermissao}
+                            onClick={() => togglePermissaoColega(u.id, false)}
+                          >
+                            Só ver
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 text-xs px-2 border-blue-300 text-blue-700"
+                            disabled={salvandoPermissao}
+                            onClick={() => togglePermissaoColega(u.id, true)}
+                          >
+                            Criar tbm
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                </ScrollArea>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogPermissoes(false)}>
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>

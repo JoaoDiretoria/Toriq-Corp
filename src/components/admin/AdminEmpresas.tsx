@@ -81,7 +81,7 @@ interface EmpresaModulo {
 }
 
 const tiposEmpresa = [
-  { value: 'cliente_final', label: 'Cliente' },
+  { value: 'sst', label: 'Cliente Toriq' },
   { value: 'lead', label: 'Lead' },
 ];
 

@@ -888,12 +888,10 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
 
   const loadIntegracaoEsocial = async () => {
     if (!empresaId) return;
+    if (!esocialBackendBaseUrl || isPlaceholderEsocialBackendUrl()) return;
 
     setLoadingIntegracaoEsocial(true);
     try {
-      if (isPlaceholderEsocialBackendUrl()) {
-        throw new Error('VITE_ESOCIAL_BACKEND_URL está com valor de exemplo. Configure a URL real do backend eSocial na VPS.');
-      }
 
       const response = await fetch(getIntegracaoConfigEndpoint(), {
         method: 'GET',
@@ -2473,6 +2471,7 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
                 </div>
 
                 {/* Google Meet */}
+                <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="flex items-center gap-3">
                     <Video className="h-5 w-5 text-blue-600" />
@@ -2535,6 +2534,41 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
                     )}
                   </div>
                 </div>
+                {!googleMeetToken && !loadingGoogleMeet && (
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm space-y-3">
+                    <p className="font-medium text-blue-800 flex items-center gap-2">
+                      <ExternalLink className="h-4 w-4 shrink-0" />
+                      Como configurar — passo a passo
+                    </p>
+                    <ol className="space-y-2 text-blue-700 text-xs ml-1 list-none">
+                      <li className="flex gap-2"><span className="font-bold shrink-0">1.</span><span>Crie um projeto em <a href="https://console.cloud.google.com" target="_blank" rel="noreferrer" className="underline font-medium">console.cloud.google.com</a></span></li>
+                      <li className="flex gap-2">
+                        <span className="font-bold shrink-0">2.</span>
+                        <span>Ative as 3 APIs necessárias:
+                          <span className="flex flex-col gap-1 mt-1 ml-1">
+                            <a href="https://console.cloud.google.com/apis/library/calendar-json.googleapis.com" target="_blank" rel="noreferrer" className="underline font-medium">→ Google Calendar API</a>
+                            <a href="https://console.cloud.google.com/apis/library/meet.googleapis.com" target="_blank" rel="noreferrer" className="underline font-medium">→ Google Meet API</a>
+                            <a href="https://console.cloud.google.com/apis/library/people.googleapis.com" target="_blank" rel="noreferrer" className="underline font-medium">→ People API</a>
+                          </span>
+                        </span>
+                      </li>
+                      <li className="flex gap-2"><span className="font-bold shrink-0">3.</span><span>Configure a tela de consentimento OAuth e adicione os 3 escopos necessários</span></li>
+                      <li className="flex gap-2">
+                        <span className="font-bold shrink-0">4.</span>
+                        <span>
+                          Crie um <strong>ID do cliente OAuth</strong> (tipo: Aplicativo da Web) e adicione este URI de redirecionamento:
+                          <code className="block mt-1 bg-white border border-blue-200 px-2 py-1 rounded text-blue-900 break-all select-all">
+                            https://bsvtgdtsbrjdwdnpirzb.supabase.co/functions/v1/google-meet-callback
+                          </code>
+                        </span>
+                      </li>
+                      <li className="flex gap-2"><span className="font-bold shrink-0">5.</span><span>Clique em <strong>"Conectar Google"</strong> acima e autorize as permissões solicitadas</span></li>
+                    </ol>
+                    <p className="text-blue-600 text-xs pt-2 border-t border-blue-200">
+                      Manual completo: <code className="bg-white border border-blue-200 px-1 rounded text-blue-900">doc/GOOGLE_MEET_CONFIGURACAO.md</code>
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -2909,6 +2943,7 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
               </div>
             </div>
           </div>
+        </div>
         );
 
       case 'atalhos':
