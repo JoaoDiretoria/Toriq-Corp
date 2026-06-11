@@ -122,6 +122,147 @@ _CADASTRO_DDL = [
         descricao TEXT
     )
     """,
+    # ── Contas a Receber ──────────────────────────────────────────────────────
+    """
+    CREATE TABLE IF NOT EXISTS contas_receber_colunas (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        nome TEXT NOT NULL,
+        cor TEXT NOT NULL DEFAULT '#6366f1',
+        ordem INTEGER NOT NULL DEFAULT 0,
+        created_at DATETIME NOT NULL DEFAULT (now()),
+        updated_at DATETIME NOT NULL DEFAULT (now())
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS contas_receber (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        coluna_id CHAR(32) NOT NULL REFERENCES contas_receber_colunas(id) ON DELETE CASCADE,
+        numero TEXT NOT NULL DEFAULT '',
+        cliente_nome TEXT NOT NULL DEFAULT '—',
+        valor NUMERIC(15,2) NOT NULL DEFAULT 0,
+        valor_pago NUMERIC(15,2) NOT NULL DEFAULT 0,
+        data_emissao DATE NOT NULL DEFAULT CURRENT_DATE,
+        ordem INTEGER NOT NULL DEFAULT 0,
+        arquivado BOOLEAN NOT NULL DEFAULT 0,
+        created_at DATETIME NOT NULL DEFAULT (now()),
+        updated_at DATETIME NOT NULL DEFAULT (now()),
+        cliente_id CHAR(32),
+        cliente_cnpj TEXT,
+        servico_produto TEXT,
+        descricao TEXT,
+        data_competencia DATE,
+        data_recebimento DATE,
+        data_pagamento DATE,
+        data_vencimento DATE,
+        forma_pagamento TEXT,
+        forma_pagamento_id CHAR(32),
+        categoria TEXT,
+        conta_financeira TEXT,
+        conta_financeira_id CHAR(32),
+        observacoes TEXT,
+        origem TEXT,
+        closer_card_id CHAR(32),
+        created_by CHAR(32),
+        condicao_pagamento TEXT,
+        condicao_pagamento_id CHAR(32),
+        recorrente BOOLEAN DEFAULT 0,
+        nfe_data_programada DATE,
+        nfe_hora_programada TEXT,
+        origem_card_id CHAR(32),
+        origem_kanban VARCHAR(50),
+        contato_nome TEXT,
+        contato_email TEXT,
+        contato_telefone TEXT,
+        empresa_nome TEXT,
+        empresa_email TEXT,
+        empresa_telefone TEXT,
+        empresa_endereco TEXT,
+        empresa_numero TEXT,
+        empresa_complemento TEXT,
+        empresa_bairro TEXT,
+        empresa_cidade TEXT,
+        empresa_estado TEXT,
+        empresa_cep TEXT,
+        status_recebimento VARCHAR(50) DEFAULT 'previsto'
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS contas_receber_movimentacoes (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        conta_id CHAR(32) NOT NULL REFERENCES contas_receber(id) ON DELETE CASCADE,
+        tipo TEXT NOT NULL DEFAULT 'mudanca_coluna',
+        descricao TEXT NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT (now()),
+        usuario_id CHAR(32),
+        coluna_origem_id CHAR(32),
+        coluna_destino_id CHAR(32)
+    )
+    """,
+    # ── Contas a Pagar ────────────────────────────────────────────────────────
+    """
+    CREATE TABLE IF NOT EXISTS contas_pagar_colunas (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        nome TEXT NOT NULL,
+        cor TEXT NOT NULL DEFAULT '#6366f1',
+        ordem INTEGER NOT NULL DEFAULT 0,
+        created_at DATETIME NOT NULL DEFAULT (now()),
+        updated_at DATETIME NOT NULL DEFAULT (now())
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS contas_pagar (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        coluna_id CHAR(32) NOT NULL REFERENCES contas_pagar_colunas(id) ON DELETE CASCADE,
+        numero TEXT NOT NULL DEFAULT '',
+        fornecedor_nome TEXT NOT NULL DEFAULT '—',
+        valor NUMERIC(15,2) NOT NULL DEFAULT 0,
+        valor_pago NUMERIC(15,2) NOT NULL DEFAULT 0,
+        data_emissao DATE NOT NULL DEFAULT CURRENT_DATE,
+        ordem INTEGER NOT NULL DEFAULT 0,
+        arquivado BOOLEAN NOT NULL DEFAULT 0,
+        created_at DATETIME NOT NULL DEFAULT (now()),
+        updated_at DATETIME NOT NULL DEFAULT (now()),
+        fornecedor_id CHAR(32),
+        fornecedor_cnpj TEXT,
+        descricao TEXT,
+        data_competencia DATE,
+        data_vencimento DATE,
+        data_pagamento DATE,
+        forma_pagamento TEXT,
+        forma_pagamento_id CHAR(32),
+        categoria TEXT,
+        conta_financeira TEXT,
+        conta_financeira_id CHAR(32),
+        centro_custo TEXT,
+        centro_custo_id CHAR(32),
+        observacoes TEXT,
+        origem TEXT,
+        condicao_pagamento TEXT,
+        condicao_pagamento_id CHAR(32),
+        recorrente BOOLEAN DEFAULT 0,
+        created_by CHAR(32),
+        status_pagamento VARCHAR(20) DEFAULT 'previsto',
+        frequencia_cobranca VARCHAR(20) DEFAULT 'unico',
+        tipo_valor_recorrente VARCHAR(20),
+        data_pagamento_programado DATE
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS contas_pagar_movimentacoes (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        conta_id CHAR(32) NOT NULL REFERENCES contas_pagar(id) ON DELETE CASCADE,
+        tipo TEXT NOT NULL DEFAULT 'movimentacao',
+        descricao TEXT NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT (now()),
+        usuario_id CHAR(32),
+        coluna_origem_id CHAR(32),
+        coluna_destino_id CHAR(32)
+    )
+    """,
 ]
 
 
