@@ -41,6 +41,13 @@ class TenantRepository(Generic[T]):
         )
 
     async def add(self, **fields) -> T:
+        # Some generated models rely on server_default (gen_random_uuid()) for id
+        # without a Python-side default.  Supply one explicitly so the ORM always
+        # has a value — this is safe in both PostgreSQL and SQLite test environments.
+        if "id" not in fields:
+            id_col = self.model.__table__.c["id"]
+            if id_col.default is None:
+                fields = {"id": uuid.uuid4(), **fields}
         obj = self.model(empresa_id=self.empresa_id, **fields)
         self.db.add(obj)
         await self.db.commit()
