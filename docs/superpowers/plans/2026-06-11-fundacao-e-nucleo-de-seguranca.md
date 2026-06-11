@@ -203,11 +203,13 @@ COOKIE_SECURE=false
 - [ ] **Step 2: Criar `apps/api/.env` com a credencial real (NÃO commitar)**
 
 ```bash
-DATABASE_URL=postgresql+asyncpg://toriq_corp:jRr2wEMKHB734.@69.62.89.220:5432/db-toriq-corp
+DATABASE_URL=postgresql+asyncpg://toriq_corp:<SENHA_DO_BANCO>@69.62.89.220:5432/db-toriq-corp
 JWT_SECRET=<gerar-um-segredo-forte-aleatorio>
 JWT_ACCESS_TTL_SECONDS=900
 JWT_REFRESH_TTL_SECONDS=1209600
+# Overrides de dev local (banco do EasyPanel sem TLS; front em HTTP):
 COOKIE_SECURE=false
+DB_SSL=false
 ```
 
 Gerar um `JWT_SECRET` forte:
@@ -543,7 +545,7 @@ estiver errada (URL/porta exposta/senha), o `upgrade` falha aqui com erro de con
 
 Verificação opcional das tabelas (se tiver `psql` local apontando para o IP público):
 ```bash
-psql "postgresql://toriq_corp:jRr2wEMKHB734.@<IP_PUBLICO>:5432/db-toriq-corp" -c "\dt"
+psql "postgresql://toriq_corp:<SENHA_DO_BANCO>@<IP_PUBLICO>:5432/db-toriq-corp" -c "\dt"
 ```
 Expected: lista `empresas`, `users`, `notas`, `alembic_version`.
 
