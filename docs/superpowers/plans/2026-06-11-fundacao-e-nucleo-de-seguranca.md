@@ -164,32 +164,23 @@ git commit -m "feat(api): scaffold FastAPI com endpoint de health"
 
 ---
 
-### Task 2: docker-compose com Postgres + MinIO
+### Task 2: docker-compose com MinIO + `.env` apontando para o Postgres do EasyPanel
+
+> **Decisão de infra (atualizada):** o Postgres é **único**, já provisionado no EasyPanel
+> (`db-toriq-corp`), e exposto numa porta pública. O docker-compose local **não** sobe
+> Postgres — só o MinIO (storage). A API (local e em produção) conecta ao mesmo
+> `db-toriq-corp`. A senha real fica só no `.env` (gitignored); o `.env.example` usa
+> placeholders.
 
 **Files:**
 - Create: `docker-compose.yml` (raiz do repo)
 - Create: `.env.example` (raiz do repo)
+- Create: `apps/api/.env` (gitignored — credenciais reais; NÃO commitar)
 
-- [ ] **Step 1: Criar `docker-compose.yml` na raiz**
+- [ ] **Step 1: Criar `docker-compose.yml` na raiz (somente MinIO)**
 
 ```yaml
 services:
-  postgres:
-    image: postgres:17
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-toriq}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-toriq}
-      POSTGRES_DB: ${POSTGRES_DB:-toriq}
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-toriq}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   minio:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
@@ -203,51 +194,60 @@ services:
       - miniodata:/data
 
 volumes:
-  pgdata:
   miniodata:
 ```
 
-- [ ] **Step 2: Criar `.env.example` na raiz**
+- [ ] **Step 2: Criar `.env.example` na raiz (placeholders, vai pro git)**
 
 ```bash
-# Postgres
-POSTGRES_USER=toriq
-POSTGRES_PASSWORD=toriq
-POSTGRES_DB=toriq
+# Postgres (EasyPanel db-toriq-corp) — preencher o real no apps/api/.env
+DATABASE_URL=postgresql+asyncpg://toriq_corp:SENHA@IP_PUBLICO_DA_VPS:5432/db-toriq-corp
 
 # MinIO
 MINIO_ROOT_USER=minioadmin
 MINIO_ROOT_PASSWORD=minioadmin
 
-# API
-DATABASE_URL=postgresql+asyncpg://toriq:toriq@localhost:5432/toriq
+# API / Auth
 JWT_SECRET=troque-isto-por-um-segredo-forte
 JWT_ACCESS_TTL_SECONDS=900
 JWT_REFRESH_TTL_SECONDS=1209600
 COOKIE_SECURE=false
 ```
 
-- [ ] **Step 3: Subir os containers e verificar**
+- [ ] **Step 3: Criar `apps/api/.env` com a credencial real (NÃO commitar)**
+
+Substituir `<IP_PUBLICO>` pelo IP público da VPS:
+
+```bash
+DATABASE_URL=postgresql+asyncpg://toriq_corp:jRr2wEMKHB734.@<IP_PUBLICO>:5432/db-toriq-corp
+JWT_SECRET=<gerar-um-segredo-forte-aleatorio>
+JWT_ACCESS_TTL_SECONDS=900
+JWT_REFRESH_TTL_SECONDS=1209600
+COOKIE_SECURE=false
+```
+
+> **Gotcha asyncpg:** não inclua `?sslmode=disable` na URL — esse parâmetro é do psycopg,
+> não do asyncpg, e causa erro. Para desativar SSL com asyncpg, passe via `connect_args`
+> no engine (já tratado na Task 3, Step 3a).
+
+- [ ] **Step 4: Subir o MinIO**
 
 Run:
 ```bash
-cp .env.example .env
 docker compose up -d
 docker compose ps
 ```
-Expected: `postgres` com status `healthy` e `minio` `running`.
+Expected: `minio` `running`.
 
-Run (verifica conexão ao Postgres):
-```bash
-docker compose exec postgres pg_isready -U toriq
-```
-Expected: `accepting connections`.
+> A verificação da conexão com o Postgres do EasyPanel acontece de forma natural na
+> Task 4 (`alembic upgrade head`): se a URL/credencial/porta exposta estiverem erradas,
+> o Alembic falha com um erro de conexão claro. Não há comando extra aqui.
 
-- [ ] **Step 4: Commitar**
+- [ ] **Step 5: Commitar (sem o .env real)**
 
 ```bash
 git add docker-compose.yml .env.example
-git commit -m "feat: docker-compose com postgres e minio"
+git commit -m "feat: docker-compose com minio; conexao ao postgres do EasyPanel via .env"
 ```
 
 ---
@@ -318,7 +318,14 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import settings
 
-engine = create_async_engine(settings.database_url, echo=False, future=True)
+# O Postgres do EasyPanel é exposto sem SSL (sslmode=disable). Com asyncpg, o SSL
+# NÃO se configura pela query string da URL — passa-se por connect_args.
+engine = create_async_engine(
+    settings.database_url,
+    echo=False,
+    future=True,
+    connect_args={"ssl": False},
+)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 
@@ -536,12 +543,19 @@ uv run alembic revision --autogenerate -m "baseline: empresas, users, notas"
 ```
 Expected: cria um arquivo em `migrations/versions/` contendo `create_table('empresas')`, `create_table('users')`, `create_table('notas')` e o enum `user_role`.
 
-- [ ] **Step 5: Aplicar e verificar**
+- [ ] **Step 5: Aplicar e verificar (contra o `db-toriq-corp` do EasyPanel)**
 
-Run:
+Run (a partir de `apps/api`, com o `.env` configurado):
 ```bash
 uv run alembic upgrade head
-docker compose exec postgres psql -U toriq -d toriq -c "\dt"
+uv run alembic current
+```
+Expected: `alembic current` mostra a revisão `baseline` aplicada (head). Se a conexão
+estiver errada (URL/porta exposta/senha), o `upgrade` falha aqui com erro de conexão.
+
+Verificação opcional das tabelas (se tiver `psql` local apontando para o IP público):
+```bash
+psql "postgresql://toriq_corp:jRr2wEMKHB734.@<IP_PUBLICO>:5432/db-toriq-corp" -c "\dt"
 ```
 Expected: lista `empresas`, `users`, `notas`, `alembic_version`.
 
@@ -1468,8 +1482,8 @@ git commit -m "feat(api): endpoints de refresh e logout"
 
 Ao terminar todas as tasks, o seguinte deve ser verdade:
 
-- [ ] `docker compose up -d` sobe postgres + minio.
-- [ ] `uv run alembic upgrade head` cria `empresas`, `users`, `notas`.
+- [ ] `docker compose up -d` sobe o minio (storage).
+- [ ] `uv run alembic upgrade head` cria `empresas`, `users`, `notas` no `db-toriq-corp` do EasyPanel.
 - [ ] `uv run pytest -v` passa 100%.
 - [ ] Subindo a API (`uv run uvicorn app.main:app --reload`), o fluzo manual funciona: register → login (recebe cookies httpOnly) → criar nota → listar (só vê as da própria empresa) → refresh → logout.
 - [ ] `/docs` (Swagger) mostra a OpenAPI — base para gerar o `packages/api-client` no próximo plano.

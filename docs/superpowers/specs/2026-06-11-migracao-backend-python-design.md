@@ -70,13 +70,18 @@ Observações:
 - A `web` continua sendo buildada pelo Vite e servida pelo Nginx existente; muda apenas a
   origem dos dados: de `supabase.from()` para chamadas HTTP à API.
 
-### 3.2 Infraestrutura (VPS + Docker Compose)
+### 3.2 Infraestrutura (VPS gerenciada por EasyPanel)
 
-Containers:
-- **postgres** — Postgres 17, volume persistente.
-- **api** — FastAPI (uvicorn/gunicorn), Alembic nas migrations.
-- **minio** — storage S3-compatível, volume persistente.
+A VPS roda **EasyPanel** (PaaS sobre Docker). Serviços:
+- **postgres** — `db-toriq-corp` já provisionado no EasyPanel (Postgres 17), exposto numa
+  porta pública para acesso da API local e de produção. **Banco único** (dev e prod usam o
+  mesmo). Credenciais só no `.env` (gitignored).
+- **api** — FastAPI (uvicorn/gunicorn), Alembic nas migrations; deploy como serviço EasyPanel.
+- **minio** — storage S3-compatível (via docker-compose local; vira serviço EasyPanel em prod).
 - **web** — build estático servido por Nginx (em produção).
+
+> Nota asyncpg: a URL de conexão NÃO usa `?sslmode=disable` (parâmetro do psycopg); o SSL
+> é desabilitado via `connect_args={"ssl": False}` no engine SQLAlchemy.
 
 ### 3.3 Autenticação e RBAC
 
