@@ -82,6 +82,22 @@ async def mover(
     return conta
 
 
+@router.post("/gerar-recorrentes")
+async def gerar_recorrentes(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Trigger manual: gera as contas recorrentes do mês atual para a empresa do usuário."""
+    from datetime import date
+
+    from app.services.contas_recorrentes import gerar_contas_recorrentes
+
+    if user.empresa_id is None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "usuário sem empresa")
+    n = await gerar_contas_recorrentes(db, user.empresa_id, ref=date.today().replace(day=1))
+    return {"criadas": n}
+
+
 @router.post("/bootstrap-colunas", status_code=status.HTTP_201_CREATED)
 async def bootstrap_colunas(
     user: User = Depends(get_current_user),
