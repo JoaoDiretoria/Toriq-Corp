@@ -200,6 +200,161 @@ _CADASTRO_DDL = [
         coluna_destino_id CHAR(32)
     )
     """,
+    # ── Funil / CRM ───────────────────────────────────────────────────────────
+    """
+    CREATE TABLE IF NOT EXISTS setores (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        nome VARCHAR(255) NOT NULL,
+        descricao TEXT,
+        ativo BOOLEAN DEFAULT 1,
+        created_at DATETIME DEFAULT (now()),
+        updated_at DATETIME DEFAULT (now())
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS funis (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        setor_id CHAR(32) NOT NULL REFERENCES setores(id) ON DELETE CASCADE,
+        nome VARCHAR(255) NOT NULL,
+        tipo VARCHAR(20) NOT NULL DEFAULT 'negocio',
+        descricao TEXT,
+        ativo BOOLEAN DEFAULT 1,
+        ordem INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT (now()),
+        updated_at DATETIME DEFAULT (now())
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS funis_configuracoes (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        funil_id CHAR(32) NOT NULL REFERENCES funis(id) ON DELETE CASCADE,
+        empresa_id CHAR(32) REFERENCES empresas(id) ON DELETE CASCADE,
+        titulo_pagina VARCHAR(255),
+        descricao_pagina TEXT,
+        modo_visualizacao VARCHAR(20) DEFAULT 'kanban',
+        dashboard_visivel BOOLEAN DEFAULT 1,
+        dashboard_tipo VARCHAR(50) DEFAULT 'simples',
+        dashboard_metricas TEXT DEFAULT '["total_cards","valor_total","cards_por_etapa"]',
+        botao_adicionar_visivel BOOLEAN DEFAULT 1,
+        botao_adicionar_texto VARCHAR(100) DEFAULT 'Novo Card',
+        card_campos_visiveis TEXT DEFAULT '["titulo","cliente","valor","data","responsavel"]',
+        card_mostrar_valor BOOLEAN DEFAULT 1,
+        card_mostrar_cliente BOOLEAN DEFAULT 1,
+        card_mostrar_data BOOLEAN DEFAULT 1,
+        card_mostrar_responsavel BOOLEAN DEFAULT 1,
+        card_mostrar_etiquetas BOOLEAN DEFAULT 1,
+        card_mostrar_categoria BOOLEAN DEFAULT 1,
+        card_mostrar_status BOOLEAN DEFAULT 1,
+        card_mostrar_status_atividade BOOLEAN DEFAULT 1,
+        card_interno_atividades_tipos TEXT DEFAULT '["tarefa","email","ligacao","whatsapp","reuniao","visita","nota"]',
+        card_interno_acoes_rapidas TEXT DEFAULT '["editar","mover","excluir"]',
+        card_interno_mostrar_historico BOOLEAN DEFAULT 1,
+        card_interno_mostrar_movimentacoes BOOLEAN DEFAULT 1,
+        card_interno_campos_personalizados TEXT DEFAULT '[]',
+        card_interno_mostrar_prioridade BOOLEAN DEFAULT 1,
+        acoes_especiais TEXT DEFAULT '[]',
+        formulario_campos TEXT DEFAULT '[]',
+        cards_ordenacao TEXT DEFAULT 'ordem_chegada',
+        botao_novo_card_texto TEXT DEFAULT 'Novo Card',
+        created_at DATETIME DEFAULT (now()),
+        updated_at DATETIME DEFAULT (now()),
+        UNIQUE(funil_id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS funil_etapas (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        funil_id CHAR(32) NOT NULL REFERENCES funis(id) ON DELETE CASCADE,
+        nome VARCHAR(255) NOT NULL,
+        ordem INTEGER NOT NULL DEFAULT 0,
+        trancada BOOLEAN NOT NULL DEFAULT 0,
+        descricao TEXT,
+        cor VARCHAR(7) DEFAULT '#6366f1',
+        ativo BOOLEAN DEFAULT 1,
+        created_at DATETIME DEFAULT (now()),
+        updated_at DATETIME DEFAULT (now())
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS funil_cards (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        funil_id CHAR(32) NOT NULL REFERENCES funis(id) ON DELETE CASCADE,
+        etapa_id CHAR(32) NOT NULL REFERENCES funil_etapas(id) ON DELETE SET NULL,
+        titulo VARCHAR(255) NOT NULL,
+        descricao TEXT,
+        valor NUMERIC(15,2) DEFAULT 0,
+        cliente_id CHAR(32),
+        responsavel_id CHAR(32),
+        data_criacao DATETIME DEFAULT (now()),
+        data_previsao DATE,
+        data_conclusao DATE,
+        prioridade VARCHAR(20) DEFAULT 'media',
+        ordem INTEGER DEFAULT 0,
+        ativo BOOLEAN DEFAULT 1,
+        metadata TEXT DEFAULT '{}',
+        status_negocio VARCHAR(20),
+        acoes_rapidas_config TEXT,
+        orcamento_treinamento TEXT,
+        orcamento_vertical365 TEXT,
+        orcamento_servicos_sst TEXT,
+        created_at DATETIME DEFAULT (now()),
+        updated_at DATETIME DEFAULT (now())
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS funil_card_movimentacoes (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        card_id CHAR(32) NOT NULL REFERENCES funil_cards(id) ON DELETE CASCADE,
+        tipo VARCHAR(50) NOT NULL DEFAULT 'mudanca_etapa',
+        descricao TEXT NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT (now()),
+        etapa_origem_id CHAR(32),
+        etapa_destino_id CHAR(32),
+        usuario_id CHAR(32),
+        coluna_origem_id CHAR(32),
+        coluna_destino_id CHAR(32),
+        kanban_origem VARCHAR(100),
+        kanban_destino VARCHAR(100)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS funil_etiquetas (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        nome VARCHAR(100) NOT NULL,
+        cor VARCHAR(20) NOT NULL DEFAULT '#F59E0B',
+        created_at DATETIME NOT NULL DEFAULT (now())
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS funil_card_etiquetas (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        card_id CHAR(32) NOT NULL REFERENCES funil_cards(id) ON DELETE CASCADE,
+        etiqueta_id CHAR(32) NOT NULL REFERENCES funil_etiquetas(id) ON DELETE CASCADE,
+        created_at DATETIME NOT NULL DEFAULT (now()),
+        UNIQUE(card_id, etiqueta_id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS funil_card_atividades (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        card_id CHAR(32) NOT NULL REFERENCES funil_cards(id) ON DELETE CASCADE,
+        tipo VARCHAR(50) NOT NULL DEFAULT 'tarefa',
+        descricao TEXT NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'a_realizar',
+        created_at DATETIME NOT NULL DEFAULT (now()),
+        updated_at DATETIME NOT NULL DEFAULT (now()),
+        prazo DATE,
+        horario VARCHAR(10),
+        usuario_id CHAR(32),
+        responsavel_id CHAR(32),
+        proposta_aprovada BOOLEAN DEFAULT 0,
+        anexo_url TEXT,
+        anexo_nome TEXT
+    )
+    """,
     # ── Contas a Pagar ────────────────────────────────────────────────────────
     """
     CREATE TABLE IF NOT EXISTS contas_pagar_colunas (

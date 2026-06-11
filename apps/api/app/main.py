@@ -15,6 +15,7 @@ from app.api.contas_receber import (
     router as cr_kanban_router,
 )
 from app.api.financeiro_cadastros import router as fin_cadastros_router
+from app.api.funil import router as funil_router
 from app.api.health import router as health_router
 from app.jobs.scheduler import build_scheduler
 
@@ -44,6 +45,9 @@ def create_app() -> FastAPI:
     app.include_router(cp_kanban_router)
     app.include_router(cp_colunas_router)
     app.include_router(cp_contas_router)
+    # Funil / CRM genérico — rotas específicas (/{id}/configuracao, /reorder,
+    # /{id}/mover, /etiquetas do card) registradas ANTES de /{id} pelo router único
+    app.include_router(funil_router)
     return app
 
 
