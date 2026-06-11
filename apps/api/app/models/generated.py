@@ -6,11 +6,8 @@ import uuid
 
 from sqlalchemy import ARRAY, BigInteger, Boolean, CheckConstraint, Column, Computed, Date, DateTime, Enum, ForeignKeyConstraint, Index, Integer, Numeric, PrimaryKeyConstraint, SmallInteger, String, Table, Text, Time, UniqueConstraint, Uuid, text
 from sqlalchemy.dialects.postgresql import INET, JSONB
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-
-class Base(DeclarativeBase):
-    pass
-
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from app.core.db import Base
 
 class AppRole(str, enum.Enum):
     ADMIN_VERTICAL = 'admin_vertical'
@@ -1574,7 +1571,7 @@ class Fornecedores(Base):
 class FrotaMotoristas(Base):
     __tablename__ = 'frota_motoristas'
     __table_args__ = (
-        ForeignKeyConstraint(['created_by'], ['auth.users.id'], name='frota_motoristas_created_by_fkey'),
+        ForeignKeyConstraint(['created_by'], ['users.id'], name='frota_motoristas_created_by_fkey'),
         ForeignKeyConstraint(['empresa_id'], ['public.empresas.id'], ondelete='CASCADE', name='frota_motoristas_empresa_id_fkey'),
         PrimaryKeyConstraint('id', name='frota_motoristas_pkey'),
         Index('idx_frota_motoristas_created_by', 'created_by'),
@@ -1618,7 +1615,7 @@ class FrotaMotoristas(Base):
 class FrotaVeiculos(Base):
     __tablename__ = 'frota_veiculos'
     __table_args__ = (
-        ForeignKeyConstraint(['created_by'], ['auth.users.id'], name='frota_veiculos_created_by_fkey'),
+        ForeignKeyConstraint(['created_by'], ['users.id'], name='frota_veiculos_created_by_fkey'),
         ForeignKeyConstraint(['empresa_id'], ['public.empresas.id'], ondelete='CASCADE', name='frota_veiculos_empresa_id_fkey'),
         PrimaryKeyConstraint('id', name='frota_veiculos_pkey'),
         UniqueConstraint('empresa_id', 'placa', name='frota_veiculos_empresa_id_placa_key'),
@@ -1761,7 +1758,7 @@ class ImportQueue(Base):
     __tablename__ = 'import_queue'
     __table_args__ = (
         ForeignKeyConstraint(['empresa_id'], ['public.empresas.id'], ondelete='CASCADE', name='import_queue_empresa_id_fkey'),
-        ForeignKeyConstraint(['user_id'], ['auth.users.id'], ondelete='CASCADE', name='import_queue_user_id_fkey'),
+        ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE', name='import_queue_user_id_fkey'),
         PrimaryKeyConstraint('id', name='import_queue_pkey'),
         Index('idx_import_queue_empresa_id', 'empresa_id'),
         Index('idx_import_queue_status', 'status'),
@@ -1868,7 +1865,7 @@ class ModelosContrato(Base):
 class ModelosPropostaComercial(Base):
     __tablename__ = 'modelos_proposta_comercial'
     __table_args__ = (
-        ForeignKeyConstraint(['created_by'], ['auth.users.id'], name='modelos_proposta_comercial_created_by_fkey'),
+        ForeignKeyConstraint(['created_by'], ['users.id'], name='modelos_proposta_comercial_created_by_fkey'),
         ForeignKeyConstraint(['empresa_id'], ['public.empresas.id'], ondelete='CASCADE', name='modelos_proposta_comercial_empresa_id_fkey'),
         PrimaryKeyConstraint('id', name='modelos_proposta_comercial_pkey'),
         Index('idx_modelos_proposta_empresa', 'empresa_id'),
@@ -1931,8 +1928,8 @@ class Notificacoes(Base):
     __table_args__ = (
         CheckConstraint("tipo = ANY (ARRAY['info'::text, 'success'::text, 'warning'::text, 'error'::text])", name='notificacoes_tipo_check'),
         ForeignKeyConstraint(['empresa_id'], ['public.empresas.id'], ondelete='CASCADE', name='notificacoes_empresa_id_fkey'),
-        ForeignKeyConstraint(['lida_por'], ['auth.users.id'], ondelete='SET NULL', name='notificacoes_lida_por_fkey'),
-        ForeignKeyConstraint(['usuario_id'], ['auth.users.id'], ondelete='SET NULL', name='notificacoes_usuario_id_fkey'),
+        ForeignKeyConstraint(['lida_por'], ['users.id'], ondelete='SET NULL', name='notificacoes_lida_por_fkey'),
+        ForeignKeyConstraint(['usuario_id'], ['users.id'], ondelete='SET NULL', name='notificacoes_usuario_id_fkey'),
         PrimaryKeyConstraint('id', name='notificacoes_pkey'),
         Index('idx_notificacoes_created_at', 'created_at'),
         Index('idx_notificacoes_empresa_id', 'empresa_id'),
@@ -2018,7 +2015,7 @@ class PacotesProdutos(Base):
 class Perigos(Base):
     __tablename__ = 'perigos'
     __table_args__ = (
-        ForeignKeyConstraint(['created_by'], ['auth.users.id'], name='perigos_created_by_fkey'),
+        ForeignKeyConstraint(['created_by'], ['users.id'], name='perigos_created_by_fkey'),
         ForeignKeyConstraint(['empresa_id'], ['public.empresas.id'], ondelete='CASCADE', name='perigos_empresa_id_fkey'),
         PrimaryKeyConstraint('id', name='perigos_pkey'),
         Index('idx_perigos_created_by', 'created_by'),
@@ -2188,7 +2185,7 @@ class PosVendaEtiquetas(Base):
 class PropostasModelos(Base):
     __tablename__ = 'propostas_modelos'
     __table_args__ = (
-        ForeignKeyConstraint(['created_by'], ['auth.users.id'], name='propostas_modelos_created_by_fkey'),
+        ForeignKeyConstraint(['created_by'], ['users.id'], name='propostas_modelos_created_by_fkey'),
         ForeignKeyConstraint(['empresa_id'], ['public.empresas.id'], ondelete='CASCADE', name='propostas_modelos_empresa_id_fkey'),
         PrimaryKeyConstraint('id', name='propostas_modelos_pkey'),
         Index('idx_propostas_modelos_empresa_id', 'empresa_id'),
@@ -2278,7 +2275,7 @@ class ProspeccaoModelos(Base):
 class Riscos(Base):
     __tablename__ = 'riscos'
     __table_args__ = (
-        ForeignKeyConstraint(['created_by'], ['auth.users.id'], name='riscos_created_by_fkey'),
+        ForeignKeyConstraint(['created_by'], ['users.id'], name='riscos_created_by_fkey'),
         ForeignKeyConstraint(['empresa_id'], ['public.empresas.id'], ondelete='CASCADE', name='riscos_empresa_id_fkey'),
         PrimaryKeyConstraint('id', name='riscos_pkey'),
         Index('idx_riscos_created_by', 'created_by'),
@@ -2356,7 +2353,7 @@ class Servicos(Base):
 class SessoesAtivas(Base):
     __tablename__ = 'sessoes_ativas'
     __table_args__ = (
-        ForeignKeyConstraint(['user_id'], ['auth.users.id'], ondelete='CASCADE', name='sessoes_ativas_user_id_fkey'),
+        ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE', name='sessoes_ativas_user_id_fkey'),
         PrimaryKeyConstraint('id', name='sessoes_ativas_pkey'),
         UniqueConstraint('session_token', name='sessoes_ativas_session_token_key'),
         Index('idx_sessoes_ativas_ativo', 'ativo'),
@@ -2461,10 +2458,10 @@ class TicketsSuporte(Base):
         CheckConstraint("prioridade = ANY (ARRAY['baixa'::text, 'media'::text, 'alta'::text, 'critica'::text])", name='tickets_suporte_prioridade_check'),
         CheckConstraint("status = ANY (ARRAY['aberto'::text, 'em_andamento'::text, 'aguardando_resposta'::text, 'resolvido'::text, 'fechado'::text])", name='tickets_suporte_status_check'),
         CheckConstraint("tipo = ANY (ARRAY['bug'::text, 'duvida'::text, 'sugestao'::text, 'problema_tecnico'::text, 'financeiro'::text, 'outro'::text])", name='tickets_suporte_tipo_check'),
-        ForeignKeyConstraint(['atendente_id'], ['auth.users.id'], name='tickets_suporte_atendente_id_fkey'),
+        ForeignKeyConstraint(['atendente_id'], ['users.id'], name='tickets_suporte_atendente_id_fkey'),
         ForeignKeyConstraint(['empresa_destino_id'], ['public.empresas.id'], name='tickets_suporte_empresa_destino_id_fkey'),
         ForeignKeyConstraint(['empresa_solicitante_id'], ['public.empresas.id'], name='tickets_suporte_empresa_solicitante_id_fkey'),
-        ForeignKeyConstraint(['solicitante_id'], ['auth.users.id'], name='tickets_suporte_solicitante_id_fkey'),
+        ForeignKeyConstraint(['solicitante_id'], ['users.id'], name='tickets_suporte_solicitante_id_fkey'),
         PrimaryKeyConstraint('id', name='tickets_suporte_pkey'),
         Index('idx_tickets_created', 'created_at'),
         Index('idx_tickets_empresa_destino', 'empresa_destino_id'),
@@ -2557,7 +2554,7 @@ class UserUpdateViews(Base):
     __tablename__ = 'user_update_views'
     __table_args__ = (
         ForeignKeyConstraint(['update_id'], ['public.system_updates.id'], ondelete='CASCADE', name='user_update_views_update_id_fkey'),
-        ForeignKeyConstraint(['user_id'], ['auth.users.id'], ondelete='CASCADE', name='user_update_views_user_id_fkey'),
+        ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE', name='user_update_views_user_id_fkey'),
         PrimaryKeyConstraint('id', name='user_update_views_pkey'),
         UniqueConstraint('user_id', 'update_id', name='user_update_views_user_id_update_id_key'),
         Index('idx_user_update_views_update_id', 'update_id'),
@@ -2600,7 +2597,7 @@ class WhatsappConfiguracoes(Base):
 class WhatsappTemplates(Base):
     __tablename__ = 'whatsapp_templates'
     __table_args__ = (
-        ForeignKeyConstraint(['criado_por'], ['auth.users.id'], ondelete='SET NULL', name='whatsapp_templates_criado_por_fkey'),
+        ForeignKeyConstraint(['criado_por'], ['users.id'], ondelete='SET NULL', name='whatsapp_templates_criado_por_fkey'),
         ForeignKeyConstraint(['empresa_id'], ['public.empresas.id'], ondelete='CASCADE', name='whatsapp_templates_empresa_id_fkey'),
         PrimaryKeyConstraint('id', name='whatsapp_templates_pkey'),
         Index('idx_whatsapp_templates_empresa', 'empresa_id'),
@@ -2795,9 +2792,9 @@ class CrossSellingCards(Base):
     __tablename__ = 'cross_selling_cards'
     __table_args__ = (
         ForeignKeyConstraint(['coluna_id'], ['public.cross_selling_colunas.id'], ondelete='CASCADE', name='cross_selling_cards_coluna_id_fkey'),
-        ForeignKeyConstraint(['created_by'], ['auth.users.id'], name='cross_selling_cards_created_by_fkey'),
+        ForeignKeyConstraint(['created_by'], ['users.id'], name='cross_selling_cards_created_by_fkey'),
         ForeignKeyConstraint(['empresa_id'], ['public.empresas.id'], ondelete='CASCADE', name='cross_selling_cards_empresa_id_fkey'),
-        ForeignKeyConstraint(['responsavel_id'], ['auth.users.id'], name='cross_selling_cards_responsavel_id_fkey'),
+        ForeignKeyConstraint(['responsavel_id'], ['users.id'], name='cross_selling_cards_responsavel_id_fkey'),
         PrimaryKeyConstraint('id', name='cross_selling_cards_pkey'),
         Index('idx_cross_selling_cards_coluna_id', 'coluna_id'),
         Index('idx_cross_selling_cards_created_by', 'created_by'),
@@ -2863,7 +2860,7 @@ class EquipamentosKitItens(Base):
 class FrotaChecklists(Base):
     __tablename__ = 'frota_checklists'
     __table_args__ = (
-        ForeignKeyConstraint(['created_by'], ['auth.users.id'], name='frota_checklists_created_by_fkey'),
+        ForeignKeyConstraint(['created_by'], ['users.id'], name='frota_checklists_created_by_fkey'),
         ForeignKeyConstraint(['empresa_id'], ['public.empresas.id'], ondelete='CASCADE', name='frota_checklists_empresa_id_fkey'),
         ForeignKeyConstraint(['veiculo_id'], ['public.frota_veiculos.id'], ondelete='CASCADE', name='frota_checklists_veiculo_id_fkey'),
         PrimaryKeyConstraint('id', name='frota_checklists_pkey'),
@@ -2895,7 +2892,7 @@ class FrotaChecklists(Base):
 class FrotaCustos(Base):
     __tablename__ = 'frota_custos'
     __table_args__ = (
-        ForeignKeyConstraint(['created_by'], ['auth.users.id'], name='frota_custos_created_by_fkey'),
+        ForeignKeyConstraint(['created_by'], ['users.id'], name='frota_custos_created_by_fkey'),
         ForeignKeyConstraint(['empresa_id'], ['public.empresas.id'], ondelete='CASCADE', name='frota_custos_empresa_id_fkey'),
         ForeignKeyConstraint(['veiculo_id'], ['public.frota_veiculos.id'], ondelete='CASCADE', name='frota_custos_veiculo_id_fkey'),
         PrimaryKeyConstraint('id', name='frota_custos_pkey'),
@@ -2951,7 +2948,7 @@ class FrotaDocumentos(Base):
 class FrotaManutencoes(Base):
     __tablename__ = 'frota_manutencoes'
     __table_args__ = (
-        ForeignKeyConstraint(['created_by'], ['auth.users.id'], name='frota_manutencoes_created_by_fkey'),
+        ForeignKeyConstraint(['created_by'], ['users.id'], name='frota_manutencoes_created_by_fkey'),
         ForeignKeyConstraint(['empresa_id'], ['public.empresas.id'], ondelete='CASCADE', name='frota_manutencoes_empresa_id_fkey'),
         ForeignKeyConstraint(['veiculo_id'], ['public.frota_veiculos.id'], ondelete='CASCADE', name='frota_manutencoes_veiculo_id_fkey'),
         PrimaryKeyConstraint('id', name='frota_manutencoes_pkey'),
@@ -2985,7 +2982,7 @@ class FrotaManutencoes(Base):
 class FrotaOcorrencias(Base):
     __tablename__ = 'frota_ocorrencias'
     __table_args__ = (
-        ForeignKeyConstraint(['created_by'], ['auth.users.id'], name='frota_ocorrencias_created_by_fkey'),
+        ForeignKeyConstraint(['created_by'], ['users.id'], name='frota_ocorrencias_created_by_fkey'),
         ForeignKeyConstraint(['empresa_id'], ['public.empresas.id'], ondelete='CASCADE', name='frota_ocorrencias_empresa_id_fkey'),
         ForeignKeyConstraint(['veiculo_id'], ['public.frota_veiculos.id'], ondelete='CASCADE', name='frota_ocorrencias_veiculo_id_fkey'),
         PrimaryKeyConstraint('id', name='frota_ocorrencias_pkey'),
@@ -3164,12 +3161,12 @@ class ProdutosServicos(Base):
     pacotes_produtos_itens: Mapped[list['PacotesProdutosItens']] = relationship('PacotesProdutosItens', back_populates='produto')
 
 
-class Profiles(Users):
+class Profiles(Base):
     __tablename__ = 'profiles'
     __table_args__ = (
         ForeignKeyConstraint(['empresa_id'], ['public.empresas.id'], ondelete='SET NULL', name='profiles_empresa_id_fkey'),
         ForeignKeyConstraint(['gestor_id'], ['public.profiles.id'], ondelete='SET NULL', name='profiles_gestor_id_fkey'),
-        ForeignKeyConstraint(['id'], ['auth.users.id'], ondelete='CASCADE', name='profiles_id_fkey'),
+        ForeignKeyConstraint(['id'], ['users.id'], ondelete='CASCADE', name='profiles_id_fkey'),
         ForeignKeyConstraint(['setor_id'], ['public.setores.id'], ondelete='SET NULL', name='profiles_setor_id_fkey'),
         PrimaryKeyConstraint('id', name='profiles_pkey'),
         Index('idx_profiles_empresa_id', 'empresa_id'),
@@ -3333,7 +3330,7 @@ class TicketsSuporteAnexos(Base):
 class TicketsSuporteComentarios(Base):
     __tablename__ = 'tickets_suporte_comentarios'
     __table_args__ = (
-        ForeignKeyConstraint(['autor_id'], ['auth.users.id'], name='tickets_suporte_comentarios_autor_id_fkey'),
+        ForeignKeyConstraint(['autor_id'], ['users.id'], name='tickets_suporte_comentarios_autor_id_fkey'),
         ForeignKeyConstraint(['ticket_id'], ['public.tickets_suporte.id'], ondelete='CASCADE', name='tickets_suporte_comentarios_ticket_id_fkey'),
         PrimaryKeyConstraint('id', name='tickets_suporte_comentarios_pkey'),
         Index('idx_tickets_comentarios_ticket', 'ticket_id'),
@@ -3357,7 +3354,7 @@ class WhatsappCampanhas(Base):
     __tablename__ = 'whatsapp_campanhas'
     __table_args__ = (
         CheckConstraint("status::text = ANY (ARRAY['pendente'::character varying, 'processando'::character varying, 'concluida'::character varying, 'cancelada'::character varying, 'falha'::character varying]::text[])", name='whatsapp_campanhas_status_check'),
-        ForeignKeyConstraint(['criado_por'], ['auth.users.id'], ondelete='SET NULL', name='whatsapp_campanhas_criado_por_fkey'),
+        ForeignKeyConstraint(['criado_por'], ['users.id'], ondelete='SET NULL', name='whatsapp_campanhas_criado_por_fkey'),
         ForeignKeyConstraint(['empresa_id'], ['public.empresas.id'], ondelete='CASCADE', name='whatsapp_campanhas_empresa_id_fkey'),
         ForeignKeyConstraint(['template_id'], ['public.whatsapp_templates.id'], ondelete='RESTRICT', name='whatsapp_campanhas_template_id_fkey'),
         PrimaryKeyConstraint('id', name='whatsapp_campanhas_pkey'),
@@ -3516,7 +3513,7 @@ class CloserAtividades(Base):
     __table_args__ = (
         ForeignKeyConstraint(['card_id'], ['public.closer_cards.id'], ondelete='CASCADE', name='closer_atividades_card_id_fkey'),
         ForeignKeyConstraint(['responsavel_id'], ['public.colaboradores.id'], ondelete='SET NULL', name='closer_atividades_responsavel_id_fkey'),
-        ForeignKeyConstraint(['usuario_id'], ['auth.users.id'], name='closer_atividades_usuario_id_fkey'),
+        ForeignKeyConstraint(['usuario_id'], ['users.id'], name='closer_atividades_usuario_id_fkey'),
         PrimaryKeyConstraint('id', name='closer_atividades_pkey'),
         Index('idx_closer_atividades_card', 'card_id'),
         Index('idx_closer_atividades_responsavel_id', 'responsavel_id'),
@@ -3674,7 +3671,7 @@ class CrossSellingAtividades(Base):
     __tablename__ = 'cross_selling_atividades'
     __table_args__ = (
         ForeignKeyConstraint(['card_id'], ['public.cross_selling_cards.id'], ondelete='CASCADE', name='cross_selling_atividades_card_id_fkey'),
-        ForeignKeyConstraint(['usuario_id'], ['auth.users.id'], name='cross_selling_atividades_usuario_id_fkey'),
+        ForeignKeyConstraint(['usuario_id'], ['users.id'], name='cross_selling_atividades_usuario_id_fkey'),
         PrimaryKeyConstraint('id', name='cross_selling_atividades_pkey'),
         Index('idx_cross_selling_atividades_card_id', 'card_id'),
         Index('idx_cross_selling_atividades_usuario_id', 'usuario_id'),
@@ -3711,7 +3708,7 @@ class CrossSellingCardMovimentacoes(Base):
     __tablename__ = 'cross_selling_card_movimentacoes'
     __table_args__ = (
         ForeignKeyConstraint(['card_id'], ['public.cross_selling_cards.id'], ondelete='CASCADE', name='cross_selling_card_movimentacoes_card_id_fkey'),
-        ForeignKeyConstraint(['usuario_id'], ['auth.users.id'], ondelete='SET NULL', name='cross_selling_card_movimentacoes_usuario_id_fkey'),
+        ForeignKeyConstraint(['usuario_id'], ['users.id'], ondelete='SET NULL', name='cross_selling_card_movimentacoes_usuario_id_fkey'),
         PrimaryKeyConstraint('id', name='cross_selling_card_movimentacoes_pkey'),
         Index('idx_cross_selling_card_movimentacoes_card_id', 'card_id'),
         Index('idx_cross_selling_card_movimentacoes_usuario_id', 'usuario_id'),
@@ -4833,7 +4830,7 @@ class EquipamentosMovimentacoesHistorico(Base):
     __tablename__ = 'equipamentos_movimentacoes_historico'
     __table_args__ = (
         ForeignKeyConstraint(['movimentacao_id'], ['public.equipamentos_movimentacoes.id'], ondelete='CASCADE', name='equipamentos_movimentacoes_historico_movimentacao_id_fkey'),
-        ForeignKeyConstraint(['usuario_id'], ['auth.users.id'], name='equipamentos_movimentacoes_historico_usuario_id_fkey'),
+        ForeignKeyConstraint(['usuario_id'], ['users.id'], name='equipamentos_movimentacoes_historico_usuario_id_fkey'),
         PrimaryKeyConstraint('id', name='equipamentos_movimentacoes_historico_pkey'),
         Index('idx_equipamentos_movimentacoes_historico_movimentacao_id', 'movimentacao_id'),
         Index('idx_equipamentos_movimentacoes_historico_usuario_id', 'usuario_id'),
@@ -4862,7 +4859,7 @@ class EquipamentosMovimentacoesHistorico(Base):
 class FrotaUtilizacoes(Base):
     __tablename__ = 'frota_utilizacoes'
     __table_args__ = (
-        ForeignKeyConstraint(['created_by'], ['auth.users.id'], name='frota_utilizacoes_created_by_fkey'),
+        ForeignKeyConstraint(['created_by'], ['users.id'], name='frota_utilizacoes_created_by_fkey'),
         ForeignKeyConstraint(['empresa_id'], ['public.empresas.id'], ondelete='CASCADE', name='frota_utilizacoes_empresa_id_fkey'),
         ForeignKeyConstraint(['funil_card_id'], ['public.funil_cards.id'], ondelete='SET NULL', name='frota_utilizacoes_funil_card_id_fkey'),
         ForeignKeyConstraint(['veiculo_id'], ['public.frota_veiculos.id'], ondelete='CASCADE', name='frota_utilizacoes_veiculo_id_fkey'),
@@ -4908,8 +4905,8 @@ class FunilCardAtividades(Base):
     __tablename__ = 'funil_card_atividades'
     __table_args__ = (
         ForeignKeyConstraint(['card_id'], ['public.funil_cards.id'], ondelete='CASCADE', name='funil_card_atividades_card_id_fkey'),
-        ForeignKeyConstraint(['responsavel_id'], ['auth.users.id'], name='funil_card_atividades_responsavel_id_fkey'),
-        ForeignKeyConstraint(['usuario_id'], ['auth.users.id'], name='funil_card_atividades_usuario_id_fkey'),
+        ForeignKeyConstraint(['responsavel_id'], ['users.id'], name='funil_card_atividades_responsavel_id_fkey'),
+        ForeignKeyConstraint(['usuario_id'], ['users.id'], name='funil_card_atividades_usuario_id_fkey'),
         PrimaryKeyConstraint('id', name='funil_card_atividades_pkey'),
         Index('idx_funil_card_atividades_card_id', 'card_id'),
         Index('idx_funil_card_atividades_responsavel_id', 'responsavel_id'),
@@ -4942,7 +4939,7 @@ class FunilCardComparacoes(Base):
     __tablename__ = 'funil_card_comparacoes'
     __table_args__ = (
         ForeignKeyConstraint(['card_id'], ['public.funil_cards.id'], ondelete='CASCADE', name='funil_card_comparacoes_card_id_fkey'),
-        ForeignKeyConstraint(['created_by'], ['auth.users.id'], name='funil_card_comparacoes_created_by_fkey'),
+        ForeignKeyConstraint(['created_by'], ['users.id'], name='funil_card_comparacoes_created_by_fkey'),
         ForeignKeyConstraint(['empresa_id'], ['public.empresas.id'], ondelete='CASCADE', name='funil_card_comparacoes_empresa_id_fkey'),
         PrimaryKeyConstraint('id', name='funil_card_comparacoes_pkey'),
         Index('idx_funil_card_comparacoes_card_id', 'card_id'),
@@ -5013,7 +5010,7 @@ class FunilCardMovimentacoes(Base):
         ForeignKeyConstraint(['card_id'], ['public.funil_cards.id'], ondelete='CASCADE', name='funil_card_movimentacoes_card_id_fkey'),
         ForeignKeyConstraint(['etapa_destino_id'], ['public.funil_etapas.id'], ondelete='SET NULL', name='funil_card_movimentacoes_etapa_destino_id_fkey'),
         ForeignKeyConstraint(['etapa_origem_id'], ['public.funil_etapas.id'], ondelete='SET NULL', name='funil_card_movimentacoes_etapa_origem_id_fkey'),
-        ForeignKeyConstraint(['usuario_id'], ['auth.users.id'], name='funil_card_movimentacoes_usuario_id_fkey'),
+        ForeignKeyConstraint(['usuario_id'], ['users.id'], name='funil_card_movimentacoes_usuario_id_fkey'),
         PrimaryKeyConstraint('id', name='funil_card_movimentacoes_pkey'),
         Index('idx_funil_card_movimentacoes_card_id', 'card_id'),
         Index('idx_funil_card_movimentacoes_etapa_destino_id', 'etapa_destino_id'),
@@ -5047,7 +5044,7 @@ class FunilCardOrcamentos(Base):
     __tablename__ = 'funil_card_orcamentos'
     __table_args__ = (
         ForeignKeyConstraint(['card_id'], ['public.funil_cards.id'], ondelete='CASCADE', name='funil_card_orcamentos_card_id_fkey'),
-        ForeignKeyConstraint(['created_by'], ['auth.users.id'], name='funil_card_orcamentos_created_by_fkey'),
+        ForeignKeyConstraint(['created_by'], ['users.id'], name='funil_card_orcamentos_created_by_fkey'),
         ForeignKeyConstraint(['empresa_id'], ['public.empresas.id'], ondelete='CASCADE', name='funil_card_orcamentos_empresa_id_fkey'),
         PrimaryKeyConstraint('id', name='funil_card_orcamentos_pkey'),
         Index('idx_funil_card_orcamentos_card_id', 'card_id'),
@@ -5083,7 +5080,7 @@ class FunilCardOrcamentosServicosSst(Base):
     __tablename__ = 'funil_card_orcamentos_servicos_sst'
     __table_args__ = (
         ForeignKeyConstraint(['card_id'], ['public.funil_cards.id'], ondelete='CASCADE', name='funil_card_orcamentos_servicos_sst_card_id_fkey'),
-        ForeignKeyConstraint(['created_by'], ['auth.users.id'], name='funil_card_orcamentos_servicos_sst_created_by_fkey'),
+        ForeignKeyConstraint(['created_by'], ['users.id'], name='funil_card_orcamentos_servicos_sst_created_by_fkey'),
         ForeignKeyConstraint(['empresa_id'], ['public.empresas.id'], ondelete='CASCADE', name='funil_card_orcamentos_servicos_sst_empresa_id_fkey'),
         PrimaryKeyConstraint('id', name='funil_card_orcamentos_servicos_sst_pkey'),
         Index('idx_funil_card_orcamentos_sst_card_id', 'card_id'),
@@ -5111,7 +5108,7 @@ class FunilCardPropostas(Base):
     __tablename__ = 'funil_card_propostas'
     __table_args__ = (
         ForeignKeyConstraint(['card_id'], ['public.funil_cards.id'], ondelete='CASCADE', name='funil_card_propostas_card_id_fkey'),
-        ForeignKeyConstraint(['created_by'], ['auth.users.id'], name='funil_card_propostas_created_by_fkey'),
+        ForeignKeyConstraint(['created_by'], ['users.id'], name='funil_card_propostas_created_by_fkey'),
         ForeignKeyConstraint(['empresa_id'], ['public.empresas.id'], ondelete='CASCADE', name='funil_card_propostas_empresa_id_fkey'),
         PrimaryKeyConstraint('id', name='funil_card_propostas_pkey'),
         Index('idx_funil_card_propostas_card_id', 'card_id'),
@@ -5197,7 +5194,7 @@ class PosVendaCardMovimentacoes(Base):
     __tablename__ = 'pos_venda_card_movimentacoes'
     __table_args__ = (
         ForeignKeyConstraint(['card_id'], ['public.pos_venda_cards.id'], ondelete='CASCADE', name='pos_venda_card_movimentacoes_card_id_fkey'),
-        ForeignKeyConstraint(['usuario_id'], ['auth.users.id'], ondelete='SET NULL', name='pos_venda_card_movimentacoes_usuario_id_fkey'),
+        ForeignKeyConstraint(['usuario_id'], ['users.id'], ondelete='SET NULL', name='pos_venda_card_movimentacoes_usuario_id_fkey'),
         PrimaryKeyConstraint('id', name='pos_venda_card_movimentacoes_pkey'),
         Index('idx_pos_venda_card_movimentacoes_card_id', 'card_id'),
         Index('idx_pos_venda_card_movimentacoes_usuario_id', 'usuario_id'),
@@ -5228,7 +5225,7 @@ class PropostasComerciaisServicosSst(Base):
         CheckConstraint("status = ANY (ARRAY['aguardando'::text, 'aprovada'::text, 'rejeitada'::text])", name='propostas_comerciais_servicos_sst_status_check'),
         ForeignKeyConstraint(['card_id'], ['public.funil_cards.id'], ondelete='SET NULL', name='propostas_comerciais_servicos_sst_card_id_fkey'),
         ForeignKeyConstraint(['cliente_id'], ['public.clientes_sst.id'], ondelete='SET NULL', name='propostas_comerciais_servicos_sst_cliente_id_fkey'),
-        ForeignKeyConstraint(['created_by'], ['auth.users.id'], ondelete='SET NULL', name='propostas_comerciais_servicos_sst_created_by_fkey'),
+        ForeignKeyConstraint(['created_by'], ['users.id'], ondelete='SET NULL', name='propostas_comerciais_servicos_sst_created_by_fkey'),
         ForeignKeyConstraint(['empresa_id'], ['public.empresas.id'], ondelete='CASCADE', name='propostas_comerciais_servicos_sst_empresa_id_fkey'),
         PrimaryKeyConstraint('id', name='propostas_comerciais_servicos_sst_pkey'),
         Index('idx_propostas_servicos_sst_card_id', 'card_id'),
@@ -5300,7 +5297,7 @@ class PropostasComerciaisTreinamentos(Base):
         CheckConstraint("status = ANY (ARRAY['aguardando'::text, 'aprovada'::text, 'rejeitada'::text])", name='propostas_comerciais_treinamentos_status_check'),
         ForeignKeyConstraint(['card_id'], ['public.funil_cards.id'], ondelete='SET NULL', name='propostas_comerciais_treinamentos_card_id_fkey'),
         ForeignKeyConstraint(['cliente_id'], ['public.clientes_sst.id'], ondelete='SET NULL', name='propostas_comerciais_treinamentos_cliente_id_fkey'),
-        ForeignKeyConstraint(['created_by'], ['auth.users.id'], name='propostas_comerciais_treinamentos_created_by_fkey'),
+        ForeignKeyConstraint(['created_by'], ['users.id'], name='propostas_comerciais_treinamentos_created_by_fkey'),
         ForeignKeyConstraint(['empresa_id'], ['public.empresas.id'], ondelete='CASCADE', name='propostas_comerciais_treinamentos_empresa_id_fkey'),
         PrimaryKeyConstraint('id', name='propostas_comerciais_treinamentos_pkey'),
         Index('idx_propostas_comerciais_treinamentos_card', 'card_id'),
@@ -5378,7 +5375,7 @@ class PropostasComerciaisVertical365(Base):
         CheckConstraint("modo_exibicao_valores = ANY (ARRAY['anual'::text, 'mensal'::text, 'detalhado'::text])", name='propostas_comerciais_vertical365_modo_exibicao_valores_check'),
         CheckConstraint("status = ANY (ARRAY['aguardando'::text, 'aprovada'::text, 'rejeitada'::text])", name='propostas_comerciais_vertical365_status_check'),
         ForeignKeyConstraint(['card_id'], ['public.funil_cards.id'], ondelete='SET NULL', name='propostas_comerciais_vertical365_card_id_fkey'),
-        ForeignKeyConstraint(['created_by'], ['auth.users.id'], name='propostas_comerciais_vertical365_created_by_fkey'),
+        ForeignKeyConstraint(['created_by'], ['users.id'], name='propostas_comerciais_vertical365_created_by_fkey'),
         ForeignKeyConstraint(['empresa_id'], ['public.empresas.id'], ondelete='CASCADE', name='propostas_comerciais_vertical365_empresa_id_fkey'),
         PrimaryKeyConstraint('id', name='propostas_comerciais_vertical365_pkey'),
         Index('idx_propostas_v365_card_id', 'card_id'),
