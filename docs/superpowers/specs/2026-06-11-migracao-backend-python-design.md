@@ -39,7 +39,7 @@ sem plano de migração de dados.
 | 5 | Backend | **FastAPI + SQLAlchemy 2.0 + Alembic**, deps via `uv` | Async, OpenAPI automático, Pydantic; padrão Python maduro |
 | 6 | Sessão | **JWT próprio**, access (15min) + refresh em **cookie httpOnly**, argon2 | Imune a XSS; padrão pro de SaaS |
 | 7 | Multi-tenancy | Filtro `empresa_id` **estrutural** no repository base | Substitui o RLS; isolamento não confiado à memória do dev |
-| 8 | Storage | **MinIO** (S3-compatível) na VPS, via `@aws-sdk`/`boto3` | Troca para R2/S3 no futuro sem mudar código |
+| 8 | Storage | **RustFS** (S3-compatível) já provisionado no EasyPanel, via `boto3` | Troca para R2/S3 no futuro sem mudar código |
 | 9 | eSocial | **Reescrito em Python** dentro da API | Stack única |
 | 10 | Tipos front↔back | OpenAPI → `packages/api-client` (TS gerado) | Type-safety de ponta a ponta cruzando linguagens |
 | 11 | Schema inicial | **Introspectar** o schema do Supabase | Reaproveita 150+ tabelas já modeladas |
@@ -72,12 +72,12 @@ Observações:
 
 ### 3.2 Infraestrutura (VPS gerenciada por EasyPanel)
 
-A VPS roda **EasyPanel** (PaaS sobre Docker). Serviços:
-- **postgres** — `db-toriq-corp` já provisionado no EasyPanel (Postgres 17), exposto numa
-  porta pública para acesso da API local e de produção. **Banco único** (dev e prod usam o
-  mesmo). Credenciais só no `.env` (gitignored).
+A VPS (`69.62.89.220`) roda **EasyPanel** (PaaS sobre Docker). Serviços:
+- **postgres** — `db-toriq-corp` já provisionado no EasyPanel (Postgres 17), exposto em
+  `69.62.89.220:5432`. **Banco único** (dev e prod usam o mesmo). Credenciais só no `.env`.
+- **storage** — serviço **RustFS** (S3-compatível, `:9000`, key `rustfsadmin`) já provisionado;
+  substitui o MinIO. Acessado via SDK S3 (`boto3`).
 - **api** — FastAPI (uvicorn/gunicorn), Alembic nas migrations; deploy como serviço EasyPanel.
-- **minio** — storage S3-compatível (via docker-compose local; vira serviço EasyPanel em prod).
 - **web** — build estático servido por Nginx (em produção).
 
 > Nota asyncpg: a URL de conexão NÃO usa `?sslmode=disable` (parâmetro do psycopg); o SSL
