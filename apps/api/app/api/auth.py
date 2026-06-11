@@ -1,11 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+import uuid
+
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.security import hash_password, verify_password
-from app.core.tokens import create_token
+from app.core.tokens import TokenError, create_token, decode_token
 from app.models.user import User
 from app.schemas.auth import LoginIn, RegisterIn, UserOut
 
@@ -62,3 +64,30 @@ async def login(payload: LoginIn, response: Response,
         raise HTTPException(status.HTTP_403_FORBIDDEN, "usuário inativo")
     _set_auth_cookies(response, user)
     return user
+
+
+@router.post("/refresh", response_model=UserOut)
+async def refresh(
+    response: Response,
+    refresh_token: str | None = Cookie(default=None),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    if not refresh_token:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "sem refresh token")
+    try:
+        payload = decode_token(refresh_token)
+    except TokenError:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "refresh inválido")
+    if payload.get("type") != "refresh":
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "tipo de token inválido")
+    user = await db.get(User, uuid.UUID(payload["sub"]))
+    if not user or not user.ativo:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "usuário inválido")
+    _set_auth_cookies(response, user)
+    return user
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(response: Response) -> None:
+    response.delete_cookie("access_token")
+    response.delete_cookie("refresh_token", path="/auth")
