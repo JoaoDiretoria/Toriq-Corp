@@ -84,8 +84,10 @@ Containers:
 - Senhas com **argon2** (`passlib`).
 - FastAPI emite **access token (15min)** + **refresh token** em **cookies httpOnly**.
   - Atenção a **CSRF** (cookies enviados automaticamente) e **CORS com credenciais**.
-- **RBAC:** papéis existentes (`admin`, `cliente_torq`, `instrutor`, `parceira`) viram
-  dependências FastAPI: `Depends(require_role("admin"))`.
+- **RBAC:** papéis reais (enum `user_role`: `admin_vertical`, `cliente_torq`,
+  `cliente_final`, `empresa_parceira`, `instrutor`; + `grupo_acesso`:
+  administrador/gestor/colaborador) viram dependências FastAPI:
+  `Depends(require_role(UserRole.admin_vertical))`.
 - A lógica hoje em `usePermissoes` / `useTelaPermissoes` / `useHierarquia` (cosmética no
   front) migra para a API, onde passa a ser **autoridade real**.
 
