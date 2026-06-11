@@ -12,7 +12,7 @@ async def whoami(user: CurrentUser = Depends(get_current_user)):
 
 
 async def _seed_and_login(client, db_session, role="cliente_torq"):
-    from app.models.empresa import Empresa
+    from app.models.generated import Empresas as Empresa
 
     empresa = Empresa(id=uuid.uuid4(), nome="ACME", tipo="sst")
     db_session.add(empresa)

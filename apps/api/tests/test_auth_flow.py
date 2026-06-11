@@ -2,7 +2,7 @@ import uuid
 
 
 async def test_register_then_login_sets_cookies(client, db_session):
-    from app.models.empresa import Empresa
+    from app.models.generated import Empresas as Empresa
 
     empresa = Empresa(id=uuid.uuid4(), nome="ACME", tipo="sst")
     db_session.add(empresa)
@@ -30,7 +30,7 @@ async def test_register_then_login_sets_cookies(client, db_session):
 
 
 async def test_login_wrong_password_401(client, db_session):
-    from app.models.empresa import Empresa
+    from app.models.generated import Empresas as Empresa
 
     empresa = Empresa(id=uuid.uuid4(), nome="ACME", tipo="sst")
     db_session.add(empresa)

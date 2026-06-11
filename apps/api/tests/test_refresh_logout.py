@@ -2,7 +2,7 @@ import uuid
 
 
 async def _login(client, db_session):
-    from app.models.empresa import Empresa
+    from app.models.generated import Empresas as Empresa
 
     empresa = Empresa(id=uuid.uuid4(), nome="E", tipo="sst")
     db_session.add(empresa)

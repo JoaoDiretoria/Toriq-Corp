@@ -1,16 +1,38 @@
+import datetime
+
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.db import Base, get_db
 from app.main import app
 
+# Tables used by the unit test suite (public schema mapped to None for SQLite).
+_TEST_TABLES = ["users", "public.empresas"]
+
+
+def _register_sqlite_functions(dbapi_conn, _connection_record):
+    """Register PostgreSQL functions that SQLite lacks, for the test suite."""
+    dbapi_conn.create_function(
+        "now", 0, lambda: datetime.datetime.now(datetime.UTC).isoformat(" ")
+    )
+
 
 @pytest.fixture
 async def db_engine():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        execution_options={"schema_translate_map": {"public": None}},
+    )
+    event.listen(engine.sync_engine, "connect", _register_sqlite_functions)
+
+    def _create(conn):
+        tables = [Base.metadata.tables[name] for name in _TEST_TABLES]
+        Base.metadata.create_all(conn, tables=tables)
+
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(_create)
     yield engine
     await engine.dispose()
 

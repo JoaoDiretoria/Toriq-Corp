@@ -26,101 +26,6 @@ class TipoEmpresa(str, enum.Enum):
     LEAD = 'lead'
 
 
-class Users(Base):
-    __tablename__ = 'users'
-    __table_args__ = (
-        CheckConstraint('email_change_confirm_status >= 0 AND email_change_confirm_status <= 2', name='users_email_change_confirm_status_check'),
-        PrimaryKeyConstraint('id', name='users_pkey'),
-        UniqueConstraint('phone', name='users_phone_key'),
-        Index('confirmation_token_idx', 'confirmation_token', postgresql_where="((confirmation_token)::text !~ '^[0-9 ]*$'::text)", unique=True),
-        Index('email_change_token_current_idx', 'email_change_token_current', postgresql_where="((email_change_token_current)::text !~ '^[0-9 ]*$'::text)", unique=True),
-        Index('email_change_token_new_idx', 'email_change_token_new', postgresql_where="((email_change_token_new)::text !~ '^[0-9 ]*$'::text)", unique=True),
-        Index('reauthentication_token_idx', 'reauthentication_token', postgresql_where="((reauthentication_token)::text !~ '^[0-9 ]*$'::text)", unique=True),
-        Index('recovery_token_idx', 'recovery_token', postgresql_where="((recovery_token)::text !~ '^[0-9 ]*$'::text)", unique=True),
-        Index('users_email_partial_key', 'email', postgresql_where='(is_sso_user = false)', unique=True),
-        Index('users_instance_id_email_idx', 'instance_id'),
-        Index('users_instance_id_idx', 'instance_id'),
-        Index('users_is_anonymous_idx', 'is_anonymous'),
-        {'comment': 'Auth: Stores user login data within a secure schema.',
-     'schema': 'auth'}
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
-    is_sso_user: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text('false'), comment='Auth: Set this column to true when the account comes from SSO. These accounts can have duplicate emails.')
-    is_anonymous: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text('false'))
-    instance_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
-    aud: Mapped[Optional[str]] = mapped_column(String(255))
-    role: Mapped[Optional[str]] = mapped_column(String(255))
-    email: Mapped[Optional[str]] = mapped_column(String(255))
-    encrypted_password: Mapped[Optional[str]] = mapped_column(String(255))
-    email_confirmed_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True))
-    invited_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True))
-    confirmation_token: Mapped[Optional[str]] = mapped_column(String(255))
-    confirmation_sent_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True))
-    recovery_token: Mapped[Optional[str]] = mapped_column(String(255))
-    recovery_sent_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True))
-    email_change_token_new: Mapped[Optional[str]] = mapped_column(String(255))
-    email_change: Mapped[Optional[str]] = mapped_column(String(255))
-    email_change_sent_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True))
-    last_sign_in_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True))
-    raw_app_meta_data: Mapped[Optional[dict]] = mapped_column(JSONB)
-    raw_user_meta_data: Mapped[Optional[dict]] = mapped_column(JSONB)
-    is_super_admin: Mapped[Optional[bool]] = mapped_column(Boolean)
-    created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True))
-    updated_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True))
-    phone: Mapped[Optional[str]] = mapped_column(Text, server_default=text('NULL::character varying'))
-    phone_confirmed_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True))
-    phone_change: Mapped[Optional[str]] = mapped_column(Text, server_default=text("''::character varying"))
-    phone_change_token: Mapped[Optional[str]] = mapped_column(String(255), server_default=text("''::character varying"))
-    phone_change_sent_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True))
-    confirmed_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), Computed('LEAST(email_confirmed_at, phone_confirmed_at)', persisted=True))
-    email_change_token_current: Mapped[Optional[str]] = mapped_column(String(255), server_default=text("''::character varying"))
-    email_change_confirm_status: Mapped[Optional[int]] = mapped_column(SmallInteger, server_default=text('0'))
-    banned_until: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True))
-    reauthentication_token: Mapped[Optional[str]] = mapped_column(String(255), server_default=text("''::character varying"))
-    reauthentication_sent_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True))
-    deleted_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True))
-
-    frota_motoristas: Mapped[list['FrotaMotoristas']] = relationship('FrotaMotoristas', back_populates='users')
-    frota_veiculos: Mapped[list['FrotaVeiculos']] = relationship('FrotaVeiculos', back_populates='users')
-    import_queue: Mapped[list['ImportQueue']] = relationship('ImportQueue', back_populates='user')
-    modelos_proposta_comercial: Mapped[list['ModelosPropostaComercial']] = relationship('ModelosPropostaComercial', back_populates='users')
-    notificacoes_lida_por: Mapped[list['Notificacoes']] = relationship('Notificacoes', foreign_keys='[Notificacoes.lida_por]', back_populates='users')
-    notificacoes_usuario: Mapped[list['Notificacoes']] = relationship('Notificacoes', foreign_keys='[Notificacoes.usuario_id]', back_populates='usuario')
-    perigos: Mapped[list['Perigos']] = relationship('Perigos', back_populates='users')
-    propostas_modelos: Mapped[list['PropostasModelos']] = relationship('PropostasModelos', back_populates='users')
-    riscos: Mapped[list['Riscos']] = relationship('Riscos', back_populates='users')
-    sessoes_ativas: Mapped[list['SessoesAtivas']] = relationship('SessoesAtivas', back_populates='user')
-    tickets_suporte_atendente: Mapped[list['TicketsSuporte']] = relationship('TicketsSuporte', foreign_keys='[TicketsSuporte.atendente_id]', back_populates='atendente')
-    tickets_suporte_solicitante: Mapped[list['TicketsSuporte']] = relationship('TicketsSuporte', foreign_keys='[TicketsSuporte.solicitante_id]', back_populates='solicitante')
-    user_update_views: Mapped[list['UserUpdateViews']] = relationship('UserUpdateViews', back_populates='user')
-    whatsapp_templates: Mapped[list['WhatsappTemplates']] = relationship('WhatsappTemplates', back_populates='users')
-    cross_selling_cards_created_by: Mapped[list['CrossSellingCards']] = relationship('CrossSellingCards', foreign_keys='[CrossSellingCards.created_by]', back_populates='users')
-    cross_selling_cards_responsavel: Mapped[list['CrossSellingCards']] = relationship('CrossSellingCards', foreign_keys='[CrossSellingCards.responsavel_id]', back_populates='responsavel')
-    frota_checklists: Mapped[list['FrotaChecklists']] = relationship('FrotaChecklists', back_populates='users')
-    frota_custos: Mapped[list['FrotaCustos']] = relationship('FrotaCustos', back_populates='users')
-    frota_manutencoes: Mapped[list['FrotaManutencoes']] = relationship('FrotaManutencoes', back_populates='users')
-    frota_ocorrencias: Mapped[list['FrotaOcorrencias']] = relationship('FrotaOcorrencias', back_populates='users')
-    tickets_suporte_comentarios: Mapped[list['TicketsSuporteComentarios']] = relationship('TicketsSuporteComentarios', back_populates='autor')
-    whatsapp_campanhas: Mapped[list['WhatsappCampanhas']] = relationship('WhatsappCampanhas', back_populates='users')
-    closer_atividades: Mapped[list['CloserAtividades']] = relationship('CloserAtividades', back_populates='usuario')
-    cross_selling_atividades: Mapped[list['CrossSellingAtividades']] = relationship('CrossSellingAtividades', back_populates='usuario')
-    cross_selling_card_movimentacoes: Mapped[list['CrossSellingCardMovimentacoes']] = relationship('CrossSellingCardMovimentacoes', back_populates='usuario')
-    equipamentos_movimentacoes_historico: Mapped[list['EquipamentosMovimentacoesHistorico']] = relationship('EquipamentosMovimentacoesHistorico', back_populates='usuario')
-    frota_utilizacoes: Mapped[list['FrotaUtilizacoes']] = relationship('FrotaUtilizacoes', back_populates='users')
-    funil_card_atividades_responsavel: Mapped[list['FunilCardAtividades']] = relationship('FunilCardAtividades', foreign_keys='[FunilCardAtividades.responsavel_id]', back_populates='responsavel')
-    funil_card_atividades_usuario: Mapped[list['FunilCardAtividades']] = relationship('FunilCardAtividades', foreign_keys='[FunilCardAtividades.usuario_id]', back_populates='usuario')
-    funil_card_comparacoes: Mapped[list['FunilCardComparacoes']] = relationship('FunilCardComparacoes', back_populates='users')
-    funil_card_movimentacoes: Mapped[list['FunilCardMovimentacoes']] = relationship('FunilCardMovimentacoes', back_populates='usuario')
-    funil_card_orcamentos: Mapped[list['FunilCardOrcamentos']] = relationship('FunilCardOrcamentos', back_populates='users')
-    funil_card_orcamentos_servicos_sst: Mapped[list['FunilCardOrcamentosServicosSst']] = relationship('FunilCardOrcamentosServicosSst', back_populates='users')
-    funil_card_propostas: Mapped[list['FunilCardPropostas']] = relationship('FunilCardPropostas', back_populates='users')
-    pos_venda_card_movimentacoes: Mapped[list['PosVendaCardMovimentacoes']] = relationship('PosVendaCardMovimentacoes', back_populates='usuario')
-    propostas_comerciais_servicos_sst: Mapped[list['PropostasComerciaisServicosSst']] = relationship('PropostasComerciaisServicosSst', back_populates='users')
-    propostas_comerciais_treinamentos: Mapped[list['PropostasComerciaisTreinamentos']] = relationship('PropostasComerciaisTreinamentos', back_populates='users')
-    propostas_comerciais_vertical365: Mapped[list['PropostasComerciaisVertical365']] = relationship('PropostasComerciaisVertical365', back_populates='users')
-
-
 t_atividades_unificadas = Table(
     'atividades_unificadas', Base.metadata,
     Column('id', Uuid),
@@ -1608,7 +1513,6 @@ class FrotaMotoristas(Base):
     cidade: Mapped[Optional[str]] = mapped_column(Text, comment='Cidade do endereço')
     estado: Mapped[Optional[str]] = mapped_column(Text, comment='Estado (UF) do endereço')
 
-    users: Mapped[Optional['Users']] = relationship('Users', back_populates='frota_motoristas')
     empresa: Mapped['Empresas'] = relationship('Empresas', back_populates='frota_motoristas')
 
 
@@ -1643,7 +1547,6 @@ class FrotaVeiculos(Base):
     created_by: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
     checklist_obrigatorio: Mapped[Optional[bool]] = mapped_column(Boolean, server_default=text('false'), comment='Indica se o checklist é obrigatório antes de cada utilização do veículo')
 
-    users: Mapped[Optional['Users']] = relationship('Users', back_populates='frota_veiculos')
     empresa: Mapped['Empresas'] = relationship('Empresas', back_populates='frota_veiculos')
     frota_checklists: Mapped[list['FrotaChecklists']] = relationship('FrotaChecklists', back_populates='veiculo')
     frota_custos: Mapped[list['FrotaCustos']] = relationship('FrotaCustos', back_populates='veiculo')
@@ -1784,7 +1687,6 @@ class ImportQueue(Base):
     completed_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True))
 
     empresa: Mapped['Empresas'] = relationship('Empresas', back_populates='import_queue')
-    user: Mapped['Users'] = relationship('Users', back_populates='import_queue')
 
 
 class InformacoesEmpresa(Base):
@@ -1899,7 +1801,6 @@ class ModelosPropostaComercial(Base):
     updated_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), server_default=text('now()'))
     planos_selecionados: Mapped[Optional[list[str]]] = mapped_column(ARRAY(Text()), server_default=text("'{}'::text[]"))
 
-    users: Mapped[Optional['Users']] = relationship('Users', back_populates='modelos_proposta_comercial')
     empresa: Mapped['Empresas'] = relationship('Empresas', back_populates='modelos_proposta_comercial')
 
 
@@ -1959,8 +1860,6 @@ class Notificacoes(Base):
     updated_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), server_default=text('now()'))
 
     empresa: Mapped['Empresas'] = relationship('Empresas', back_populates='notificacoes')
-    users: Mapped[Optional['Users']] = relationship('Users', foreign_keys=[lida_por], back_populates='notificacoes_lida_por')
-    usuario: Mapped[Optional['Users']] = relationship('Users', foreign_keys=[usuario_id], back_populates='notificacoes_usuario')
 
 
 class OrigensContato(Base):
@@ -2034,7 +1933,6 @@ class Perigos(Base):
     updated_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), server_default=text('now()'))
     created_by: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
 
-    users: Mapped[Optional['Users']] = relationship('Users', back_populates='perigos')
     empresa: Mapped['Empresas'] = relationship('Empresas', back_populates='perigos')
 
 
@@ -2204,7 +2102,6 @@ class PropostasModelos(Base):
     updated_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), server_default=text('now()'))
     created_by: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
 
-    users: Mapped[Optional['Users']] = relationship('Users', back_populates='propostas_modelos')
     empresa: Mapped['Empresas'] = relationship('Empresas', back_populates='propostas_modelos')
 
 
@@ -2295,7 +2192,6 @@ class Riscos(Base):
     updated_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), server_default=text('now()'))
     created_by: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
 
-    users: Mapped[Optional['Users']] = relationship('Users', back_populates='riscos')
     empresa: Mapped['Empresas'] = relationship('Empresas', back_populates='riscos')
 
 
@@ -2372,7 +2268,6 @@ class SessoesAtivas(Base):
     last_activity: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), server_default=text('now()'))
     ativo: Mapped[Optional[bool]] = mapped_column(Boolean, server_default=text('true'))
 
-    user: Mapped['Users'] = relationship('Users', back_populates='sessoes_ativas')
 
 
 class Setores(Base):
@@ -2498,10 +2393,8 @@ class TicketsSuporte(Base):
     modulo: Mapped[Optional[str]] = mapped_column(Text)
     tela: Mapped[Optional[str]] = mapped_column(Text)
 
-    atendente: Mapped[Optional['Users']] = relationship('Users', foreign_keys=[atendente_id], back_populates='tickets_suporte_atendente')
     empresa_destino: Mapped[Optional['Empresas']] = relationship('Empresas', foreign_keys=[empresa_destino_id], back_populates='tickets_suporte_empresa_destino')
     empresa_solicitante: Mapped[Optional['Empresas']] = relationship('Empresas', foreign_keys=[empresa_solicitante_id], back_populates='tickets_suporte_empresa_solicitante')
-    solicitante: Mapped['Users'] = relationship('Users', foreign_keys=[solicitante_id], back_populates='tickets_suporte_solicitante')
     tickets_suporte_anexos: Mapped[list['TicketsSuporteAnexos']] = relationship('TicketsSuporteAnexos', back_populates='ticket')
     tickets_suporte_comentarios: Mapped[list['TicketsSuporteComentarios']] = relationship('TicketsSuporteComentarios', back_populates='ticket')
 
@@ -2568,7 +2461,6 @@ class UserUpdateViews(Base):
     viewed_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), server_default=text('now()'))
 
     update: Mapped['SystemUpdates'] = relationship('SystemUpdates', back_populates='user_update_views')
-    user: Mapped['Users'] = relationship('Users', back_populates='user_update_views')
 
 
 class WhatsappConfiguracoes(Base):
@@ -2614,7 +2506,6 @@ class WhatsappTemplates(Base):
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), server_default=text('now()'))
     updated_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), server_default=text('now()'))
 
-    users: Mapped[Optional['Users']] = relationship('Users', back_populates='whatsapp_templates')
     empresa: Mapped['Empresas'] = relationship('Empresas', back_populates='whatsapp_templates')
     whatsapp_campanhas: Mapped[list['WhatsappCampanhas']] = relationship('WhatsappCampanhas', back_populates='template')
 
@@ -2828,9 +2719,7 @@ class CrossSellingCards(Base):
     created_by: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
 
     coluna: Mapped['CrossSellingColunas'] = relationship('CrossSellingColunas', back_populates='cross_selling_cards')
-    users: Mapped[Optional['Users']] = relationship('Users', foreign_keys=[created_by], back_populates='cross_selling_cards_created_by')
     empresa: Mapped['Empresas'] = relationship('Empresas', back_populates='cross_selling_cards')
-    responsavel: Mapped[Optional['Users']] = relationship('Users', foreign_keys=[responsavel_id], back_populates='cross_selling_cards_responsavel')
     etiqueta: Mapped[list['CrossSellingEtiquetas']] = relationship('CrossSellingEtiquetas', secondary='public.cross_selling_card_etiquetas', back_populates='card')
     cross_selling_atividades: Mapped[list['CrossSellingAtividades']] = relationship('CrossSellingAtividades', back_populates='card')
     cross_selling_card_movimentacoes: Mapped[list['CrossSellingCardMovimentacoes']] = relationship('CrossSellingCardMovimentacoes', back_populates='card')
@@ -2884,7 +2773,6 @@ class FrotaChecklists(Base):
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), server_default=text('now()'))
     created_by: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
 
-    users: Mapped[Optional['Users']] = relationship('Users', back_populates='frota_checklists')
     empresa: Mapped['Empresas'] = relationship('Empresas', back_populates='frota_checklists')
     veiculo: Mapped['FrotaVeiculos'] = relationship('FrotaVeiculos', back_populates='frota_checklists')
 
@@ -2913,7 +2801,6 @@ class FrotaCustos(Base):
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), server_default=text('now()'))
     created_by: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
 
-    users: Mapped[Optional['Users']] = relationship('Users', back_populates='frota_custos')
     empresa: Mapped['Empresas'] = relationship('Empresas', back_populates='frota_custos')
     veiculo: Mapped['FrotaVeiculos'] = relationship('FrotaVeiculos', back_populates='frota_custos')
 
@@ -2974,7 +2861,6 @@ class FrotaManutencoes(Base):
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), server_default=text('now()'))
     created_by: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
 
-    users: Mapped[Optional['Users']] = relationship('Users', back_populates='frota_manutencoes')
     empresa: Mapped['Empresas'] = relationship('Empresas', back_populates='frota_manutencoes')
     veiculo: Mapped['FrotaVeiculos'] = relationship('FrotaVeiculos', back_populates='frota_manutencoes')
 
@@ -3007,7 +2893,6 @@ class FrotaOcorrencias(Base):
     created_by: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
     updated_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), server_default=text('now()'))
 
-    users: Mapped[Optional['Users']] = relationship('Users', back_populates='frota_ocorrencias')
     empresa: Mapped['Empresas'] = relationship('Empresas', back_populates='frota_ocorrencias')
     veiculo: Mapped['FrotaVeiculos'] = relationship('FrotaVeiculos', back_populates='frota_ocorrencias')
 
@@ -3346,7 +3231,6 @@ class TicketsSuporteComentarios(Base):
     interno: Mapped[Optional[bool]] = mapped_column(Boolean, server_default=text('false'))
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), server_default=text('now()'))
 
-    autor: Mapped['Users'] = relationship('Users', back_populates='tickets_suporte_comentarios')
     ticket: Mapped['TicketsSuporte'] = relationship('TicketsSuporte', back_populates='tickets_suporte_comentarios')
 
 
@@ -3380,7 +3264,6 @@ class WhatsappCampanhas(Base):
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), server_default=text('now()'))
     updated_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), server_default=text('now()'))
 
-    users: Mapped[Optional['Users']] = relationship('Users', back_populates='whatsapp_campanhas')
     empresa: Mapped['Empresas'] = relationship('Empresas', back_populates='whatsapp_campanhas')
     template: Mapped['WhatsappTemplates'] = relationship('WhatsappTemplates', back_populates='whatsapp_campanhas')
     whatsapp_mensagens: Mapped[list['WhatsappMensagens']] = relationship('WhatsappMensagens', back_populates='campanha')
@@ -3544,7 +3427,6 @@ class CloserAtividades(Base):
 
     card: Mapped['CloserCards'] = relationship('CloserCards', back_populates='closer_atividades')
     responsavel: Mapped[Optional['Colaboradores']] = relationship('Colaboradores', back_populates='closer_atividades')
-    usuario: Mapped[Optional['Users']] = relationship('Users', back_populates='closer_atividades')
 
 
 class CloserCardEtiquetas(Base):
@@ -3689,7 +3571,6 @@ class CrossSellingAtividades(Base):
     horario: Mapped[Optional[str]] = mapped_column(Text)
 
     card: Mapped['CrossSellingCards'] = relationship('CrossSellingCards', back_populates='cross_selling_atividades')
-    usuario: Mapped[Optional['Users']] = relationship('Users', back_populates='cross_selling_atividades')
 
 
 t_cross_selling_card_etiquetas = Table(
@@ -3729,7 +3610,6 @@ class CrossSellingCardMovimentacoes(Base):
     dados_novos: Mapped[Optional[dict]] = mapped_column(JSONB)
 
     card: Mapped['CrossSellingCards'] = relationship('CrossSellingCards', back_populates='cross_selling_card_movimentacoes')
-    usuario: Mapped[Optional['Users']] = relationship('Users', back_populates='cross_selling_card_movimentacoes')
 
 
 class EsocialEventLogs(Base):
@@ -4853,7 +4733,6 @@ class EquipamentosMovimentacoesHistorico(Base):
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), server_default=text('now()'))
 
     movimentacao: Mapped['EquipamentosMovimentacoes'] = relationship('EquipamentosMovimentacoes', back_populates='equipamentos_movimentacoes_historico')
-    usuario: Mapped[Optional['Users']] = relationship('Users', back_populates='equipamentos_movimentacoes_historico')
 
 
 class FrotaUtilizacoes(Base):
@@ -4895,7 +4774,6 @@ class FrotaUtilizacoes(Base):
     funil_card_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, comment='ID do card de funil vinculado a esta utilização de veículo')
     numero_movimentacao: Mapped[Optional[str]] = mapped_column(String(20))
 
-    users: Mapped[Optional['Users']] = relationship('Users', back_populates='frota_utilizacoes')
     empresa: Mapped['Empresas'] = relationship('Empresas', back_populates='frota_utilizacoes')
     funil_card: Mapped[Optional['FunilCards']] = relationship('FunilCards', back_populates='frota_utilizacoes')
     veiculo: Mapped['FrotaVeiculos'] = relationship('FrotaVeiculos', back_populates='frota_utilizacoes')
@@ -4931,8 +4809,6 @@ class FunilCardAtividades(Base):
     anexo_nome: Mapped[Optional[str]] = mapped_column(Text, comment='Nome original do arquivo anexado')
 
     card: Mapped['FunilCards'] = relationship('FunilCards', back_populates='funil_card_atividades')
-    responsavel: Mapped[Optional['Users']] = relationship('Users', foreign_keys=[responsavel_id], back_populates='funil_card_atividades_responsavel')
-    usuario: Mapped[Optional['Users']] = relationship('Users', foreign_keys=[usuario_id], back_populates='funil_card_atividades_usuario')
 
 
 class FunilCardComparacoes(Base):
@@ -4979,7 +4855,6 @@ class FunilCardComparacoes(Base):
     created_by: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
 
     card: Mapped['FunilCards'] = relationship('FunilCards', back_populates='funil_card_comparacoes')
-    users: Mapped[Optional['Users']] = relationship('Users', back_populates='funil_card_comparacoes')
     empresa: Mapped['Empresas'] = relationship('Empresas', back_populates='funil_card_comparacoes')
 
 
@@ -5037,7 +4912,6 @@ class FunilCardMovimentacoes(Base):
     card: Mapped['FunilCards'] = relationship('FunilCards', back_populates='funil_card_movimentacoes')
     etapa_destino: Mapped[Optional['FunilEtapas']] = relationship('FunilEtapas', foreign_keys=[etapa_destino_id], back_populates='funil_card_movimentacoes_etapa_destino')
     etapa_origem: Mapped[Optional['FunilEtapas']] = relationship('FunilEtapas', foreign_keys=[etapa_origem_id], back_populates='funil_card_movimentacoes_etapa_origem')
-    usuario: Mapped[Optional['Users']] = relationship('Users', back_populates='funil_card_movimentacoes')
 
 
 class FunilCardOrcamentos(Base):
@@ -5072,7 +4946,6 @@ class FunilCardOrcamentos(Base):
     created_by: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
 
     card: Mapped['FunilCards'] = relationship('FunilCards', back_populates='funil_card_orcamentos')
-    users: Mapped[Optional['Users']] = relationship('Users', back_populates='funil_card_orcamentos')
     empresa: Mapped['Empresas'] = relationship('Empresas', back_populates='funil_card_orcamentos')
 
 
@@ -5100,7 +4973,6 @@ class FunilCardOrcamentosServicosSst(Base):
     created_by: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
 
     card: Mapped['FunilCards'] = relationship('FunilCards', back_populates='funil_card_orcamentos_servicos_sst')
-    users: Mapped[Optional['Users']] = relationship('Users', back_populates='funil_card_orcamentos_servicos_sst')
     empresa: Mapped['Empresas'] = relationship('Empresas', back_populates='funil_card_orcamentos_servicos_sst')
 
 
@@ -5131,7 +5003,6 @@ class FunilCardPropostas(Base):
     created_by: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
 
     card: Mapped['FunilCards'] = relationship('FunilCards', back_populates='funil_card_propostas')
-    users: Mapped[Optional['Users']] = relationship('Users', back_populates='funil_card_propostas')
     empresa: Mapped['Empresas'] = relationship('Empresas', back_populates='funil_card_propostas')
 
 
@@ -5215,7 +5086,6 @@ class PosVendaCardMovimentacoes(Base):
     dados_novos: Mapped[Optional[dict]] = mapped_column(JSONB)
 
     card: Mapped['PosVendaCards'] = relationship('PosVendaCards', back_populates='pos_venda_card_movimentacoes')
-    usuario: Mapped[Optional['Users']] = relationship('Users', back_populates='pos_venda_card_movimentacoes')
 
 
 class PropostasComerciaisServicosSst(Base):
@@ -5287,7 +5157,6 @@ class PropostasComerciaisServicosSst(Base):
 
     card: Mapped[Optional['FunilCards']] = relationship('FunilCards', back_populates='propostas_comerciais_servicos_sst')
     cliente: Mapped[Optional['ClientesSst']] = relationship('ClientesSst', back_populates='propostas_comerciais_servicos_sst')
-    users: Mapped[Optional['Users']] = relationship('Users', back_populates='propostas_comerciais_servicos_sst')
     empresa: Mapped['Empresas'] = relationship('Empresas', back_populates='propostas_comerciais_servicos_sst')
 
 
@@ -5365,7 +5234,6 @@ class PropostasComerciaisTreinamentos(Base):
 
     card: Mapped[Optional['FunilCards']] = relationship('FunilCards', back_populates='propostas_comerciais_treinamentos')
     cliente: Mapped[Optional['ClientesSst']] = relationship('ClientesSst', back_populates='propostas_comerciais_treinamentos')
-    users: Mapped[Optional['Users']] = relationship('Users', back_populates='propostas_comerciais_treinamentos')
     empresa: Mapped['Empresas'] = relationship('Empresas', back_populates='propostas_comerciais_treinamentos')
 
 
@@ -5438,7 +5306,6 @@ class PropostasComerciaisVertical365(Base):
     cliente_cep: Mapped[Optional[str]] = mapped_column(Text)
 
     card: Mapped[Optional['FunilCards']] = relationship('FunilCards', back_populates='propostas_comerciais_vertical365')
-    users: Mapped[Optional['Users']] = relationship('Users', back_populates='propostas_comerciais_vertical365')
     empresa: Mapped['Empresas'] = relationship('Empresas', back_populates='propostas_comerciais_vertical365')
 
 
