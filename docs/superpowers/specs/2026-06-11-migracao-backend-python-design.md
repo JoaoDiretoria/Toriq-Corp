@@ -42,7 +42,8 @@ sem plano de migração de dados.
 | 8 | Storage | **RustFS** (S3-compatível) já provisionado no EasyPanel, via `boto3` | Troca para R2/S3 no futuro sem mudar código |
 | 9 | eSocial | **Reescrito em Python** dentro da API | Stack única |
 | 10 | Tipos front↔back | OpenAPI → `packages/api-client` (TS gerado) | Type-safety de ponta a ponta cruzando linguagens |
-| 11 | Schema inicial | **Introspectar** o schema do Supabase | Reaproveita 150+ tabelas já modeladas |
+| 11 | Schema inicial | **Introspectar** o schema do Supabase | Reaproveita 172 tabelas já modeladas |
+| 12 | Lógica do banco | **Portar 229 triggers + 108 funções para Python** (app layer) | Tira a lógica do banco; testável e versionável. Banco novo nasce só com dados (sem triggers); inventário classificado guia o porte módulo a módulo |
 
 ## 3. Arquitetura-alvo
 
