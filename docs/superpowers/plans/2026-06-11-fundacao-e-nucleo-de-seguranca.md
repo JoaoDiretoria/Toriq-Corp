@@ -1483,7 +1483,11 @@ Ao terminar todas as tasks, o seguinte deve ser verdade:
    bootstrap do 1º admin via seed/CLI; criação de usuários admin-gated com validação de
    `empresa_id` por tenant; self-register (se houver) com role mínima e `empresa_id=None`.
    Ver spec §3.3. **Deve ser feito antes de expor a API.**
-1. **Camada de dados** — introspecção das 172 tabelas do Supabase → models SQLAlchemy + migrations; inventário de regras que viviam em triggers/policies.
+1. **Camada de dados** — introspecção das 172 tabelas do Supabase → models SQLAlchemy + migrations; inventário de regras que viviam em triggers/policies. **Resolver no início (achados da revisão final do Plano 1, antes do autogenerate em massa):**
+   - **Enums nativos do Postgres idempotentes:** padronizar `postgresql.ENUM(..., create_type=False)` + `CREATE TYPE`/`DROP TYPE` explícitos numa migration dedicada, senão o autogenerate re-emite `CREATE TYPE` e quebra com `DuplicateObject`. Adicionar ao menos um teste de migration contra Postgres real (container descartável) — os testes em SQLite não pegam o ciclo de vida do enum.
+   - **`TenantRepository` tipado:** introduzir um `Protocol`/mixin `TenantModel` (que exige `empresa_id`) para o filtro falhar em type-check, não em runtime, quando o `get_by_id`/`update`/`delete` chegarem (perigosos de errar em 172 tabelas).
+   - **Rotas de teste:** parar de registrar rotas (`/whoami`, `/admin-only`) no `app` global em tempo de import (`test_current_user.py`, `test_rbac.py`); usar um `FastAPI()` descartável/fixture.
+   - **`Empresa.tipo` default `"sst"`:** reconciliar com o schema introspectado (resquício do rebrand SST→Toriq Corp).
 2. **Módulos de negócio** — portar os 7 edge functions + domínios (SST, Toriq Corp, Treinamentos, Frota, White Label); storage via MinIO.
 3. **eSocial em Python** — reescrever assinatura digital A1 / SOAP gov.br.
 4. **Religar o front** — mover para `apps/web`, wiring pnpm/turbo, gerar `packages/api-client`, trocar 136 arquivos de `supabase.from()` + 14 de `supabase.auth`.

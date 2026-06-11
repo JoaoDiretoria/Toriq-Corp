@@ -61,4 +61,8 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_notas_empresa_id'), table_name='notas')
     op.drop_table('notas')
     op.drop_table('empresas')
+    # O Enum nativo do Postgres não é removido ao dropar a tabela; sem isso, um
+    # downgrade+upgrade falha com "type user_role already exists". No-op fora do PG.
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute("DROP TYPE IF EXISTS user_role")
     # ### end Alembic commands ###
