@@ -96,6 +96,15 @@ A VPS (`69.62.89.220`) roda **EasyPanel** (PaaS sobre Docker). Serviços:
 - A lógica hoje em `usePermissoes` / `useTelaPermissoes` / `useHierarquia` (cosmética no
   front) migra para a API, onde passa a ser **autoridade real**.
 
+> 🔴 **BLOQUEANTE DE PRÉ-DEPLOY — registro de usuários:** no esqueleto andante, o
+> `/auth/register` aceita `role` e `empresa_id` do corpo da requisição sem autenticação
+> (necessário para o teste de isolamento de tenant criar usuários em empresas distintas).
+> Isso é **privilege escalation** e NÃO pode ir para produção assim. Antes de qualquer
+> deploy, o plano de user-management deve: (a) criar o primeiro admin via **seed/CLI** (não
+> por HTTP), e (b) tornar a criação de usuários **admin-gated** (`Depends(require_role(admin_vertical))`),
+> validando que `empresa_id` pertence ao tenant do solicitante. O self-register público, se
+> existir, deve fixar `role` no menos privilegiado e `empresa_id=None`.
+
 ### 3.4 Multi-tenancy (substituição do RLS) — ponto crítico
 
 - Hoje o **RLS** garante isolamento entre empresas mesmo com acesso direto do front.

@@ -29,6 +29,11 @@ def _set_auth_cookies(response: Response, user: User) -> None:
                         max_age=settings.jwt_refresh_ttl_seconds, path="/auth", **common)
 
 
+# 🔴 SEGURANÇA (BLOQUEANTE DE PRÉ-DEPLOY): este endpoint aceita `role` e `empresa_id`
+# de entrada NÃO autenticada — privilege escalation. É proposital no esqueleto andante
+# (o teste de isolamento de tenant precisa criar usuários em empresas distintas).
+# ANTES DE QUALQUER DEPLOY: bootstrap do 1º admin via seed/CLI + criação admin-gated
+# (Depends(require_role(UserRole.admin_vertical))). Ver spec §3.3.
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 async def register(payload: RegisterIn, db: AsyncSession = Depends(get_db)) -> User:
     exists = await db.scalar(select(User).where(User.email == payload.email))

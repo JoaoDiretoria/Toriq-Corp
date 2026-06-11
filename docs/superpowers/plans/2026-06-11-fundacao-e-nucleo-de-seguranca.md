@@ -1479,6 +1479,10 @@ Ao terminar todas as tasks, o seguinte deve ser verdade:
 
 ## Próximos planos (decomposição do spec)
 
+0. **🔴 Hardening de auth (bloqueante de pré-deploy)** — tornar `/auth/register` seguro:
+   bootstrap do 1º admin via seed/CLI; criação de usuários admin-gated com validação de
+   `empresa_id` por tenant; self-register (se houver) com role mínima e `empresa_id=None`.
+   Ver spec §3.3. **Deve ser feito antes de expor a API.**
 1. **Camada de dados** — introspecção das 172 tabelas do Supabase → models SQLAlchemy + migrations; inventário de regras que viviam em triggers/policies.
 2. **Módulos de negócio** — portar os 7 edge functions + domínios (SST, Toriq Corp, Treinamentos, Frota, White Label); storage via MinIO.
 3. **eSocial em Python** — reescrever assinatura digital A1 / SOAP gov.br.
