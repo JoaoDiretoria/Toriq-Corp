@@ -213,12 +213,33 @@ git commit -m "refactor(api): rebind do Base e religação das FKs auth.users ->
 ### Task 4: Reconciliar os models do Plano 1 com o schema introspectado
 
 **Files:**
+- Modify: `apps/api/app/models/generated.py` (remover a classe `auth.users` que vazou)
 - Delete: `apps/api/app/models/empresa.py` (substituído pela versão introspectada)
 - Delete: `apps/api/app/models/nota.py` (tabela demo, não mais necessária)
 - Delete: `apps/api/app/api/notas.py`, `apps/api/app/schemas/nota.py`, `apps/api/tests/test_tenant_isolation.py`
 - Modify: `apps/api/app/models/user.py` (enum app_role; FK p/ empresas mantida)
 - Modify: `apps/api/app/models/__init__.py`
 - Modify: `apps/api/app/main.py` (remover router de notas)
+
+- [ ] **Step 0: Remover a classe `auth.users` que vazou no generated.py**
+
+O sqlacodegen puxou a `auth.users` (única tabela não-public no arquivo, com `'schema': 'auth'`)
+para resolver as FKs. Não queremos criar tabelas do schema `auth` no banco novo — nossa
+`public.users` (de `user.py`) é o alvo. Remover essa classe.
+
+Abrir `apps/api/app/models/generated.py`, localizar `class Users(Base):` (tem
+`comment='Auth: Stores user login data within a secure schema.'` e `'schema': 'auth'` no
+`__table_args__`, com colunas `encrypted_password`, `confirmation_token`, etc.) e **apagar a
+classe inteira** (do `class Users(Base):` até a linha em branco antes da próxima classe).
+
+Verificar:
+```bash
+grep -c "'schema': 'auth'" apps/api/app/models/generated.py   # deve ser 0
+grep -c "encrypted_password" apps/api/app/models/generated.py # deve ser 0
+uv run python -c "import app.models.generated; print('OK')"
+```
+Expected: ambos `0` e `OK`. (As FKs `['users.id']` passarão a resolver para a `public.users`
+de `user.py` assim que o `__init__.py` for atualizado no Step 4.)
 
 - [ ] **Step 1: Remover a tabela demo `notas` e seus consumidores**
 
