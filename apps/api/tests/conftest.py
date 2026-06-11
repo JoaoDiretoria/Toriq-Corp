@@ -355,6 +355,110 @@ _CADASTRO_DDL = [
         anexo_nome TEXT
     )
     """,
+    # ── Contratos ─────────────────────────────────────────────────────────────
+    """
+    CREATE TABLE IF NOT EXISTS modelos_contrato (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        nome VARCHAR(255) NOT NULL,
+        tipo VARCHAR(50) NOT NULL DEFAULT 'cliente',
+        descricao TEXT,
+        ativo BOOLEAN DEFAULT 1,
+        created_at DATETIME DEFAULT (now()),
+        updated_at DATETIME DEFAULT (now())
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS contratos (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        numero VARCHAR(50) NOT NULL,
+        tipo VARCHAR(50) NOT NULL DEFAULT 'cliente',
+        modelo_id CHAR(32) REFERENCES modelos_contrato(id) ON DELETE SET NULL,
+        cliente_id CHAR(32),
+        parceiro_id CHAR(32),
+        instrutor_id CHAR(32),
+        razao_social VARCHAR(255),
+        cnpj VARCHAR(20),
+        telefone VARCHAR(20),
+        endereco TEXT,
+        cidade VARCHAR(100),
+        estado VARCHAR(2),
+        cep VARCHAR(10),
+        email VARCHAR(255),
+        representante_legal VARCHAR(255),
+        valor_implantacao NUMERIC(10,2) DEFAULT 0,
+        valor_mensal NUMERIC(10,2) DEFAULT 0,
+        valor_avista NUMERIC(10,2) DEFAULT 0,
+        texto_avista VARCHAR(255),
+        valor_3x NUMERIC(10,2) DEFAULT 0,
+        texto_3x VARCHAR(255),
+        valor_leasing NUMERIC(10,2) DEFAULT 0,
+        texto_leasing VARCHAR(255),
+        forma_pagamento VARCHAR(50) DEFAULT 'avista',
+        meio_pagamento VARCHAR(50) DEFAULT 'pix',
+        observacao_comercial TEXT,
+        validade_dias INTEGER DEFAULT 10,
+        foro VARCHAR(255),
+        observacoes_adicionais TEXT,
+        criado_por VARCHAR(255),
+        assinante_nome VARCHAR(255),
+        assinante_cpf VARCHAR(14),
+        assinado BOOLEAN DEFAULT 0,
+        data_assinatura DATETIME,
+        status VARCHAR(50) DEFAULT 'rascunho',
+        created_at DATETIME DEFAULT (now()),
+        updated_at DATETIME DEFAULT (now())
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS contrato_clausulas (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        contrato_id CHAR(32) NOT NULL REFERENCES contratos(id) ON DELETE CASCADE,
+        numero INTEGER NOT NULL,
+        titulo VARCHAR(255) NOT NULL,
+        conteudo TEXT NOT NULL,
+        ordem INTEGER NOT NULL DEFAULT 0,
+        created_at DATETIME DEFAULT (now())
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS contrato_modulos (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        contrato_id CHAR(32) NOT NULL REFERENCES contratos(id) ON DELETE CASCADE,
+        nome VARCHAR(255) NOT NULL,
+        ordem INTEGER NOT NULL DEFAULT 0,
+        versao VARCHAR(50),
+        tipo_cliente VARCHAR(50) DEFAULT 'Cliente direto',
+        descricao TEXT,
+        itens TEXT,
+        created_at DATETIME DEFAULT (now())
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS modelo_clausulas (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        modelo_id CHAR(32) NOT NULL REFERENCES modelos_contrato(id) ON DELETE CASCADE,
+        numero INTEGER NOT NULL,
+        titulo VARCHAR(255) NOT NULL,
+        conteudo TEXT NOT NULL,
+        ordem INTEGER NOT NULL DEFAULT 0,
+        created_at DATETIME DEFAULT (now())
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS modelo_modulos (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        modelo_id CHAR(32) NOT NULL REFERENCES modelos_contrato(id) ON DELETE CASCADE,
+        nome VARCHAR(255) NOT NULL,
+        ordem INTEGER NOT NULL DEFAULT 0,
+        versao VARCHAR(50),
+        tipo_cliente VARCHAR(50) DEFAULT 'Cliente direto',
+        descricao TEXT,
+        itens TEXT,
+        created_at DATETIME DEFAULT (now())
+    )
+    """,
     # ── Contas a Pagar ────────────────────────────────────────────────────────
     """
     CREATE TABLE IF NOT EXISTS contas_pagar_colunas (
