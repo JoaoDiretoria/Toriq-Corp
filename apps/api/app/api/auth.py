@@ -1,0 +1,93 @@
+import uuid
+
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import settings
+from app.core.db import get_db
+from app.core.security import hash_password, verify_password
+from app.core.tokens import TokenError, create_token, decode_token
+from app.models.user import User
+from app.schemas.auth import LoginIn, RegisterIn, UserOut
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def _set_auth_cookies(response: Response, user: User) -> None:
+    empresa_id = str(user.empresa_id) if user.empresa_id else None
+    access = create_token(
+        subject=str(user.id), token_type="access",
+        empresa_id=empresa_id, role=user.role.value,
+    )
+    refresh = create_token(
+        subject=str(user.id), token_type="refresh",
+        empresa_id=empresa_id, role=user.role.value,
+    )
+    common = {"httponly": True, "secure": settings.cookie_secure, "samesite": "lax"}
+    response.set_cookie("access_token", access,
+                        max_age=settings.jwt_access_ttl_seconds, **common)
+    response.set_cookie("refresh_token", refresh,
+                        max_age=settings.jwt_refresh_ttl_seconds, path="/auth", **common)
+
+
+# 🔴 SEGURANÇA (BLOQUEANTE DE PRÉ-DEPLOY): este endpoint aceita `role` e `empresa_id`
+# de entrada NÃO autenticada — privilege escalation. É proposital no esqueleto andante
+# (o teste de isolamento de tenant precisa criar usuários em empresas distintas).
+# ANTES DE QUALQUER DEPLOY: bootstrap do 1º admin via seed/CLI + criação admin-gated
+# (Depends(require_role(UserRole.admin_vertical))). Ver spec §3.3.
+@router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+async def register(payload: RegisterIn, db: AsyncSession = Depends(get_db)) -> User:
+    exists = await db.scalar(select(User).where(User.email == payload.email))
+    if exists:
+        raise HTTPException(status.HTTP_409_CONFLICT, "email já cadastrado")
+    user = User(
+        email=payload.email,
+        senha_hash=hash_password(payload.password),
+        nome=payload.nome,
+        role=payload.role,
+        empresa_id=payload.empresa_id,
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+@router.post("/login", response_model=UserOut)
+async def login(payload: LoginIn, response: Response,
+                db: AsyncSession = Depends(get_db)) -> User:
+    user = await db.scalar(select(User).where(User.email == payload.email))
+    if not user or not verify_password(payload.password, user.senha_hash):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "credenciais inválidas")
+    if not user.ativo:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "usuário inativo")
+    _set_auth_cookies(response, user)
+    return user
+
+
+@router.post("/refresh", response_model=UserOut)
+async def refresh(
+    response: Response,
+    refresh_token: str | None = Cookie(default=None),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    if not refresh_token:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "sem refresh token")
+    try:
+        payload = decode_token(refresh_token)
+    except TokenError:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "refresh inválido")
+    if payload.get("type") != "refresh":
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "tipo de token inválido")
+    user = await db.get(User, uuid.UUID(payload["sub"]))
+    if not user or not user.ativo:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "usuário inválido")
+    _set_auth_cookies(response, user)
+    return user
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(response: Response) -> None:
+    response.delete_cookie("access_token")
+    response.delete_cookie("refresh_token", path="/auth")
