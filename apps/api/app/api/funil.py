@@ -206,7 +206,7 @@ async def obter_etapa(
 @router.put("/etapas/{etapa_id}", response_model=s.EtapaOut)
 async def atualizar_etapa(
     etapa_id: uuid.UUID,
-    payload: s.EtapaIn,
+    payload: s.EtapaUpdateIn,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -272,13 +272,12 @@ async def mover_card(
         raise HTTPException(status.HTTP_403_FORBIDDEN, "usuário sem empresa")
     card = await _get_card_scoped(card_id, db, user.empresa_id)
 
-    # Verificar que a etapa destino pertence ao mesmo funil (logo à mesma empresa)
+    # Verificar que a etapa destino pertence ao mesmo funil do card (não apenas à empresa),
+    # prevenindo movimentação cross-funil/cross-tenant
     etapa_destino = await db.scalar(
-        select(m.FunilEtapas)
-        .join(m.Funis, m.FunilEtapas.funil_id == m.Funis.id)
-        .where(
+        select(m.FunilEtapas).where(
             m.FunilEtapas.id == body.etapa_destino_id,
-            m.Funis.empresa_id == user.empresa_id,
+            m.FunilEtapas.funil_id == card.funil_id,
         )
     )
     if etapa_destino is None:
@@ -342,6 +341,15 @@ async def criar_card(
     )
     if funil is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "funil não encontrado")
+    # Verificar que a etapa pertence ao funil informado (evita injeção cross-funil)
+    etapa = await db.scalar(
+        select(m.FunilEtapas).where(
+            m.FunilEtapas.id == payload.etapa_id,
+            m.FunilEtapas.funil_id == payload.funil_id,
+        )
+    )
+    if etapa is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "etapa não encontrada no funil")
     card = m.FunilCards(id=uuid.uuid4(), **payload.model_dump())
     db.add(card)
     await db.commit()
@@ -363,7 +371,7 @@ async def obter_card(
 @router.put("/cards/{card_id}", response_model=s.CardOut)
 async def atualizar_card(
     card_id: uuid.UUID,
-    payload: s.CardIn,
+    payload: s.CardUpdateIn,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

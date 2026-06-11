@@ -44,6 +44,17 @@ class EtapaIn(BaseModel):
     ativo: bool = True
 
 
+class EtapaUpdateIn(BaseModel):
+    """Payload de atualização de etapa — exclui funil_id para evitar
+    re-parenteamento cross-tenant via mass-assignment."""
+    nome: Optional[str] = None
+    ordem: Optional[int] = None
+    cor: Optional[str] = None
+    descricao: Optional[str] = None
+    trancada: Optional[bool] = None
+    ativo: Optional[bool] = None
+
+
 class EtapaOut(BaseModel):
     id: uuid.UUID
     funil_id: uuid.UUID
@@ -90,6 +101,20 @@ class CardIn(BaseModel):
     data_previsao: Optional[datetime.date] = None
     prioridade: Optional[str] = None
     ordem: int = 0
+
+
+class CardUpdateIn(BaseModel):
+    """Payload de atualização de card — exclui funil_id e etapa_id para evitar
+    re-parenteamento cross-tenant via mass-assignment. Para mover um card entre
+    etapas use POST /cards/{card_id}/mover."""
+    titulo: Optional[str] = None
+    descricao: Optional[str] = None
+    valor: Optional[decimal.Decimal] = None
+    cliente_id: Optional[uuid.UUID] = None
+    responsavel_id: Optional[uuid.UUID] = None
+    data_previsao: Optional[datetime.date] = None
+    prioridade: Optional[str] = None
+    ordem: Optional[int] = None
 
 
 class CardOut(BaseModel):

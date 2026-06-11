@@ -410,3 +410,166 @@ async def test_etiqueta_de_outra_empresa_nao_associavel(client, db_session):
         json={"etiqueta_id": etq_id_a},
     )
     assert assoc_r.status_code == 404
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Testes de segurança — cross-tenant FK injection (mass-assignment)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def test_put_card_nao_reparenteia_para_outro_funil(client, db_session):
+    """PUT /cards/{id} com funil_id de outro tenant deve ser ignorado —
+    o card deve permanecer no funil original (funil_id imutável via PUT)."""
+    emp_a, setor_a = await _login(client, db_session, email="sec_a@sec.com", suffix="seca")
+    funil_a_id, etapa_a1_id, _ = await _setup_funil_com_etapas(
+        client, "sec_a@sec.com", "seca", setor_a.id, funil_nome="Funil A"
+    )
+
+    # Empresa A cria um card
+    card_r = await client.post(
+        "/funil/cards",
+        json={"funil_id": funil_a_id, "etapa_id": etapa_a1_id, "titulo": "Card Seguro"},
+    )
+    assert card_r.status_code == 201, card_r.text
+    card_id = card_r.json()["id"]
+    funil_original = card_r.json()["funil_id"]
+
+    # Empresa B cria seu próprio funil
+    emp_b, setor_b = await _login(client, db_session, email="sec_b@sec.com", suffix="secb")
+    funil_b_id, etapa_b1_id, _ = await _setup_funil_com_etapas(
+        client, "sec_b@sec.com", "secb", setor_b.id, funil_nome="Funil B"
+    )
+
+    # Empresa A volta a logar
+    await _login(client, db_session, email="sec_a2@sec.com", suffix="seca2")
+    # Relog as empresa A (reutilizando a sessão de cliente com login)
+    await client.post("/auth/login", json={"email": "sec_a@sec.com", "password": "segredo123"})
+
+    # Tenta re-parentear o card para o funil da empresa B via PUT
+    put_r = await client.put(
+        f"/funil/cards/{card_id}",
+        json={"titulo": "Card Seguro Atualizado", "funil_id": funil_b_id, "etapa_id": etapa_b1_id},
+    )
+    # PUT deve ser bem-sucedido (o campo funil_id é simplesmente ignorado pelo schema)
+    assert put_r.status_code == 200, put_r.text
+
+    # funil_id deve permanecer o original — nunca o funil da empresa B
+    body = put_r.json()
+    assert body["funil_id"] == funil_original, (
+        f"funil_id foi re-parenteado para {body['funil_id']}, esperado {funil_original}"
+    )
+    assert body["titulo"] == "Card Seguro Atualizado"
+
+
+async def test_put_etapa_nao_reparenteia_para_outro_funil(client, db_session):
+    """PUT /etapas/{id} com funil_id de outro tenant deve ser ignorado —
+    a etapa deve permanecer no funil original (funil_id imutável via PUT)."""
+    emp_a, setor_a = await _login(client, db_session, email="etasec_a@sec.com", suffix="etaseca")
+    funil_r = await client.post(
+        "/funil/funis",
+        json={"nome": "Funil Etapa Sec A", "tipo": "negocio", "setor_id": str(setor_a.id)},
+    )
+    funil_a_id = funil_r.json()["id"]
+    etapa_r = await client.post(
+        "/funil/etapas",
+        json={"funil_id": funil_a_id, "nome": "Etapa Original", "ordem": 0},
+    )
+    assert etapa_r.status_code == 201, etapa_r.text
+    etapa_id = etapa_r.json()["id"]
+    funil_original = etapa_r.json()["funil_id"]
+
+    # Empresa B cria seu funil
+    emp_b, setor_b = await _login(client, db_session, email="etasec_b@sec.com", suffix="etasecb")
+    funil_b_r = await client.post(
+        "/funil/funis",
+        json={"nome": "Funil Etapa Sec B", "tipo": "negocio", "setor_id": str(setor_b.id)},
+    )
+    funil_b_id = funil_b_r.json()["id"]
+
+    # Relog como empresa A
+    await client.post("/auth/login", json={"email": "etasec_a@sec.com", "password": "segredo123"})
+
+    # Tenta re-parentear a etapa para o funil da empresa B via PUT
+    put_r = await client.put(
+        f"/funil/etapas/{etapa_id}",
+        json={"nome": "Etapa Atualizada", "ordem": 0, "funil_id": funil_b_id},
+    )
+    assert put_r.status_code == 200, put_r.text
+
+    # funil_id deve permanecer o original
+    body = put_r.json()
+    assert body["funil_id"] == funil_original, (
+        f"funil_id foi re-parenteado para {body['funil_id']}, esperado {funil_original}"
+    )
+    assert body["nome"] == "Etapa Atualizada"
+
+
+async def test_criar_card_rejeita_etapa_de_outro_funil(client, db_session):
+    """POST /cards com etapa_id de funil diferente do funil_id deve retornar 404."""
+    emp, setor = await _login(client, db_session, email="crdsec@sec.com", suffix="crdsec")
+
+    # Funil A com etapa A
+    funil_a_r = await client.post(
+        "/funil/funis",
+        json={"nome": "Funil CrdSec A", "tipo": "negocio", "setor_id": str(setor.id)},
+    )
+    funil_a_id = funil_a_r.json()["id"]
+    etapa_a_r = await client.post(
+        "/funil/etapas",
+        json={"funil_id": funil_a_id, "nome": "Etapa A", "ordem": 0},
+    )
+    etapa_a_id = etapa_a_r.json()["id"]
+
+    # Funil B (separado — mesma empresa)
+    funil_b_r = await client.post(
+        "/funil/funis",
+        json={"nome": "Funil CrdSec B", "tipo": "negocio", "setor_id": str(setor.id)},
+    )
+    funil_b_id = funil_b_r.json()["id"]
+
+    # Tentar criar card no funil B mas com etapa do funil A → deve retornar 404
+    card_r = await client.post(
+        "/funil/cards",
+        json={"funil_id": funil_b_id, "etapa_id": etapa_a_id, "titulo": "Card Inválido"},
+    )
+    assert card_r.status_code == 404, (
+        f"esperado 404 ao usar etapa de outro funil, obtido {card_r.status_code}: {card_r.text}"
+    )
+
+
+async def test_mover_card_rejeita_etapa_de_outro_funil(client, db_session):
+    """POST /cards/{id}/mover com etapa de outro funil deve retornar 404."""
+    emp, setor = await _login(client, db_session, email="movsec@sec.com", suffix="movsec")
+
+    # Funil A com duas etapas
+    funil_a_id, etapa_a1_id, etapa_a2_id = await _setup_funil_com_etapas(
+        client, "movsec@sec.com", "movsec", setor.id, funil_nome="Funil Mov A"
+    )
+
+    # Funil B com uma etapa (mesmo tenant)
+    funil_b_r = await client.post(
+        "/funil/funis",
+        json={"nome": "Funil Mov B", "tipo": "negocio", "setor_id": str(setor.id)},
+    )
+    funil_b_id = funil_b_r.json()["id"]
+    etapa_b_r = await client.post(
+        "/funil/etapas",
+        json={"funil_id": funil_b_id, "nome": "Etapa B", "ordem": 0},
+    )
+    etapa_b_id = etapa_b_r.json()["id"]
+
+    # Criar card no funil A
+    card_r = await client.post(
+        "/funil/cards",
+        json={"funil_id": funil_a_id, "etapa_id": etapa_a1_id, "titulo": "Card Mover"},
+    )
+    assert card_r.status_code == 201, card_r.text
+    card_id = card_r.json()["id"]
+
+    # Tentar mover para etapa do funil B (outro funil, mesmo tenant) → deve retornar 404
+    mover_r = await client.post(
+        f"/funil/cards/{card_id}/mover",
+        json={"etapa_destino_id": etapa_b_id},
+    )
+    assert mover_r.status_code == 404, (
+        f"esperado 404 ao mover para etapa de outro funil, obtido {mover_r.status_code}: {mover_r.text}"
+    )
