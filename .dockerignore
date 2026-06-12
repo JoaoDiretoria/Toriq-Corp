@@ -1,16 +1,37 @@
+# Contexto de build = RAIZ do repo (serve tanto o front quanto o apps/api).
+# Excluímos o pesado/irrelevante, mas MANTEMOS `apps/` (o backend precisa dele).
+
+# Dependências e caches (reinstalados no build)
 node_modules
-npm-debug.log
+**/node_modules
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+.vite
+
+# Git / IDE / efêmeros
 .git
 .gitignore
 .DS_Store
-.env
-dist
-.vite
-docs
-supabase
-*.md
 .editorconfig
 .prettierrc
-# Backends não entram no build do front (contexto = root). Reduz o contexto.
-apps
+.claude
+.context
+.snapshots
+.windsurf
+.vscode
+
+# Segredos — vêm das env vars do container, nunca do arquivo
+.env
+**/.env
+**/.env.*
+
+# Não entram em nenhuma imagem
+dist
+docs
+supabase
 backend-esocial
+*.md

@@ -1,13 +1,15 @@
 # syntax=docker/dockerfile:1
 #
 # Backend FastAPI do TORIQ — Python 3.12 + uv.
-# Contexto de build: apps/api/  (ex.: docker build -f apps/api/Dockerfile apps/api)
-# No EasyPanel: defina o "build context / root" do serviço como apps/api.
+#
+# IMPORTANTE: o contexto de build é a RAIZ DO REPO (o EasyPanel usa a raiz como
+# contexto para builds via Dockerfile, independente do "Caminho de Build"). Por
+# isso os COPY usam o prefixo `apps/api/`. O `.dockerignore` da raiz exclui o que
+# não importa (node_modules, **/.venv, backend-esocial, etc.) e MANTÉM `apps/`.
 #
 # As migrations Alembic rodam no entrypoint (alembic upgrade head) ANTES do
-# uvicorn — decisão registrada. Bom para instância única (cenário pré-lançamento);
-# se um dia escalar para N réplicas, mover para um step de deploy separado para
-# evitar corrida de migração + duplicação dos jobs APScheduler (lifespan).
+# uvicorn — bom para instância única (pré-lançamento). Se escalar para N réplicas,
+# mover a migração para um step de deploy separado (evita corrida + jobs duplicados).
 
 FROM python:3.12-slim AS base
 
@@ -23,14 +25,14 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# 1) Instala só as dependências primeiro (camada cacheável): resolve do lockfile,
-#    sem dev-deps e sem instalar o próprio projeto ([tool.uv] package = false).
-COPY pyproject.toml uv.lock ./
+# 1) Só as dependências primeiro (camada cacheável): resolve do lockfile, sem
+#    dev-deps e sem instalar o próprio projeto ([tool.uv] package = false).
+COPY apps/api/pyproject.toml apps/api/uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-project
 
-# 2) Copia o código (app/, migrations/, alembic.ini, .python-version).
-COPY . .
+# 2) Código do backend (app/, migrations/, alembic.ini, .python-version).
+COPY apps/api/ ./
 
 # Usuário não-root.
 RUN useradd --system --uid 1001 --create-home appuser \
