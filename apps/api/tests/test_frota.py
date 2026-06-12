@@ -16,6 +16,7 @@ import pytest
 from sqlalchemy import text
 
 from app.api.frota import router as frota_router
+from tests.helpers import login_as
 
 # ── DDL SQLite-compatible para as tabelas Frota ───────────────────────────────
 
@@ -204,23 +205,11 @@ async def frota_client(db_session, client):
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 async def _criar_empresa_e_login(db_session, client, email: str, nome: str = "Empresa"):
-    from app.models.generated import Empresas
-    emp = Empresas(id=uuid.uuid4(), nome=nome, tipo="sst")
-    db_session.add(emp)
-    await db_session.commit()
-    await client.post(
-        "/auth/register",
-        json={
-            "email": email,
-            "password": "segredo123",
-            "nome": nome,
-            "role": "cliente_torq",
-            "empresa_id": str(emp.id),
-        },
-    )
-    r = await client.post("/auth/login", json={"email": email, "password": "segredo123"})
-    assert r.status_code == 200, r.text
-    return emp
+    empresa_id = await login_as(client, db_session, email=email, nome=nome)
+    # Return a proxy so callers can access .id
+    class _Emp:
+        id = empresa_id
+    return _Emp()
 
 
 # ── Testes de veículos (top-level) ────────────────────────────────────────────

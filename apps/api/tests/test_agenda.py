@@ -8,6 +8,8 @@ import uuid
 import pytest
 from sqlalchemy import text
 
+from tests.helpers import login_as
+
 # DDL SQLite-friendly para as três tabelas Agenda e clientes_sst (dependência)
 _AGENDA_DDL = [
     # clientes_sst já pode existir (criada pelo conftest via _CADASTRO_DDL)
@@ -88,27 +90,7 @@ async def agenda_client(db_session, client):
 # ── Helpers de autenticação ───────────────────────────────────────────────────
 
 async def _criar_empresa_e_login(client, db_session, email: str, nome: str = "Emp"):
-    from app.models.generated import Empresas
-
-    emp = Empresas(id=uuid.uuid4(), nome=nome, tipo="sst")
-    db_session.add(emp)
-    await db_session.commit()
-
-    await client.post(
-        "/auth/register",
-        json={
-            "email": email,
-            "password": "segredo123",
-            "nome": nome,
-            "role": "cliente_torq",
-            "empresa_id": str(emp.id),
-        },
-    )
-    r = await client.post(
-        "/auth/login", json={"email": email, "password": "segredo123"}
-    )
-    assert r.status_code == 200, f"login falhou: {r.text}"
-    return emp
+    await login_as(client, db_session, email=email, nome=nome)
 
 
 # ── Testes ────────────────────────────────────────────────────────────────────

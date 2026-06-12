@@ -18,6 +18,8 @@ import uuid
 import pytest
 from sqlalchemy import text
 
+from tests.helpers import login_as
+
 # ── DDL SQLite-compatível para as 4 tabelas do módulo ─────────────────────────
 
 _SUPORTE_DDL = [
@@ -117,27 +119,10 @@ async def sclient(db_session, client):
 # ── Helpers de autenticação ───────────────────────────────────────────────────
 
 async def _criar_empresa_e_logar(client, db_session, email: str, nome_empresa: str = "Empresa Teste"):
-    from app.models.generated import Empresas
-    emp = Empresas(id=uuid.uuid4(), nome=nome_empresa, tipo="sst")
-    db_session.add(emp)
-    await db_session.commit()
-
-    await client.post(
-        "/auth/register",
-        json={
-            "email": email,
-            "password": "senha123",
-            "nome": f"Usuario {email}",
-            "role": "cliente_torq",
-            "empresa_id": str(emp.id),
-        },
+    # Note: suporte tests historically used "senha123" — kept for isolation consistency
+    return await login_as(
+        client, db_session, email=email, password="senha123", nome=f"Usuario {email}"
     )
-    r = await client.post(
-        "/auth/login",
-        json={"email": email, "password": "senha123"},
-    )
-    assert r.status_code == 200, f"login falhou: {r.text}"
-    return emp.id
 
 
 # ── Testes ────────────────────────────────────────────────────────────────────

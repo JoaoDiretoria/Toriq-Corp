@@ -3,32 +3,13 @@
 Task 1: numeração sequencial TQ-{ano}-{seq:04d} + CRUD contratos/modelos.
 Task 2: cláusulas e módulos (de contrato e de modelo), tenant-scoped (cross-tenant → 404).
 """
-import uuid
 from datetime import datetime, timezone
 
+from tests.helpers import login_as
 
-# ── Helper de login ───────────────────────────────────────────────────────────
 
 async def _login(client, db_session, email="ct@ct.com", suffix=""):
-    from app.models.generated import Empresas as Empresa
-
-    emp = Empresa(id=uuid.uuid4(), nome=f"E{suffix}", tipo="sst")
-    db_session.add(emp)
-    await db_session.commit()
-
-    await client.post(
-        "/auth/register",
-        json={
-            "email": email,
-            "password": "segredo123",
-            "nome": f"CT{suffix}",
-            "role": "cliente_torq",
-            "empresa_id": str(emp.id),
-        },
-    )
-    resp = await client.post("/auth/login", json={"email": email, "password": "segredo123"})
-    assert resp.status_code == 200, f"login falhou: {resp.text}"
-    return emp
+    return await login_as(client, db_session, email=email)
 
 
 # ════════════════════════════════════════════════════════════════════════════════

@@ -19,6 +19,8 @@ import uuid
 import pytest
 from sqlalchemy import text
 
+from tests.helpers import login_as
+
 from app.api.white_label import router as wl_router
 
 # ── DDL SQLite para as tabelas deste módulo ───────────────────────────────────
@@ -157,6 +159,7 @@ async def wl_client(db_session, client):
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 async def _criar_empresa(db_session, nome: str = "Empresa") -> uuid.UUID:
+    """Creates an empresa and returns its id without logging in."""
     from app.models.generated import Empresas
     emp = Empresas(id=uuid.uuid4(), nome=nome, tipo="sst")
     db_session.add(emp)
@@ -165,21 +168,7 @@ async def _criar_empresa(db_session, nome: str = "Empresa") -> uuid.UUID:
 
 
 async def _registrar_e_logar(client, email: str, empresa_id: uuid.UUID):
-    await client.post(
-        "/auth/register",
-        json={
-            "email": email,
-            "password": "senha123",
-            "nome": email.split("@")[0],
-            "role": "cliente_torq",
-            "empresa_id": str(empresa_id),
-        },
-    )
-    r = await client.post(
-        "/auth/login",
-        json={"email": email, "password": "senha123"},
-    )
-    assert r.status_code == 200, f"login falhou: {r.text}"
+    await login_as(client, None, email=email, password="senha123", empresa_id=empresa_id)
 
 
 async def _criar_modulo(db_session) -> str:

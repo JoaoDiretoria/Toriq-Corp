@@ -12,6 +12,7 @@ from sqlalchemy import Boolean, DateTime, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
+from tests.helpers import login_as
 
 
 # ── Modelos SQLite-friendly para o teste ──────────────────────────────────────
@@ -101,28 +102,7 @@ async def notif_client(db_session, client):
 
 async def _login(client, db_session, email: str = "n@n.com") -> uuid.UUID:
     """Registra e autentica um usuário; retorna o empresa_id criado."""
-    from app.models.generated import Empresas as Empresa
-
-    emp = Empresa(id=uuid.uuid4(), nome="NotifEmp", tipo="sst")
-    db_session.add(emp)
-    await db_session.commit()
-
-    r = await client.post(
-        "/auth/register",
-        json={
-            "email": email,
-            "password": "segredo123",
-            "nome": "N",
-            "role": "cliente_torq",
-            "empresa_id": str(emp.id),
-        },
-    )
-    assert r.status_code == 201, r.text
-    r2 = await client.post(
-        "/auth/login", json={"email": email, "password": "segredo123"}
-    )
-    assert r2.status_code == 200, r2.text
-    return emp.id
+    return await login_as(client, db_session, email=email)
 
 
 async def _seed_notif(db_session, empresa_id: uuid.UUID, titulo: str = "Teste") -> uuid.UUID:

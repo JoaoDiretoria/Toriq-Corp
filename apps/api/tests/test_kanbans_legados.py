@@ -3,35 +3,14 @@ import uuid
 
 import pytest
 
-
-async def _login(client, db_session, email: str = "cl@cl.com"):
-    from app.models.generated import Empresas as Empresa
-
-    emp = Empresa(id=uuid.uuid4(), nome="E", tipo="sst")
-    db_session.add(emp)
-    await db_session.commit()
-    await client.post(
-        "/auth/register",
-        json={
-            "email": email,
-            "password": "segredo123",
-            "nome": "CL",
-            "role": "cliente_torq",
-            "empresa_id": str(emp.id),
-        },
-    )
-    r = await client.post(
-        "/auth/login", json={"email": email, "password": "segredo123"}
-    )
-    assert r.status_code == 200, r.text
-    return emp
+from tests.helpers import login_as
 
 
 # ── Closer ────────────────────────────────────────────────────────────────────
 
 async def test_closer_kanban(client, db_session):
     """Bootstrap → criar card → mover → verificar coluna."""
-    await _login(client, db_session, "closer@test.com")
+    await login_as(client, db_session, email="closer@test.com")
 
     resp = await client.post("/kanban/closer/bootstrap-colunas")
     assert resp.status_code == 201, resp.text
@@ -73,7 +52,7 @@ async def test_closer_kanban(client, db_session):
 
 async def test_prospeccao_kanban(client, db_session):
     """Bootstrap → criar card com lead_numero → mover."""
-    await _login(client, db_session, "prosp@test.com")
+    await login_as(client, db_session, email="prosp@test.com")
 
     resp = await client.post("/kanban/prospeccao/bootstrap-colunas")
     assert resp.status_code == 201, resp.text
@@ -107,7 +86,7 @@ async def test_prospeccao_kanban(client, db_session):
 
 async def test_pos_venda_kanban(client, db_session):
     """Bootstrap → criar card → mover."""
-    await _login(client, db_session, "posvenda@test.com")
+    await login_as(client, db_session, email="posvenda@test.com")
 
     resp = await client.post("/kanban/pos-venda/bootstrap-colunas")
     assert resp.status_code == 201, resp.text
@@ -136,7 +115,7 @@ async def test_pos_venda_kanban(client, db_session):
 
 async def test_cross_selling_kanban(client, db_session):
     """Bootstrap → criar card → mover."""
-    await _login(client, db_session, "cross@test.com")
+    await login_as(client, db_session, email="cross@test.com")
 
     resp = await client.post("/kanban/cross-selling/bootstrap-colunas")
     assert resp.status_code == 201, resp.text

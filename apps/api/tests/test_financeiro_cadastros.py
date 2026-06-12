@@ -1,21 +1,8 @@
-import uuid
-
-
-async def _login(client, db_session):
-    from app.models.generated import Empresas as Empresa
-    emp = Empresa(id=uuid.uuid4(), nome="E", tipo="sst")
-    db_session.add(emp)
-    await db_session.commit()
-    await client.post("/auth/register", json={
-        "email": "f@f.com", "password": "segredo123",
-        "nome": "F", "role": "cliente_torq", "empresa_id": str(emp.id),
-    })
-    await client.post("/auth/login", json={"email": "f@f.com", "password": "segredo123"})
-    return emp
+from tests.helpers import login_as
 
 
 async def test_fornecedor_crud_e_isolamento(client, db_session):
-    await _login(client, db_session)
+    await login_as(client, db_session, email="f@f.com")
     r = await client.post(
         "/financeiro/cadastros/fornecedores",
         json={"razao_social": "ACME LTDA", "cnpj_cpf": "00000000000191"},

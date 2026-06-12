@@ -8,6 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.api.kanban_factory import make_kanban_router
 from app.core.db import Base
+from tests.helpers import login_as
 
 
 # ── Modelos de teste (SQLite-friendly, sem server_default PostgreSQL-specific) ──
@@ -94,32 +95,11 @@ async def kclient(db_session, client):
     return client
 
 
-async def _login(client, db_session):
-    from app.models.generated import Empresas as Empresa
-    emp = Empresa(id=uuid.uuid4(), nome="E", tipo="sst")
-    db_session.add(emp)
-    await db_session.commit()
-    await client.post(
-        "/auth/register",
-        json={
-            "email": "k@k.com",
-            "password": "segredo123",
-            "nome": "K",
-            "role": "cliente_torq",
-            "empresa_id": str(emp.id),
-        },
-    )
-    r = await client.post(
-        "/auth/login", json={"email": "k@k.com", "password": "segredo123"}
-    )
-    assert r.status_code == 200, r.text
-
-
 # ── Testes ────────────────────────────────────────────────────────────────────
 
 async def test_kanban_ciclo(kclient, db_session):
     """Ciclo completo: bootstrap → criar card → mover → deletar."""
-    await _login(kclient, db_session)
+    await login_as(kclient, db_session, email="k@k.com")
 
     # Bootstrap colunas
     resp = await kclient.post("/k/bootstrap-colunas")

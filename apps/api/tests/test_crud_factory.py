@@ -8,6 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.api.crud_factory import make_crud_router
 from app.core.db import Base
+from tests.helpers import login_as
 
 
 class _Gadget(Base):
@@ -39,17 +40,8 @@ async def gadget_client(db_session, client):
     return client
 
 
-async def _login(client, db_session):
-    from app.models.generated import Empresas as Empresa
-    emp = Empresa(id=uuid.uuid4(), nome="E", tipo="sst")
-    db_session.add(emp); await db_session.commit()
-    await client.post("/auth/register", json={"email": "g@g.com", "password": "segredo123",
-        "nome": "G", "role": "cliente_torq", "empresa_id": str(emp.id)})
-    await client.post("/auth/login", json={"email": "g@g.com", "password": "segredo123"})
-
-
 async def test_crud_factory_full_cycle(gadget_client, db_session):
-    await _login(gadget_client, db_session)
+    await login_as(gadget_client, db_session, email="g@g.com")
     created = await gadget_client.post("/gadgets", json={"nome": "X"})
     assert created.status_code == 201
     gid = created.json()["id"]

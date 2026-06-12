@@ -1,28 +1,8 @@
-import uuid
-
-
-async def _login(client, db_session):
-    from app.models.generated import Empresas as Empresa
-
-    emp = Empresa(id=uuid.uuid4(), nome="EP", tipo="sst")
-    db_session.add(emp)
-    await db_session.commit()
-    await client.post(
-        "/auth/register",
-        json={
-            "email": "cp@cp.com",
-            "password": "segredo123",
-            "nome": "CP",
-            "role": "cliente_torq",
-            "empresa_id": str(emp.id),
-        },
-    )
-    await client.post("/auth/login", json={"email": "cp@cp.com", "password": "segredo123"})
-    return emp
+from tests.helpers import login_as
 
 
 async def test_bootstrap_e_mover(client, db_session):
-    await _login(client, db_session)
+    await login_as(client, db_session, email="cp@cp.com")
 
     # Bootstrap deve criar 4 colunas padrão (inclui "Pagamentos Recorrentes")
     boot = await client.post("/financeiro/contas-pagar/bootstrap-colunas")
@@ -62,7 +42,7 @@ async def test_bootstrap_e_mover(client, db_session):
 
 
 async def test_reorder(client, db_session):
-    await _login(client, db_session)
+    await login_as(client, db_session, email="cp@cp.com")
     await client.post("/financeiro/contas-pagar/bootstrap-colunas")
 
     cols = (await client.get("/financeiro/contas-pagar/colunas")).json()
