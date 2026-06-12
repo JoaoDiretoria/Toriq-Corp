@@ -39,6 +39,21 @@ from app.api.setor_permissoes import router as setor_permissoes_router
 from app.api.empresa_settings import router as empresa_settings_router
 from app.api.cadastros_empresa import router as cadastros_empresa_router
 from app.api.funil_comercial import router as funil_comercial_router
+# Onda 2 Fatia 5 — plataforma/sistema, conteúdo/público, financeiro/EPI extras
+from app.api.sistema import router as sistema_router
+from app.api.leads_landing import router as leads_landing_router
+from app.api.vagas import router as vagas_router
+from app.api.financeiro_extras import (
+    financeiro_contas_router,
+    modelos_atividade_router,
+    atividades_router as cp_atividades_router,
+    anexos_router as cp_anexos_router,
+    cp_movimentacoes_router,
+)
+from app.api.equipamentos_extras import (
+    epi_modelos_atividade_router,
+    historico_router as epi_historico_router,
+)
 from app.api.health import router as health_router
 from app.api.kanbans_legados import router as kanbans_legados_router
 from app.jobs.scheduler import build_scheduler
@@ -112,6 +127,17 @@ def create_app() -> FastAPI:
     app.include_router(empresa_settings_router)
     app.include_router(cadastros_empresa_router)
     app.include_router(funil_comercial_router)
+    # Onda 2 — sistema, públicos e sub-recursos financeiro/EPI (filhas antes dos genéricos)
+    app.include_router(sistema_router)
+    app.include_router(leads_landing_router)
+    app.include_router(vagas_router)
+    app.include_router(cp_atividades_router)
+    app.include_router(cp_anexos_router)
+    app.include_router(cp_movimentacoes_router)
+    app.include_router(financeiro_contas_router)
+    app.include_router(modelos_atividade_router)
+    app.include_router(epi_historico_router)
+    app.include_router(epi_modelos_atividade_router)
     return app
 
 
