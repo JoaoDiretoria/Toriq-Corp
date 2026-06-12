@@ -49,6 +49,15 @@ async def register(payload: RegisterIn, db: AsyncSession = Depends(get_db)) -> U
         empresa_id=payload.empresa_id,
     )
     db.add(user)
+    await db.flush()
+    # Cria o perfil de negócio (profiles.id -> users.id). Sem isso, FKs como
+    # agenda_eventos.criado_por -> profiles.id quebram para qualquer usuário.
+    from app.models.generated import Profiles
+
+    db.add(Profiles(
+        id=user.id, email=user.email, nome=user.nome,
+        role=user.role.value, empresa_id=user.empresa_id,
+    ))
     await db.commit()
     await db.refresh(user)
     return user
