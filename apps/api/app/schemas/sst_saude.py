@@ -79,10 +79,18 @@ class ProfissionaisSaudeUpdate(BaseModel):
     rubrica_url: Optional[str] = None
 
 
-class ProfissionaisSaudeOut(ProfissionaisSaudeBase):
+class ProfissionaisSaudeOut(BaseModel):
+    """OUTPUT schema — exclui campos sensíveis (senha_certificado, certificado_digital_url)."""
     id: uuid.UUID
     empresa_id: uuid.UUID
     cliente_id: Optional[uuid.UUID] = None
+    nome: str
+    especialidade: str
+    cpf: Optional[str] = None
+    conselho: Optional[str] = None
+    nr_conselho: Optional[str] = None
+    uf_conselho: Optional[str] = None
+    rubrica_url: Optional[str] = None
     created_at: Optional[datetime.datetime] = None
     updated_at: Optional[datetime.datetime] = None
 

@@ -303,6 +303,38 @@ async def test_profissionais_crud(saude_client, db_session):
     assert resp.status_code == 404
 
 
+async def test_profissional_nao_expoe_senha_certificado(saude_client, db_session):
+    """[SECURITY] senha_certificado e certificado_digital_url NÃO devem aparecer na resposta GET."""
+    await _criar_empresa_e_login(saude_client, db_session, "prof_sec@test.com", "SecEmp")
+
+    # Criar profissional com senha_certificado
+    resp = await saude_client.post(
+        "/sst/saude/profissionais",
+        json={
+            "nome": "Dr. Seguro",
+            "especialidade": "Medicina do Trabalho",
+            "senha_certificado": "senhasupersecreta",
+            "certificado_digital_url": "https://storage/cert.pfx",
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    pid = resp.json()["id"]
+
+    # Verificar GET individual — campos sensíveis não devem aparecer
+    resp = await saude_client.get(f"/sst/saude/profissionais/{pid}")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "senha_certificado" not in body, "senha_certificado exposta na resposta GET!"
+    assert "certificado_digital_url" not in body, "certificado_digital_url exposto na resposta GET!"
+
+    # Verificar lista — campos sensíveis não devem aparecer em nenhum item
+    resp = await saude_client.get("/sst/saude/profissionais")
+    assert resp.status_code == 200
+    for item in resp.json():
+        assert "senha_certificado" not in item, "senha_certificado exposta na listagem!"
+        assert "certificado_digital_url" not in item, "certificado_digital_url exposta na listagem!"
+
+
 async def test_profissional_cliente_id_valido(saude_client, db_session):
     """cliente_id pertencente à empresa deve ser aceito no POST."""
     emp = await _criar_empresa_e_login(
@@ -349,86 +381,40 @@ async def test_profissional_cliente_id_invalido_retorna_404(saude_client, db_ses
     assert resp.status_code == 404, f"Esperado 404, recebeu {resp.status_code}: {resp.text}"
 
 
-# ── Testes: SinistrosColaborador ──────────────────────────────────────────────
+# ── Testes: SinistrosColaborador — endpoints REMOVIDOS por segurança ──────────
+#
+# Os endpoints /sst/saude/sinistros foram removidos pois sinistros_colaborador
+# não possui empresa_id e seus campos turma_id / turma_colaborador_id são UUIDs
+# sem FK declarada para nenhuma tabela com empresa_id no modelo gerado.
+# Expô-los implicaria IDOR cross-tenant irresolvível neste módulo.
+# TODO: sinistros precisam de scoping via turma (Treinamentos)
 
-async def _criar_tipo_sinistro(db_session) -> uuid.UUID:
-    """Insere um TiposSinistro de lookup."""
-    ts_id = uuid.uuid4()
-    await db_session.execute(
-        text(
-            "INSERT INTO tipos_sinistro (id, codigo, nome) VALUES (:id, :cod, :nome)"
-        ),
-        {"id": str(ts_id).replace("-", ""), "cod": "TST001", "nome": "Tipo Teste"},
+
+async def test_sinistros_endpoints_removidos(saude_client, db_session):
+    """[SECURITY] Endpoints /sst/saude/sinistros devem estar ausentes (404/405) após remoção por IDOR."""
+    await _criar_empresa_e_login(saude_client, db_session, "sin_rm@test.com", "SinRmEmp")
+
+    # Nenhum dos endpoints deve existir no router
+    resp = await saude_client.get("/sst/saude/sinistros")
+    assert resp.status_code == 404, (
+        f"GET /sinistros deveria retornar 404 (endpoint removido), retornou {resp.status_code}"
     )
-    await db_session.commit()
-    return ts_id
 
-
-async def test_sinistros_crud(saude_client, db_session):
-    """CRUD completo de sinistros de colaborador."""
-    # Apenas autenticação necessária (sem filtro de tenant)
-    await _criar_empresa_e_login(saude_client, db_session, "sin@test.com", "SinEmp")
-    ts_id = await _criar_tipo_sinistro(db_session)
-
-    turma_id = uuid.uuid4()
-    turma_col_id = uuid.uuid4()
-
-    # Criar
     resp = await saude_client.post(
         "/sst/saude/sinistros",
-        json={
-            "turma_colaborador_id": str(turma_col_id),
-            "turma_id": str(turma_id),
-            "tipo_sinistro_id": str(ts_id),
-            "acao": "reprovacao",
-            "descricao": "Falta injustificada",
-        },
+        json={"turma_colaborador_id": str(uuid.uuid4()), "turma_id": str(uuid.uuid4()),
+              "tipo_sinistro_id": str(uuid.uuid4())},
     )
-    assert resp.status_code == 201, resp.text
-    sinistro = resp.json()
-    assert sinistro["descricao"] == "Falta injustificada"
-    sid = sinistro["id"]
-
-    # Listar (sem filtro)
-    resp = await saude_client.get("/sst/saude/sinistros")
-    assert resp.status_code == 200
-    ids = [s["id"] for s in resp.json()]
-    assert sid in ids
-
-    # Listar filtrado por turma_id
-    resp = await saude_client.get(f"/sst/saude/sinistros?turma_id={turma_id}")
-    assert resp.status_code == 200
-    ids_filtrados = [s["id"] for s in resp.json()]
-    assert sid in ids_filtrados
-
-    # Obter
-    resp = await saude_client.get(f"/sst/saude/sinistros/{sid}")
-    assert resp.status_code == 200
-    assert resp.json()["id"] == sid
-
-    # Atualizar (UPDATE schema exclui turma_colaborador_id, turma_id, tipo_sinistro_id)
-    resp = await saude_client.put(
-        f"/sst/saude/sinistros/{sid}",
-        json={"descricao": "Atualizado"},
+    assert resp.status_code == 404, (
+        f"POST /sinistros deveria retornar 404 (endpoint removido), retornou {resp.status_code}"
     )
-    assert resp.status_code == 200
-    assert resp.json()["descricao"] == "Atualizado"
 
-    # Deletar
-    resp = await saude_client.delete(f"/sst/saude/sinistros/{sid}")
-    assert resp.status_code == 204
-
-    resp = await saude_client.get(f"/sst/saude/sinistros/{sid}")
+    fake_id = uuid.uuid4()
+    resp = await saude_client.get(f"/sst/saude/sinistros/{fake_id}")
     assert resp.status_code == 404
 
+    resp = await saude_client.put(f"/sst/saude/sinistros/{fake_id}", json={"descricao": "x"})
+    assert resp.status_code == 404
 
-async def test_sinistros_requer_auth(saude_client):
-    """Rotas de sinistros requerem autenticação."""
-    import httpx
-    from httpx import ASGITransport
-    from app.main import app
-
-    transport = ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
-        resp = await ac.get("/sst/saude/sinistros")
-        assert resp.status_code == 401
+    resp = await saude_client.delete(f"/sst/saude/sinistros/{fake_id}")
+    assert resp.status_code == 404

@@ -4,7 +4,13 @@ Entidades:
   /sst/saude/exames           → SaudeOcupacional   (empresa_id, TenantRepository)
   /sst/saude/profissionais    → ProfissionaisSaude (empresa_id, TenantRepository)
                                   POST valida cliente_id contra empresa_sst_id da ClientesSst
-  /sst/saude/sinistros        → SinistrosColaborador (sem empresa_id — CRUD simples)
+
+NOTA DE SEGURANÇA — sinistros_colaborador:
+  Os endpoints /sst/saude/sinistros foram removidos pois a tabela não possui
+  empresa_id e seus campos turma_id / turma_colaborador_id são UUIDs sem FK
+  declarada para nenhuma tabela com empresa_id no modelo gerado. Expô-los
+  implicaria IDOR cross-tenant irresolvível neste módulo.
+  # TODO: sinistros precisam de scoping via turma (Treinamentos)
 """
 import uuid
 
@@ -24,9 +30,6 @@ from app.schemas.sst_saude import (
     SaudeOcupacionalCreate,
     SaudeOcupacionalOut,
     SaudeOcupacionalUpdate,
-    SinistrosColaboradorCreate,
-    SinistrosColaboradorOut,
-    SinistrosColaboradorUpdate,
 )
 
 router = APIRouter(prefix="/sst/saude", tags=["sst_saude"])
@@ -171,81 +174,3 @@ async def remover_profissional(id_: uuid.UUID, repo: _ProfRepo = Depends(_get_pr
     if not await repo.delete(id_):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "profissional não encontrado")
 
-
-# ── SinistrosColaborador ──────────────────────────────────────────────────────
-# Esta tabela NÃO possui empresa_id — vinculada a turmas de treinamento.
-# Acesso requer autenticação; sem filtragem de tenant (não há coluna empresa_id).
-
-@router.get("/sinistros", response_model=list[SinistrosColaboradorOut])
-async def listar_sinistros(
-    turma_id: uuid.UUID | None = None,
-    _user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """Lista sinistros, opcionalmente filtrados por turma_id."""
-    q = select(m.SinistrosColaborador)
-    if turma_id is not None:
-        q = q.where(m.SinistrosColaborador.turma_id == turma_id)
-    result = await db.scalars(q)
-    return list(result)
-
-
-@router.get("/sinistros/{id_}", response_model=SinistrosColaboradorOut)
-async def obter_sinistro(
-    id_: uuid.UUID,
-    _user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    obj = await db.scalar(
-        select(m.SinistrosColaborador).where(m.SinistrosColaborador.id == id_)
-    )
-    if obj is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "sinistro não encontrado")
-    return obj
-
-
-@router.post("/sinistros", response_model=SinistrosColaboradorOut, status_code=status.HTTP_201_CREATED)
-async def criar_sinistro(
-    payload: SinistrosColaboradorCreate,
-    _user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    obj = m.SinistrosColaborador(id=uuid.uuid4(), **payload.model_dump(exclude_unset=True))
-    db.add(obj)
-    await db.commit()
-    await db.refresh(obj)
-    return obj
-
-
-@router.put("/sinistros/{id_}", response_model=SinistrosColaboradorOut)
-async def atualizar_sinistro(
-    id_: uuid.UUID,
-    payload: SinistrosColaboradorUpdate,
-    _user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    obj = await db.scalar(
-        select(m.SinistrosColaborador).where(m.SinistrosColaborador.id == id_)
-    )
-    if obj is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "sinistro não encontrado")
-    for k, v in payload.model_dump(exclude_unset=True).items():
-        setattr(obj, k, v)
-    await db.commit()
-    await db.refresh(obj)
-    return obj
-
-
-@router.delete("/sinistros/{id_}", status_code=status.HTTP_204_NO_CONTENT)
-async def remover_sinistro(
-    id_: uuid.UUID,
-    _user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    obj = await db.scalar(
-        select(m.SinistrosColaborador).where(m.SinistrosColaborador.id == id_)
-    )
-    if obj is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "sinistro não encontrado")
-    await db.delete(obj)
-    await db.commit()
