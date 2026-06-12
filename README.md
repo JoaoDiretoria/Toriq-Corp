@@ -318,7 +318,7 @@ removido no cutover). Guia/contrato da esteira em `docs/migracao-front-esteira.m
   + seed do 1º admin (`python -m app.seed_admin`).
 - [x] **Realtime → push:** ✅ resolvido com **polling**/recarga (era opcional).
 - [ ] **Fechar as lacunas de backend** descobertas pela esteira (ver abaixo) — para
-  as 11 telas parciais voltarem a 100%.
+  as 11 telas parciais voltarem a 100%. **4 de ~13 já fechadas.**
 - [ ] **Apontar o serviço de front** (`VITE_API_URL`) para `https://api.toriqcorp.com.br`.
 - [ ] **Validar paridade** tela-a-tela contra o backend novo.
 - [ ] **Auth avançado:** reset de senha por **email** (precisa SMTP) + validação de **captcha** Turnstile no backend.
@@ -328,19 +328,21 @@ removido no cutover). Guia/contrato da esteira em `docs/migracao-front-esteira.m
 
 ### Lacunas de backend descobertas pela esteira (backlog)
 
-As 11 telas parciais degradam graciosamente porque dependem de endpoints que ainda
+As telas parciais degradam graciosamente porque dependem de endpoints que ainda
 não existem. Para fechá-las, criar no backend (`apps/api`):
 
-- **Escrita de empresas:** `POST` / `DELETE /empresas` (hoje só `GET`/`PUT`) — usado por
-  AdminEmpresas, EmpresasImportExport, useImportQueue, SSTClientes.
-- **`empresa_contatos`** (CRUD tenant-scoped).
+**✅ Já fechadas:**
+- ~~Escrita de empresas (`POST`/`DELETE /empresas`)~~ + ~~`empresa_contatos`~~ — AdminEmpresas.
+- ~~`tipos_empresa`~~ (`/tipos-empresa`) — AdminTiposEmpresa.
+- ~~`/sst/terceiros`~~ — GestaoTerceiros.
+- ~~`origens_contato` / `categorias_clientes_empresa`~~ (`/sst/origens-contato`,
+  `/sst/categorias-clientes-empresa`) — SSTClientes.
+
+**🔴 Restantes:**
 - **Kanbans legados — atividades e etiquetas:** `closer/prospeccao/pos_venda_atividades`,
   `*_etiquetas` e `*_card_etiquetas` (histórico e tags dos cards).
-- **`tipos_empresa`** (CRUD) — AdminTiposEmpresa.
-- **`/sst/terceiros`** (CRUD) — GestaoTerceiros.
 - **Sinistros:** `tipos_sinistro` / `sinistros_colaborador` / `sinistro_fotos`
   (foram removidos por risco de IDOR — precisam de versão tenant-scoped).
-- **`categorias_clientes_empresa` / `origens_contato`** (tenant-scoped) — SSTClientes.
 - **`blog_user_preferences`** (recomendações) — hoje degrada para "posts recentes".
 - **`normas_regulamentadoras`** — AdminCadastrosSST.
 - **Campos estendidos de usuário** em `AdminUserCreateIn`/`UpdateIn` (telefone, cpf,
