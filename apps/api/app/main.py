@@ -32,6 +32,13 @@ from app.api.blog import router as blog_router
 from app.api.pesquisas import router as pesquisas_router
 from app.api.modelos import router as modelos_router
 from app.api.funil_card_extras import router as funil_card_extras_router
+# Onda 1 Fatia 5 — endpoints de tabelas que já existiam no banco mas não tinham router
+from app.api.empresas import router as empresas_router
+from app.api.modulos import router as modulos_router
+from app.api.setor_permissoes import router as setor_permissoes_router
+from app.api.empresa_settings import router as empresa_settings_router
+from app.api.cadastros_empresa import router as cadastros_empresa_router
+from app.api.funil_comercial import router as funil_comercial_router
 from app.api.health import router as health_router
 from app.api.kanbans_legados import router as kanbans_legados_router
 from app.jobs.scheduler import build_scheduler
@@ -98,6 +105,13 @@ def create_app() -> FastAPI:
     app.include_router(white_label_router)
     app.include_router(blog_router)
     app.include_router(pesquisas_router)
+    # Onda 1 Fatia 5 — empresa/plataforma, cadastros e funil comercial
+    app.include_router(empresas_router)
+    app.include_router(modulos_router)
+    app.include_router(setor_permissoes_router)
+    app.include_router(empresa_settings_router)
+    app.include_router(cadastros_empresa_router)
+    app.include_router(funil_comercial_router)
     return app
 
 
