@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
-import { useEmpresaMode } from '@/hooks/useEmpresaMode';
 
 export interface Notificacao {
   id: string;
@@ -34,118 +33,51 @@ export interface Notificacao {
  */
 export function useNotificacoes() {
   const { profile, user } = useAuth();
-  const { empresaMode } = useEmpresaMode();
-  const empresaId = empresaMode?.empresaId || profile?.empresa_id;
-  const isAdminVertical = profile?.role === 'admin_vertical';
 
   const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
   const [naoLidas, setNaoLidas] = useState<number>(0);
   const [loading, setLoading] = useState(true);
 
-  // Carregar notificações
+  // Carregar notificações.
+  // Backend novo: GET /notificacoes já escopa por empresa_id do token (modelo
+  // de isolamento estrutural que substitui o RLS) — o front não filtra mais por
+  // empresa. NOTA: isso estreita o admin_vertical, que antes via notificações de
+  // TODAS as empresas; agora vê apenas as da própria. Ordenação/limite (50) que
+  // antes iam na query do Supabase passam para o cliente.
   const fetchNotificacoes = useCallback(async () => {
     if (!profile) return;
 
     try {
-      let query = (supabase as any)
-        .from('notificacoes')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(50);
+      const data = await api
+        .get<Notificacao[]>('/notificacoes')
+        .catch(() => [] as Notificacao[]);
 
-      // Admin Vertical vê todas, outros veem apenas da sua empresa
-      if (!isAdminVertical && empresaId) {
-        query = query.eq('empresa_id', empresaId);
-      }
+      const ordenadas = [...(data || [])]
+        .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
+        .slice(0, 50);
 
-      const { data, error } = await query;
-
-      if (error) {
-        console.error('Erro ao carregar notificações:', error);
-        return;
-      }
-
-      setNotificacoes(data || []);
-      setNaoLidas((data || []).filter((n: Notificacao) => !n.lida).length);
+      setNotificacoes(ordenadas);
+      setNaoLidas(ordenadas.filter((n: Notificacao) => !n.lida).length);
     } catch (e) {
       console.error('Erro ao carregar notificações:', e);
     } finally {
       setLoading(false);
     }
-  }, [profile, empresaId, isAdminVertical]);
+  }, [profile]);
 
-  // Carregar ao montar e quando mudar empresa
+  // Carregar ao montar e quando mudar o perfil.
+  // NOTA (migração): a subscrição realtime do Supabase foi removida (sem push no
+  // backend novo). Atualização via `refetch()` / próximo carregamento.
   useEffect(() => {
     fetchNotificacoes();
   }, [fetchNotificacoes]);
 
-  // Realtime subscription para novas notificações (apenas escuta, não cria)
-  useEffect(() => {
-    if (!profile || !empresaId) return;
-
-    // Filtro por empresa (exceto admin que vê tudo)
-    const filter = isAdminVertical ? undefined : `empresa_id=eq.${empresaId}`;
-
-    const channel = supabase
-      .channel('notificacoes-realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notificacoes',
-          ...(filter ? { filter } : {})
-        },
-        (payload) => {
-          const novaNotificacao = payload.new as Notificacao;
-          setNotificacoes(prev => [novaNotificacao, ...prev].slice(0, 50));
-          setNaoLidas(prev => prev + 1);
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'notificacoes',
-          ...(filter ? { filter } : {})
-        },
-        (payload) => {
-          const notificacaoAtualizada = payload.new as Notificacao;
-          setNotificacoes(prev => {
-            const updated = prev.map(n => 
-              n.id === notificacaoAtualizada.id ? notificacaoAtualizada : n
-            );
-            setNaoLidas(updated.filter(n => !n.lida).length);
-            return updated;
-          });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [profile, empresaId, isAdminVertical]);
-
-  // Marcar uma notificação como lida
+  // Marcar uma notificação como lida → PATCH /notificacoes/{id}/lida
   const marcarComoLida = useCallback(async (notificacaoId: string) => {
     if (!user) return;
 
     try {
-      const { error } = await (supabase as any)
-        .from('notificacoes')
-        .update({
-          lida: true,
-          lida_em: new Date().toISOString(),
-          lida_por: user.id
-        })
-        .eq('id', notificacaoId);
-
-      if (error) {
-        console.error('Erro ao marcar notificação como lida:', error);
-        return;
-      }
+      await api.patch(`/notificacoes/${notificacaoId}/lida`, { lida_por: user.id });
 
       setNotificacoes(prev =>
         prev.map(n =>
@@ -160,30 +92,19 @@ export function useNotificacoes() {
     }
   }, [user]);
 
-  // Marcar todas como lidas
+  // Marcar todas como lidas. Sem endpoint de bulk no backend novo → percorre as
+  // não lidas carregadas chamando PATCH /{id}/lida (N pequeno, ≤50 carregadas).
   const marcarTodasComoLidas = useCallback(async () => {
-    if (!user || !empresaId) return;
+    if (!user) return;
+
+    const naoLidasIds = notificacoes.filter(n => !n.lida).map(n => n.id);
 
     try {
-      let query = (supabase as any)
-        .from('notificacoes')
-        .update({
-          lida: true,
-          lida_em: new Date().toISOString(),
-          lida_por: user.id
-        })
-        .eq('lida', false);
-
-      if (!isAdminVertical) {
-        query = query.eq('empresa_id', empresaId);
-      }
-
-      const { error } = await query;
-
-      if (error) {
-        console.error('Erro ao marcar todas como lidas:', error);
-        return;
-      }
+      await Promise.all(
+        naoLidasIds.map(id =>
+          api.patch(`/notificacoes/${id}/lida`, { lida_por: user.id }).catch(() => null)
+        )
+      );
 
       setNotificacoes(prev =>
         prev.map(n => ({
@@ -197,7 +118,7 @@ export function useNotificacoes() {
     } catch (e) {
       console.error('Erro ao marcar todas como lidas:', e);
     }
-  }, [user, empresaId, isAdminVertical]);
+  }, [user, notificacoes]);
 
   return {
     notificacoes,
