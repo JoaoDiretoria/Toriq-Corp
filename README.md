@@ -116,12 +116,24 @@ uv run alembic revision -m "x"  # nova migration
 | `S3_REGION` | — | Região S3 (default `us-east-1`) | `us-east-1` |
 | `S3_PUBLIC_BASE_URL` | — | Base pública opcional (CDN/proxy) p/ URLs de arquivo | — |
 | `CORS_ORIGINS` | ✅* | Origens permitidas (separadas por vírgula) — domínios do front | `https://toriqcorp.com.br,https://www.toriqcorp.com.br` |
+| `OPEN_REGISTER` | — | `false` (default, seguro): `/auth/register` exige admin_vertical. `true` só p/ bootstrap/testes | `false` |
 | `SUPABASE_DB_URL` | só dev | URL do Supabase original (introspecção/port de RPCs) — **não usar em produção** | — |
 | `TEST_DATABASE_URL` | só teste | Banco de teste (`db-toriq-test`) | `postgresql+asyncpg://...@.../db-toriq-test` |
+| `SEED_ADMIN_EMAIL` | seed | E-mail do 1º admin (usado só pelo `python -m app.seed_admin`) | `admin@toriqcorp.com.br` |
+| `SEED_ADMIN_PASSWORD` | seed | Senha do 1º admin (≥ 8 chars) | `<senha forte>` |
+| `SEED_ADMIN_NOME` | — | Nome do 1º admin (default `Admin`) | `Admin` |
 
 > ⚠️ Sem `S3_*` configurado, os endpoints `/storage/*` respondem **503** (o resto funciona normal).
 > Em produção, use **hostnames internos** (`db-toriq-corp`, `rustfs`) — mais rápido e não sai pra internet.
 > ⚠️ `.env` é **gitignored**. Cada variável em **uma linha** (`CHAVE=valor`).
+
+> **Bootstrap do 1º admin (Fatia 0):** em produção `OPEN_REGISTER=false`, então
+> `/auth/register` é restrito a `admin_vertical`. Crie o primeiro admin via seed
+> (idempotente) — depois dele, todos os outros usuários são criados logado:
+> ```
+> SEED_ADMIN_EMAIL=admin@toriqcorp.com.br SEED_ADMIN_PASSWORD='<senha forte>' \
+>   uv run python -m app.seed_admin
+> ```
 
 ### Frontend (`.env` na raiz · build-args do Vite)
 
