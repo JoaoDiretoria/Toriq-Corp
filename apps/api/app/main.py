@@ -62,6 +62,11 @@ from app.api.instrutores import (
     recon_facial_router,
     anexos_router as funil_anexos_router,
 )
+# Subsistema gestão de usuários (admin) + troca de senha
+from app.api.admin_users import (
+    router as admin_users_router,
+    password_router as change_password_router,
+)
 from app.api.health import router as health_router
 from app.api.kanbans_legados import router as kanbans_legados_router
 from app.jobs.scheduler import build_scheduler
@@ -152,6 +157,9 @@ def create_app() -> FastAPI:
     app.include_router(recon_facial_router)
     app.include_router(instrutores_router)
     app.include_router(funil_anexos_router)
+    # Gestão de usuários (admin) + troca de senha
+    app.include_router(admin_users_router)
+    app.include_router(change_password_router)
     return app
 
 
