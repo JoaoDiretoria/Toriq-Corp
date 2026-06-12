@@ -701,7 +701,7 @@ export function ToriqCorpControleEquipamentos() {
       if (editingStatus) {
         const statusDbId = statusIdMap[editingStatus];
         if (statusDbId) {
-          await api.put(/sst/epi/status/, {
+          await api.put(`/sst/epi/status/${statusDbId}`, {
             codigo: statusCodigo,
             nome: novoStatus.nome.trim(),
             cor: novoStatus.cor
@@ -739,7 +739,7 @@ export function ToriqCorpControleEquipamentos() {
     try {
       const statusDbId = statusIdMap[statusId];
       if (statusDbId) {
-        await api.del(/sst/epi/status/);
+        await api.del(`/sst/epi/status/${statusDbId}`);
       }
       await loadData();
       toast({ title: 'Sucesso', description: 'Status removido.' });
@@ -759,7 +759,7 @@ export function ToriqCorpControleEquipamentos() {
       if (editingUsadoPara) {
         const finalidadeId = finalidadeIdMap[editingUsadoPara];
         if (finalidadeId) {
-          await api.put(/sst/epi/finalidades/, { nome: novoUsadoPara.trim() });
+          await api.put(`/sst/epi/finalidades/${finalidadeId}`, { nome: novoUsadoPara.trim() });
         }
       } else {
         if (usadoParaList.includes(novoUsadoPara.trim())) {
@@ -789,7 +789,7 @@ export function ToriqCorpControleEquipamentos() {
     try {
       const finalidadeId = finalidadeIdMap[item];
       if (finalidadeId) {
-        await api.del(/sst/epi/finalidades/);
+        await api.del(`/sst/epi/finalidades/${finalidadeId}`);
       }
       await loadData();
       toast({ title: 'Sucesso', description: 'Finalidade removida.' });
@@ -807,7 +807,7 @@ export function ToriqCorpControleEquipamentos() {
 
     try {
       if (editingEquipamento) {
-        await api.put(/sst/epi/equipamentos/, {
+        await api.put(`/sst/epi/equipamentos/${editingEquipamento.id}`, {
           nome: equipamentoForm.nome,
           codigo: equipamentoForm.codigo,
           numero_serie: equipamentoForm.numero_serie,
@@ -852,7 +852,7 @@ export function ToriqCorpControleEquipamentos() {
     if (!confirm('Deseja realmente excluir este equipamento?')) return;
 
     try {
-      await api.del(/sst/epi/equipamentos/);
+      await api.del(`/sst/epi/equipamentos/${id}`);
       await loadData();
       toast({ title: 'Sucesso', description: 'Equipamento excluído.' });
     } catch (error) {
@@ -920,7 +920,7 @@ export function ToriqCorpControleEquipamentos() {
 
     try {
       if (editingKit) {
-        await api.put(/sst/epi/kits/, {
+        await api.put(`/sst/epi/kits/${editingKit.id}`, {
           nome: kitForm.nome,
           codigo: kitForm.codigo,
           tipo_servico: kitForm.tipo_servico,
@@ -928,14 +928,14 @@ export function ToriqCorpControleEquipamentos() {
         });
 
         // Remover itens antigos e reinserir
-        const itensAtuais: any[] = await api.get(/sst/epi/kits//itens).catch(() => []);
+        const itensAtuais: any[] = await api.get(`/sst/epi/kits/${editingKit.id}/itens`).catch(() => []);
         await Promise.all(itensAtuais.map((item: any) =>
-          api.del(/sst/epi/kits//itens/).catch(() => null)
+          api.del(`/sst/epi/kits/${editingKit.id}/itens/${item.id}`).catch(() => null)
         ));
 
         if (kitForm.equipamentos && kitForm.equipamentos.length > 0) {
           await Promise.all(kitForm.equipamentos.map((item) =>
-            api.post(/sst/epi/kits//itens, {
+            api.post(`/sst/epi/kits/${editingKit.id}/itens`, {
               equipamento_id: item.equipamento_id,
               quantidade: item.quantidade
             })
@@ -953,7 +953,7 @@ export function ToriqCorpControleEquipamentos() {
 
         if (kitForm.equipamentos && kitForm.equipamentos.length > 0 && newKit) {
           await Promise.all(kitForm.equipamentos.map((item) =>
-            api.post(/sst/epi/kits//itens, {
+            api.post(`/sst/epi/kits/${newKit.id}/itens`, {
               equipamento_id: item.equipamento_id,
               quantidade: item.quantidade
             })
@@ -977,7 +977,7 @@ export function ToriqCorpControleEquipamentos() {
     if (!confirm('Deseja realmente excluir este kit?')) return;
 
     try {
-      await api.del(/sst/epi/kits/);
+      await api.del(`/sst/epi/kits/${id}`);
       await loadData();
       toast({ title: 'Sucesso', description: 'Kit excluído.' });
     } catch (error) {
@@ -1045,7 +1045,7 @@ export function ToriqCorpControleEquipamentos() {
         await loadData();
         toast({
           title: 'Sucesso',
-          description: Movimentação  registrada com sucesso!
+          description: `Movimentação ${newMovimentacao?.numero_movimentacao || ''} registrada com sucesso!`
         });
         setShowMovimentacaoDialog(false);
         setMovimentacaoForm({ tipo: 'saida', status: 'demanda' });
@@ -1101,7 +1101,7 @@ export function ToriqCorpControleEquipamentos() {
         await loadData();
         toast({
           title: 'Sucesso',
-          description: Movimentação  registrada com  equipamento(s)!
+          description: `Movimentação ${newMovimentacao?.numero_movimentacao || ''} registrada com ${equipamentosMovimentacao.length} equipamento(s)!`
         });
         setShowMovimentacaoDialog(false);
         setMovimentacaoForm({ tipo: 'saida', status: 'demanda' });
