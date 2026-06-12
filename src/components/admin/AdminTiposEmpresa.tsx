@@ -66,8 +66,7 @@ export function AdminTiposEmpresa() {
   const fetchTipos = async () => {
     setLoading(true);
     try {
-      // NOTA (migração): endpoint /empresas/tipos-empresa não existe no backend ainda — degradando para lista vazia.
-      const data = await api.get<TipoEmpresa[]>('/empresas/tipos-empresa').catch(() => [] as TipoEmpresa[]);
+      const data = await api.get<TipoEmpresa[]>('/tipos-empresa').catch(() => [] as TipoEmpresa[]);
       const sorted = [...data].sort((a, b) => a.nome.localeCompare(b.nome));
       setTipos(sorted);
     } catch (error) {
@@ -108,18 +107,16 @@ export function AdminTiposEmpresa() {
 
     try {
       if (editingTipo) {
-        // NOTA (migração): endpoint PUT /empresas/tipos-empresa/{id} não existe no backend ainda — degradando com no-op.
-        await api.put<any>(`/empresas/tipos-empresa/${editingTipo.id}`, {
+        await api.put<any>(`/tipos-empresa/${editingTipo.id}`, {
           nome: form.nome,
           descricao: form.descricao || null,
-        }).catch(() => null);
+        });
         toast({ title: 'Sucesso', description: 'Tipo de empresa atualizado!' });
       } else {
-        // NOTA (migração): endpoint POST /empresas/tipos-empresa não existe no backend ainda — degradando com no-op.
-        await api.post<any>('/empresas/tipos-empresa', {
+        await api.post<any>('/tipos-empresa', {
           nome: form.nome,
           descricao: form.descricao || null,
-        }).catch(() => null);
+        });
         toast({ title: 'Sucesso', description: 'Tipo de empresa criado!' });
       }
 
@@ -139,8 +136,7 @@ export function AdminTiposEmpresa() {
     if (!deletingId) return;
 
     try {
-      // NOTA (migração): endpoint DELETE /empresas/tipos-empresa/{id} não existe no backend ainda — degradando com no-op.
-      await api.del<any>(`/empresas/tipos-empresa/${deletingId}`).catch(() => null);
+      await api.del<any>(`/tipos-empresa/${deletingId}`);
       toast({ title: 'Sucesso', description: 'Tipo de empresa excluído!' });
       setDeleteDialogOpen(false);
       setDeletingId(null);

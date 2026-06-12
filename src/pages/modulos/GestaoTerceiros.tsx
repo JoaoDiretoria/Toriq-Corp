@@ -168,13 +168,11 @@ const GestaoTerceiros = () => {
       };
 
       if (selectedTerceiro) {
-        // NOTA (migração): endpoint PUT /sst/terceiros/{id} não existe ainda — operação é no-op
-        await api.put<any>(`/sst/terceiros/${selectedTerceiro.id}`, terceiroData).catch(() => null);
+        await api.put<any>(`/sst/terceiros/${selectedTerceiro.id}`, terceiroData);
         toast({ title: "Terceiro atualizado com sucesso!" });
         logUpdate('Terceiros', 'Gestão de Terceiros', `Atualizou terceiro: ${formData.nome_empresa_terceira}`, { id: selectedTerceiro.id, nome: formData.nome_empresa_terceira });
       } else {
-        // NOTA (migração): endpoint POST /sst/terceiros não existe ainda — operação é no-op
-        await api.post<any>("/sst/terceiros", terceiroData).catch(() => null);
+        await api.post<any>("/sst/terceiros", terceiroData);
         toast({ title: "Terceiro cadastrado com sucesso!" });
         logCreate('Terceiros', 'Gestão de Terceiros', `Cadastrou terceiro: ${formData.nome_empresa_terceira}`, { nome: formData.nome_empresa_terceira });
       }
@@ -207,8 +205,7 @@ const GestaoTerceiros = () => {
     if (!selectedTerceiro) return;
 
     try {
-      // NOTA (migração): endpoint DELETE /sst/terceiros/{id} não existe ainda — operação é no-op
-      await api.del<any>(`/sst/terceiros/${selectedTerceiro.id}`).catch(() => null);
+      await api.del<any>(`/sst/terceiros/${selectedTerceiro.id}`);
 
       toast({ title: "Terceiro excluído com sucesso!" });
       logDelete('Terceiros', 'Gestão de Terceiros', `Excluiu terceiro: ${selectedTerceiro.nome_empresa_terceira}`, { id: selectedTerceiro.id, nome: selectedTerceiro.nome_empresa_terceira });

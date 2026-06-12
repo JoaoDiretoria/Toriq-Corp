@@ -332,3 +332,90 @@ class UnidadeClienteOut(BaseModel):
     email: Optional[str]
     status: Optional[str]
     model_config = {"from_attributes": True}
+
+
+# ── Terceiros (tenant-scoped) ─────────────────────────────────────────────────
+
+class TerceiroIn(BaseModel):
+    nome_empresa_terceira: str
+    responsavel: str
+    status_conformidade: str
+    data_validade_documentos: datetime.date
+    documentos_entregues: Optional[str] = None
+
+
+class TerceiroUpdate(BaseModel):
+    nome_empresa_terceira: Optional[str] = None
+    responsavel: Optional[str] = None
+    status_conformidade: Optional[str] = None
+    data_validade_documentos: Optional[datetime.date] = None
+    documentos_entregues: Optional[str] = None
+
+
+class TerceiroOut(BaseModel):
+    id: uuid.UUID
+    empresa_id: uuid.UUID
+    nome_empresa_terceira: str
+    responsavel: str
+    status_conformidade: str
+    data_validade_documentos: datetime.date
+    documentos_entregues: Optional[str] = None
+    created_at: Optional[datetime.datetime] = None
+    updated_at: Optional[datetime.datetime] = None
+    model_config = {"from_attributes": True}
+
+
+# ── OrigensContato (tenant-scoped) ────────────────────────────────────────────
+
+class OrigemContatoIn(BaseModel):
+    nome: str
+    descricao: Optional[str] = None
+    cor: Optional[str] = None
+    ativo: Optional[bool] = True
+
+
+class OrigemContatoUpdate(BaseModel):
+    nome: Optional[str] = None
+    descricao: Optional[str] = None
+    cor: Optional[str] = None
+    ativo: Optional[bool] = None
+
+
+class OrigemContatoOut(BaseModel):
+    id: uuid.UUID
+    empresa_id: uuid.UUID
+    nome: str
+    descricao: Optional[str] = None
+    cor: Optional[str] = None
+    ativo: Optional[bool] = None
+    created_at: Optional[datetime.datetime] = None
+    updated_at: Optional[datetime.datetime] = None
+    model_config = {"from_attributes": True}
+
+
+# ── CategoriasClientesEmpresa (tenant-scoped, com cor/ativo) ──────────────────
+
+class CategoriaClienteEmpresaIn(BaseModel):
+    nome: str
+    descricao: Optional[str] = None
+    cor: Optional[str] = None
+    ativo: Optional[bool] = True
+
+
+class CategoriaClienteEmpresaUpdate(BaseModel):
+    nome: Optional[str] = None
+    descricao: Optional[str] = None
+    cor: Optional[str] = None
+    ativo: Optional[bool] = None
+
+
+class CategoriaClienteEmpresaOut(BaseModel):
+    id: uuid.UUID
+    empresa_id: uuid.UUID
+    nome: str
+    descricao: Optional[str] = None
+    cor: Optional[str] = None
+    ativo: Optional[bool] = None
+    created_at: Optional[datetime.datetime] = None
+    updated_at: Optional[datetime.datetime] = None
+    model_config = {"from_attributes": True}

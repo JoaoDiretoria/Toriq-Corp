@@ -34,6 +34,7 @@ from app.api.modelos import router as modelos_router
 from app.api.funil_card_extras import router as funil_card_extras_router
 # Onda 1 Fatia 5 — endpoints de tabelas que já existiam no banco mas não tinham router
 from app.api.empresas import router as empresas_router
+from app.api.tipos_empresa import router as tipos_empresa_router
 from app.api.modulos import router as modulos_router
 from app.api.setor_permissoes import router as setor_permissoes_router
 from app.api.empresa_settings import router as empresa_settings_router
@@ -142,6 +143,7 @@ def create_app() -> FastAPI:
     app.include_router(pesquisas_router)
     # Onda 1 Fatia 5 — empresa/plataforma, cadastros e funil comercial
     app.include_router(empresas_router)
+    app.include_router(tipos_empresa_router)
     app.include_router(modulos_router)
     app.include_router(setor_permissoes_router)
     app.include_router(empresa_settings_router)

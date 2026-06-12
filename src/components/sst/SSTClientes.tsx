@@ -615,14 +615,27 @@ export function SSTClientes({ empresaIdOverride }: SSTClientesProps = {}) {
   };
 
   const fetchCategoriasDisponiveis = async () => {
-    // NOTA (migração): não há endpoint /sst/categorias-clientes-empresa (tenant-scoped).
-    // O endpoint /sst/categorias-clientes é global sem cor/ativo — degrade para lista vazia.
-    setCategoriasDisponiveis([]);
+    // GET /sst/categorias-clientes-empresa (tenant-scoped; traz cor/ativo)
+    const data = await api
+      .get<any[]>('/sst/categorias-clientes-empresa')
+      .catch(() => [] as any[]);
+    setCategoriasDisponiveis(
+      (Array.isArray(data) ? data : [])
+        .filter((c: any) => c.ativo !== false)
+        .map((c: any) => ({ id: c.id, nome: c.nome, cor: c.cor || '', ativo: c.ativo !== false })),
+    );
   };
 
   const fetchOrigensContatoDisponiveis = async () => {
-    // NOTA (migração): não há endpoint para origens_contato — degrade para lista vazia.
-    setOrigensContatoDisponiveis([]);
+    // GET /sst/origens-contato (tenant-scoped)
+    const data = await api
+      .get<any[]>('/sst/origens-contato')
+      .catch(() => [] as any[]);
+    setOrigensContatoDisponiveis(
+      (Array.isArray(data) ? data : [])
+        .filter((o: any) => o.ativo !== false)
+        .map((o: any) => ({ id: o.id, nome: o.nome, cor: o.cor || '', ativo: o.ativo !== false })),
+    );
   };
 
   // Carregar total e dados auxiliares ao montar

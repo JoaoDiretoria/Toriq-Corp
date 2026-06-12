@@ -90,6 +90,36 @@ router.include_router(make_crud_router(
     tags=["sst-colaboradores"],
 ))
 
+# ── Terceiros (tenant-scoped) ─────────────────────────────────────────────────
+router.include_router(make_crud_router(
+    model=m.Terceiros,
+    create_schema=s.TerceiroIn,
+    update_schema=s.TerceiroUpdate,
+    read_schema=s.TerceiroOut,
+    prefix="/terceiros",
+    tags=["sst-terceiros"],
+))
+
+# ── OrigensContato (tenant-scoped) ────────────────────────────────────────────
+router.include_router(make_crud_router(
+    model=m.OrigensContato,
+    create_schema=s.OrigemContatoIn,
+    update_schema=s.OrigemContatoUpdate,
+    read_schema=s.OrigemContatoOut,
+    prefix="/origens-contato",
+    tags=["sst-origens-contato"],
+))
+
+# ── CategoriasClientesEmpresa (tenant-scoped, com cor/ativo) ──────────────────
+router.include_router(make_crud_router(
+    model=m.CategoriasClientesEmpresa,
+    create_schema=s.CategoriaClienteEmpresaIn,
+    update_schema=s.CategoriaClienteEmpresaUpdate,
+    read_schema=s.CategoriaClienteEmpresaOut,
+    prefix="/categorias-clientes-empresa",
+    tags=["sst-categorias-clientes-empresa"],
+))
+
 # ── CategoriasClientes — global, somente leitura ──────────────────────────────
 # Esta tabela NÃO possui empresa_id — é uma tabela de referência global.
 # Exposta como GET-only; nenhum filtro de tenant é aplicado.
