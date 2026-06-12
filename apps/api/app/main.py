@@ -28,6 +28,8 @@ from app.api.agenda import router as agenda_router
 from app.api.white_label import router as white_label_router
 from app.api.blog import router as blog_router
 from app.api.pesquisas import router as pesquisas_router
+from app.api.modelos import router as modelos_router
+from app.api.funil_card_extras import router as funil_card_extras_router
 from app.api.health import router as health_router
 from app.api.kanbans_legados import router as kanbans_legados_router
 from app.jobs.scheduler import build_scheduler
@@ -61,6 +63,10 @@ def create_app() -> FastAPI:
     # Funil / CRM genérico — rotas específicas (/{id}/configuracao, /reorder,
     # /{id}/mover, /etiquetas do card) registradas ANTES de /{id} pelo router único
     app.include_router(funil_router)
+    # Extras de card do funil (orçamentos/propostas/comparações) — escopados via card
+    app.include_router(funil_card_extras_router)
+    # Modelos/Templates — ANTES de contratos (cujo /modelos/{id} capturaria /modelos/atividades)
+    app.include_router(modelos_router)
     # Contratos — rotas filhas (/{id}/clausulas, /{id}/modulos) registradas pelo
     # router único (rota específica antes de /{id} garantida pela ordem no arquivo)
     app.include_router(contratos_router)
