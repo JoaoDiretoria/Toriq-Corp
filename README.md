@@ -318,7 +318,7 @@ removido no cutover). Guia/contrato da esteira em `docs/migracao-front-esteira.m
   + seed do 1º admin (`python -m app.seed_admin`).
 - [x] **Realtime → push:** ✅ resolvido com **polling**/recarga (era opcional).
 - [ ] **Fechar as lacunas de backend** descobertas pela esteira (ver abaixo) — para
-  as 11 telas parciais voltarem a 100%. **4 de ~13 já fechadas.**
+  as telas parciais voltarem a 100%. **5 de ~13 já fechadas.**
 - [ ] **Apontar o serviço de front** (`VITE_API_URL`) para `https://api.toriqcorp.com.br`.
 - [ ] **Validar paridade** tela-a-tela contra o backend novo.
 - [ ] **Auth avançado:** reset de senha por **email** (precisa SMTP) + validação de **captcha** Turnstile no backend.
@@ -331,25 +331,28 @@ removido no cutover). Guia/contrato da esteira em `docs/migracao-front-esteira.m
 As telas parciais degradam graciosamente porque dependem de endpoints que ainda
 não existem. Para fechá-las, criar no backend (`apps/api`):
 
-**✅ Já fechadas:**
+**✅ Já fechadas (backend + front religado, com testes):**
 - ~~Escrita de empresas (`POST`/`DELETE /empresas`)~~ + ~~`empresa_contatos`~~ — AdminEmpresas.
 - ~~`tipos_empresa`~~ (`/tipos-empresa`) — AdminTiposEmpresa.
 - ~~`/sst/terceiros`~~ — GestaoTerceiros.
 - ~~`origens_contato` / `categorias_clientes_empresa`~~ (`/sst/origens-contato`,
   `/sst/categorias-clientes-empresa`) — SSTClientes.
+- ~~**Kanbans legados — atividades, etiquetas e vínculos card↔etiqueta**~~
+  (`/kanban/{closer,prospeccao,pos-venda,cross-selling}/{cardId}/atividades`,
+  `.../etiquetas`, `.../{cardId}/etiquetas`) — AdminCloser/Prospeccao/PosVenda/CrossSelling.
 
 **🔴 Restantes:**
-- **Kanbans legados — atividades e etiquetas:** `closer/prospeccao/pos_venda_atividades`,
-  `*_etiquetas` e `*_card_etiquetas` (histórico e tags dos cards).
 - **Sinistros:** `tipos_sinistro` / `sinistros_colaborador` / `sinistro_fotos`
-  (foram removidos por risco de IDOR — precisam de versão tenant-scoped).
-- **`blog_user_preferences`** (recomendações) — hoje degrada para "posts recentes".
-- **`normas_regulamentadoras`** — AdminCadastrosSST.
+  (foram removidos por risco de IDOR — precisam de versão tenant-scoped) — RegistrarSinistroDialog.
 - **Campos estendidos de usuário** em `AdminUserCreateIn`/`UpdateIn` (telefone, cpf,
-  endereço, setor) — SSTUsuarios.
+  endereço, setor) — SSTUsuarios. *(rápido)*
+- **`blog_user_preferences`** (recomendações) — hoje degrada para "posts recentes".
+- **`normas_regulamentadoras`** (precisa criar tabela/migration) — AdminCadastrosSST.
 - **`send-newsletter`** (era edge function) — disparo de newsletter.
-- **Catálogo de módulos:** `AdminModulos` tenta escrever em `/white-label/modulos`
-  (hoje read-only por design) — decidir se vira gravável.
+- **Catálogo de módulos graváveis** (`AdminModulos` × `/white-label/modulos`,
+  hoje read-only por design) — decidir.
+- **Outras degradações pontuais** das telas de kanban: movimentações/modelos de
+  prospecção, cópia de atividades entre funis (sem endpoint de histórico).
 
 ---
 
