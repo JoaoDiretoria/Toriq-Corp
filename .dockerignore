@@ -11,3 +11,6 @@ supabase
 *.md
 .editorconfig
 .prettierrc
+# Backends não entram no build do front (contexto = root). Reduz o contexto.
+apps
+backend-esocial

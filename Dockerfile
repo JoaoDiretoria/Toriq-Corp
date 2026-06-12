@@ -3,6 +3,10 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Build args para Vite
+# IMPORTANTE: o Vite "queima" estas vars no bundle em BUILD time. VITE_API_URL
+# precisa apontar para a URL PÚBLICA da API nova (ex.: https://api.seudominio.com),
+# senão o front cai no default http://localhost:8000 e quebra em produção.
+ARG VITE_API_URL
 ARG VITE_SUPABASE_PROJECT_ID
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_PUBLISHABLE_KEY
@@ -16,6 +20,7 @@ RUN npm ci
 
 # Copiar código fonte e buildar
 COPY . .
+ENV VITE_API_URL=${VITE_API_URL}
 ENV VITE_SUPABASE_PROJECT_ID=${VITE_SUPABASE_PROJECT_ID}
 ENV VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
 ENV VITE_SUPABASE_PUBLISHABLE_KEY=${VITE_SUPABASE_PUBLISHABLE_KEY}

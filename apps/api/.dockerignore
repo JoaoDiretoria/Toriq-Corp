@@ -1,0 +1,18 @@
+# Ambiente/venv e caches — nunca devem entrar na imagem.
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.mypy_cache
+
+# Segredos — vêm das env vars do container (EasyPanel), não do arquivo.
+.env
+.env.*
+
+# Não precisa em produção.
+tests
+openapi_dump.json
+*.md
+.git
+.gitignore
