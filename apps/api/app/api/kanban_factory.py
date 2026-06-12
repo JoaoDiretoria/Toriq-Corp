@@ -105,6 +105,9 @@ def make_kanban_router(
         )
         if existe:
             return {"criadas": 0}
+        # NOTE: race condition acceptable here (pre-launch, low concurrency).
+        # A concurrent call could insert duplicates between the scalar check and commit.
+        # A DB-level unique constraint or advisory lock would eliminate it if needed later.
         for i, nome in enumerate(default_colunas):
             db.add(coluna_model(id=uuid.uuid4(), empresa_id=user.empresa_id, nome=nome, ordem=i))
         await db.commit()
@@ -132,10 +135,21 @@ def make_kanban_router(
 
         Segurança: usa TenantRepository.get para garantir que card_id pertence
         à empresa do usuário autenticado antes de qualquer modificação.
+        Valida também que coluna_destino_id pertence à mesma empresa (anti FK-injection).
         """
         card = await r.get(card_id)
         if card is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "card não encontrado")
+
+        # Validate destination column belongs to the caller's tenant
+        dest = await db.scalar(
+            select(coluna_model).where(
+                coluna_model.id == body.coluna_destino_id,
+                coluna_model.empresa_id == r.empresa_id,
+            )
+        )
+        if dest is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "coluna destino não encontrada")
 
         origem = card.coluna_id
         card = await r.update(card_id, coluna_id=body.coluna_destino_id)
@@ -169,7 +183,20 @@ def make_kanban_router(
         return await r.list()
 
     @router.post("", response_model=card_out, status_code=status.HTTP_201_CREATED)
-    async def criar_card(payload: card_in, r: _CardRepo = Depends(_repo)):
+    async def criar_card(
+        payload: card_in,
+        r: _CardRepo = Depends(_repo),
+        db: AsyncSession = Depends(get_db),
+    ):
+        """Cria um card validando que coluna_id pertence à empresa do usuário (anti FK-injection)."""
+        col = await db.scalar(
+            select(coluna_model).where(
+                coluna_model.id == payload.coluna_id,
+                coluna_model.empresa_id == r.empresa_id,
+            )
+        )
+        if col is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "coluna não encontrada")
         return await r.add(**payload.model_dump(exclude_unset=True))
 
     @router.get("/{id_}", response_model=card_out)

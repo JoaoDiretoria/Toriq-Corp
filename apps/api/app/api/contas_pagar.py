@@ -49,6 +49,28 @@ def _repo(
     return _ContaRepo(db, user.empresa_id)
 
 
+@router.post("", response_model=s.ContaPagarOut, status_code=status.HTTP_201_CREATED)
+async def criar_conta(
+    payload: s.ContaPagarIn,
+    repo: _ContaRepo = Depends(_repo),
+    db: AsyncSession = Depends(get_db),
+):
+    """Cria uma conta validando que coluna_id pertence à empresa do usuário (anti FK-injection).
+
+    Este endpoint explícito tem prioridade sobre o POST genérico do contas_crud_router
+    porque o cp_kanban_router é registrado antes no main.py.
+    """
+    col = await db.scalar(
+        select(m.ContasPagarColunas).where(
+            m.ContasPagarColunas.id == payload.coluna_id,
+            m.ContasPagarColunas.empresa_id == repo.empresa_id,
+        )
+    )
+    if col is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "coluna não encontrada")
+    return await repo.add(**payload.model_dump(exclude_unset=True))
+
+
 @router.patch("/reorder", status_code=status.HTTP_204_NO_CONTENT)
 async def reordenar(itens: list[s.ReorderItem], repo: _ContaRepo = Depends(_repo)):
     """Reordena múltiplas contas em lote (tenant-scoped)."""
@@ -63,10 +85,24 @@ async def mover(
     repo: _ContaRepo = Depends(_repo),
     db: AsyncSession = Depends(get_db),
 ):
-    """Move uma conta para outra coluna e registra a movimentação (tenant-scoped)."""
+    """Move uma conta para outra coluna e registra a movimentação (tenant-scoped).
+
+    Valida que coluna_destino_id pertence à empresa do usuário (anti FK-injection).
+    """
     conta = await repo.get(conta_id)
     if conta is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "não encontrada")
+
+    # Validate destination column belongs to the caller's tenant
+    dest = await db.scalar(
+        select(m.ContasPagarColunas).where(
+            m.ContasPagarColunas.id == body.coluna_destino_id,
+            m.ContasPagarColunas.empresa_id == repo.empresa_id,
+        )
+    )
+    if dest is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "coluna destino não encontrada")
+
     origem = conta.coluna_id
     conta = await repo.update(conta_id, coluna_id=body.coluna_destino_id)
     descricao = body.justificativa or "movimentação de coluna"
@@ -116,6 +152,9 @@ async def bootstrap_colunas(
     )
     if existe:
         return {"criadas": 0}
+    # NOTE: race condition acceptable here (pre-launch, low concurrency).
+    # A concurrent call could insert duplicates between the scalar check and commit.
+    # A DB-level unique constraint or advisory lock would eliminate it if needed later.
     padroes = ["A Pagar", "Pagamentos Recorrentes", "Vencidos", "Pagas"]
     for i, nome in enumerate(padroes):
         db.add(m.ContasPagarColunas(

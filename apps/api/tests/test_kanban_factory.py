@@ -247,3 +247,140 @@ async def test_kanban_isolamento(db_session, client):
         json={"coluna_destino_id": cols[0]["id"]},
     )
     assert resp.status_code == 404
+
+
+async def test_criar_card_rejeita_coluna_de_outra_empresa(db_session, client):
+    """Criar card com coluna_id de outra empresa deve retornar 404 (anti FK-injection)."""
+    from app.models.generated import Empresas as Empresa
+
+    # Garante que tabelas existem
+    for t in (_KColuna.__table__, _KCard.__table__, _KMov.__table__):
+        async with db_session.bind.begin() as conn:
+            try:
+                await conn.run_sync(t.create)
+            except Exception:
+                pass  # tabela já existe
+
+    from app.main import app as _app
+    prefix_exists = any(r.path.startswith("/k") for r in _app.routes)
+    if not prefix_exists:
+        _app.include_router(
+            make_kanban_router(
+                card_model=_KCard,
+                coluna_model=_KColuna,
+                mov_model=_KMov,
+                card_in=CardIn,
+                card_update=CardUpdate,
+                card_out=CardOut,
+                coluna_in=ColIn,
+                coluna_out=ColOut,
+                prefix="/k",
+                tags=["k"],
+                default_colunas=["A", "B"],
+            )
+        )
+
+    # Empresa A e empresa B
+    emp_a = Empresa(id=uuid.uuid4(), nome="Sec-A", tipo="sst")
+    emp_b = Empresa(id=uuid.uuid4(), nome="Sec-B", tipo="sst")
+    db_session.add_all([emp_a, emp_b])
+    await db_session.commit()
+
+    async def _reg_login(email: str, emp_id: uuid.UUID):
+        await client.post(
+            "/auth/register",
+            json={"email": email, "password": "segredo123", "nome": email,
+                  "role": "cliente_torq", "empresa_id": str(emp_id)},
+        )
+        await client.post("/auth/login", json={"email": email, "password": "segredo123"})
+
+    # Empresa A: bootstrap e obter coluna
+    await _reg_login("sec-a@a.com", emp_a.id)
+    await client.post("/k/bootstrap-colunas")
+    cols_a = (await client.get("/k/colunas")).json()
+    coluna_a_id = cols_a[0]["id"]
+
+    # Empresa B: tenta criar card usando coluna da empresa A → 404
+    await _reg_login("sec-b@b.com", emp_b.id)
+    await client.post("/k/bootstrap-colunas")  # empresa B tem suas próprias colunas
+
+    resp = await client.post("/k", json={"titulo": "ataque", "coluna_id": coluna_a_id})
+    assert resp.status_code == 404, f"esperado 404, recebeu {resp.status_code}: {resp.text}"
+
+
+async def test_mover_rejeita_coluna_destino_de_outra_empresa(db_session, client):
+    """Mover card para coluna_destino_id de outra empresa deve retornar 404 (anti FK-injection)."""
+    from app.models.generated import Empresas as Empresa
+
+    # Garante que tabelas existem
+    for t in (_KColuna.__table__, _KCard.__table__, _KMov.__table__):
+        async with db_session.bind.begin() as conn:
+            try:
+                await conn.run_sync(t.create)
+            except Exception:
+                pass
+
+    from app.main import app as _app
+    prefix_exists = any(r.path.startswith("/k") for r in _app.routes)
+    if not prefix_exists:
+        _app.include_router(
+            make_kanban_router(
+                card_model=_KCard,
+                coluna_model=_KColuna,
+                mov_model=_KMov,
+                card_in=CardIn,
+                card_update=CardUpdate,
+                card_out=CardOut,
+                coluna_in=ColIn,
+                coluna_out=ColOut,
+                prefix="/k",
+                tags=["k"],
+                default_colunas=["A", "B"],
+            )
+        )
+
+    emp_a = Empresa(id=uuid.uuid4(), nome="Mov-A", tipo="sst")
+    emp_b = Empresa(id=uuid.uuid4(), nome="Mov-B", tipo="sst")
+    db_session.add_all([emp_a, emp_b])
+    await db_session.commit()
+
+    async def _reg_login(email: str, emp_id: uuid.UUID):
+        await client.post(
+            "/auth/register",
+            json={"email": email, "password": "segredo123", "nome": email,
+                  "role": "cliente_torq", "empresa_id": str(emp_id)},
+        )
+        await client.post("/auth/login", json={"email": email, "password": "segredo123"})
+
+    # Empresa A: bootstrap, criar card
+    await _reg_login("mov-a@a.com", emp_a.id)
+    await client.post("/k/bootstrap-colunas")
+    cols_a = (await client.get("/k/colunas")).json()
+    card_a = (
+        await client.post("/k", json={"titulo": "meu card", "coluna_id": cols_a[0]["id"]})
+    ).json()
+
+    # Empresa B: bootstrap e obter coluna
+    await _reg_login("mov-b@b.com", emp_b.id)
+    await client.post("/k/bootstrap-colunas")
+    cols_b = (await client.get("/k/colunas")).json()
+    coluna_b_id = cols_b[0]["id"]
+
+    # Empresa B tenta mover o card dela própria mas aponta destino para coluna da empresa A
+    # Primeiro cria um card da empresa B
+    card_b = (
+        await client.post("/k", json={"titulo": "card b", "coluna_id": cols_b[0]["id"]})
+    ).json()
+
+    resp = await client.post(
+        f"/k/{card_b['id']}/mover",
+        json={"coluna_destino_id": cols_a[0]["id"]},  # coluna de outra empresa
+    )
+    assert resp.status_code == 404, f"esperado 404, recebeu {resp.status_code}: {resp.text}"
+
+    # Mover para coluna da própria empresa B ainda deve funcionar
+    resp_ok = await client.post(
+        f"/k/{card_b['id']}/mover",
+        json={"coluna_destino_id": cols_b[1]["id"]},  # coluna válida de empresa B
+    )
+    assert resp_ok.status_code == 200, f"mover legítimo falhou: {resp_ok.text}"

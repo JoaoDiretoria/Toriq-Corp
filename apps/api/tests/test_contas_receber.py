@@ -1,5 +1,7 @@
 import uuid
 
+from app.models.generated import Empresas as Empresa
+
 
 async def _login(client, db_session):
     from app.models.generated import Empresas as Empresa
@@ -95,3 +97,72 @@ async def test_reorder(client, db_session):
     updated2 = (await client.get(f"/financeiro/contas-receber/{id2}")).json()
     assert updated1["ordem"] == 10
     assert updated2["ordem"] == 5
+
+
+async def _setup_two_empresas(client, db_session):
+    """Helper: cria duas empresas, cada uma com bootstrap de colunas.
+
+    Retorna (emp_a_cols, emp_b_cols) — listas de colunas de cada empresa.
+    """
+    emp_a = Empresa(id=uuid.uuid4(), nome="CR-Sec-A", tipo="sst")
+    emp_b = Empresa(id=uuid.uuid4(), nome="CR-Sec-B", tipo="sst")
+    db_session.add_all([emp_a, emp_b])
+    await db_session.commit()
+
+    async def _reg_login(email: str, emp_id: uuid.UUID):
+        await client.post(
+            "/auth/register",
+            json={"email": email, "password": "segredo123", "nome": email,
+                  "role": "cliente_torq", "empresa_id": str(emp_id)},
+        )
+        await client.post("/auth/login", json={"email": email, "password": "segredo123"})
+
+    await _reg_login("cr-sec-a@test.com", emp_a.id)
+    await client.post("/financeiro/contas-receber/bootstrap-colunas")
+    cols_a = (await client.get("/financeiro/contas-receber/colunas")).json()
+
+    await _reg_login("cr-sec-b@test.com", emp_b.id)
+    await client.post("/financeiro/contas-receber/bootstrap-colunas")
+    cols_b = (await client.get("/financeiro/contas-receber/colunas")).json()
+
+    return cols_a, cols_b, _reg_login, emp_a, emp_b
+
+
+async def test_criar_conta_rejeita_coluna_de_outra_empresa(client, db_session):
+    """POST /financeiro/contas-receber com coluna_id de outra empresa deve retornar 404."""
+    cols_a, cols_b, _reg_login, emp_a, emp_b = await _setup_two_empresas(client, db_session)
+    coluna_a_id = cols_a[0]["id"]
+
+    # Logado como empresa B, tenta criar conta usando coluna da empresa A
+    resp = await client.post(
+        "/financeiro/contas-receber",
+        json={"coluna_id": coluna_a_id, "cliente_nome": "Ataque", "numero": "X-001", "valor": 0},
+    )
+    assert resp.status_code == 404, f"esperado 404, recebeu {resp.status_code}: {resp.text}"
+
+
+async def test_mover_rejeita_coluna_destino_de_outra_empresa(client, db_session):
+    """POST /{conta_id}/mover com coluna_destino_id de outra empresa deve retornar 404."""
+    cols_a, cols_b, _reg_login, emp_a, emp_b = await _setup_two_empresas(client, db_session)
+
+    # Empresa B: criar conta em coluna própria
+    conta_b_resp = await client.post(
+        "/financeiro/contas-receber",
+        json={"coluna_id": cols_b[0]["id"], "cliente_nome": "B-Cliente", "numero": "B-001", "valor": 50},
+    )
+    assert conta_b_resp.status_code == 201, conta_b_resp.text
+    conta_b = conta_b_resp.json()
+
+    # Tenta mover para coluna da empresa A → 404
+    resp = await client.post(
+        f"/financeiro/contas-receber/{conta_b['id']}/mover",
+        json={"coluna_destino_id": cols_a[0]["id"]},
+    )
+    assert resp.status_code == 404, f"esperado 404, recebeu {resp.status_code}: {resp.text}"
+
+    # Mover para coluna da própria empresa B deve funcionar
+    resp_ok = await client.post(
+        f"/financeiro/contas-receber/{conta_b['id']}/mover",
+        json={"coluna_destino_id": cols_b[1]["id"]},
+    )
+    assert resp_ok.status_code == 200, f"mover legítimo falhou: {resp_ok.text}"
