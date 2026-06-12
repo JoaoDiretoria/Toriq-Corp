@@ -287,30 +287,67 @@ uv run pytest tests/test_x.py # um arquivo
 
 ## O que falta migrar (front)
 
-A migração é **invisível** (mesma UI; só troca `supabase.from()` → client novo). Já migrado:
-auth (`useAuth`), dashboard admin, log de acesso, troca de senha.
+A migração é **invisível** (mesma UI; só troca `supabase.from()` → client novo).
 
-**Falta** (esteira, ~134 arquivos ainda com `supabase`): telas de Empresas, Usuários, Colaboradores,
-Comercial/Funil, Financeiro, SST, Frota, Produtos, Agenda, Suporte, Blog. Mapa completo (tabela→endpoint,
-contratos de "invisibilidade", riscos) em `docs/superpowers/migracao-front-map.md`.
+**Estado (2026-06-12): essencialmente concluída.** Os hooks-keystone (`useAuth`,
+`useModulosAtivos`, `usePermissoes`, `useEmpresaMode`, `useHierarquia`,
+`useNotificacoes`) e as ~127 telas restantes foram migrados — **zero chamadas
+`supabase.` de código** no `src/` (só sobra o arquivo `integrations/supabase/client.ts`,
+removido no cutover). Guia/contrato da esteira em `docs/migracao-front-esteira.md`.
 
-**Bloqueios conhecidos por tela:**
-- **Upload** (fotos/certificados/anexos) → usar `/storage` (já pronto).
-- **Realtime** (notificações, kanban, tickets) → front faz **polling** nos GETs existentes (sem backend novo).
+**Degradações conhecidas (sem endpoint equivalente — degradam graciosamente):**
+- **Realtime** (notificações, kanban, tickets) → **polling**/recarga nos GETs (sem push no backend novo).
+- **Envio de newsletter** (`functions.invoke('send-newsletter')`) → sem endpoint; ação fica no-op até criar.
+- **Recomendações de blog** (`blog_user_preferences`) → degrada para "posts recentes".
+- **Branding pré-login por empresa arbitrária** (`useEmpresaWhiteLabel`) → revisar (há `/white-label/me`).
 - **eSocial / Google Meet** → dependem da Fatia 4 (eSocial em Python).
+- **Upload** (fotos/certificados/anexos) → `/storage` (já pronto).
 
 ---
 
 ## O que falta para terminar o desenvolvimento
 
-- [ ] **Migrar as telas restantes do front** (a maior parte — esteira invisível).
+> Atualizado em **2026-06-12**. Decisão do produto: o banco novo começa **vazio**
+> (cria do zero) — **não há backfill** de dados do Supabase. Isso remove a etapa
+> mais cara (e a migração de credenciais) do caminho.
+
+- [x] **Migrar as telas do front** — ✅ esteira concluída: hooks-keystone + ~127 telas
+  migradas (116 limpas, 11 parciais que degradam graciosamente), **0 chamadas
+  `supabase.` de código**, 0 erros de TypeScript. Guia em `docs/migracao-front-esteira.md`.
+- [x] **Fatia 0 (pré-deploy):** ✅ `/auth/register` **admin-gated** (`OPEN_REGISTER=false`)
+  + seed do 1º admin (`python -m app.seed_admin`).
+- [x] **Realtime → push:** ✅ resolvido com **polling**/recarga (era opcional).
+- [ ] **Fechar as lacunas de backend** descobertas pela esteira (ver abaixo) — para
+  as 11 telas parciais voltarem a 100%.
 - [ ] **Apontar o serviço de front** (`VITE_API_URL`) para `https://api.toriqcorp.com.br`.
+- [ ] **Validar paridade** tela-a-tela contra o backend novo.
 - [ ] **Auth avançado:** reset de senha por **email** (precisa SMTP) + validação de **captcha** Turnstile no backend.
-- [ ] **Realtime → push** (opcional; hoje resolvido com polling).
-- [ ] **Fatia 0 (pré-deploy):** tornar `/auth/register` **admin-gated** + seed do 1º admin (hoje aberto, proposital p/ testes).
 - [ ] **Fatia 4 — eSocial em Python:** reescrever `backend-esocial` (assinatura digital, SOAP gov.br).
 - [ ] **Rotação de senha do banco + TLS/exposição** (decisão: deixado para o fim do projeto).
-- [ ] **Cutover (big-bang):** desligar o Supabase, limpar legado, mover o front para `apps/web`.
+- [ ] **Cutover (big-bang):** desligar o Supabase, remover `integrations/supabase/`, mover o front para `apps/web`.
+
+### Lacunas de backend descobertas pela esteira (backlog)
+
+As 11 telas parciais degradam graciosamente porque dependem de endpoints que ainda
+não existem. Para fechá-las, criar no backend (`apps/api`):
+
+- **Escrita de empresas:** `POST` / `DELETE /empresas` (hoje só `GET`/`PUT`) — usado por
+  AdminEmpresas, EmpresasImportExport, useImportQueue, SSTClientes.
+- **`empresa_contatos`** (CRUD tenant-scoped).
+- **Kanbans legados — atividades e etiquetas:** `closer/prospeccao/pos_venda_atividades`,
+  `*_etiquetas` e `*_card_etiquetas` (histórico e tags dos cards).
+- **`tipos_empresa`** (CRUD) — AdminTiposEmpresa.
+- **`/sst/terceiros`** (CRUD) — GestaoTerceiros.
+- **Sinistros:** `tipos_sinistro` / `sinistros_colaborador` / `sinistro_fotos`
+  (foram removidos por risco de IDOR — precisam de versão tenant-scoped).
+- **`categorias_clientes_empresa` / `origens_contato`** (tenant-scoped) — SSTClientes.
+- **`blog_user_preferences`** (recomendações) — hoje degrada para "posts recentes".
+- **`normas_regulamentadoras`** — AdminCadastrosSST.
+- **Campos estendidos de usuário** em `AdminUserCreateIn`/`UpdateIn` (telefone, cpf,
+  endereço, setor) — SSTUsuarios.
+- **`send-newsletter`** (era edge function) — disparo de newsletter.
+- **Catálogo de módulos:** `AdminModulos` tenta escrever em `/white-label/modulos`
+  (hoje read-only por design) — decidir se vira gravável.
 
 ---
 
