@@ -321,18 +321,32 @@ export function AdminComercialDashboard() {
     setLoading(true);
     try {
       // Buscar dados do Closer
-      const [closerColunasData, closerCardsAll, closerAtividadesData] = await Promise.all([
+      const [closerColunasData, closerCardsAll] = await Promise.all([
         api.get<any[]>('/kanban/closer/colunas').catch(() => [] as any[]),
         api.get<any[]>('/kanban/closer').catch(() => [] as any[]),
-        // NOTA (migração): closer_atividades não possui endpoint REST equivalente — degradando para lista vazia
-        Promise.resolve([] as any[]),
       ]);
 
       // Ordenar colunas por ordem (o backend não garante ordenação)
       const closerColunasSorted = [...closerColunasData].sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
       setCloserColunas(closerColunasSorted);
       // Filtrar cards não arquivados no cliente (o endpoint retorna todos)
-      setCloserCards(closerCardsAll.filter((c: any) => !c.arquivado));
+      const closerCardsAtivos = closerCardsAll.filter((c: any) => !c.arquivado);
+      setCloserCards(closerCardsAtivos);
+
+      // Buscar atividades de cada card do closer em paralelo
+      // GET /kanban/closer/{cardId}/atividades — um endpoint por cardId
+      const atividadesResults = await Promise.allSettled(
+        closerCardsAtivos.map((card: any) =>
+          api.get<any[]>(`/kanban/closer/${card.id}/atividades`).catch(() => [] as any[])
+        )
+      );
+      const closerAtividadesData = atividadesResults.flatMap((result) =>
+        result.status === 'fulfilled' ? result.value : []
+      );
+      // Ordenar por created_at desc (o backend não garante ordenação global)
+      closerAtividadesData.sort((a: any, b: any) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
       setCloserAtividades(closerAtividadesData);
 
       // Buscar dados da Prospecção

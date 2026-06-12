@@ -266,10 +266,43 @@ export function AdminPosVenda() {
         .sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
       setCards(cardsData);
 
-      // NOTA (migração): pos_venda_atividades e pos_venda_card_etiquetas não têm endpoint REST.
-      // Atividades e etiquetas por card degradam para vazio — UI renderiza "sem atividade".
-      setCardAtividades({});
-      setAllCardEtiquetas({});
+      // Buscar atividades e etiquetas por card em paralelo
+      const cardIds = cardsData.map((c: any) => c.id);
+
+      // Etiquetas da empresa (definições)
+      const etiquetasDef = await api.get<Etiqueta[]>('/kanban/pos-venda/etiquetas').catch(() => [] as Etiqueta[]);
+
+      // Para cada card, buscar atividades e vínculos de etiqueta em paralelo
+      const [atividadesResults, etiquetasResults] = await Promise.all([
+        Promise.all(
+          cardIds.map((id: string) =>
+            api.get<Atividade[]>(`/kanban/pos-venda/${id}/atividades`).catch(() => [] as Atividade[])
+          )
+        ),
+        Promise.all(
+          cardIds.map((id: string) =>
+            api.get<{ id: string; card_id: string; etiqueta_id: string }[]>(
+              `/kanban/pos-venda/${id}/etiquetas`
+            ).catch(() => [] as { id: string; card_id: string; etiqueta_id: string }[])
+          )
+        ),
+      ]);
+
+      const newCardAtividades: Record<string, Atividade[]> = {};
+      const newAllCardEtiquetas: Record<string, CardEtiqueta[]> = {};
+
+      cardIds.forEach((id: string, idx: number) => {
+        newCardAtividades[id] = atividadesResults[idx] || [];
+        const vinculos = etiquetasResults[idx] || [];
+        newAllCardEtiquetas[id] = vinculos.map((v) => ({
+          card_id: v.card_id,
+          etiqueta_id: v.etiqueta_id,
+          etiqueta: (etiquetasDef || []).find((e) => e.id === v.etiqueta_id),
+        }));
+      });
+
+      setCardAtividades(newCardAtividades);
+      setAllCardEtiquetas(newAllCardEtiquetas);
     } catch (error: any) { console.error('Erro ao buscar dados:', error); toast({ title: 'Erro', description: 'Não foi possível carregar os dados.', variant: 'destructive' }); } finally { setLoading(false); }
   };
 
@@ -315,13 +348,11 @@ export function AdminPosVenda() {
     } catch (error) { console.error('Erro ao mover card:', error); fetchData(); } } }
   };
 
-  // NOTA (migração): pos_venda_atividades não tem endpoint REST.
-  // fetchAtividades retorna lista vazia — UI exibe "Nenhuma atividade registrada".
   const fetchAtividades = async (cardId: string) => {
     setLoadingAtividades(true);
     try {
-      // Sem endpoint para pos_venda_atividades — degrade para vazio
-      setAtividades([] as Atividade[]);
+      const data = await api.get<Atividade[]>(`/kanban/pos-venda/${cardId}/atividades`).catch(() => [] as Atividade[]);
+      setAtividades(data || []);
     } catch (error) { console.error('Erro ao buscar atividades:', error); } finally { setLoadingAtividades(false); }
   };
 
@@ -433,15 +464,49 @@ export function AdminPosVenda() {
     }
   };
 
-  // NOTA (migração): pos_venda_atividades não tem endpoint REST — handleAddAtividade é no-op com aviso.
   const handleAddAtividade = async () => {
-    toast({ title: 'Indisponível', description: 'Atividades para este kanban ainda não têm endpoint no backend.', variant: 'destructive' });
+    if (!viewingCard) return;
+    try {
+      const body: any = {
+        tipo: novaAtividade.tipo || 'nota',
+        descricao: novaAtividade.descricao || null,
+        prazo: novaAtividade.prazo || null,
+        horario: novaAtividade.horario || null,
+        usuario_id: profile?.id ?? null,
+      };
+      const created = await api.post<Atividade>(`/kanban/pos-venda/${viewingCard.id}/atividades`, body);
+      setAtividades(prev => [created, ...prev]);
+      setCardAtividades(prev => ({
+        ...prev,
+        [viewingCard.id]: [created, ...(prev[viewingCard.id] || [])],
+      }));
+      setAtividadeDialogOpen(false);
+      setNovaAtividade({ tipo: 'tarefa', descricao: '', prazo: '', horario: '' });
+      toast({ title: 'Sucesso', description: 'Atividade registrada!' });
+    } catch (error: any) {
+      console.error('Erro ao criar atividade:', error);
+      toast({ title: 'Erro', description: error?.message || 'Não foi possível salvar a atividade.', variant: 'destructive' });
+    }
   };
 
-  // NOTA (migração): pos_venda_atividades não tem endpoint REST — handleUpdateAtividadeStatus é no-op.
   const handleUpdateAtividadeStatus = async (atividadeId: string, newStatus: string) => {
-    // Sem endpoint — degrade silenciosamente
-    console.warn('[PosVenda] handleUpdateAtividadeStatus: sem endpoint para pos_venda_atividades');
+    if (!viewingCard) return;
+    try {
+      const updated = await api.put<Atividade>(
+        `/kanban/pos-venda/${viewingCard.id}/atividades/${atividadeId}`,
+        { status: newStatus }
+      );
+      setAtividades(prev => prev.map(a => a.id === atividadeId ? { ...a, ...updated } : a));
+      setCardAtividades(prev => ({
+        ...prev,
+        [viewingCard.id]: (prev[viewingCard.id] || []).map(a =>
+          a.id === atividadeId ? { ...a, ...updated } : a
+        ),
+      }));
+    } catch (error: any) {
+      console.error('Erro ao atualizar status da atividade:', error);
+      toast({ title: 'Erro', description: error?.message || 'Não foi possível atualizar a atividade.', variant: 'destructive' });
+    }
   };
 
   // Função para buscar colunas do funil selecionado

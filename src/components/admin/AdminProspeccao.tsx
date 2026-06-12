@@ -958,11 +958,33 @@ export function AdminProspeccao() {
         .sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
       setCards(cardsAtivos);
 
-      // NOTA (migração): prospeccao_atividades sem endpoint REST — cardAtividades vazio
-      setCardAtividades({});
+      // Buscar definições de etiquetas da empresa (necessário para enriquecer vínculos)
+      const etiquetasGlobais = await api.get<any[]>('/kanban/prospeccao/etiquetas').catch(() => [] as any[]);
+      const etiquetasMap: Record<string, Etiqueta> = {};
+      (etiquetasGlobais || []).forEach((e: any) => { etiquetasMap[e.id] = e; });
+      setEtiquetas(etiquetasGlobais || []);
 
-      // NOTA (migração): prospeccao_card_etiquetas sem endpoint REST — etiquetas vazias
-      setAllCardEtiquetas({});
+      // Buscar atividades de todos os cards ativos em paralelo
+      const atividadesEntries = await Promise.all(
+        cardsAtivos.map(async (c: any) => {
+          const acts = await api.get<any[]>(`/kanban/prospeccao/${c.id}/atividades`).catch(() => [] as any[]);
+          return [c.id, acts || []] as [string, Atividade[]];
+        })
+      );
+      setCardAtividades(Object.fromEntries(atividadesEntries));
+
+      // Buscar etiquetas de todos os cards ativos em paralelo (enriquecidas com objeto etiqueta)
+      const etiquetasEntries = await Promise.all(
+        cardsAtivos.map(async (c: any) => {
+          const tags = await api.get<any[]>(`/kanban/prospeccao/${c.id}/etiquetas`).catch(() => [] as any[]);
+          const enriched: CardEtiqueta[] = (tags || []).map((ce: any) => ({
+            ...ce,
+            etiqueta: etiquetasMap[ce.etiqueta_id],
+          }));
+          return [c.id, enriched] as [string, CardEtiqueta[]];
+        })
+      );
+      setAllCardEtiquetas(Object.fromEntries(etiquetasEntries));
     } catch (error: any) {
       console.error('Erro ao buscar dados:', error);
       toast({
@@ -1274,37 +1296,57 @@ export function AdminProspeccao() {
   const fetchResponsaveis = fetchResponsaveisAndReturn;
 
   // Buscar etiquetas da empresa
-  // NOTA (migração): prospeccao_etiquetas sem endpoint REST — etiquetas não carregadas
   const fetchEtiquetas = async () => {
-    setEtiquetas([]);
+    const data = await api.get<any[]>('/kanban/prospeccao/etiquetas').catch(() => [] as any[]);
+    setEtiquetas(data || []);
   };
 
-  // Buscar etiquetas de um card específico
-  // NOTA (migração): prospeccao_card_etiquetas sem endpoint REST — etiquetas não carregadas
-  const fetchCardEtiquetas = async (_cardId: string) => {
-    setCardEtiquetas([]);
+  // Buscar etiquetas de um card específico e enriquecer com objeto etiqueta
+  const fetchCardEtiquetas = async (cardId: string, etiquetasRef?: Etiqueta[]) => {
+    const data = await api.get<any[]>(`/kanban/prospeccao/${cardId}/etiquetas`).catch(() => [] as any[]);
+    // Enriquecer com objeto etiqueta para o render (ce.etiqueta.nome / ce.etiqueta.cor)
+    const source = etiquetasRef ?? etiquetas;
+    const enriched: CardEtiqueta[] = (data || []).map((ce: any) => ({
+      ...ce,
+      etiqueta: source.find(e => e.id === ce.etiqueta_id),
+    }));
+    setCardEtiquetas(enriched);
+    setAllCardEtiquetas(prev => ({ ...prev, [cardId]: enriched }));
   };
 
   // Criar nova etiqueta
-  // NOTA (migração): prospeccao_etiquetas sem endpoint REST — operação degradada (no-op)
   const handleCriarEtiqueta = async () => {
-    toast({
-      title: 'Aviso',
-      description: 'Criação de etiquetas indisponível temporariamente.',
-      variant: 'destructive',
+    if (!novaEtiqueta.nome.trim()) return;
+    const criada = await api.post<any>('/kanban/prospeccao/etiquetas', {
+      nome: novaEtiqueta.nome.trim(),
+      cor: novaEtiqueta.cor,
     });
+    if (criada) {
+      setEtiquetas(prev => [...prev, criada]);
+      toast({ title: 'Sucesso', description: 'Etiqueta criada!' });
+    }
     setCriandoEtiqueta(false);
     setNovaEtiqueta({ nome: '', cor: '#f59e0b' });
   };
 
   // Alternar etiqueta no card (adicionar/remover)
-  // NOTA (migração): prospeccao_card_etiquetas sem endpoint REST — operação degradada (no-op)
-  const handleToggleEtiqueta = async (_etiquetaId: string) => {
-    toast({
-      title: 'Aviso',
-      description: 'Gerenciamento de etiquetas indisponível temporariamente.',
-      variant: 'destructive',
-    });
+  const handleToggleEtiqueta = async (etiquetaId: string) => {
+    if (!viewingCard) return;
+    const isSelected = cardEtiquetas.some(ce => ce.etiqueta_id === etiquetaId);
+    if (isSelected) {
+      await api.del(`/kanban/prospeccao/${viewingCard.id}/etiquetas/${etiquetaId}`);
+      const updated = cardEtiquetas.filter(ce => ce.etiqueta_id !== etiquetaId);
+      setCardEtiquetas(updated);
+      setAllCardEtiquetas(prev => ({ ...prev, [viewingCard.id]: updated }));
+    } else {
+      const vinculo = await api.post<any>(`/kanban/prospeccao/${viewingCard.id}/etiquetas`, { etiqueta_id: etiquetaId });
+      const etiqueta = etiquetas.find(e => e.id === etiquetaId);
+      const newEntry: CardEtiqueta = vinculo || { card_id: viewingCard.id, etiqueta_id: etiquetaId };
+      if (etiqueta) (newEntry as any).etiqueta = etiqueta;
+      const updated = [...cardEtiquetas, newEntry];
+      setCardEtiquetas(updated);
+      setAllCardEtiquetas(prev => ({ ...prev, [viewingCard.id]: updated }));
+    }
   };
 
   // Handler para atualizar o responsável do lead
@@ -1411,11 +1453,15 @@ export function AdminProspeccao() {
       }
     }
     
+    // Buscar etiquetas da empresa primeiro para enriquecer cardEtiquetas
+    const etiquetasData = await api.get<any[]>('/kanban/prospeccao/etiquetas').catch(() => [] as any[]);
+    const etiquetasList: Etiqueta[] = etiquetasData || [];
+    setEtiquetas(etiquetasList);
+
     await Promise.all([
       fetchAtividades(card.id),
       fetchModelos(),
-      fetchEtiquetas(),
-      fetchCardEtiquetas(card.id),
+      fetchCardEtiquetas(card.id, etiquetasList),
       fetchMovimentacoes(card.id),
     ]);
   };
@@ -1438,19 +1484,32 @@ export function AdminProspeccao() {
     setModelosOpen(false);
   };
 
-  // NOTA (migração): prospeccao_atividades sem endpoint REST — atividades não carregadas
-  const fetchAtividades = async (_cardId: string) => {
+  const fetchAtividades = async (cardId: string) => {
     setLoadingAtividades(true);
-    setAtividades([]);
+    const data = await api.get<any[]>(`/kanban/prospeccao/${cardId}/atividades`).catch(() => [] as any[]);
+    const sorted = (data || []).slice().sort(
+      (a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+    setAtividades(sorted);
+    setCardAtividades(prev => ({ ...prev, [cardId]: sorted }));
     setLoadingAtividades(false);
   };
 
   // Atualizar status da atividade
-  // NOTA (migração): prospeccao_atividades sem endpoint REST — atualização local apenas
   const handleUpdateAtividadeStatus = async (atividadeId: string, novoStatus: 'a_realizar' | 'programada' | 'pendente' | 'concluida') => {
     if (!viewingCard) return;
 
-    // Atualizar apenas localmente
+    const updateBody: any = { status: novoStatus };
+    if (novoStatus === 'concluida') {
+      updateBody.concluida = true;
+      updateBody.data_conclusao = new Date().toISOString();
+    } else {
+      updateBody.concluida = false;
+      updateBody.data_conclusao = null;
+    }
+
+    await api.put(`/kanban/prospeccao/${viewingCard.id}/atividades/${atividadeId}`, updateBody);
+
     const novasAtividades = atividades.map(a => a.id === atividadeId ? { ...a, status: novoStatus } : a);
     setAtividades(novasAtividades as Atividade[]);
     setCardAtividades(prev => ({
@@ -1571,29 +1630,24 @@ export function AdminProspeccao() {
         atividadeData.membros_ids = novaAtividade.membros_ids;
       }
 
-      // NOTA (migração): prospeccao_atividades sem endpoint REST — atividade salva localmente apenas
-      const atividadeLocal: Atividade = {
-        ...atividadeData,
-        id: crypto.randomUUID(),
-        created_at: new Date().toISOString(),
-        usuario: profile ? { nome: profile.nome } : undefined,
-        anexos: null,
-        checklist_items: atividadeData.checklist_items || null,
-        membros_ids: atividadeData.membros_ids || null,
-        dados_anteriores: null,
-        dados_novos: null,
-      };
-
       // Upload de anexos (degradado — bucket não suportado)
       if (anexos.length > 0) {
-        await uploadAnexos(atividadeLocal.id);
+        await uploadAnexos('_');
       }
 
-      // Simular inserção local
-      setAtividades(prev => [atividadeLocal, ...prev]);
+      // Criar atividade via endpoint REST
+      const criada: Atividade = await api.post(`/kanban/prospeccao/${viewingCard.id}/atividades`, atividadeData);
+
+      // Enriquecer com campo usuario para exibição local imediata
+      const atividadeEnriquecida: Atividade = {
+        ...criada,
+        usuario: profile ? { nome: profile.nome } : criada.usuario,
+      };
+
+      setAtividades(prev => [atividadeEnriquecida, ...prev]);
       setCardAtividades(prev => ({
         ...prev,
-        [viewingCard.id]: [atividadeLocal, ...(prev[viewingCard.id] || [])],
+        [viewingCard.id]: [atividadeEnriquecida, ...(prev[viewingCard.id] || [])],
       }));
 
       toast({ title: 'Sucesso', description: 'Atividade registrada!' });
@@ -1786,7 +1840,7 @@ export function AdminProspeccao() {
           origem: cardData.origem,
           temperatura: cardData.temperatura,
         });
-        // NOTA (migração): prospeccao_atividades e movimentações sem endpoint — registros omitidos
+        // NOTA (migração): movimentações sem endpoint — registro de criação omitido
         toast({ title: 'Sucesso', description: 'Lead criado!' });
       }
 
@@ -1907,7 +1961,6 @@ export function AdminProspeccao() {
         await api.del(`/kanban/prospeccao/colunas/${deleteId}`);
         toast({ title: 'Sucesso', description: 'Coluna excluída!' });
       } else if (deleteType === 'card') {
-        // NOTA (migração): prospeccao_atividades sem endpoint — atividades não excluídas separadamente
         await api.del(`/kanban/prospeccao/${deleteId}`);
         toast({ title: 'Sucesso', description: 'Lead excluído!' });
       }

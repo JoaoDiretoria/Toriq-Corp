@@ -219,9 +219,8 @@ export function AdminCrossSelling() {
       // backend escopa por empresa; filtrar arquivados no cliente (backend devolve tudo)
       const cardsData = allCards.filter((c: any) => !c.arquivado).sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
       setCards(cardsData);
-      // NOTA (migração): cross_selling_atividades sem endpoint REST — degradando para lista vazia
       setCardAtividades({});
-      // NOTA (migração): cross_selling_card_etiquetas / cross_selling_etiquetas sem endpoint REST — degradando para vazio
+      // cross_selling não tem vínculo card↔etiqueta no backend — mantido vazio intencionalmente
       setAllCardEtiquetas({});
     } catch (error: any) { console.error('Erro ao buscar dados:', error); toast({ title: 'Erro', description: 'Não foi possível carregar os dados.', variant: 'destructive' }); } finally { setLoading(false); }
   };
@@ -240,8 +239,15 @@ export function AdminCrossSelling() {
     if (activeData?.type === 'card') { const activeId = active.id as string; const activeCardData = activeData.card as CrossSellingCard; const overData = over.data.current; const colunaOrigemId = savedOriginColunaId || activeCardData.coluna_id; let targetColunaId = colunaOrigemId; if (over.id.toString().startsWith('droppable-')) { targetColunaId = over.id.toString().replace('droppable-', ''); } else if (overData?.type === 'card') { targetColunaId = (overData.card as CrossSellingCard).coluna_id; } else if (overData?.type === 'column') { targetColunaId = overData.coluna.id; } const mudouDeColuna = colunaOrigemId !== targetColunaId; const cardAtualizado = cards.find(c => c.id === activeId); if (cardAtualizado) { const cardsNaColuna = cards.filter(c => c.coluna_id === targetColunaId && c.id !== activeId); const novaOrdem = cardsNaColuna.length; setCards(prev => prev.map(c => c.id === activeId ? { ...c, coluna_id: targetColunaId, ordem: novaOrdem } : c)); setDroppedCardId(activeId); setTimeout(() => setDroppedCardId(null), 500); try { if (mudouDeColuna) { const colunaDestino = colunas.find(c => c.id === targetColunaId); await api.post(`/kanban/cross-selling/${activeId}/mover`, { coluna_destino_id: targetColunaId, justificativa: `Oportunidade movida para "${colunaDestino?.nome}"` }); } else { await api.put(`/kanban/cross-selling/${activeId}`, { ordem: novaOrdem }).catch(() => null); } fetchData(); } catch (error) { console.error('Erro ao mover card:', error); fetchData(); } } }
   };
 
-  // NOTA (migração): cross_selling_atividades sem endpoint REST — degradando para lista vazia
-  const fetchAtividades = async (_cardId: string) => { setLoadingAtividades(true); setAtividades([]); setLoadingAtividades(false); };
+  const fetchAtividades = async (cardId: string) => {
+    setLoadingAtividades(true);
+    try {
+      const data: Atividade[] = await api.get<Atividade[]>(`/kanban/cross-selling/${cardId}/atividades`).catch(() => []);
+      setAtividades(data);
+    } finally {
+      setLoadingAtividades(false);
+    }
+  };
 
   // Função para executar mudança de etapa com justificativa
   const executarMudancaEtapa = async (colunaDestino: Coluna, colunaOrigem: Coluna, justificativa?: string) => {
@@ -277,12 +283,38 @@ export function AdminCrossSelling() {
     }
   };
 
-  // NOTA (migração): cross_selling_atividades sem endpoint REST — operação no-op
-  const handleAddAtividade = async () => { if (!viewingCard || !novaAtividade.descricao.trim()) { toast({ title: 'Erro', description: 'Digite uma descrição.', variant: 'destructive' }); return; } setNovaAtividade({ tipo: 'tarefa', descricao: '', prazo: '', horario: '' }); setAtividadeDialogOpen(false); toast({ title: 'Aviso', description: 'Atividades não disponíveis no momento.' }); };
+  const handleAddAtividade = async () => {
+    if (!viewingCard || !novaAtividade.descricao.trim()) {
+      toast({ title: 'Erro', description: 'Digite uma descrição.', variant: 'destructive' });
+      return;
+    }
+    try {
+      const body: Record<string, any> = {
+        tipo: novaAtividade.tipo || 'nota',
+        descricao: novaAtividade.descricao,
+      };
+      if (novaAtividade.prazo) body.prazo = novaAtividade.prazo;
+      if (novaAtividade.horario) body.horario = novaAtividade.horario;
+      await api.post(`/kanban/cross-selling/${viewingCard.id}/atividades`, body);
+      setNovaAtividade({ tipo: 'tarefa', descricao: '', prazo: '', horario: '' });
+      setAtividadeDialogOpen(false);
+      fetchAtividades(viewingCard.id);
+      toast({ title: 'Sucesso', description: 'Atividade registrada.' });
+    } catch (error: any) {
+      console.error('Erro ao criar atividade:', error);
+      toast({ title: 'Erro', description: error?.message || 'Não foi possível registrar a atividade.', variant: 'destructive' });
+    }
+  };
 
-  // NOTA (migração): cross_selling_atividades sem endpoint REST — operação no-op
-  const handleUpdateAtividadeStatus = async (_atividadeId: string, _newStatus: string) => {
-    // sem endpoint; UI não quebra pois atividades já degradam para lista vazia
+  const handleUpdateAtividadeStatus = async (atividadeId: string, newStatus: string) => {
+    if (!viewingCard) return;
+    try {
+      await api.put(`/kanban/cross-selling/${viewingCard.id}/atividades/${atividadeId}`, { status: newStatus });
+      setAtividades(prev => prev.map(a => a.id === atividadeId ? { ...a, status: newStatus } : a));
+    } catch (error: any) {
+      console.error('Erro ao atualizar status da atividade:', error);
+      toast({ title: 'Erro', description: error?.message || 'Não foi possível atualizar a atividade.', variant: 'destructive' });
+    }
   };
 
   // Função para buscar colunas do funil selecionado
@@ -351,8 +383,7 @@ export function AdminCrossSelling() {
 
       await api.post(`/kanban/${funilPath}`, cardData);
 
-      // NOTA (migração): cross_selling_atividades e cross_selling_card_movimentacoes
-      // sem endpoint REST — cópia de histórico para o funil destino não realizada.
+      // Cópia de histórico de atividades para o funil destino não é suportada pelo backend.
 
       // Arquivar o card original via update (arquivado=true)
       await api.put(`/kanban/cross-selling/${viewingCard.id}`, { arquivado: true }).catch(() => null);

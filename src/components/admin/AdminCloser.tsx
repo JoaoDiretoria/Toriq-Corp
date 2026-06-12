@@ -1132,13 +1132,35 @@ export function AdminCloser() {
         .sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
       setCards(cardsData);
 
-      // Atividades: sem endpoint no kanban legado — degrade com objeto vazio
-      // NOTA (migração): closer_atividades não tem endpoint REST próprio; indicadores de atividade ficam vazios
-      setCardAtividades({});
+      // Atividades: buscar para todos os cards ativos
+      const atividadesMap: Record<string, Atividade[]> = {};
+      await Promise.all(
+        cardsData.map(async (card: any) => {
+          const ativs: any[] = await api.get<any[]>(`/kanban/closer/${card.id}/atividades`).catch(() => []);
+          atividadesMap[card.id] = (ativs || []).sort(
+            (a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          );
+        })
+      );
+      setCardAtividades(atividadesMap);
 
-      // Etiquetas: sem endpoint REST — degrade com objeto vazio
-      // NOTA (migração): closer_card_etiquetas/closer_etiquetas sem endpoint REST
-      setAllCardEtiquetas({});
+      // Etiquetas: buscar vínculos card↔etiqueta para todos os cards
+      const etiquetasDef: Etiqueta[] = await api.get<Etiqueta[]>('/kanban/closer/etiquetas').catch(() => []);
+      const etiquetasDefMap: Record<string, Etiqueta> = {};
+      (etiquetasDef || []).forEach((e) => { etiquetasDefMap[e.id] = e; });
+
+      const etiquetasMap: Record<string, CardEtiqueta[]> = {};
+      await Promise.all(
+        cardsData.map(async (card: any) => {
+          const vinculos: any[] = await api.get<any[]>(`/kanban/closer/${card.id}/etiquetas`).catch(() => []);
+          etiquetasMap[card.id] = (vinculos || []).map((v: any) => ({
+            card_id: v.card_id,
+            etiqueta_id: v.etiqueta_id,
+            etiqueta: etiquetasDefMap[v.etiqueta_id],
+          }));
+        })
+      );
+      setAllCardEtiquetas(etiquetasMap);
     } catch (error: any) {
       console.error('Erro ao buscar dados:', error);
       toast({
@@ -1367,9 +1389,9 @@ export function AdminCloser() {
       const novoCardId = insertedCard?.id;
       console.log('Novo card ID no Onboarding:', novoCardId);
 
-      // NOTA (migração): closer_atividades sem endpoint REST — cópia de histórico para o Onboarding indisponível
-      // O card de movimentação de origem também não pode ser registrado sem endpoint de atividades pos-venda
-      console.log('[Onboarding] Histórico de atividades não copiado — endpoint closer_atividades não disponível no backend');
+      // Cópia de histórico de atividades do Closer para o Onboarding não é feita aqui —
+      // o endpoint de atividades do pos-venda é separado e o card novo no Onboarding começa limpo.
+      console.log('[Onboarding] Histórico de atividades do Closer não copiado — card inicia limpo no Onboarding.');
 
       // Arquivar o card do Closer (mover, não duplicar)
       const archiveResult = await api.put(`/kanban/closer/${card.id}`, { arquivado: true }).catch((e: any) => {
@@ -1823,36 +1845,82 @@ export function AdminCloser() {
   const fetchResponsaveis = fetchResponsaveisAndReturn;
 
   // Buscar etiquetas da empresa
-  // NOTA (migração): closer_etiquetas sem endpoint REST — etiquetas ficam vazias
   const fetchEtiquetas = async () => {
     if (!empresaId) return;
-    setEtiquetas([]);
+    try {
+      const data: Etiqueta[] = await api.get<Etiqueta[]>('/kanban/closer/etiquetas').catch(() => []);
+      setEtiquetas(data || []);
+    } catch (error) {
+      console.error('Erro ao buscar etiquetas:', error);
+    }
   };
 
   // Buscar etiquetas de um card específico
-  // NOTA (migração): closer_card_etiquetas sem endpoint REST — etiquetas do card ficam vazias
-  const fetchCardEtiquetas = async (_cardId: string) => {
-    setCardEtiquetas([]);
+  const fetchCardEtiquetas = async (cardId: string) => {
+    try {
+      const vinculos: any[] = await api.get<any[]>(`/kanban/closer/${cardId}/etiquetas`).catch(() => []);
+      // Enriquecer com objeto etiqueta a partir da lista já carregada (ou buscar novamente)
+      const etiquetasDef: Etiqueta[] = await api.get<Etiqueta[]>('/kanban/closer/etiquetas').catch(() => []);
+      const etiquetasDefMap: Record<string, Etiqueta> = {};
+      (etiquetasDef || []).forEach((e) => { etiquetasDefMap[e.id] = e; });
+      setCardEtiquetas((vinculos || []).map((v: any) => ({
+        card_id: v.card_id,
+        etiqueta_id: v.etiqueta_id,
+        etiqueta: etiquetasDefMap[v.etiqueta_id],
+      })));
+    } catch (error) {
+      console.error('Erro ao buscar etiquetas do card:', error);
+      setCardEtiquetas([]);
+    }
   };
 
   // Criar nova etiqueta
-  // NOTA (migração): closer_etiquetas sem endpoint REST — criação de etiqueta indisponível
   const handleCriarEtiqueta = async () => {
-    toast({
-      title: 'Indisponível',
-      description: 'Criação de etiquetas será habilitada na próxima versão do backend.',
-      variant: 'destructive',
-    });
+    if (!novaEtiqueta.nome.trim()) {
+      toast({ title: 'Erro', description: 'Digite um nome para a etiqueta.', variant: 'destructive' });
+      return;
+    }
+    try {
+      const criada: Etiqueta = await api.post<Etiqueta>('/kanban/closer/etiquetas', {
+        nome: novaEtiqueta.nome.trim(),
+        cor: novaEtiqueta.cor,
+      });
+      toast({ title: 'Sucesso', description: 'Etiqueta criada!' });
+      setNovaEtiqueta({ nome: '', cor: '#f59e0b' });
+      setCriandoEtiqueta(false);
+      setEtiquetas(prev => [...prev, criada]);
+    } catch (error) {
+      console.error('Erro ao criar etiqueta:', error);
+      toast({ title: 'Erro', description: 'Não foi possível criar a etiqueta.', variant: 'destructive' });
+    }
   };
 
   // Alternar etiqueta no card (adicionar/remover)
-  // NOTA (migração): closer_card_etiquetas sem endpoint REST — toggle de etiqueta indisponível
-  const handleToggleEtiqueta = async (_etiquetaId: string) => {
-    toast({
-      title: 'Indisponível',
-      description: 'Gerenciamento de etiquetas será habilitado na próxima versão do backend.',
-      variant: 'destructive',
-    });
+  const handleToggleEtiqueta = async (etiquetaId: string) => {
+    if (!viewingCard) return;
+    const isSelected = cardEtiquetas.some(ce => ce.etiqueta_id === etiquetaId);
+    try {
+      if (isSelected) {
+        await api.del(`/kanban/closer/${viewingCard.id}/etiquetas/${etiquetaId}`);
+        setCardEtiquetas(prev => prev.filter(ce => ce.etiqueta_id !== etiquetaId));
+        setAllCardEtiquetas(prev => ({
+          ...prev,
+          [viewingCard.id]: (prev[viewingCard.id] || []).filter(ce => ce.etiqueta_id !== etiquetaId),
+        }));
+      } else {
+        await api.post(`/kanban/closer/${viewingCard.id}/etiquetas`, { etiqueta_id: etiquetaId });
+        const etiqueta = etiquetas.find(e => e.id === etiquetaId);
+        const novoVinculo: CardEtiqueta = { card_id: viewingCard.id, etiqueta_id: etiquetaId, etiqueta };
+        setCardEtiquetas(prev => [...prev, novoVinculo]);
+        setAllCardEtiquetas(prev => ({
+          ...prev,
+          [viewingCard.id]: [...(prev[viewingCard.id] || []), novoVinculo],
+        }));
+      }
+    } catch (error) {
+      console.error('Erro ao alternar etiqueta:', error);
+      toast({ title: 'Erro', description: 'Não foi possível atualizar a etiqueta.', variant: 'destructive' });
+    }
   };
 
   // Handler para atualizar o responsável do lead
@@ -2005,12 +2073,17 @@ export function AdminCloser() {
     setModelosOpen(false);
   };
 
-  // NOTA (migração): closer_atividades sem endpoint REST no kanban legado.
-  // A busca retorna vazio; as atividades não são exibidas no histórico até o endpoint ser criado.
-  const fetchAtividades = async (_cardId: string, _origemCardId?: string, _origemKanban?: string) => {
+  const fetchAtividades = async (cardId: string, _origemCardId?: string, _origemKanban?: string) => {
     setLoadingAtividades(true);
     try {
-      setAtividades([]);
+      const data: any[] = await api.get<any[]>(`/kanban/closer/${cardId}/atividades`).catch(() => []);
+      // Ordenar do mais antigo para o mais recente (mesma ordem do histórico)
+      const sorted = (data || []).sort(
+        (a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+      setAtividades(sorted as Atividade[]);
+      // Atualizar cardAtividades para refletir no kanban
+      setCardAtividades(prev => ({ ...prev, [cardId]: sorted as Atividade[] }));
     } catch (error) {
       console.error('Erro ao buscar atividades:', error);
     } finally {
@@ -2019,31 +2092,33 @@ export function AdminCloser() {
   };
 
   // Atualizar status da atividade
-  // NOTA (migração): closer_atividades sem endpoint REST — atualização de status indisponível
-  const handleUpdateAtividadeStatus = async (_atividadeId: string, _novoStatus: 'a_realizar' | 'programada' | 'pendente' | 'concluida') => {
+  const handleUpdateAtividadeStatus = async (atividadeId: string, novoStatus: 'a_realizar' | 'programada' | 'pendente' | 'concluida') => {
     if (!viewingCard) return;
 
     try {
-      // Sem endpoint disponível — atualizar apenas no estado local como fallback visual
-      const novoStatus = _novoStatus;
-      const atividadeId = _atividadeId;
-      
+      const body: any = { status: novoStatus };
+      if (novoStatus === 'concluida') {
+        body.concluida = true;
+        body.data_conclusao = new Date().toISOString();
+      } else {
+        body.concluida = false;
+        body.data_conclusao = null;
+      }
+      await api.put(`/kanban/closer/${viewingCard.id}/atividades/${atividadeId}`, body);
+
       // Atualizar lista local de atividades do dialog
-      const novasAtividades = atividades.map(a => a.id === atividadeId ? { 
-        ...a, 
-        status: novoStatus
-      } : a);
+      const novasAtividades = atividades.map(a => a.id === atividadeId ? { ...a, ...body } : a);
       setAtividades(novasAtividades as Atividade[]);
-      
+
       // Atualizar cardAtividades para refletir no kanban imediatamente
       setCardAtividades(prev => ({
         ...prev,
         [viewingCard.id]: novasAtividades as Atividade[],
       }));
-      
-      toast({ 
-        title: 'Sucesso', 
-        description: novoStatus === 'concluida' ? 'Atividade concluída!' : 'Status atualizado!' 
+
+      toast({
+        title: 'Sucesso',
+        description: novoStatus === 'concluida' ? 'Atividade concluída!' : 'Status atualizado!',
       });
     } catch (error) {
       console.error('Erro ao atualizar status:', error);
@@ -2206,12 +2281,27 @@ export function AdminCloser() {
         atividadeData.membros_ids = novaAtividade.membros_ids;
       }
 
-      // NOTA (migração): closer_atividades sem endpoint REST — inserção de atividade indisponível
-      // Inserção de atividade não persistida; toast de sucesso mantido para não quebrar UX
-      // Upload de anexos se houver (mantido para futura integração)
+      // Upload de anexos se houver
       if (anexos.length > 0) {
-        await uploadAnexos('temp').catch((e: any) => console.error('Erro no upload:', e));
+        const uploadedAnexos = await uploadAnexos('temp').catch((e: any) => {
+          console.error('Erro no upload:', e);
+          return [] as { nome: string; url: string; tipo: string }[];
+        });
+        if (uploadedAnexos && uploadedAnexos.length > 0) {
+          atividadeData.anexos = uploadedAnexos;
+        }
       }
+
+      // Inserir atividade via endpoint REST
+      const criada = await api.post(`/kanban/closer/${viewingCard.id}/atividades`, atividadeData);
+
+      // Atualizar lista local otimisticamente com o objeto retornado pelo backend
+      const atividadeCriada = (criada || atividadeData) as Atividade;
+      setAtividades(prev => [...prev, atividadeCriada]);
+      setCardAtividades(prev => ({
+        ...prev,
+        [viewingCard.id]: [...(prev[viewingCard.id] || []), atividadeCriada],
+      }));
 
       toast({ title: 'Sucesso', description: 'Atividade registrada!' });
       setNovaAtividade({ tipo: 'tarefa', descricao: '', responsavel_id: '', prazo: '', horario: '', checklist_items: [], membros_ids: [], status_contrato: 'a_elaborar' });
@@ -2380,7 +2470,6 @@ export function AdminCloser() {
       } else {
         const cardsNaColuna = cards.filter(c => c.coluna_id === colunaId);
         await api.post('/kanban/closer', { ...cardData, ordem: cardsNaColuna.length });
-        // NOTA (migração): atividade de criação do lead não registrada — closer_atividades sem endpoint
         toast({ title: 'Sucesso', description: 'Lead criado!' });
       }
 
@@ -2502,7 +2591,6 @@ export function AdminCloser() {
         await api.del(`/kanban/closer/colunas/${deleteId}`);
         toast({ title: 'Sucesso', description: 'Coluna excluída!' });
       } else if (deleteType === 'card') {
-        // NOTA (migração): closer_atividades sem endpoint DELETE — atividades do card não são excluídas pelo frontend
         await api.del(`/kanban/closer/${deleteId}`);
         toast({ title: 'Sucesso', description: 'Lead excluído!' });
       }
@@ -3180,8 +3268,7 @@ export function AdminCloser() {
                               coluna_destino_id: colunaPerdido.id,
                               justificativa: 'Card marcado como Perdido',
                             });
-                            // NOTA (migração): atividade de mudança de etapa não registrada — closer_atividades sem endpoint
-                            setViewingCard({ ...viewingCard, coluna_id: colunaPerdido.id });
+                                                setViewingCard({ ...viewingCard, coluna_id: colunaPerdido.id });
                             setCards(prev => prev.map(c =>
                               c.id === viewingCard.id ? { ...c, coluna_id: colunaPerdido.id } : c
                             ));
@@ -3221,7 +3308,6 @@ export function AdminCloser() {
                               coluna_destino_id: colunaAceito.id,
                               justificativa: 'Card marcado como Negócio Aceito',
                             });
-                            // NOTA (migração): atividade de mudança de etapa não registrada — closer_atividades sem endpoint
                             setViewingCard({ ...viewingCard, coluna_id: colunaAceito.id });
                             setCards(prev => prev.map(c =>
                               c.id === viewingCard.id ? { ...c, coluna_id: colunaAceito.id } : c
@@ -5033,7 +5119,6 @@ export function AdminCloser() {
                       return;
                     }
 
-                    // NOTA (migração): closer_atividades sem endpoint REST — atividade de comparação não registrada
                     // Recarregar atividades do card
                     if (viewingCard?.id) {
                       fetchAtividades(viewingCard.id, (viewingCard as any).origem_card_id, (viewingCard as any).origem_kanban);
@@ -5240,7 +5325,6 @@ export function AdminCloser() {
                 }
               }
 
-              // NOTA (migração): closer_atividades sem endpoint REST — atividade de proposta não registrada
               // Recarregar atividades do card
               if (viewingCard?.id) {
                 fetchAtividades(viewingCard.id, (viewingCard as any).origem_card_id, (viewingCard as any).origem_kanban);
