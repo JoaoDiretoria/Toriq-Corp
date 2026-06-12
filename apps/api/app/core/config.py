@@ -12,6 +12,13 @@ class Settings(BaseSettings):
     # Sobrescreva para False apenas no .env de dev local (HTTP / Postgres sem TLS).
     cookie_secure: bool = True
     db_ssl: bool = True
+    # Origens permitidas no CORS (separadas por vírgula no .env). O Vite de dev
+    # roda em :8080 — daí o default. Necessário para o front enviar o cookie httpOnly.
+    cors_origins: str = "http://localhost:8080,http://127.0.0.1:8080"
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
 
 settings = Settings()  # type: ignore[call-arg]

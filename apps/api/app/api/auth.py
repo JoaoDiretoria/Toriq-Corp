@@ -8,8 +8,9 @@ from app.core.config import settings
 from app.core.db import get_db
 from app.core.security import hash_password, verify_password
 from app.core.tokens import TokenError, create_token, decode_token
+from app.api.deps import get_current_user
 from app.models.user import User
-from app.schemas.auth import LoginIn, RegisterIn, UserOut
+from app.schemas.auth import EmpresaOut, LoginIn, MeOut, ProfileOut, RegisterIn, UserOut
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -61,6 +62,29 @@ async def register(payload: RegisterIn, db: AsyncSession = Depends(get_db)) -> U
     await db.commit()
     await db.refresh(user)
     return user
+
+
+@router.get("/me", response_model=MeOut)
+async def me(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> MeOut:
+    """Retorna a sessão atual (usuário + perfil de negócio + empresa).
+
+    É o que o front chama ao restaurar a sessão (substitui o
+    `supabase.auth.getSession()` + busca de profile/empresa).
+    """
+    from app.models.generated import Empresas, Profiles
+
+    profile = await db.get(Profiles, user.id)
+    empresa = None
+    if profile is not None and profile.empresa_id is not None:
+        empresa = await db.get(Empresas, profile.empresa_id)
+    return MeOut(
+        user=UserOut.model_validate(user),
+        profile=ProfileOut.model_validate(profile) if profile is not None else None,
+        empresa=EmpresaOut.model_validate(empresa) if empresa is not None else None,
+    )
 
 
 @router.post("/login", response_model=UserOut)

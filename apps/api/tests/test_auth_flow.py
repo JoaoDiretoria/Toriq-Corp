@@ -1,5 +1,31 @@
 import uuid
 
+from tests.helpers import login_as
+
+
+async def test_me_returns_user_profile_empresa(client, db_session):
+    """GET /auth/me devolve usuário + perfil + empresa da sessão atual."""
+    empresa_id = await login_as(
+        client, db_session, role="cliente_torq", email="me@test.com", nome="Mel"
+    )
+
+    resp = await client.get("/auth/me")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["user"]["email"] == "me@test.com"
+    assert body["profile"]["nome"] == "Mel"
+    assert body["profile"]["role"] == "cliente_torq"
+    assert body["empresa"]["id"] == str(empresa_id)
+    # Não vaza campos sensíveis da empresa (certificado/senha A1).
+    assert "certificado_a1_base64" not in body["empresa"]
+    assert "certificado_a1_senha" not in body["empresa"]
+
+
+async def test_me_unauthenticated_401(client):
+    """Sem cookie de acesso, /auth/me responde 401."""
+    resp = await client.get("/auth/me")
+    assert resp.status_code == 401
+
 
 async def test_register_then_login_sets_cookies(client, db_session):
     from app.models.generated import Empresas as Empresa

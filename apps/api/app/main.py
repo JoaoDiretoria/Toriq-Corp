@@ -2,7 +2,9 @@ import app.models  # noqa: F401  (registers all models in Base.metadata)
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
+from app.core.config import settings
 from app.api.auth import router as auth_router
 from app.api.contas_pagar import (
     colunas_crud_router as cp_colunas_router,
@@ -48,6 +50,15 @@ async def lifespan(app):
 
 def create_app() -> FastAPI:
     app = FastAPI(title="TORIQ API", version="0.1.0", lifespan=lifespan)
+    # CORS: o front (Vite :8080) precisa enviar o cookie httpOnly de auth.
+    # allow_credentials=True exige origens explícitas (não pode usar "*").
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins_list,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(fin_cadastros_router)
