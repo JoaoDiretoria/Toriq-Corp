@@ -319,12 +319,16 @@ removido no cutover). Guia/contrato da esteira em `docs/migracao-front-esteira.m
 - [x] **Realtime → push:** ✅ resolvido com **polling**/recarga (era opcional).
 - [ ] **Fechar as lacunas de backend** descobertas pela esteira (ver abaixo) — para
   as telas parciais voltarem a 100%. **10 de ~13 já fechadas.**
-- [ ] **Apontar o serviço de front** (`VITE_API_URL`) para `https://api.toriqcorp.com.br`.
-- [ ] **Validar paridade** tela-a-tela contra o backend novo.
+- [x] **Apontar o serviço de front** (`VITE_API_URL` → `https://api.toriqcorp.com.br`) —
+  ✅ **CUTOVER FEITO (2026-06-12):** o front em produção (`toriqcorp.com.br`) já roda
+  o build migrado falando com o backend Python; bundle sem Supabase (tree-shaken).
+  CORS/cookies cross-subdomínio validados. 1º admin via `app.seed_admin`.
+- [ ] **Validar paridade** tela-a-tela em produção (monitorar erros reais agora que está no ar).
 - [ ] **Auth avançado:** reset de senha por **email** (precisa SMTP) + validação de **captcha** Turnstile no backend.
 - [ ] **Fatia 4 — eSocial em Python:** reescrever `backend-esocial` (assinatura digital, SOAP gov.br).
 - [ ] **Rotação de senha do banco + TLS/exposição** (decisão: deixado para o fim do projeto).
-- [ ] **Cutover (big-bang):** desligar o Supabase, remover `integrations/supabase/`, mover o front para `apps/web`.
+- [ ] **Limpeza pós-cutover:** desligar/arquivar o Supabase, remover `integrations/supabase/`,
+  mover o front para `apps/web`.
 
 ### Lacunas de backend descobertas pela esteira (backlog)
 
