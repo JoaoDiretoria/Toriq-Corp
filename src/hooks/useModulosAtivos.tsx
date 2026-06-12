@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
 
@@ -44,26 +44,24 @@ export function ModulosAtivosProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('empresas_modulos')
-        .select(`
-          modulo_id,
-          ativo,
-          modulos (
-            id,
-            nome
-          )
-        `)
-        .eq('empresa_id', empresaId)
-        .eq('ativo', true);
+      // Backend novo: os vínculos da empresa (/white-label/empresa-modulos, já
+      // escopado por empresa_id do token) + o catálogo global de módulos
+      // (/white-label/modulos) para resolver o nome de cada módulo. O filtro
+      // ativo=true, que antes ia no .eq() do Supabase, é aplicado no cliente.
+      const [vinculos, catalogo] = await Promise.all([
+        api.get<any[]>('/white-label/empresa-modulos').catch(() => [] as any[]),
+        api.get<any[]>('/white-label/modulos').catch(() => [] as any[]),
+      ]);
 
-      if (error) throw error;
+      const nomePorModulo = new Map<string, string>(
+        (catalogo || []).map((mod: any) => [mod.id, mod.nome])
+      );
 
-      const modulos = (data || [])
-        .filter((item: any) => item.modulos)
+      const modulos = (vinculos || [])
+        .filter((item: any) => item.ativo && nomePorModulo.has(item.modulo_id))
         .map((item: any) => ({
           modulo_id: item.modulo_id,
-          nome: item.modulos.nome,
+          nome: nomePorModulo.get(item.modulo_id) as string,
           ativo: item.ativo,
         }));
 
@@ -81,31 +79,10 @@ export function ModulosAtivosProvider({ children }: { children: ReactNode }) {
     carregarModulos();
   }, [carregarModulos]);
 
-  // Subscrever a mudanças em tempo real na tabela empresas_modulos
-  useEffect(() => {
-    if (!empresaId) return;
-
-    const channel = supabase
-      .channel(`modulos-changes-${empresaId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'empresas_modulos',
-          filter: `empresa_id=eq.${empresaId}`,
-        },
-        () => {
-          // Recarregar módulos quando houver mudança
-          carregarModulos();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [empresaId, carregarModulos]);
+  // NOTA (migração): a subscrição realtime do Supabase em `empresas_modulos`
+  // foi removida. O backend novo não tem push; a atualização ao alternar um
+  // módulo se dá via `recarregarModulos()` (chamado pelas telas de configuração)
+  // ou no próximo carregamento. Toggles de módulo são ações raras de admin.
 
   // Verifica se um módulo está ativo pelo nome ou ID do código
   const isModuloAtivo = useCallback((moduloIdOuNome: string): boolean => {

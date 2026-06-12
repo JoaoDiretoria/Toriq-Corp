@@ -1,5 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { useEffect, createContext, useContext, ReactNode } from 'react';
 
 interface EmpresaModeData {
   empresaId: string;

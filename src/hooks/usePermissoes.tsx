@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useHierarquia, GrupoAcesso } from '@/hooks/useHierarquia';
 
 interface PermissaoSetor {
@@ -101,30 +101,28 @@ export function usePermissoes() {
         setIsAdminVertical(false);
       }
 
-      // Carregar módulos e telas liberadas para a empresa
+      // Carregar módulos e telas liberadas para a empresa.
+      // Backend novo: /white-label/empresa-modulos e /white-label/empresa-modulos-telas
+      // (ambos já escopados por empresa_id do token). O filtro ativo=true, antes
+      // no .eq() do Supabase, é aplicado no cliente.
       if (empresaId) {
         try {
-          // Carregar módulos ativos da empresa
-          const { data: modulosData, error: modulosError } = await (supabase as any)
-            .from('empresas_modulos')
-            .select('modulo_id, ativo')
-            .eq('empresa_id', empresaId)
-            .eq('ativo', true);
+          const [modulosData, telasData] = await Promise.all([
+            api.get<any[]>('/white-label/empresa-modulos').catch(() => [] as any[]),
+            api.get<any[]>('/white-label/empresa-modulos-telas').catch(() => [] as any[]),
+          ]);
 
-          if (!modulosError && modulosData) {
-            setModulosEmpresa(modulosData);
-          }
+          setModulosEmpresa(
+            (modulosData || [])
+              .filter((mo: any) => mo.ativo)
+              .map((mo: any) => ({ modulo_id: mo.modulo_id, ativo: mo.ativo }))
+          );
 
-          // Carregar telas liberadas para a empresa
-          const { data: telasData, error: telasError } = await (supabase as any)
-            .from('empresas_modulos_telas')
-            .select('modulo_id, tela_id, ativo')
-            .eq('empresa_id', empresaId)
-            .eq('ativo', true);
-
-          if (!telasError && telasData) {
-            setTelasEmpresa(telasData);
-          }
+          setTelasEmpresa(
+            (telasData || [])
+              .filter((te: any) => te.ativo)
+              .map((te: any) => ({ modulo_id: te.modulo_id, tela_id: te.tela_id, ativo: te.ativo }))
+          );
         } catch (e) {
           console.error('Erro ao carregar módulos/telas da empresa:', e);
         }
@@ -140,18 +138,18 @@ export function usePermissoes() {
         return;
       }
 
-      // Carregar permissões do setor do usuário (se tiver setor)
+      // Carregar permissões do setor do usuário (se tiver setor).
+      // Backend novo: /setores/{setor_id}/permissoes (escopado: valida que o
+      // setor pertence à empresa do token). O endpoint devolve TODAS as linhas
+      // do setor; o filtro por grupo_acesso, antes no .eq() do Supabase, é
+      // aplicado no cliente.
       if (setorId) {
         try {
           const grupoAcesso = profile.grupo_acesso || 'colaborador';
-          const { data, error } = await (supabase as any)
-            .from('setor_permissoes')
-            .select('*')
-            .eq('setor_id', setorId)
-            .eq('grupo_acesso', grupoAcesso);
-
-          if (error) throw error;
-          setPermissoes(data || []);
+          const data = await api
+            .get<any[]>(`/setores/${setorId}/permissoes`)
+            .catch(() => [] as any[]);
+          setPermissoes((data || []).filter((p: any) => p.grupo_acesso === grupoAcesso));
         } catch (e) {
           console.error('Erro ao carregar permissões:', e);
           setPermissoes([]);
