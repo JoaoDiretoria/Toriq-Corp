@@ -19,16 +19,22 @@ target_metadata = Base.metadata
 
 
 def do_run_migrations(connection):
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        include_schemas=True,
+    )
     with context.begin_transaction():
         context.run_migrations()
 
 
 async def run_async_migrations():
+    connect_args = {} if settings.db_ssl else {"ssl": False}
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=connect_args,
     )
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)

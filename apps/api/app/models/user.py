@@ -12,10 +12,11 @@ from app.core.db import Base
 
 class UserRole(str, enum.Enum):
     admin_vertical = "admin_vertical"
-    cliente_torq = "cliente_torq"
+    empresa_sst = "empresa_sst"
     cliente_final = "cliente_final"
     empresa_parceira = "empresa_parceira"
     instrutor = "instrutor"
+    cliente_torq = "cliente_torq"
 
 
 class User(Base):
@@ -28,10 +29,10 @@ class User(Base):
     senha_hash: Mapped[str] = mapped_column(String, nullable=False)
     nome: Mapped[str] = mapped_column(String, nullable=False)
     role: Mapped[UserRole] = mapped_column(
-        SAEnum(UserRole, name="user_role"), nullable=False
+        SAEnum(UserRole, name="app_role", create_type=False), nullable=False
     )
     empresa_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("empresas.id"), nullable=True
+        UUID(as_uuid=True), ForeignKey("public.empresas.id"), nullable=True
     )
     ativo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(

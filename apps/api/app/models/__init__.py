@@ -1,5 +1,5 @@
-from app.models.empresa import Empresa
-from app.models.nota import Nota
+from app.core.db import Base
+from app.models import generated  # noqa: F401  (registra as 172 tabelas no metadata)
 from app.models.user import User, UserRole
 
-__all__ = ["Empresa", "User", "UserRole", "Nota"]
+__all__ = ["Base", "User", "UserRole", "generated"]

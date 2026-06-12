@@ -13,7 +13,7 @@ async def admin_only():
 
 
 async def _register_login(client, db_session, role):
-    from app.models.empresa import Empresa
+    from app.models.generated import Empresas as Empresa
 
     empresa = Empresa(id=uuid.uuid4(), nome="ACME", tipo="sst")
     db_session.add(empresa)
