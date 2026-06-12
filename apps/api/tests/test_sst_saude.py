@@ -94,10 +94,10 @@ _SAUDE_DDL = [
 
 @pytest.fixture
 async def saude_client(db_session, client):
-    """Cria as tabelas SST Saúde e registra o router na app."""
-    async with db_session.bind.begin() as conn:
-        for ddl in _SAUDE_DDL:
-            await conn.execute(text(ddl))
+    """Garante que as tabelas SST Saúde existem e registra o router na app."""
+    conn = await db_session.connection()
+    for ddl in _SAUDE_DDL:
+        await conn.execute(text(ddl))
 
     from app.main import app
     from app.api.sst_saude import router as saude_router
@@ -125,7 +125,7 @@ async def _criar_cliente_sst(db_session, empresa_id: uuid.UUID) -> uuid.UUID:
     await db_session.execute(
         text(
             "INSERT INTO clientes_sst (id, empresa_sst_id, nome, created_at, updated_at) "
-            "VALUES (:id, :emp, 'Cliente Teste', datetime('now'), datetime('now'))"
+            "VALUES (:id, :emp, 'Cliente Teste', now(), now())"
         ),
         {"id": str(cliente_id).replace("-", ""), "emp": str(empresa_id).replace("-", "")},
     )

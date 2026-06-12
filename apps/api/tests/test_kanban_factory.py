@@ -73,9 +73,9 @@ class ColOut(BaseModel):
 
 @pytest.fixture
 async def kclient(db_session, client):
+    conn = await db_session.connection()
     for t in (_KColuna.__table__, _KCard.__table__, _KMov.__table__):
-        async with db_session.bind.begin() as conn:
-            await conn.run_sync(t.create)
+        await conn.run_sync(t.create, checkfirst=True)
     from app.main import app
     app.include_router(
         make_kanban_router(
@@ -156,12 +156,9 @@ async def test_kanban_isolamento(db_session, client):
     from app.models.generated import Empresas as Empresa
 
     # Garantir que as tabelas foram criadas (podem já existir do outro teste)
+    conn = await db_session.connection()
     for t in (_KColuna.__table__, _KCard.__table__, _KMov.__table__):
-        async with db_session.bind.begin() as conn:
-            try:
-                await conn.run_sync(t.create)
-            except Exception:
-                pass  # tabela já existe
+        await conn.run_sync(t.create, checkfirst=True)
 
     from app.main import app
     # Registrar o router apenas se ainda não estiver registrado
@@ -234,12 +231,9 @@ async def test_criar_card_rejeita_coluna_de_outra_empresa(db_session, client):
     from app.models.generated import Empresas as Empresa
 
     # Garante que tabelas existem
+    conn = await db_session.connection()
     for t in (_KColuna.__table__, _KCard.__table__, _KMov.__table__):
-        async with db_session.bind.begin() as conn:
-            try:
-                await conn.run_sync(t.create)
-            except Exception:
-                pass  # tabela já existe
+        await conn.run_sync(t.create, checkfirst=True)
 
     from app.main import app as _app
     prefix_exists = any(r.path.startswith("/k") for r in _app.routes)
@@ -293,12 +287,9 @@ async def test_mover_rejeita_coluna_destino_de_outra_empresa(db_session, client)
     from app.models.generated import Empresas as Empresa
 
     # Garante que tabelas existem
+    conn = await db_session.connection()
     for t in (_KColuna.__table__, _KCard.__table__, _KMov.__table__):
-        async with db_session.bind.begin() as conn:
-            try:
-                await conn.run_sync(t.create)
-            except Exception:
-                pass
+        await conn.run_sync(t.create, checkfirst=True)
 
     from app.main import app as _app
     prefix_exists = any(r.path.startswith("/k") for r in _app.routes)

@@ -30,8 +30,8 @@ class GadgetOut(BaseModel):
 
 @pytest.fixture
 async def gadget_client(db_session, client):
-    async with db_session.bind.begin() as conn:
-        await conn.run_sync(_Gadget.__table__.create)
+    conn = await db_session.connection()
+    await conn.run_sync(_Gadget.__table__.create, checkfirst=True)
     from app.main import app
     app.include_router(make_crud_router(
         model=_Gadget, create_schema=GadgetIn, update_schema=GadgetIn,

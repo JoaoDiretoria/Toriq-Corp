@@ -1,86 +1,25 @@
 """Testes auto-contidos para o módulo Notificações.
 
-Padrão: cria as tabelas necessárias no motor SQLite em memória fornecido por
-conftest, registra o router em app.main.app e exercita os endpoints via cliente
-ASGI — identicamente ao padrão em test_kanban_factory.py.
+Usa os modelos gerados reais (Notificacoes, NotificacaoConfig) contra o banco
+de teste Postgres com rollback transacional por teste.
 """
 import datetime
 import uuid
 
 import pytest
-from sqlalchemy import Boolean, DateTime, String, Text, Uuid
-from sqlalchemy.orm import Mapped, mapped_column
 
-from app.core.db import Base
+from app.models.generated import Notificacoes, NotificacaoConfig, Empresas
 from tests.helpers import login_as
-
-
-# ── Modelos SQLite-friendly para o teste ──────────────────────────────────────
-# Os modelos gerados têm server_default PostgreSQL-específico (::text, JSONB,
-# ARRAY CHECK) que o SQLite não aceita.  Replicamos somente os campos relevantes
-# para os testes, sem nenhum server_default PG-específico.
-
-class _Notificacao(Base):
-    __tablename__ = "_notif_notificacoes"
-    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    empresa_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
-    tipo: Mapped[str] = mapped_column(Text, nullable=False, default="info")
-    categoria: Mapped[str] = mapped_column(Text, nullable=False, default="sistema")
-    titulo: Mapped[str] = mapped_column(Text, nullable=False)
-    mensagem: Mapped[str] = mapped_column(Text, nullable=False)
-    usuario_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
-    usuario_nome: Mapped[str | None] = mapped_column(Text, nullable=True)
-    modulo: Mapped[str | None] = mapped_column(Text, nullable=True)
-    tela: Mapped[str | None] = mapped_column(Text, nullable=True)
-    referencia_tipo: Mapped[str | None] = mapped_column(Text, nullable=True)
-    referencia_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
-    lida: Mapped[bool | None] = mapped_column(Boolean, default=False)
-    lida_em: Mapped[datetime.datetime | None] = mapped_column(DateTime(True), nullable=True)
-    lida_por: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
-    referencia_dados: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(True), nullable=True)
-    updated_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(True), nullable=True)
-
-
-class _NotifConfig(Base):
-    __tablename__ = "_notif_config"
-    tabela: Mapped[str] = mapped_column(Text, primary_key=True)
-    titulo: Mapped[str] = mapped_column(Text, nullable=False)
-    categoria: Mapped[str] = mapped_column(Text, nullable=False)
-    modulo: Mapped[str | None] = mapped_column(Text, nullable=True)
-    tela: Mapped[str | None] = mapped_column(Text, nullable=True)
-    campo_nome: Mapped[str | None] = mapped_column(Text, nullable=True, default="nome")
-    ativo: Mapped[bool | None] = mapped_column(Boolean, default=True)
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 @pytest.fixture
 async def notif_client(db_session, client):
-    """Cria tabelas de teste e registra o router de notificações."""
-    for t in (_Notificacao.__table__, _NotifConfig.__table__):
-        async with db_session.bind.begin() as conn:
-            await conn.run_sync(t.create)
-
-    # Monkey-patch: substitui os modelos gerados pelos modelos SQLite do teste
-    import app.models.generated as gen_models
-    import app.services.notificacoes as svc
+    """Registra o router de notificações no app (idempotente)."""
     import app.api.notificacoes as notif_api
-
-    _orig_notif = gen_models.Notificacoes
-    _orig_config = gen_models.NotificacaoConfig
-    _orig_repo_model = notif_api._NotifRepo.model
-
-    gen_models.Notificacoes = _Notificacao
-    gen_models.NotificacaoConfig = _NotifConfig
-    notif_api.m.Notificacoes = _Notificacao
-    notif_api.m.NotificacaoConfig = _NotifConfig
-    # Patch the class attribute so TenantRepository.get/delete/list use the test model
-    notif_api._NotifRepo.model = _Notificacao
-    svc.m.Notificacoes = _Notificacao
-
-    # Registra o router no app apenas uma vez
     from app.main import app as _app
+
     prefix_exists = any(
         getattr(r, "path", "").startswith("/notificacoes") for r in _app.routes
     )
@@ -88,14 +27,6 @@ async def notif_client(db_session, client):
         _app.include_router(notif_api.router)
 
     yield client
-
-    # Restaura modelos e repo originais
-    gen_models.Notificacoes = _orig_notif
-    gen_models.NotificacaoConfig = _orig_config
-    notif_api.m.Notificacoes = _orig_notif
-    notif_api.m.NotificacaoConfig = _orig_config
-    notif_api._NotifRepo.model = _orig_repo_model
-    svc.m.Notificacoes = _orig_notif
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -107,7 +38,7 @@ async def _login(client, db_session, email: str = "n@n.com") -> uuid.UUID:
 
 async def _seed_notif(db_session, empresa_id: uuid.UUID, titulo: str = "Teste") -> uuid.UUID:
     """Insere diretamente uma notificação na sessão de teste."""
-    notif = _Notificacao(
+    notif = Notificacoes(
         id=uuid.uuid4(),
         empresa_id=empresa_id,
         tipo="info",
@@ -131,8 +62,7 @@ async def test_listar_notificacoes_scoped_por_empresa(notif_client, db_session):
     notif_id = await _seed_notif(db_session, emp_id, "Minha Notif")
 
     # Notificação de outra empresa (não deve aparecer)
-    from app.models.generated import Empresas as Empresa
-    outra = Empresa(id=uuid.uuid4(), nome="Outra", tipo="sst")
+    outra = Empresas(id=uuid.uuid4(), nome="Outra", tipo="sst")
     db_session.add(outra)
     await db_session.commit()
     await _seed_notif(db_session, outra.id, "Notif Alheia")
@@ -182,14 +112,12 @@ async def test_filtro_nao_lidas(notif_client, db_session):
 
 async def test_cross_tenant_isolation(notif_client, db_session):
     """Empresa B não pode ler nem marcar lida notificação de empresa A."""
-    from app.models.generated import Empresas as Empresa
-
     # Empresa A
     emp_a = await _login(notif_client, db_session, email="iso-a@n.com")
     notif_a_id = await _seed_notif(db_session, emp_a, "Notif A")
 
     # Empresa B faz login
-    emp_b_obj = Empresa(id=uuid.uuid4(), nome="IsoB", tipo="sst")
+    emp_b_obj = Empresas(id=uuid.uuid4(), nome="IsoB", tipo="sst")
     db_session.add(emp_b_obj)
     await db_session.commit()
     await notif_client.post(
@@ -231,11 +159,10 @@ async def test_deletar_notificacao(notif_client, db_session):
 
 
 async def test_criar_notificacao_service(notif_client, db_session):
-    """Unit test: criar_notificacao insere uma linha na sessão (usa modelos SQLite)."""
-    from app.models.generated import Empresas as Empresa
+    """Unit test: criar_notificacao insere uma linha na sessão."""
     import app.services.notificacoes as svc
 
-    emp = Empresa(id=uuid.uuid4(), nome="SvcEmp", tipo="sst")
+    emp = Empresas(id=uuid.uuid4(), nome="SvcEmp", tipo="sst")
     db_session.add(emp)
     await db_session.commit()
 

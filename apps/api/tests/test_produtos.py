@@ -169,10 +169,10 @@ _PRODUTOS_DDL = [
 
 @pytest.fixture
 async def pclient(db_session, client):
-    """Cria as tabelas de produtos e inclui o router no app de teste."""
-    async with db_session.bind.begin() as conn:
-        for ddl in _PRODUTOS_DDL:
-            await conn.execute(text(ddl))
+    """Garante que as tabelas de produtos existem e inclui o router no app de teste."""
+    conn = await db_session.connection()
+    for ddl in _PRODUTOS_DDL:
+        await conn.execute(text(ddl))
 
     # Registra o router apenas uma vez
     prefix_exists = any(r.path.startswith("/produtos") for r in app.routes)

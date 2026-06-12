@@ -91,10 +91,10 @@ _SUPORTE_DDL = [
 
 
 async def _ensure_tables(db_session):
-    """Cria as tabelas SQLite de suporte no engine atual (idempotente via IF NOT EXISTS)."""
-    async with db_session.bind.begin() as conn:
-        for ddl in _SUPORTE_DDL:
-            await conn.execute(text(ddl))
+    """Garante que as tabelas de suporte existem (idempotente via IF NOT EXISTS)."""
+    conn = await db_session.connection()
+    for ddl in _SUPORTE_DDL:
+        await conn.execute(text(ddl))
 
 
 async def _ensure_router():

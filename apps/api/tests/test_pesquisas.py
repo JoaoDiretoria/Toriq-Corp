@@ -85,10 +85,10 @@ _PESQUISAS_DDL = [
 
 @pytest.fixture(autouse=True)
 async def _pesquisas_tables(db_session):
-    """Cria as tabelas de pesquisas no banco SQLite de teste."""
-    async with db_session.bind.begin() as conn:
-        for ddl in _PESQUISAS_DDL:
-            await conn.execute(text(ddl))
+    """Garante que as tabelas de pesquisas existem."""
+    conn = await db_session.connection()
+    for ddl in _PESQUISAS_DDL:
+        await conn.execute(text(ddl))
 
 
 @pytest.fixture

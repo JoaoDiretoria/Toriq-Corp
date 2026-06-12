@@ -143,10 +143,10 @@ _WL_DDL = [
 
 @pytest.fixture
 async def wl_client(db_session, client):
-    """Cria as tabelas do módulo White Label e registra o router."""
-    async with db_session.bind.begin() as conn:
-        for ddl in _WL_DDL:
-            await conn.execute(text(ddl))
+    """Garante que as tabelas do módulo White Label existem e registra o router."""
+    conn = await db_session.connection()
+    for ddl in _WL_DDL:
+        await conn.execute(text(ddl))
 
     from app.main import app
     prefix_exists = any(r.path.startswith("/white-label") for r in app.routes)
@@ -177,7 +177,7 @@ async def _criar_modulo(db_session) -> str:
     await db_session.execute(
         text(
             "INSERT INTO modulos (id, nome, rota, created_at) "
-            "VALUES (:id, :nome, :rota, datetime('now'))"
+            "VALUES (:id, :nome, :rota, now())"
         ),
         {"id": mid, "nome": "Financeiro", "rota": "/financeiro"},
     )

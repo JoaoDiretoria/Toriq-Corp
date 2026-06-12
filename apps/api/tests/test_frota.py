@@ -190,9 +190,9 @@ _FROTA_DDL = [
 
 @pytest.fixture
 async def frota_client(db_session, client):
-    async with db_session.bind.begin() as conn:
-        for ddl in _FROTA_DDL:
-            await conn.execute(text(ddl))
+    conn = await db_session.connection()
+    for ddl in _FROTA_DDL:
+        await conn.execute(text(ddl))
 
     from app.main import app
     prefix_exists = any(r.path.startswith("/frota") for r in app.routes)

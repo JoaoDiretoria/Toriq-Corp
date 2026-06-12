@@ -69,10 +69,10 @@ _AGENDA_DDL = [
 
 @pytest.fixture
 async def agenda_client(db_session, client):
-    """Cria as tabelas de agenda no banco em memória e registra o router."""
-    async with db_session.bind.begin() as conn:
-        for ddl in _AGENDA_DDL:
-            await conn.execute(text(ddl))
+    """Garante que as tabelas de agenda existem e registra o router."""
+    conn = await db_session.connection()
+    for ddl in _AGENDA_DDL:
+        await conn.execute(text(ddl))
 
     from app.main import app
     from app.api.agenda import router as agenda_router
@@ -198,7 +198,7 @@ async def test_criar_compartilhamento(agenda_client, db_session):
     """Criar compartilhamento de evento deve funcionar para evento da própria empresa."""
     c = agenda_client
 
-    emp = await _criar_empresa_e_login(c, db_session, "comp@test.com", "EmpComp")
+    await _criar_empresa_e_login(c, db_session, "comp@test.com", "EmpComp")
 
     # Criar evento
     resp = await c.post(
@@ -208,8 +208,16 @@ async def test_criar_compartilhamento(agenda_client, db_session):
     assert resp.status_code == 201, resp.text
     evento_id = resp.json()["id"]
 
-    # Criar compartilhamento com um usuário fictício
-    usuario_destino = uuid.uuid4()
+    # Criar compartilhamento com um usuário real (profiles row criado pelo login_as helper)
+    await login_as(c, db_session, email="comp2@test.com")
+    from sqlalchemy import select
+    from app.models.user import User
+    usuario_destino_obj = await db_session.scalar(select(User).where(User.email == "comp2@test.com"))
+    usuario_destino = usuario_destino_obj.id
+
+    # Reconectar como comp@test.com
+    await c.post("/auth/login", json={"email": "comp@test.com", "password": "segredo123"})
+
     comp_resp = await c.post(
         "/agenda/compartilhamentos",
         json={
@@ -268,7 +276,16 @@ async def test_criar_permissao(agenda_client, db_session):
 
     await _criar_empresa_e_login(c, db_session, "perm@test.com", "EmpPerm")
 
-    usuario_alvo = uuid.uuid4()
+    # Criar usuário alvo real (profiles row criado pelo login_as helper)
+    await login_as(c, db_session, email="perm-alvo@test.com")
+    from sqlalchemy import select
+    from app.models.user import User
+    usuario_alvo_obj = await db_session.scalar(select(User).where(User.email == "perm-alvo@test.com"))
+    usuario_alvo = usuario_alvo_obj.id
+
+    # Reconectar como perm@test.com
+    await c.post("/auth/login", json={"email": "perm@test.com", "password": "segredo123"})
+
     perm_resp = await c.post(
         "/agenda/permissoes",
         json={
@@ -296,12 +313,18 @@ async def test_permissoes_isolamento_tenant(agenda_client, db_session):
     """Permissões de empresa A não devem aparecer para empresa B."""
     c = agenda_client
 
-    # Empresa A cria permissão
+    # Empresa A cria permissão com usuário real
     await _criar_empresa_e_login(c, db_session, "permi-a@test.com", "PermIsoA")
+    await login_as(c, db_session, email="permi-alvo-a@test.com")
+    from sqlalchemy import select
+    from app.models.user import User
+    usr_alvo_a = await db_session.scalar(select(User).where(User.email == "permi-alvo-a@test.com"))
+    await c.post("/auth/login", json={"email": "permi-a@test.com", "password": "segredo123"})
+
     perm_a = (
         await c.post(
             "/agenda/permissoes",
-            json={"usuario_id": str(uuid.uuid4()), "pode_criar_eventos": False},
+            json={"usuario_id": str(usr_alvo_a.id), "pode_criar_eventos": False},
         )
     ).json()
 

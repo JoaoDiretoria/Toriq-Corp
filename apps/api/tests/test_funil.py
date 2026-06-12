@@ -212,13 +212,16 @@ async def test_criar_card_e_mover_com_historico(client, db_session):
                 "SELECT etapa_origem_id, etapa_destino_id FROM funil_card_movimentacoes"
                 " WHERE card_id = :cid"
             ),
-            {"cid": uuid.UUID(card_id).hex},
+            {"cid": str(uuid.UUID(card_id))},
         )
     ).fetchall()
     assert len(rows) == 1
-    # SQLite stores UUIDs as hex strings without dashes; normalise for comparison
+    # Normalise to hex without dashes for comparison (Postgres returns UUID objects)
     def _norm(v):
-        return v.replace("-", "") if v else v
+        if v is None:
+            return v
+        # asyncpg returns UUID objects; uuid.UUID strings have dashes
+        return str(v).replace("-", "")
 
     assert _norm(rows[0][0]) == uuid.UUID(etapa1_id).hex
     assert _norm(rows[0][1]) == uuid.UUID(etapa2_id).hex

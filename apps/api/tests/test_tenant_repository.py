@@ -22,8 +22,8 @@ class WidgetRepo(TenantRepository[_Widget]):
 @pytest.fixture
 async def repo(db_session):
     e1 = uuid.uuid4()
-    async with db_session.bind.begin() as conn:
-        await conn.run_sync(_Widget.__table__.create)
+    conn = await db_session.connection()
+    await conn.run_sync(_Widget.__table__.create, checkfirst=True)
     return WidgetRepo(db_session, e1), e1
 
 

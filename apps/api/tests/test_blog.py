@@ -153,10 +153,10 @@ _BLOG_DDL = [
 
 @pytest.fixture(autouse=True)
 async def _blog_tables(db_session):
-    """Cria as tabelas do blog no banco SQLite de teste."""
-    async with db_session.bind.begin() as conn:
-        for ddl in _BLOG_DDL:
-            await conn.execute(text(ddl))
+    """Garante que as tabelas do blog existem."""
+    conn = await db_session.connection()
+    for ddl in _BLOG_DDL:
+        await conn.execute(text(ddl))
 
 
 @pytest.fixture
