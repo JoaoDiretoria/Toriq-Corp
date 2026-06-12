@@ -33,6 +33,7 @@ import PesquisaVotar from "./pages/public/PesquisaVotar";
 import Newsletter from "./pages/public/Newsletter";
 import TrabalheConosco from "./pages/public/TrabalheConosco";
 import NotFound from "./pages/NotFound";
+import ApiTest from "./pages/dev/ApiTest";
 import SuporteTickets from "./pages/shared/SuporteTickets";
 import { FloatingSupportWidget } from "./components/shared/support";
 import { UpdateNotificationPopup } from "./components/shared/UpdateNotificationPopup";
@@ -85,6 +86,9 @@ const App = () => (
             <Route path="/proposta/:propostaId" element={<PropostaWeb />} />
             {/* Rota de Suporte */}
             <Route path="/suporte" element={<SuporteTickets />} />
+            {/* Piloto da migração (Fatia 5) — front ↔ backend Python.
+                Só existe em DEV: removido do build de produção, invisível ao usuário. */}
+            {import.meta.env.DEV && <Route path="/_api-test" element={<ApiTest />} />}
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
