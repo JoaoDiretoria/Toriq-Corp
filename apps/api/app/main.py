@@ -54,6 +54,14 @@ from app.api.equipamentos_extras import (
     epi_modelos_atividade_router,
     historico_router as epi_historico_router,
 )
+# Onda 3 Fatia 5 — endpoints das 13 tabelas novas (Treinamentos, instrutores, parceiras)
+from app.api.treinamentos import router as treinamentos_router
+from app.api.instrutores import (
+    instrutores_router,
+    parceiras_router,
+    recon_facial_router,
+    anexos_router as funil_anexos_router,
+)
 from app.api.health import router as health_router
 from app.api.kanbans_legados import router as kanbans_legados_router
 from app.jobs.scheduler import build_scheduler
@@ -138,6 +146,12 @@ def create_app() -> FastAPI:
     app.include_router(modelos_atividade_router)
     app.include_router(epi_historico_router)
     app.include_router(epi_modelos_atividade_router)
+    # Onda 3 — Treinamentos, instrutores, parceiras, recon. facial, anexos de card
+    app.include_router(treinamentos_router)
+    app.include_router(parceiras_router)
+    app.include_router(recon_facial_router)
+    app.include_router(instrutores_router)
+    app.include_router(funil_anexos_router)
     return app
 
 
