@@ -51,6 +51,7 @@ class Instrutores(Base):
     __table_args__ = (
         ForeignKeyConstraint(['empresa_id'], ['public.empresas.id'], name='instrutores_empresa_id_fkey'),
         ForeignKeyConstraint(['empresa_parceira_id'], ['public.empresas_parceiras.id'], name='instrutores_empresa_parceira_id_fkey'),
+        ForeignKeyConstraint(['user_id'], ['public.profiles.id'], name='fk_instrutores_user_id_profiles', ondelete='SET NULL'),
         PrimaryKeyConstraint('id', name='instrutores_pkey'),
         {'schema': 'public'}
     )
@@ -60,6 +61,7 @@ class Instrutores(Base):
     cpf_cnpj: Mapped[str] = mapped_column(Text, nullable=False)
     email: Mapped[str] = mapped_column(Text, nullable=False)
     empresa_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
     telefone: Mapped[Optional[str]] = mapped_column(Text)
     data_nascimento: Mapped[Optional[datetime.date]] = mapped_column(Date)
     ativo: Mapped[Optional[bool]] = mapped_column(Boolean, server_default=text('true'))
