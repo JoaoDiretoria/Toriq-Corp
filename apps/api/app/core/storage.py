@@ -47,10 +47,24 @@ class StorageService:
         base = (base or "").rstrip("/")
         return f"{base}/{bucket}/{key}"
 
-    def upload(self, bucket: str, key: str, data: bytes, content_type: str) -> str:
-        """Sobe ``data`` em ``bucket/key`` e retorna a URL pública."""
+    def upload(
+        self,
+        bucket: str,
+        key: str,
+        data: bytes,
+        content_type: str,
+        content_disposition: str | None = None,
+    ) -> str:
+        """Sobe ``data`` em ``bucket/key`` e retorna a URL pública.
+
+        ``content_disposition`` (ex.: ``attachment``) é usado para neutralizar
+        renderização no navegador de tipos não-imagem (anti stored-XSS).
+        """
+        extra: dict[str, str] = {}
+        if content_disposition is not None:
+            extra["ContentDisposition"] = content_disposition
         self.client.put_object(
-            Bucket=bucket, Key=key, Body=data, ContentType=content_type
+            Bucket=bucket, Key=key, Body=data, ContentType=content_type, **extra
         )
         return self._public_url(bucket, key)
 

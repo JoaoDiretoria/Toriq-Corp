@@ -66,8 +66,34 @@ async def test_upload_bucket_fora_da_allowlist_400(sclient, db_session):
     assert resp.status_code == 400, resp.text
 
 
-async def test_delete_204(sclient, db_session):
-    await login_as(sclient, db_session, email="del@test.com")
-
-    resp = await sclient.delete("/storage/documentos/algum/caminho/arquivo.pdf")
+async def test_delete_da_propria_empresa_204(sclient, db_session):
+    empresa_id = await login_as(sclient, db_session, email="del@test.com")
+    # Key dentro do próprio tenant → 204.
+    resp = await sclient.delete(f"/storage/documentos/{empresa_id}/xyz/arquivo.pdf")
     assert resp.status_code == 204, resp.text
+
+
+async def test_delete_cross_tenant_404(sclient, db_session):
+    """IDOR: usuário não apaga objeto de outra empresa."""
+    await login_as(sclient, db_session, email="del2@test.com")
+    outra = "00000000-0000-0000-0000-0000000000ff"
+    resp = await sclient.delete(f"/storage/documentos/{outra}/xyz/arquivo.pdf")
+    assert resp.status_code == 404, resp.text
+
+
+async def test_presigned_cross_tenant_404(sclient, db_session):
+    """IDOR: usuário não gera URL de objeto de outra empresa."""
+    await login_as(sclient, db_session, email="ps@test.com")
+    outra = "00000000-0000-0000-0000-0000000000ff"
+    resp = await sclient.get(f"/storage/documentos/{outra}/xyz/arquivo.pdf/url")
+    assert resp.status_code == 404, resp.text
+
+
+async def test_upload_mime_perigoso_rejeitado_400(sclient, db_session):
+    """Anti-XSS: content-type não permitido (ex.: text/html) → 400."""
+    await login_as(sclient, db_session, email="xss@test.com")
+    resp = await sclient.post(
+        "/storage/documentos/upload",
+        files={"file": ("evil.html", b"<script>alert(1)</script>", "text/html")},
+    )
+    assert resp.status_code == 400, resp.text
