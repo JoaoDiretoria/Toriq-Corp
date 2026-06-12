@@ -1,7 +1,7 @@
 """Testes para o módulo Frota.
 
-Self-contained: cria as tabelas necessárias com DDL SQLite-compatible no fixture
-e registra o router no app — sem editar conftest.py ou qualquer arquivo existente.
+Self-contained: registra o router no app — sem editar conftest.py ou qualquer
+arquivo existente. As tabelas Frota já existem no schema real do banco de teste.
 
 Cobertura:
 - CRUD completo de veículos (top-level tenant-scoped)
@@ -13,187 +13,14 @@ import uuid
 import datetime
 
 import pytest
-from sqlalchemy import text
 
 from app.api.frota import router as frota_router
 from tests.helpers import login_as
 
-# ── DDL SQLite-compatible para as tabelas Frota ───────────────────────────────
-
-_FROTA_DDL = [
-    """
-    CREATE TABLE IF NOT EXISTS frota_veiculos (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        placa VARCHAR(10) NOT NULL,
-        renavam VARCHAR(20),
-        chassi VARCHAR(50),
-        marca VARCHAR(100),
-        modelo VARCHAR(100),
-        ano VARCHAR(20),
-        tipo VARCHAR(50) DEFAULT 'Passeio',
-        combustivel VARCHAR(50) DEFAULT 'Flex',
-        km_atual INTEGER DEFAULT 0,
-        gestor_responsavel VARCHAR(255),
-        motorista_padrao VARCHAR(255),
-        observacoes TEXT,
-        ativo BOOLEAN DEFAULT 1,
-        checklist_obrigatorio BOOLEAN DEFAULT 0,
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now()),
-        created_by CHAR(32)
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS frota_motoristas (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        nome TEXT NOT NULL,
-        cpf TEXT,
-        rg TEXT,
-        data_nascimento DATE,
-        cnh_numero TEXT,
-        cnh_categoria TEXT,
-        cnh_validade DATE,
-        telefone TEXT,
-        email TEXT,
-        endereco TEXT,
-        foto_url TEXT,
-        cpf_anexo_url TEXT,
-        rg_anexo_url TEXT,
-        cnh_anexo_url TEXT,
-        observacoes TEXT,
-        ativo BOOLEAN DEFAULT 1,
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now()),
-        created_by CHAR(32),
-        cep TEXT,
-        logradouro TEXT,
-        numero TEXT,
-        complemento TEXT,
-        bairro TEXT,
-        cidade TEXT,
-        estado TEXT
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS frota_manutencoes (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        veiculo_id CHAR(32) NOT NULL REFERENCES frota_veiculos(id) ON DELETE CASCADE,
-        tipo VARCHAR(50) NOT NULL,
-        data DATE NOT NULL,
-        servico VARCHAR(255) NOT NULL,
-        status VARCHAR(50) NOT NULL DEFAULT 'Agendada',
-        km INTEGER,
-        custo NUMERIC(12,2) DEFAULT 0,
-        proxima_km INTEGER,
-        proxima_data DATE,
-        observacoes TEXT,
-        created_at DATETIME DEFAULT (now()),
-        created_by CHAR(32)
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS frota_checklists (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        veiculo_id CHAR(32) NOT NULL REFERENCES frota_veiculos(id) ON DELETE CASCADE,
-        data DATE NOT NULL,
-        status_geral VARCHAR(50) NOT NULL DEFAULT 'Aprovado',
-        tipo VARCHAR(50) DEFAULT 'Pre-uso',
-        km INTEGER,
-        responsavel VARCHAR(255),
-        local_inspecao VARCHAR(255),
-        observacoes TEXT,
-        created_at DATETIME DEFAULT (now()),
-        created_by CHAR(32)
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS frota_custos (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        veiculo_id CHAR(32) NOT NULL REFERENCES frota_veiculos(id) ON DELETE CASCADE,
-        categoria VARCHAR(50) NOT NULL,
-        data DATE NOT NULL,
-        valor NUMERIC(12,2) NOT NULL,
-        fornecedor VARCHAR(255),
-        observacoes TEXT,
-        created_at DATETIME DEFAULT (now()),
-        created_by CHAR(32)
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS frota_documentos (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        veiculo_id CHAR(32) NOT NULL REFERENCES frota_veiculos(id) ON DELETE CASCADE,
-        tipo VARCHAR(50) NOT NULL DEFAULT 'Licenciamento',
-        vencimento DATE NOT NULL,
-        numero VARCHAR(100),
-        observacoes TEXT,
-        anexo_url TEXT,
-        arquivo_url TEXT,
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now())
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS frota_ocorrencias (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        veiculo_id CHAR(32) NOT NULL REFERENCES frota_veiculos(id) ON DELETE CASCADE,
-        tipo VARCHAR(50) NOT NULL,
-        data DATE NOT NULL,
-        status VARCHAR(50) NOT NULL DEFAULT 'Aberta',
-        descricao TEXT NOT NULL,
-        local_ocorrencia VARCHAR(255),
-        custo_estimado NUMERIC(12,2),
-        responsavel VARCHAR(255),
-        prazo DATE,
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now()),
-        created_by CHAR(32)
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS frota_utilizacoes (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        veiculo_id CHAR(32) NOT NULL REFERENCES frota_veiculos(id) ON DELETE CASCADE,
-        data DATE NOT NULL,
-        km_inicio INTEGER NOT NULL,
-        local_utilizacao VARCHAR(255),
-        motorista VARCHAR(255),
-        km_fim INTEGER DEFAULT 0,
-        finalidade VARCHAR(255),
-        observacoes TEXT,
-        created_at DATETIME DEFAULT (now()),
-        created_by CHAR(32),
-        codigo VARCHAR(20),
-        data_saida DATE,
-        hora_saida TIME,
-        previsao_retorno DATETIME,
-        data_retorno DATE,
-        hora_retorno TIME,
-        status VARCHAR(20) DEFAULT 'Em uso',
-        km_rodados INTEGER DEFAULT 0,
-        numero_movimentacao VARCHAR(20),
-        funil_card_id CHAR(32)
-    )
-    """,
-]
-
-
-# ── Fixture: cria tabelas + registra router ───────────────────────────────────
+# ── Fixture: registra router ──────────────────────────────────────────────────
 
 @pytest.fixture
-async def frota_client(db_session, client):
-    conn = await db_session.connection()
-    for ddl in _FROTA_DDL:
-        await conn.execute(text(ddl))
-
+async def frota_client(client):
     from app.main import app
     prefix_exists = any(r.path.startswith("/frota") for r in app.routes)
     if not prefix_exists:

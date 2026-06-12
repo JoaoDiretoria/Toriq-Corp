@@ -1,9 +1,8 @@
 """Testes para o módulo Blog / Newsletter.
 
-Padrão self-contained: cria suas próprias tabelas SQLite-friendly via DDL
-raw (evita server_defaults e tipos PostgreSQL-específicos do modelo gerado).
-O router /blog é incluído sob demanda, verificando se já existe para evitar
-duplicatas.
+O schema das tabelas já existe no banco de teste (Postgres real), então os
+testes usam diretamente as tabelas reais. O router /blog é incluído sob
+demanda, verificando se já existe para evitar duplicatas.
 
 Cobertura:
 - CRUD básico de posts de blog (autores, categorias, posts)
@@ -14,150 +13,11 @@ Cobertura:
 import uuid
 
 import pytest
-from sqlalchemy import text
 
 from app.models.generated import Empresas
 
-# ── SQLite DDL para as tabelas do módulo (sem tipos PG-específicos) ────────────
 
-_BLOG_DDL = [
-    """
-    CREATE TABLE IF NOT EXISTS blog_autores (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        nome VARCHAR(100) NOT NULL,
-        sobrenome VARCHAR(100),
-        cargo VARCHAR(100),
-        bio TEXT,
-        avatar_url TEXT,
-        email VARCHAR(255),
-        linkedin_url TEXT,
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now())
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS blog_categorias (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        nome VARCHAR(100) NOT NULL,
-        slug VARCHAR(100) NOT NULL UNIQUE,
-        descricao TEXT,
-        cor VARCHAR(7) DEFAULT '#6366f1',
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now())
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS blogs (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        titulo VARCHAR(255) NOT NULL,
-        slug VARCHAR(255) NOT NULL UNIQUE,
-        descricao TEXT,
-        conteudo TEXT,
-        imagem_capa_url TEXT,
-        autor_id CHAR(32),
-        categoria_id CHAR(32),
-        status VARCHAR(20) DEFAULT 'rascunho',
-        tags TEXT,
-        tempo_leitura INTEGER,
-        visualizacoes INTEGER DEFAULT 0,
-        publicado_em DATETIME,
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now())
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS blog_visualizacoes (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        blog_id CHAR(32) NOT NULL REFERENCES blogs(id) ON DELETE CASCADE,
-        ip_address TEXT,
-        user_agent TEXT,
-        referer TEXT,
-        country VARCHAR(100),
-        city VARCHAR(100),
-        device_type VARCHAR(50),
-        browser VARCHAR(100),
-        os VARCHAR(100),
-        session_id VARCHAR(255),
-        created_at DATETIME DEFAULT (now())
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS blog_user_preferences (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        session_id VARCHAR(255) NOT NULL UNIQUE,
-        ip_address TEXT,
-        tags_interesse TEXT,
-        ultimo_acesso DATETIME DEFAULT (now()),
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now())
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS newsletter_inscricoes (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        nome VARCHAR(255) NOT NULL,
-        email VARCHAR(255) NOT NULL UNIQUE,
-        telefone VARCHAR(20) NOT NULL,
-        data_nascimento DATE,
-        empresa VARCHAR(255),
-        cargo VARCHAR(255),
-        ativo BOOLEAN DEFAULT 1,
-        ip_address VARCHAR(45),
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now()),
-        unsubscribed_at DATETIME
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS newsletter_conteudos (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        titulo VARCHAR(500) NOT NULL,
-        slug VARCHAR(500) NOT NULL UNIQUE,
-        descricao TEXT,
-        conteudo TEXT,
-        imagem_capa_url TEXT,
-        status VARCHAR(50) DEFAULT 'rascunho',
-        agendado_para DATETIME,
-        enviado_em DATETIME,
-        total_enviados INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now())
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS newsletter_config (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        frequencia_diaria INTEGER DEFAULT 1,
-        horarios_disparo TEXT DEFAULT '["09:00"]',
-        ativo BOOLEAN DEFAULT 1,
-        ultima_execucao DATETIME,
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now())
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS newsletter_disparos (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        tipo VARCHAR(50) NOT NULL,
-        referencia_id CHAR(32) NOT NULL,
-        titulo VARCHAR(500) NOT NULL,
-        total_enviados INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT (now()),
-        UNIQUE(tipo, referencia_id)
-    )
-    """,
-]
-
-
-# ── Fixture: cria as tabelas e registra o router ──────────────────────────────
-
-@pytest.fixture(autouse=True)
-async def _blog_tables(db_session):
-    """Garante que as tabelas do blog existem."""
-    conn = await db_session.connection()
-    for ddl in _BLOG_DDL:
-        await conn.execute(text(ddl))
-
+# ── Fixture: registra o router ────────────────────────────────────────────────
 
 @pytest.fixture
 async def blog_client(db_session, client):

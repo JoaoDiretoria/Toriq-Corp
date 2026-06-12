@@ -1,7 +1,7 @@
 """Testes para o módulo Produtos/Serviços.
 
-Self-contained: cria as tabelas necessárias diretamente via DDL SQLite
-e registra o router em app sem editar conftest ou main.py.
+Self-contained: registra o router em app sem editar conftest ou main.py.
+O schema real já existe no banco de teste (Postgres).
 
 Cobertura:
 - CRUD completo de ProdutosServicos (tabela tenant)
@@ -13,167 +13,17 @@ Cobertura:
 import uuid
 
 import pytest
-from sqlalchemy import text
 
 from app.api.produtos import router as produtos_router
 from app.main import app
 from tests.helpers import login_as
 
-# ── DDL SQLite-compatível para as tabelas do módulo ───────────────────────────
 
-_PRODUTOS_DDL = [
-    """
-    CREATE TABLE IF NOT EXISTS categorias_produtos (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        nome VARCHAR(255) NOT NULL,
-        descricao TEXT,
-        cor VARCHAR(7) DEFAULT '#6366f1',
-        ativo BOOLEAN DEFAULT 1,
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now())
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS classificacoes_produtos (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        nome TEXT NOT NULL,
-        descricao TEXT,
-        ativo BOOLEAN DEFAULT 1,
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now())
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS naturezas_produtos (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        nome VARCHAR(100) NOT NULL,
-        descricao TEXT,
-        ativo BOOLEAN DEFAULT 1,
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now())
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS tipos_produtos (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        nome VARCHAR(255) NOT NULL,
-        descricao TEXT,
-        ativo BOOLEAN DEFAULT 1,
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now())
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS tipos_servico (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        nome TEXT NOT NULL,
-        descricao TEXT,
-        ativo BOOLEAN DEFAULT 1,
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now())
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS servicos (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        nome TEXT NOT NULL,
-        descricao TEXT,
-        categoria TEXT,
-        tipo TEXT,
-        preco NUMERIC(10,2),
-        unidade TEXT,
-        duracao_estimada TEXT,
-        ativo BOOLEAN DEFAULT 1,
-        destaque BOOLEAN DEFAULT 0,
-        ordem INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now())
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS planos_produtos (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        nome TEXT NOT NULL,
-        descricao TEXT,
-        cor TEXT DEFAULT '#6366f1',
-        ordem INTEGER DEFAULT 0,
-        ativo BOOLEAN DEFAULT 1,
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now())
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS produtos_servicos (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        nome VARCHAR(255) NOT NULL,
-        colaboradores_por_turma INTEGER NOT NULL DEFAULT 30,
-        categoria_id CHAR(32) REFERENCES categorias_produtos(id) ON DELETE SET NULL,
-        classificacao_id CHAR(32) REFERENCES classificacoes_produtos(id),
-        natureza_id CHAR(32) REFERENCES naturezas_produtos(id),
-        tipo_id CHAR(32) REFERENCES tipos_produtos(id),
-        tipo_servico_id CHAR(32) REFERENCES tipos_servico(id) ON DELETE SET NULL,
-        forma_cobranca_id CHAR(32),
-        codigo VARCHAR(50),
-        preco NUMERIC(10,2),
-        descricao TEXT,
-        tipo VARCHAR(20) DEFAULT 'servico',
-        ativo BOOLEAN DEFAULT 1,
-        forma_cobranca VARCHAR(50) DEFAULT 'por_produto',
-        carga_horaria INTEGER,
-        ch_formacao INTEGER,
-        ch_reciclagem INTEGER,
-        classificacao TEXT,
-        categoria_plano TEXT,
-        norma VARCHAR(100),
-        treinamento_id CHAR(32),
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now())
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pacotes_produtos (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        nome VARCHAR(255) NOT NULL,
-        descricao TEXT,
-        preco_total NUMERIC(10,2),
-        preco_fixo NUMERIC(10,2),
-        desconto_percentual NUMERIC(5,2) DEFAULT 0,
-        ativo BOOLEAN DEFAULT 1,
-        forma_cobranca VARCHAR(50) DEFAULT 'por_produto',
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now())
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pacotes_produtos_itens (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        pacote_id CHAR(32) NOT NULL REFERENCES pacotes_produtos(id) ON DELETE CASCADE,
-        produto_id CHAR(32) NOT NULL REFERENCES produtos_servicos(id) ON DELETE CASCADE,
-        quantidade INTEGER DEFAULT 1,
-        created_at DATETIME DEFAULT (now())
-    )
-    """,
-]
-
-
-# ── Fixture: cria tabelas + registra o router ──────────────────────────────────
+# ── Fixture: registra o router ─────────────────────────────────────────────────
 
 @pytest.fixture
 async def pclient(db_session, client):
-    """Garante que as tabelas de produtos existem e inclui o router no app de teste."""
-    conn = await db_session.connection()
-    for ddl in _PRODUTOS_DDL:
-        await conn.execute(text(ddl))
-
+    """Inclui o router de produtos no app de teste."""
     # Registra o router apenas uma vez
     prefix_exists = any(r.path.startswith("/produtos") for r in app.routes)
     if not prefix_exists:

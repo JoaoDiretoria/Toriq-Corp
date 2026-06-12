@@ -1,8 +1,8 @@
 """Testes para o módulo Tickets/Suporte.
 
-Self-contained: cria as tabelas SQLite necessárias em db_session.bind e
-registra o router em app.main.app — seguindo exatamente o padrão de
-tests/test_kanban_factory.py.
+Self-contained: registra o router em app.main.app — seguindo exatamente o
+padrão de tests/test_kanban_factory.py. As tabelas já fazem parte do schema
+real do banco de teste (Postgres).
 
 Cobertura:
 1. test_suporte_requer_auth          — rotas retornam 401 sem autenticação
@@ -16,85 +16,8 @@ Cobertura:
 import uuid
 
 import pytest
-from sqlalchemy import text
 
 from tests.helpers import login_as
-
-# ── DDL SQLite-compatível para as 4 tabelas do módulo ─────────────────────────
-
-_SUPORTE_DDL = [
-    """
-    CREATE TABLE IF NOT EXISTS tickets_sla_config (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        prioridade_baixa_horas INTEGER NOT NULL DEFAULT 72,
-        prioridade_media_horas INTEGER NOT NULL DEFAULT 48,
-        prioridade_alta_horas INTEGER NOT NULL DEFAULT 24,
-        prioridade_critica_horas INTEGER NOT NULL DEFAULT 4,
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now()),
-        UNIQUE(empresa_id)
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS tickets_suporte (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        solicitante_id CHAR(32) NOT NULL,
-        solicitante_nome TEXT NOT NULL,
-        tipo TEXT NOT NULL,
-        prioridade TEXT NOT NULL DEFAULT 'media',
-        impacto_operacional TEXT NOT NULL DEFAULT 'nenhum',
-        titulo TEXT NOT NULL,
-        descricao TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'aberto',
-        solicitante_email TEXT,
-        empresa_solicitante_id CHAR(32) REFERENCES empresas(id) ON DELETE CASCADE,
-        empresa_destino_id CHAR(32) REFERENCES empresas(id),
-        categoria TEXT,
-        atendente_id CHAR(32),
-        atendente_nome TEXT,
-        resolucao TEXT,
-        resolvido_em DATETIME,
-        tela_origem TEXT,
-        url_origem TEXT,
-        navegador TEXT,
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now()),
-        role_solicitante TEXT,
-        modulo TEXT,
-        tela TEXT
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS tickets_suporte_comentarios (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        ticket_id CHAR(32) NOT NULL REFERENCES tickets_suporte(id) ON DELETE CASCADE,
-        autor_id CHAR(32) NOT NULL,
-        autor_nome TEXT NOT NULL,
-        conteudo TEXT NOT NULL,
-        interno BOOLEAN DEFAULT 0,
-        created_at DATETIME DEFAULT (now())
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS tickets_suporte_anexos (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        ticket_id CHAR(32) NOT NULL REFERENCES tickets_suporte(id) ON DELETE CASCADE,
-        nome_arquivo TEXT NOT NULL,
-        url TEXT NOT NULL,
-        tamanho_bytes INTEGER,
-        tipo_mime TEXT,
-        created_at DATETIME DEFAULT (now())
-    )
-    """,
-]
-
-
-async def _ensure_tables(db_session):
-    """Garante que as tabelas de suporte existem (idempotente via IF NOT EXISTS)."""
-    conn = await db_session.connection()
-    for ddl in _SUPORTE_DDL:
-        await conn.execute(text(ddl))
 
 
 async def _ensure_router():
@@ -106,12 +29,11 @@ async def _ensure_router():
         app.include_router(suporte_router)
 
 
-# ── Fixture: cria tabelas + registra router ───────────────────────────────────
+# ── Fixture: registra router ──────────────────────────────────────────────────
 
 @pytest.fixture
 async def sclient(db_session, client):
-    """Fixture auto-setup: tabelas de suporte criadas + router registrado."""
-    await _ensure_tables(db_session)
+    """Fixture auto-setup: router de suporte registrado."""
     await _ensure_router()
     return client
 

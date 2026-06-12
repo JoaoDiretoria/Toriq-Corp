@@ -15,90 +15,12 @@ from sqlalchemy import text
 
 from tests.helpers import login_as
 
-# ── DDL SQLite-compatível para as três tabelas ────────────────────────────────
 
-_SAUDE_DDL = [
-    """
-    CREATE TABLE IF NOT EXISTS saude_ocupacional (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        colaborador_nome TEXT NOT NULL,
-        tipo_exame TEXT NOT NULL,
-        data_exame DATE NOT NULL,
-        validade_dias NUMERIC NOT NULL DEFAULT 365,
-        created_at DATETIME NOT NULL DEFAULT (now()),
-        updated_at DATETIME NOT NULL DEFAULT (now()),
-        aso_arquivo_url TEXT,
-        observacoes TEXT
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS profissionais_saude (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        especialidade VARCHAR(100) NOT NULL,
-        nome VARCHAR(255) NOT NULL,
-        cpf VARCHAR(11),
-        conselho VARCHAR(50),
-        nr_conselho VARCHAR(50),
-        uf_conselho VARCHAR(2),
-        certificado_digital_url TEXT,
-        senha_certificado TEXT,
-        rubrica_url TEXT,
-        cliente_id CHAR(32) REFERENCES clientes_sst(id) ON DELETE SET NULL,
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now())
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS tipos_sinistro (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        codigo VARCHAR(50) NOT NULL UNIQUE,
-        nome VARCHAR(255) NOT NULL,
-        descricao TEXT,
-        acao_padrao VARCHAR(50) DEFAULT 'reprovacao',
-        ativo BOOLEAN DEFAULT 1,
-        ordem INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT (now())
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS sinistros_colaborador (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        turma_colaborador_id CHAR(32) NOT NULL,
-        turma_id CHAR(32) NOT NULL,
-        tipo_sinistro_id CHAR(32) NOT NULL REFERENCES tipos_sinistro(id),
-        acao VARCHAR(50) DEFAULT 'reprovacao',
-        descricao TEXT,
-        registrado_por CHAR(32),
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now())
-    )
-    """,
-    # sinistro_fotos é carregado via lazy-load pelo relacionamento ORM
-    """
-    CREATE TABLE IF NOT EXISTS sinistro_fotos (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        sinistro_id CHAR(32) NOT NULL REFERENCES sinistros_colaborador(id) ON DELETE CASCADE,
-        foto_url TEXT NOT NULL,
-        descricao TEXT,
-        data_captura DATETIME,
-        ordem INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT (now())
-    )
-    """,
-]
-
-
-# ── Fixture: cria tabelas + registra router ───────────────────────────────────
+# ── Fixture: registra router ──────────────────────────────────────────────────
 
 @pytest.fixture
 async def saude_client(db_session, client):
-    """Garante que as tabelas SST Saúde existem e registra o router na app."""
-    conn = await db_session.connection()
-    for ddl in _SAUDE_DDL:
-        await conn.execute(text(ddl))
-
+    """Registra o router SST Saúde na app (schema já provisionado pelo banco de teste)."""
     from app.main import app
     from app.api.sst_saude import router as saude_router
 

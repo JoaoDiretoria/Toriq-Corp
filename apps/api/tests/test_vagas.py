@@ -1,7 +1,7 @@
 """Testes auto-contidos para o módulo Vagas e Candidaturas.
 
 Padrão self-contained (igual ao test_blog.py / test_pesquisas.py):
-  - Cria as tabelas via DDL SQLite-friendly (sem server_defaults PG-específicos)
+  - Tabelas vêm do schema introspectado (sem DDL no teste)
   - vagas e candidaturas são GLOBAIS — sem empresa_id
   - GET de vagas é público; escrita exige admin_vertical
   - POST de candidatura é público (valida que a vaga existe)
@@ -19,61 +19,11 @@ import uuid
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import text
 
 from app.models.generated import Empresas
 
-_DDL = [
-    """
-    CREATE TABLE IF NOT EXISTS vagas (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        titulo TEXT NOT NULL,
-        descricao TEXT,
-        requisitos TEXT,
-        beneficios TEXT,
-        tipo_contrato TEXT,
-        modalidade TEXT,
-        local TEXT,
-        salario_faixa TEXT,
-        ativa BOOLEAN DEFAULT 1,
-        exibir_salario BOOLEAN DEFAULT 1,
-        created_at DATETIME DEFAULT (datetime('now')),
-        updated_at DATETIME DEFAULT (datetime('now'))
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS candidaturas (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        nome_completo TEXT NOT NULL,
-        email TEXT NOT NULL,
-        vaga_id CHAR(32) REFERENCES vagas(id) ON DELETE SET NULL,
-        data_nascimento DATE,
-        telefone TEXT,
-        cep TEXT,
-        logradouro TEXT,
-        numero TEXT,
-        complemento TEXT,
-        bairro TEXT,
-        cidade TEXT,
-        estado TEXT,
-        grau_escolaridade TEXT,
-        formacoes TEXT DEFAULT '[]',
-        cursos TEXT DEFAULT '[]',
-        observacoes TEXT,
-        created_at DATETIME DEFAULT (datetime('now')),
-        sobre_voce TEXT,
-        experiencias TEXT DEFAULT '[]',
-        diferenciais TEXT
-    )
-    """,
-]
-
-
-@pytest.fixture(autouse=True)
-async def _vagas_tables(db_session):
-    conn = await db_session.connection()
-    for ddl in _DDL:
-        await conn.execute(text(ddl))
+# As tabelas vagas / candidaturas já existem no banco de teste (schema
+# introspectado em app/models/generated.py). Sem DDL aqui.
 
 
 @pytest.fixture

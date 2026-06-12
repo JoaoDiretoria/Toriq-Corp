@@ -1,79 +1,20 @@
 """Testes TDD para o módulo Agenda.
 
-Self-contained: cria as tabelas necessárias (SQLite-compatible DDL) e registra
-o router em app.main.app antes de executar os cenários.
+Registra o router em app.main.app antes de executar os cenários. As tabelas de
+agenda já fazem parte do schema real do banco de teste.
 """
 import uuid
 
 import pytest
-from sqlalchemy import text
 
 from tests.helpers import login_as
 
-# DDL SQLite-friendly para as três tabelas Agenda e clientes_sst (dependência)
-_AGENDA_DDL = [
-    # clientes_sst já pode existir (criada pelo conftest via _CADASTRO_DDL)
-    # As tabelas de agenda são novas — criadas apenas por este teste
-    """
-    CREATE TABLE IF NOT EXISTS agenda_eventos (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        criado_por CHAR(32) NOT NULL,
-        titulo TEXT NOT NULL,
-        data_inicio DATETIME NOT NULL,
-        descricao TEXT,
-        data_fim DATETIME,
-        dia_inteiro BOOLEAN DEFAULT 0,
-        local TEXT,
-        cor TEXT DEFAULT '#16E17A',
-        tipo TEXT DEFAULT 'evento',
-        status TEXT DEFAULT 'ativo',
-        visibilidade TEXT DEFAULT 'privado',
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now()),
-        bloqueado BOOLEAN DEFAULT 0,
-        meet_link TEXT,
-        cliente_sst_id CHAR(32),
-        cliente_email TEXT,
-        cliente_nome TEXT,
-        convite_enviado BOOLEAN DEFAULT 0,
-        convite_enviado_em DATETIME
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS agenda_compartilhamentos (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        evento_id CHAR(32) NOT NULL REFERENCES agenda_eventos(id) ON DELETE CASCADE,
-        compartilhado_com CHAR(32) NOT NULL,
-        compartilhado_por CHAR(32) NOT NULL,
-        pode_editar BOOLEAN DEFAULT 0,
-        created_at DATETIME DEFAULT (now()),
-        UNIQUE(evento_id, compartilhado_com)
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS agenda_permissoes (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        dono_id CHAR(32) NOT NULL,
-        usuario_id CHAR(32) NOT NULL,
-        pode_criar_eventos BOOLEAN NOT NULL DEFAULT 0,
-        created_at DATETIME DEFAULT (now()),
-        UNIQUE(dono_id, usuario_id)
-    )
-    """,
-]
 
-
-# ── Fixture: cria tabelas + registra router ───────────────────────────────────
+# ── Fixture: registra router ──────────────────────────────────────────────────
 
 @pytest.fixture
 async def agenda_client(db_session, client):
-    """Garante que as tabelas de agenda existem e registra o router."""
-    conn = await db_session.connection()
-    for ddl in _AGENDA_DDL:
-        await conn.execute(text(ddl))
-
+    """Registra o router de agenda em app.main.app."""
     from app.main import app
     from app.api.agenda import router as agenda_router
 

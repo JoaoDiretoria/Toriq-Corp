@@ -1,150 +1,19 @@
 """Testes para o módulo SST EPI / Equipamentos.
 
-Self-contained: cria as tabelas necessárias via DDL SQLite na fixture,
-e inclui o router no app, seguindo o padrão de test_kanban_factory.py.
+Inclui o router no app, seguindo o padrão de test_kanban_factory.py.
+O schema das tabelas já é provido pelo banco de teste Postgres.
 """
 import uuid
 
 import pytest
-from sqlalchemy import text
 
 from app.api.sst_epi import router as epi_router
 
-# ── DDL SQLite para as tabelas do módulo EPI ─────────────────────────────────
 
-_EPI_DDL = [
-    """
-    CREATE TABLE IF NOT EXISTS equipamentos_categorias (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        nome TEXT NOT NULL,
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now()),
-        UNIQUE(empresa_id, nome)
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS equipamentos_finalidades (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        nome TEXT NOT NULL,
-        created_at DATETIME DEFAULT (now()),
-        UNIQUE(empresa_id, nome)
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS equipamentos_status (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        codigo TEXT NOT NULL,
-        nome TEXT NOT NULL,
-        cor TEXT DEFAULT 'bg-gray-100 text-gray-700 border-gray-300',
-        created_at DATETIME DEFAULT (now()),
-        UNIQUE(empresa_id, codigo)
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS equipamentos_unidades (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        nome TEXT NOT NULL,
-        created_at DATETIME DEFAULT (now()),
-        UNIQUE(empresa_id, nome)
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS equipamentos_sst (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        nome TEXT NOT NULL,
-        codigo TEXT NOT NULL,
-        categoria TEXT NOT NULL,
-        numero_serie TEXT,
-        unidade_medida TEXT,
-        quantidade INTEGER DEFAULT 1,
-        usado_para TEXT,
-        status TEXT DEFAULT 'disponivel',
-        local_base TEXT,
-        validade_calibracao DATE,
-        observacoes TEXT,
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now()),
-        UNIQUE(empresa_id, codigo)
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS equipamentos_kits (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        nome TEXT NOT NULL,
-        codigo TEXT NOT NULL,
-        quantidade INTEGER NOT NULL DEFAULT 1,
-        tipo_servico TEXT,
-        descricao TEXT,
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now()),
-        UNIQUE(empresa_id, codigo)
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS equipamentos_kit_itens (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        kit_id CHAR(32) NOT NULL REFERENCES equipamentos_kits(id) ON DELETE CASCADE,
-        equipamento_id CHAR(32) NOT NULL REFERENCES equipamentos_sst(id) ON DELETE CASCADE,
-        quantidade INTEGER DEFAULT 1,
-        created_at DATETIME DEFAULT (now()),
-        UNIQUE(kit_id, equipamento_id)
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS equipamentos_movimentacoes (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-        tipo TEXT NOT NULL,
-        kit_id CHAR(32),
-        equipamento_id CHAR(32),
-        quantidade INTEGER DEFAULT 1,
-        tipo_servico TEXT,
-        cliente_id CHAR(32),
-        responsavel_retirada TEXT,
-        usuario_separou_id CHAR(32),
-        usuario_utilizou_id CHAR(32),
-        usuario_recebeu_id CHAR(32),
-        data_saida DATETIME,
-        data_retorno DATETIME,
-        status TEXT DEFAULT 'demanda',
-        checklist_saida TEXT,
-        checklist_entrada TEXT,
-        observacoes TEXT,
-        created_at DATETIME DEFAULT (now()),
-        updated_at DATETIME DEFAULT (now()),
-        numero_movimentacao TEXT UNIQUE,
-        funil_card_id CHAR(32),
-        equipamentos_lista TEXT
-    )
-    """,
-]
-
-_EPI_TABLES = [
-    "equipamentos_categorias",
-    "equipamentos_finalidades",
-    "equipamentos_status",
-    "equipamentos_unidades",
-    "equipamentos_sst",
-    "equipamentos_kits",
-    "equipamentos_kit_itens",
-    "equipamentos_movimentacoes",
-]
-
-
-# ── Fixture: cria tabelas + registra router ──────────────────────────────────
+# ── Fixture: registra router ─────────────────────────────────────────────────
 
 @pytest.fixture
 async def epi_client(db_session, client):
-    conn = await db_session.connection()
-    for ddl in _EPI_DDL:
-        await conn.execute(text(ddl))
-
     from app.main import app
     # Only include if not already registered (test isolation guard)
     prefix_exists = any(r.path.startswith("/sst/epi") for r in app.routes)

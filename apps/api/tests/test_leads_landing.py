@@ -1,7 +1,7 @@
 """Testes auto-contidos para o módulo Leads da Landing Page.
 
 Padrão self-contained (igual ao test_blog.py / test_pesquisas.py):
-  - Cria a tabela via DDL SQLite-friendly (sem server_defaults PG-específicos)
+  - Tabela vem do schema introspectado (sem DDL no teste)
   - leads_landing é GLOBAL — sem empresa_id
   - POST é público (sem auth); leitura/gestão exige admin_vertical
 
@@ -14,30 +14,11 @@ import uuid
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import text
 
 from app.models.generated import Empresas
 
-_DDL = """
-CREATE TABLE IF NOT EXISTS leads_landing (
-    id CHAR(32) NOT NULL PRIMARY KEY,
-    nome TEXT NOT NULL,
-    empresa TEXT NOT NULL,
-    email TEXT NOT NULL,
-    telefone TEXT NOT NULL,
-    segmento TEXT,
-    mensagem TEXT,
-    cnpj TEXT,
-    created_at DATETIME DEFAULT (datetime('now')),
-    updated_at DATETIME DEFAULT (datetime('now'))
-)
-"""
-
-
-@pytest.fixture(autouse=True)
-async def _leads_tables(db_session):
-    conn = await db_session.connection()
-    await conn.execute(text(_DDL))
+# A tabela leads_landing já existe no banco de teste (schema introspectado em
+# app/models/generated.py). Sem DDL aqui.
 
 
 @pytest.fixture

@@ -1,7 +1,7 @@
 """Testes auto-contidos para o módulo Pesquisas de Opinião.
 
 Padrão idêntico ao test_blog.py:
-  - Cria as tabelas via DDL SQLite-friendly (sem server_defaults PG-específicos)
+  - Tabelas vêm do schema introspectado (sem DDL no teste)
   - PesquisasOpiniao é GLOBAL — sem empresa_id
   - Leitura é pública; criação/edição/deleção exige admin_vertical
   - Votação exige qualquer usuário autenticado
@@ -18,77 +18,11 @@ Cobertura:
 import uuid
 
 import pytest
-from sqlalchemy import text
 
 from app.models.generated import Empresas
 
-# ── SQLite DDL para as tabelas do módulo ──────────────────────────────────────
-
-_PESQUISAS_DDL = [
-    """
-    CREATE TABLE IF NOT EXISTS pesquisas_opiniao (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        titulo VARCHAR(255) NOT NULL,
-        slug VARCHAR(255) NOT NULL UNIQUE,
-        descricao TEXT,
-        imagem_capa_url TEXT,
-        autor_id CHAR(32),
-        categoria_id CHAR(32),
-        status VARCHAR(50) DEFAULT 'rascunho',
-        tipo VARCHAR(50) DEFAULT 'multipla_escolha',
-        permite_multiplas_respostas BOOLEAN DEFAULT 0,
-        anonima BOOLEAN DEFAULT 1,
-        data_inicio DATETIME,
-        data_fim DATETIME,
-        total_votos INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT (datetime('now')),
-        updated_at DATETIME DEFAULT (datetime('now'))
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pesquisas_opcoes (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        pesquisa_id CHAR(32) NOT NULL REFERENCES pesquisas_opiniao(id) ON DELETE CASCADE,
-        texto VARCHAR(500) NOT NULL,
-        ordem INTEGER DEFAULT 0,
-        votos INTEGER DEFAULT 0,
-        cor VARCHAR(7),
-        created_at DATETIME DEFAULT (datetime('now'))
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pesquisas_votos (
-        id CHAR(32) NOT NULL PRIMARY KEY,
-        pesquisa_id CHAR(32) NOT NULL REFERENCES pesquisas_opiniao(id) ON DELETE CASCADE,
-        session_id VARCHAR(255) NOT NULL,
-        opcao_id CHAR(32) REFERENCES pesquisas_opcoes(id) ON DELETE CASCADE,
-        resposta_texto TEXT,
-        ip_address TEXT,
-        user_agent TEXT,
-        nome VARCHAR(255),
-        empresa VARCHAR(255),
-        cnpj VARCHAR(25),
-        cargo VARCHAR(100),
-        sistema_atual VARCHAR(255),
-        mensagem TEXT,
-        data_nascimento DATE,
-        telefone VARCHAR(20),
-        email VARCHAR(255),
-        created_at DATETIME DEFAULT (datetime('now')),
-        UNIQUE(pesquisa_id, session_id)
-    )
-    """,
-]
-
-
-# ── Fixture: cria tabelas + registra router ───────────────────────────────────
-
-@pytest.fixture(autouse=True)
-async def _pesquisas_tables(db_session):
-    """Garante que as tabelas de pesquisas existem."""
-    conn = await db_session.connection()
-    for ddl in _PESQUISAS_DDL:
-        await conn.execute(text(ddl))
+# As tabelas pesquisas_opiniao / pesquisas_opcoes / pesquisas_votos já existem no
+# banco de teste (schema introspectado em app/models/generated.py). Sem DDL aqui.
 
 
 @pytest.fixture
