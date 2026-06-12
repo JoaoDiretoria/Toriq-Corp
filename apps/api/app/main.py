@@ -69,6 +69,8 @@ from app.api.admin_users import (
 )
 # Subsistema de storage (RustFS / S3) — substitui supabase.storage
 from app.api.storage import router as storage_router
+# RPCs portadas (white-label resolver, register_app_update, blog trending)
+from app.api.rpcs import router as rpcs_router
 from app.api.health import router as health_router
 from app.api.kanbans_legados import router as kanbans_legados_router
 from app.jobs.scheduler import build_scheduler
@@ -131,6 +133,9 @@ def create_app() -> FastAPI:
     app.include_router(notificacoes_router)
     app.include_router(suporte_router)
     app.include_router(agenda_router)
+    # RPCs portadas — ANTES de white_label e blog (precedência: /white-label/me e
+    # /blog/trending não podem ser capturadas por /white-label/{id} e /blog/{id})
+    app.include_router(rpcs_router)
     # White Label (config/módulos da empresa) e Blog/Newsletter (conteúdo global)
     app.include_router(white_label_router)
     app.include_router(blog_router)
