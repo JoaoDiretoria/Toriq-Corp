@@ -25,6 +25,8 @@ from app.api.produtos import router as produtos_router
 from app.api.notificacoes import router as notificacoes_router
 from app.api.suporte import router as suporte_router
 from app.api.agenda import router as agenda_router
+from app.api.white_label import router as white_label_router
+from app.api.blog import router as blog_router
 from app.api.health import router as health_router
 from app.api.kanbans_legados import router as kanbans_legados_router
 from app.jobs.scheduler import build_scheduler
@@ -74,6 +76,9 @@ def create_app() -> FastAPI:
     app.include_router(notificacoes_router)
     app.include_router(suporte_router)
     app.include_router(agenda_router)
+    # White Label (config/módulos da empresa) e Blog/Newsletter (conteúdo global)
+    app.include_router(white_label_router)
+    app.include_router(blog_router)
     return app
 
 
