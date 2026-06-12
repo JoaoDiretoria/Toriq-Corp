@@ -30,6 +30,7 @@ from app.schemas.admin_users import (
     AdminUserUpdateIn,
     ChangePasswordIn,
     FirstAccessPasswordIn,
+    HierarquiaUserOut,
 )
 
 router = APIRouter(prefix="/admin/users", tags=["admin-users"])
@@ -140,6 +141,28 @@ async def create_user(
     out = AdminUserCreatedOut.model_validate(user)
     out.temp_password = temp_password
     return out
+
+
+@router.get("/hierarquia", response_model=list[HierarquiaUserOut])
+async def list_hierarquia(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[Profiles]:
+    """Grafo de hierarquia (profiles) para o `useHierarquia` do front.
+
+    Aberto a QUALQUER usuário autenticado — gestor e colaborador também precisam
+    montar seu conjunto de visíveis. Escopo:
+      - admin_vertical: todos os profiles (vê tudo, como no modelo legado);
+      - demais papéis: apenas profiles da própria empresa.
+    Retorna só metadados de organização (sem campos sensíveis).
+    """
+    stmt = select(Profiles)
+    if user.role != UserRole.admin_vertical:
+        if user.empresa_id is None:
+            return []
+        stmt = stmt.where(Profiles.empresa_id == user.empresa_id)
+    result = await db.scalars(stmt)
+    return list(result.all())
 
 
 @router.get("", response_model=list[AdminUserOut])

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 
 export type GrupoAcesso = 'administrador' | 'gestor' | 'colaborador';
 
@@ -46,26 +46,22 @@ export function useHierarquia(): UseHierarquiaReturn {
     }
 
     try {
-      // Buscar profile completo com grupo_acesso e gestor_id
-      const { data: profileData, error: profileError } = await (supabase as any)
-        .from('profiles')
-        .select('id, nome, email, grupo_acesso, gestor_id, setor_id, empresa_id')
-        .eq('id', profile.id)
-        .single();
+      // Backend novo: /admin/users/hierarquia devolve, numa única chamada, o grafo
+      // de profiles já escopado pelo token (admin_vertical → todos; demais papéis →
+      // apenas a própria empresa). Substitui as várias queries recursivas ao Supabase:
+      // o cálculo de subordinados passa a ser feito em memória sobre esse grafo.
+      const profiles = await api
+        .get<any[]>('/admin/users/hierarquia')
+        .catch(() => [] as any[]);
 
-      if (profileError) throw profileError;
-      setProfileCompleto(profileData);
+      const self = (profiles || []).find((p: any) => p.id === profile.id) || null;
+      setProfileCompleto(self);
 
-      const grupoAcesso = profileData?.grupo_acesso as GrupoAcesso | null;
+      const grupoAcesso = (self?.grupo_acesso ?? null) as GrupoAcesso | null;
 
-      // admin_vertical sempre tem acesso total
+      // admin_vertical sempre tem acesso total (a lista já vem com todos)
       if (profile.role === 'admin_vertical') {
-        // Buscar todos os usuários (admin vertical vê tudo)
-        const { data: todosUsuarios } = await (supabase as any)
-          .from('profiles')
-          .select('id');
-        
-        const todosIds = todosUsuarios?.map((u: any) => u.id) || [];
+        const todosIds = (profiles || []).map((u: any) => u.id);
         setSubordinados(todosIds);
         setUsuariosVisiveis(todosIds);
         setLoading(false);
@@ -73,24 +69,21 @@ export function useHierarquia(): UseHierarquiaReturn {
       }
 
       // Administrador da empresa OU cliente_torq sem grupo definido vê todos da empresa
-      // (cliente_torq sem grupo_acesso é o dono/admin da empresa - comportamento legado)
+      // (cliente_torq sem grupo_acesso é o dono/admin da empresa - comportamento legado).
+      // A lista já é escopada por empresa; o filtro por empresa.id é redundante/defensivo.
       if ((grupoAcesso === 'administrador' || !grupoAcesso) && empresa?.id) {
-        const { data: usuariosEmpresa } = await (supabase as any)
-          .from('profiles')
-          .select('id')
-          .eq('empresa_id', empresa.id);
-        
-        const ids = usuariosEmpresa?.map((u: any) => u.id) || [];
+        const ids = (profiles || [])
+          .filter((u: any) => u.empresa_id === empresa.id)
+          .map((u: any) => u.id);
         setSubordinados(ids.filter((id: string) => id !== profile.id));
         setUsuariosVisiveis(ids);
         setLoading(false);
         return;
       }
 
-      // Gestor vê a si mesmo + subordinados diretos e indiretos
+      // Gestor vê a si mesmo + subordinados diretos e indiretos (BFS em memória)
       if (grupoAcesso === 'gestor') {
-        // Buscar subordinados recursivamente
-        const subordinadosIds = await getSubordinadosRecursivo(profile.id);
+        const subordinadosIds = getSubordinadosRecursivo(profile.id, profiles || []);
         setSubordinados(subordinadosIds);
         setUsuariosVisiveis([profile.id, ...subordinadosIds]);
         setLoading(false);
@@ -109,8 +102,17 @@ export function useHierarquia(): UseHierarquiaReturn {
     }
   }, [profile?.id, profile?.role, empresa?.id]);
 
-  // Função para buscar subordinados recursivamente
-  const getSubordinadosRecursivo = async (gestorId: string): Promise<string[]> => {
+  // Subordinados diretos e indiretos via BFS sobre o grafo de profiles já carregado
+  // (cada nó tem gestor_id). Antes eram N consultas recursivas ao Supabase.
+  const getSubordinadosRecursivo = (gestorId: string, profiles: any[]): string[] => {
+    const filhosPorGestor = new Map<string, string[]>();
+    for (const p of profiles) {
+      if (!p.gestor_id) continue;
+      const lista = filhosPorGestor.get(p.gestor_id) ?? [];
+      lista.push(p.id);
+      filhosPorGestor.set(p.gestor_id, lista);
+    }
+
     const subordinadosIds: string[] = [];
     const queue = [gestorId];
     const visited = new Set<string>();
@@ -120,17 +122,10 @@ export function useHierarquia(): UseHierarquiaReturn {
       if (visited.has(currentGestorId)) continue;
       visited.add(currentGestorId);
 
-      const { data: subordinadosDiretos } = await (supabase as any)
-        .from('profiles')
-        .select('id')
-        .eq('gestor_id', currentGestorId);
-
-      if (subordinadosDiretos) {
-        for (const sub of subordinadosDiretos) {
-          if (!subordinadosIds.includes(sub.id)) {
-            subordinadosIds.push(sub.id);
-            queue.push(sub.id);
-          }
+      for (const filhoId of filhosPorGestor.get(currentGestorId) ?? []) {
+        if (!subordinadosIds.includes(filhoId)) {
+          subordinadosIds.push(filhoId);
+          queue.push(filhoId);
         }
       }
     }

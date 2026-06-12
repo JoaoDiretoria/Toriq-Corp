@@ -4,7 +4,7 @@ import uuid
 import pytest
 from sqlalchemy import select
 
-from app.models.generated import Empresas
+from app.models.generated import Empresas, Profiles
 from app.models.user import User
 from tests.helpers import login_as
 
@@ -179,6 +179,42 @@ async def test_first_access_password(client, db_session):
     # loga com a nova senha
     login = await client.post("/auth/login", json={"email": "fa@e.com", "password": "NovaForte1"})
     assert login.status_code == 200
+
+
+async def test_hierarquia_escopada_e_campos(client, db_session):
+    """/admin/users/hierarquia: cliente_torq vê só a própria empresa e os
+    campos de organização (gestor_id/grupo_acesso) chegam ao cliente."""
+    # empresa B com um profile (criado por admin_vertical)
+    await login_as(client, db_session, role="admin_vertical", email="advh@v.com")
+    emp_b = await _nova_empresa(db_session)
+    rb = await client.post(
+        "/admin/users",
+        json={"email": "hb@b.com", "nome": "HB", "role": "instrutor", "empresa_id": str(emp_b)},
+    )
+    # garante o profile da empresa B (o /admin/users cria só o user)
+    hb_id = uuid.UUID(rb.json()["id"])
+    if await db_session.scalar(select(Profiles).where(Profiles.id == hb_id)) is None:
+        db_session.add(Profiles(id=hb_id, email="hb@b.com", nome="HB", role="instrutor", empresa_id=emp_b))
+        await db_session.commit()
+
+    # empresa A: um gestor e um colaborador subordinado a ele
+    emp_a = await login_as(client, db_session, role="cliente_torq", email="gestorA@a.com")
+    gestor = await db_session.scalar(select(Profiles).where(Profiles.email == "gestorA@a.com"))
+    gestor.grupo_acesso = "gestor"
+    await login_as(client, db_session, role="cliente_torq", email="subA@a.com", empresa_id=emp_a)
+    sub = await db_session.scalar(select(Profiles).where(Profiles.email == "subA@a.com"))
+    sub.grupo_acesso = "colaborador"
+    sub.gestor_id = gestor.id
+    await db_session.commit()
+
+    # logado como subA (cliente_torq) → só enxerga profiles da empresa A
+    r = await client.get("/admin/users/hierarquia")
+    assert r.status_code == 200, r.text
+    por_id = {u["id"]: u for u in r.json()}
+    assert str(hb_id) not in por_id  # nada da empresa B
+    assert str(gestor.id) in por_id and str(sub.id) in por_id
+    assert por_id[str(sub.id)]["gestor_id"] == str(gestor.id)
+    assert por_id[str(sub.id)]["grupo_acesso"] == "colaborador"
 
 
 async def test_lista_escopada_por_tenant(client, db_session):

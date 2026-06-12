@@ -57,6 +57,22 @@ class AdminUserCreatedOut(AdminUserOut):
     temp_password: str | None = None
 
 
+class HierarquiaUserOut(BaseModel):
+    """Nó do grafo de hierarquia (profiles) — só metadados de org, sem dados
+    sensíveis. Consumido pelo `useHierarquia` do front para montar, no cliente,
+    o conjunto de usuários visíveis por gestor/subordinado.
+    """
+
+    id: uuid.UUID
+    nome: str | None = None
+    empresa_id: uuid.UUID | None = None
+    setor_id: uuid.UUID | None = None
+    grupo_acesso: str | None = None
+    gestor_id: uuid.UUID | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class ChangePasswordIn(BaseModel):
     """Troca de senha do próprio usuário logado."""
 
