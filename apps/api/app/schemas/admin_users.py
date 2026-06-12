@@ -1,8 +1,11 @@
 import uuid
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 from app.models.user import UserRole
+
+# Mínimo de senha (quando o admin/usuário fornece uma explicitamente).
+MIN_SENHA = 8
 
 
 class AdminUserCreateIn(BaseModel):
@@ -18,7 +21,7 @@ class AdminUserCreateIn(BaseModel):
     nome: str
     role: UserRole
     empresa_id: uuid.UUID | None = None
-    password: str | None = None
+    password: str | None = Field(default=None, min_length=MIN_SENHA)
 
 
 class AdminUserUpdateIn(BaseModel):
@@ -32,7 +35,7 @@ class AdminUserUpdateIn(BaseModel):
 class AdminResetPasswordIn(BaseModel):
     """Nova senha definida pelo admin; se ausente gera temporária."""
 
-    password: str | None = None
+    password: str | None = Field(default=None, min_length=MIN_SENHA)
 
 
 class AdminUserOut(BaseModel):
@@ -58,4 +61,4 @@ class ChangePasswordIn(BaseModel):
     """Troca de senha do próprio usuário logado."""
 
     current_password: str
-    new_password: str
+    new_password: str = Field(min_length=MIN_SENHA)

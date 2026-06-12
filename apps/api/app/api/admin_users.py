@@ -67,8 +67,15 @@ async def _get_scoped_user(db: AsyncSession, actor: User, user_id: uuid.UUID) ->
     target = await db.get(User, user_id)
     if target is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "usuário não encontrado")
-    if actor.role == UserRole.cliente_torq and target.empresa_id != actor.empresa_id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "usuário não encontrado")
+    if actor.role == UserRole.cliente_torq:
+        # Fora da própria empresa: não existe (não vaza usuários de outro tenant).
+        if target.empresa_id != actor.empresa_id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "usuário não encontrado")
+        # Hierarquia: um cliente_torq nunca pode tocar (editar/resetar/desativar)
+        # um admin_vertical, mesmo na própria empresa (anti-escalonamento). 404 p/
+        # não revelar a existência/privilégio do alvo.
+        if target.role == UserRole.admin_vertical:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "usuário não encontrado")
     return target
 
 

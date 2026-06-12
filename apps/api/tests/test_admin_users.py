@@ -124,6 +124,30 @@ async def test_soft_delete_e_nao_pode_desativar_a_si(client, db_session):
     assert d.json()["ativo"] is False
 
 
+async def test_cliente_torq_nao_toca_admin_vertical_da_mesma_empresa(client, db_session):
+    """Anti-escalonamento: cliente_torq não reseta/edita/desativa um admin_vertical."""
+    # cria um admin_vertical e um cliente_torq na MESMA empresa
+    emp = await login_as(client, db_session, role="admin_vertical", email="chefe@e.com")
+    await login_as(client, db_session, role="cliente_torq", email="sub@e.com", empresa_id=emp)
+    admin = await db_session.scalar(select(User).where(User.email == "chefe@e.com"))
+
+    # agora logado como cliente_torq (último login_as), tenta tocar o admin_vertical → 404
+    assert (await client.post(f"/admin/users/{admin.id}/reset-password", json={})).status_code == 404
+    assert (await client.put(f"/admin/users/{admin.id}", json={"nome": "Hack"})).status_code == 404
+    assert (await client.delete(f"/admin/users/{admin.id}")).status_code == 404
+
+
+async def test_senha_fraca_rejeitada_422(client, db_session):
+    await login_as(client, db_session, role="admin_vertical", email="adm7@v.com")
+    alvo = await _nova_empresa(db_session)
+    r = await client.post(
+        "/admin/users",
+        json={"email": "fraca@x.com", "nome": "F", "role": "instrutor",
+              "empresa_id": str(alvo), "password": "123"},
+    )
+    assert r.status_code == 422
+
+
 async def test_change_password(client, db_session):
     await login_as(client, db_session, role="cliente_torq",
                    email="cp@e.com", password="senhaAntiga1")
