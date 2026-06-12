@@ -38,6 +38,10 @@ const forgotPasswordSchema = z.object({
 });
 
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || '';
+// Captcha (Turnstile) só é exigido quando há site key configurada. Sem ela (e
+// enquanto o backend não valida o token — backlog "auth avançado"), o captcha
+// degrada graciosamente: o widget não renderiza e o botão não fica travado.
+const CAPTCHA_ENABLED = TURNSTILE_SITE_KEY.length > 0;
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -102,7 +106,7 @@ const Auth = () => {
       }
     }
 
-    if (!captchaToken) {
+    if (CAPTCHA_ENABLED && !captchaToken) {
       toast.error('Por favor, complete a verificação de segurança.');
       return;
     }
@@ -179,7 +183,7 @@ const Auth = () => {
       }
     }
 
-    if (!resetCaptchaToken) {
+    if (CAPTCHA_ENABLED && !resetCaptchaToken) {
       toast.error('Por favor, complete a verificação de segurança.');
       return;
     }
@@ -270,26 +274,28 @@ const Auth = () => {
                 </div>
               </div>
               
-              {/* Cloudflare Turnstile CAPTCHA */}
-              <div className="flex justify-center rounded-lg overflow-hidden">
-                <Turnstile
-                  ref={turnstileRef}
-                  siteKey={TURNSTILE_SITE_KEY}
-                  onSuccess={(token) => setCaptchaToken(token)}
-                  onError={() => {
-                    setCaptchaToken(null);
-                    toast.error('Erro na verificação de segurança. Tente novamente.');
-                  }}
-                  onExpire={() => {
-                    setCaptchaToken(null);
-                  }}
-                  options={{
-                    theme: 'auto',
-                  }}
-                />
-              </div>
+              {/* Cloudflare Turnstile CAPTCHA — só quando configurado */}
+              {CAPTCHA_ENABLED && (
+                <div className="flex justify-center rounded-lg overflow-hidden">
+                  <Turnstile
+                    ref={turnstileRef}
+                    siteKey={TURNSTILE_SITE_KEY}
+                    onSuccess={(token) => setCaptchaToken(token)}
+                    onError={() => {
+                      setCaptchaToken(null);
+                      toast.error('Erro na verificação de segurança. Tente novamente.');
+                    }}
+                    onExpire={() => {
+                      setCaptchaToken(null);
+                    }}
+                    options={{
+                      theme: 'auto',
+                    }}
+                  />
+                </div>
+              )}
 
-              <Button type="submit" className="w-full" disabled={isLoading || !captchaToken}>
+              <Button type="submit" className="w-full" disabled={isLoading || (CAPTCHA_ENABLED && !captchaToken)}>
                 <LogIn className="h-4 w-4 mr-2" />
                 {isLoading ? 'Entrando...' : 'Entrar'}
               </Button>
@@ -341,29 +347,31 @@ const Auth = () => {
               />
             </div>
             
-            {/* Cloudflare Turnstile CAPTCHA para recuperação */}
-            <div className="flex justify-center rounded-lg overflow-hidden">
-              <Turnstile
-                ref={resetTurnstileRef}
-                siteKey={TURNSTILE_SITE_KEY}
-                onSuccess={(token) => setResetCaptchaToken(token)}
-                onError={() => {
-                  setResetCaptchaToken(null);
-                  toast.error('Erro na verificação de segurança. Tente novamente.');
-                }}
-                onExpire={() => {
-                  setResetCaptchaToken(null);
-                }}
-                options={{
-                  theme: 'light',
-                }}
-              />
-            </div>
-            
-            <Button 
-              className="w-full" 
+            {/* Cloudflare Turnstile CAPTCHA para recuperação — só quando configurado */}
+            {CAPTCHA_ENABLED && (
+              <div className="flex justify-center rounded-lg overflow-hidden">
+                <Turnstile
+                  ref={resetTurnstileRef}
+                  siteKey={TURNSTILE_SITE_KEY}
+                  onSuccess={(token) => setResetCaptchaToken(token)}
+                  onError={() => {
+                    setResetCaptchaToken(null);
+                    toast.error('Erro na verificação de segurança. Tente novamente.');
+                  }}
+                  onExpire={() => {
+                    setResetCaptchaToken(null);
+                  }}
+                  options={{
+                    theme: 'light',
+                  }}
+                />
+              </div>
+            )}
+
+            <Button
+              className="w-full"
               onClick={handleForgotPassword}
-              disabled={isResetLoading || !resetCaptchaToken}
+              disabled={isResetLoading || (CAPTCHA_ENABLED && !resetCaptchaToken)}
             >
               {isResetLoading ? 'Enviando...' : 'Enviar Link de Recuperação'}
             </Button>
