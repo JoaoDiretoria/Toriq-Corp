@@ -1,5 +1,6 @@
 from app.core.db import Base
 from app.models import generated  # noqa: F401  (registra as 172 tabelas no metadata)
+from app.models import treinamentos  # noqa: F401
 from app.models.user import User, UserRole
 
 __all__ = ["Base", "User", "UserRole", "generated"]
