@@ -355,6 +355,204 @@ _CADASTRO_DDL = [
         anexo_nome TEXT
     )
     """,
+    # ── SST — Cadastros Base ──────────────────────────────────────────────────
+    """
+    CREATE TABLE IF NOT EXISTS cargos (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        nome VARCHAR(255) NOT NULL,
+        descricao TEXT,
+        ativo BOOLEAN DEFAULT 1,
+        created_at DATETIME DEFAULT (now()),
+        updated_at DATETIME DEFAULT (now()),
+        cbo VARCHAR(10)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS riscos (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        nome TEXT NOT NULL,
+        descricao TEXT,
+        tipo TEXT,
+        severidade TEXT,
+        probabilidade TEXT,
+        ativo BOOLEAN DEFAULT 1,
+        created_at DATETIME DEFAULT (now()),
+        updated_at DATETIME DEFAULT (now()),
+        created_by CHAR(32)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS perigos (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        nome TEXT NOT NULL,
+        descricao TEXT,
+        categoria TEXT,
+        ativo BOOLEAN DEFAULT 1,
+        created_at DATETIME DEFAULT (now()),
+        updated_at DATETIME DEFAULT (now()),
+        created_by CHAR(32)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS grupos_clientes (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        nome VARCHAR(255) NOT NULL,
+        descricao TEXT,
+        ativo BOOLEAN DEFAULT 1,
+        created_at DATETIME DEFAULT (now()),
+        updated_at DATETIME DEFAULT (now())
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS colaboradores (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        empresa_id CHAR(32) NOT NULL,
+        nome TEXT NOT NULL,
+        ativo BOOLEAN NOT NULL DEFAULT 1,
+        created_at DATETIME NOT NULL DEFAULT (now()),
+        updated_at DATETIME NOT NULL DEFAULT (now()),
+        cpf TEXT,
+        cargo TEXT,
+        setor TEXT,
+        data_admissao DATE,
+        email TEXT,
+        telefone TEXT,
+        grupo_homogeneo_id CHAR(32),
+        matricula VARCHAR(50),
+        rg TEXT,
+        data_nascimento DATE,
+        sexo TEXT,
+        estado_civil TEXT,
+        nacionalidade TEXT DEFAULT 'Brasileira',
+        naturalidade TEXT,
+        nome_mae TEXT,
+        nome_pai TEXT,
+        endereco TEXT,
+        numero TEXT,
+        complemento TEXT,
+        bairro TEXT,
+        cidade TEXT,
+        estado TEXT,
+        cep TEXT,
+        telefone_emergencia TEXT,
+        contato_emergencia TEXT,
+        pis TEXT,
+        ctps TEXT,
+        ctps_serie TEXT,
+        titulo_eleitor TEXT,
+        zona_eleitoral TEXT,
+        secao_eleitoral TEXT,
+        certificado_reservista TEXT,
+        cnh TEXT,
+        cnh_categoria TEXT,
+        cnh_validade DATE,
+        banco TEXT,
+        agencia TEXT,
+        conta TEXT,
+        tipo_conta TEXT,
+        pix TEXT,
+        tipo_contrato TEXT,
+        carga_horaria TEXT,
+        salario NUMERIC(10,2),
+        data_demissao DATE,
+        motivo_demissao TEXT,
+        observacoes TEXT,
+        foto_url TEXT,
+        formacao TEXT,
+        nivel_escolaridade TEXT,
+        tem_acesso_sistema BOOLEAN DEFAULT 0,
+        perfil_acesso TEXT,
+        modulos_acesso TEXT,
+        comissao NUMERIC(5,2),
+        codigo_facial TEXT
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS categorias_clientes (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        nome TEXT NOT NULL,
+        descricao TEXT,
+        created_at DATETIME DEFAULT (now()),
+        updated_at DATETIME DEFAULT (now())
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS clientes_sst (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        empresa_sst_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        nome TEXT NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT (now()),
+        updated_at DATETIME NOT NULL DEFAULT (now()),
+        cnpj TEXT,
+        responsavel TEXT,
+        email TEXT,
+        telefone TEXT,
+        responsavel_id CHAR(32),
+        cliente_empresa_id CHAR(32),
+        sigla VARCHAR(3),
+        categoria_id CHAR(32),
+        tipo_inscricao VARCHAR(1) DEFAULT '1',
+        numero_inscricao_esocial VARCHAR(50),
+        cnae VARCHAR(20),
+        cnae_atividade TEXT,
+        grau_risco VARCHAR(1),
+        porte_empresa VARCHAR(20),
+        servicos_contratados TEXT,
+        medico_responsavel_id CHAR(32),
+        possui_gestao_treinamentos BOOLEAN DEFAULT 0,
+        possui_pcmso BOOLEAN DEFAULT 0,
+        origem_contato_id CHAR(32)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS cliente_contatos (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        cliente_id CHAR(32) NOT NULL REFERENCES clientes_sst(id) ON DELETE CASCADE,
+        nome VARCHAR(255) NOT NULL,
+        cargo VARCHAR(255),
+        email VARCHAR(255),
+        telefone VARCHAR(50),
+        linkedin VARCHAR(500),
+        principal BOOLEAN DEFAULT 0,
+        created_at DATETIME DEFAULT (now()),
+        updated_at DATETIME DEFAULT (now())
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS unidades_clientes (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        cliente_id CHAR(32) NOT NULL REFERENCES clientes_sst(id) ON DELETE CASCADE,
+        razao_social VARCHAR(255) NOT NULL,
+        grupo_id CHAR(32),
+        tipo_inscricao VARCHAR(1) DEFAULT '1',
+        numero_inscricao VARCHAR(20),
+        nome_referencia VARCHAR(255),
+        cnae VARCHAR(10),
+        cnae_atividade TEXT,
+        grau_risco VARCHAR(1),
+        cep VARCHAR(10),
+        logradouro VARCHAR(255),
+        numero VARCHAR(20),
+        complemento VARCHAR(100),
+        bairro VARCHAR(100),
+        cidade VARCHAR(100),
+        uf VARCHAR(2),
+        codigo_interno VARCHAR(50),
+        tipo_local VARCHAR(1),
+        email VARCHAR(255),
+        medico_pcmso_id CHAR(32),
+        tecnico_responsavel_id CHAR(32),
+        faturamento VARCHAR(20) DEFAULT 'faturar',
+        status VARCHAR(20) DEFAULT 'ativo',
+        created_at DATETIME DEFAULT (now()),
+        updated_at DATETIME DEFAULT (now())
+    )
+    """,
     # ── Contratos ─────────────────────────────────────────────────────────────
     """
     CREATE TABLE IF NOT EXISTS modelos_contrato (
