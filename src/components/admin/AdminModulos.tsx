@@ -135,7 +135,6 @@ export function AdminModulos() {
   });
 
   // Create módulo
-  // NOTA (migração): POST /white-label/modulos não existe — módulos são catálogo global somente leitura no backend.
   const createMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
       await api.post<any>('/white-label/modulos', {
@@ -157,7 +156,6 @@ export function AdminModulos() {
   });
 
   // Update módulo
-  // NOTA (migração): PUT /white-label/modulos/{id} não existe — módulos são catálogo global somente leitura no backend.
   const updateMutation = useMutation({
     mutationFn: async (data: { id: string } & typeof formData) => {
       await api.put<any>(`/white-label/modulos/${data.id}`, {
@@ -180,7 +178,6 @@ export function AdminModulos() {
   });
 
   // Delete módulo
-  // NOTA (migração): DELETE /white-label/modulos/{id} não existe — módulos são catálogo global somente leitura no backend.
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       await api.del<any>(`/white-label/modulos/${id}`);

@@ -231,3 +231,88 @@ async def test_lista_escopada_por_tenant(client, db_session):
     assert r.status_code == 200
     empresas = {u["empresa_id"] for u in r.json()}
     assert empresas <= {str(emp_a)}  # nada de outra empresa
+
+
+async def test_campos_estendidos_criacao(client, db_session):
+    """Campos estendidos de perfil devem ser gravados no Profiles na criação."""
+    await login_as(client, db_session, role="admin_vertical", email="admext1@v.com")
+    alvo = await _nova_empresa(db_session)
+
+    r = await client.post(
+        "/admin/users",
+        json={
+            "email": "extcreate@x.com",
+            "nome": "ExtCreate",
+            "role": "cliente_torq",
+            "empresa_id": str(alvo),
+            "telefone": "(11) 91234-5678",
+            "cpf": "123.456.789-09",
+            "cep": "01310-100",
+            "logradouro": "Av. Paulista",
+            "numero": "1000",
+            "complemento": "Apto 42",
+            "bairro": "Bela Vista",
+            "cidade": "São Paulo",
+            "uf": "SP",
+            "grupo_acesso": "colaborador",
+        },
+    )
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["telefone"] == "(11) 91234-5678"
+    assert body["cpf"] == "123.456.789-09"
+    assert body["cidade"] == "São Paulo"
+    assert body["uf"] == "SP"
+    assert body["grupo_acesso"] == "colaborador"
+
+    # confirmar que Profiles foi gravado no banco
+    user = await db_session.scalar(
+        select(Profiles).where(Profiles.email == "extcreate@x.com")
+    )
+    assert user is not None
+    assert user.telefone == "(11) 91234-5678"
+    assert user.cidade == "São Paulo"
+    assert user.grupo_acesso == "colaborador"
+
+
+async def test_campos_estendidos_atualizacao(client, db_session):
+    """Campos estendidos de perfil devem ser atualizados no Profiles no PUT."""
+    await login_as(client, db_session, role="admin_vertical", email="admext2@v.com")
+    alvo = await _nova_empresa(db_session)
+
+    # criar sem campos estendidos
+    rc = await client.post(
+        "/admin/users",
+        json={"email": "extupdate@x.com", "nome": "ExtUpdate", "role": "cliente_torq",
+              "empresa_id": str(alvo)},
+    )
+    assert rc.status_code == 201, rc.text
+    uid = rc.json()["id"]
+
+    # atualizar com campos estendidos
+    ru = await client.put(
+        f"/admin/users/{uid}",
+        json={
+            "nome": "ExtUpdate Editado",
+            "telefone": "(21) 98765-4321",
+            "bairro": "Centro",
+            "cidade": "Rio de Janeiro",
+            "uf": "RJ",
+            "grupo_acesso": "gestor",
+        },
+    )
+    assert ru.status_code == 200, ru.text
+    body = ru.json()
+    assert body["nome"] == "ExtUpdate Editado"
+    assert body["telefone"] == "(21) 98765-4321"
+    assert body["cidade"] == "Rio de Janeiro"
+    assert body["grupo_acesso"] == "gestor"
+
+    # confirmar que Profiles foi atualizado no banco
+    profile = await db_session.scalar(
+        select(Profiles).where(Profiles.email == "extupdate@x.com")
+    )
+    assert profile is not None
+    assert profile.telefone == "(21) 98765-4321"
+    assert profile.cidade == "Rio de Janeiro"
+    assert profile.grupo_acesso == "gestor"

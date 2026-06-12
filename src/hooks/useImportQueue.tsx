@@ -166,7 +166,9 @@ export function ImportQueueProvider({ children }: { children: ReactNode }) {
         try {
           // Preparar dados da empresa
           const razaoSocial = row['Razão Social']?.toString().trim();
-          const tipo = row['Tipo (sst ou lead)']?.toString().trim().toLowerCase();
+          const tipoRaw = row['Tipo (toriqcorp ou lead)']?.toString().trim().toLowerCase();
+          // Normalizar: 'toriqcorp' mapeia para 'sst' no backend
+          const tipo = tipoRaw === 'toriqcorp' ? 'sst' : tipoRaw;
 
           if (!razaoSocial || !tipo) {
             throw new Error('Razão Social e Tipo são obrigatórios');
@@ -193,26 +195,19 @@ export function ImportQueueProvider({ children }: { children: ReactNode }) {
             instagram: row['Instagram']?.toString().trim() || null,
           };
 
-          // NOTA (migração): não existe POST /empresas no backend — a inserção de
-          // empresas via importação em lote ainda não tem endpoint equivalente.
-          // Degradando: conta como erro de linha até o endpoint ser criado.
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const _empresaData = empresaData;
-          throw new Error('Endpoint POST /empresas ainda não disponível no backend — aguardar implementação');
+          const empresaInserida = await api.post<any>('/empresas', empresaData);
 
-          // Inserir contato se houver (mantido para quando o endpoint acima for criado)
-          // const contatoNome = row['Contato - Nome']?.toString().trim();
-          // if (contatoNome && empresaInserida?.id) {
-          //   await api.post<any>('/cadastros/empresa-contatos', {
-          //     empresa_id: empresaInserida.id,
-          //     nome: contatoNome,
-          //     cargo: row['Contato - Cargo']?.toString().trim() || null,
-          //     email: row['Contato - E-mail']?.toString().trim() || null,
-          //     telefone: row['Contato - Telefone']?.toString().trim() || null,
-          //     linkedin: row['Contato - LinkedIn']?.toString().trim() || null,
-          //     principal: true,
-          //   });
-          // }
+          const contatoNome = row['Contato - Nome']?.toString().trim();
+          if (contatoNome && empresaInserida?.id) {
+            await api.post<any>(`/empresas/${empresaInserida.id}/contatos`, {
+              nome: contatoNome,
+              cargo: row['Contato - Cargo']?.toString().trim() || null,
+              email: row['Contato - E-mail']?.toString().trim() || null,
+              telefone: row['Contato - Telefone']?.toString().trim() || null,
+              linkedin: row['Contato - LinkedIn']?.toString().trim() || null,
+              principal: true,
+            });
+          }
 
           successCount++;
         } catch (error: any) {

@@ -285,3 +285,143 @@ async def test_nao_autenticado_empresa_modulos(wl_client):
             json={"modulo_id": str(uuid.uuid4()), "ativo": True},
         )
     ).status_code == 401
+
+
+# ── Testes: catálogo de módulos gravável (admin_vertical) ─────────────────────
+
+async def test_admin_vertical_cria_modulo(wl_client, db_session):
+    """admin_vertical pode criar módulo via POST /white-label/modulos (201)."""
+    await login_as(
+        wl_client,
+        db_session,
+        role="admin_vertical",
+        email="admin-cria@test.com",
+    )
+
+    r = await wl_client.post(
+        "/white-label/modulos",
+        json={"nome": "FinanceiroTest", "rota": "/financeiro-test", "icone": "BarChart3"},
+    )
+    assert r.status_code == 201, r.text
+    data = r.json()
+    assert data["nome"] == "FinanceiroTest"
+    assert data["rota"] == "/financeiro-test"
+    assert data["icone"] == "BarChart3"
+    assert "id" in data
+
+    # Limpa o registro criado para não poluir outros testes
+    await db_session.execute(
+        text("DELETE FROM modulos WHERE id = :id"),
+        {"id": data["id"]},
+    )
+    await db_session.commit()
+
+
+async def test_admin_vertical_edita_modulo(wl_client, db_session):
+    """admin_vertical pode atualizar módulo via PUT /white-label/modulos/{id} (200)."""
+    await login_as(
+        wl_client,
+        db_session,
+        role="admin_vertical",
+        email="admin-edita@test.com",
+    )
+    mid_hex = await _criar_modulo(db_session)
+    mid_uuid = str(uuid.UUID(mid_hex))
+
+    r = await wl_client.put(
+        f"/white-label/modulos/{mid_uuid}",
+        json={"nome": "NomeAtualizado", "descricao": "Nova desc"},
+    )
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["nome"] == "NomeAtualizado"
+    assert data["descricao"] == "Nova desc"
+
+    # Limpa
+    await db_session.execute(
+        text("DELETE FROM modulos WHERE id = :id"),
+        {"id": mid_uuid},
+    )
+    await db_session.commit()
+
+
+async def test_admin_vertical_deleta_modulo(wl_client, db_session):
+    """admin_vertical pode deletar módulo via DELETE /white-label/modulos/{id} (204)."""
+    await login_as(
+        wl_client,
+        db_session,
+        role="admin_vertical",
+        email="admin-deleta@test.com",
+    )
+    mid_hex = await _criar_modulo(db_session)
+    mid_uuid = str(uuid.UUID(mid_hex))
+
+    r = await wl_client.delete(f"/white-label/modulos/{mid_uuid}")
+    assert r.status_code == 204, r.text
+
+    # Confirma que sumiu
+    r2 = await wl_client.get(f"/white-label/modulos/{mid_uuid}")
+    assert r2.status_code == 404
+
+
+async def test_usuario_comum_nao_pode_criar_modulo(wl_client, db_session):
+    """Usuário com role cliente_torq recebe 403 ao tentar POST /white-label/modulos."""
+    await login_as(
+        wl_client,
+        db_session,
+        role="cliente_torq",
+        email="comum-cria@test.com",
+    )
+
+    r = await wl_client.post(
+        "/white-label/modulos",
+        json={"nome": "Tentativa", "rota": "/tentativa"},
+    )
+    assert r.status_code == 403, r.text
+
+
+async def test_usuario_comum_nao_pode_editar_modulo(wl_client, db_session):
+    """Usuário com role cliente_torq recebe 403 ao tentar PUT /white-label/modulos/{id}."""
+    await login_as(
+        wl_client,
+        db_session,
+        role="cliente_torq",
+        email="comum-edita@test.com",
+    )
+    mid_hex = await _criar_modulo(db_session)
+    mid_uuid = str(uuid.UUID(mid_hex))
+
+    r = await wl_client.put(
+        f"/white-label/modulos/{mid_uuid}",
+        json={"nome": "Tentativa"},
+    )
+    assert r.status_code == 403, r.text
+
+    # Limpa
+    await db_session.execute(
+        text("DELETE FROM modulos WHERE id = :id"),
+        {"id": mid_uuid},
+    )
+    await db_session.commit()
+
+
+async def test_usuario_comum_nao_pode_deletar_modulo(wl_client, db_session):
+    """Usuário com role cliente_torq recebe 403 ao tentar DELETE /white-label/modulos/{id}."""
+    await login_as(
+        wl_client,
+        db_session,
+        role="cliente_torq",
+        email="comum-deleta@test.com",
+    )
+    mid_hex = await _criar_modulo(db_session)
+    mid_uuid = str(uuid.UUID(mid_hex))
+
+    r = await wl_client.delete(f"/white-label/modulos/{mid_uuid}")
+    assert r.status_code == 403, r.text
+
+    # Limpa
+    await db_session.execute(
+        text("DELETE FROM modulos WHERE id = :id"),
+        {"id": mid_uuid},
+    )
+    await db_session.commit()

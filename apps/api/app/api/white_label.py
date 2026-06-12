@@ -28,10 +28,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_role
 from app.core.db import get_db
 from app.models import generated as m
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas import white_label as s
 
 router = APIRouter(prefix="/white-label", tags=["white-label"])
@@ -116,6 +116,62 @@ async def obter_modulo(
     if obj is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "módulo não encontrado")
     return obj
+
+
+@router.post(
+    "/modulos",
+    response_model=s.ModuloOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def criar_modulo(
+    payload: s.ModuloIn,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.admin_vertical)),
+):
+    """Cria um módulo no catálogo global. Restrito a admin_vertical."""
+    obj = m.Modulos(
+        id=uuid.uuid4(),
+        nome=payload.nome,
+        rota=payload.rota,
+        descricao=payload.descricao,
+        icone=payload.icone,
+    )
+    db.add(obj)
+    await db.commit()
+    await db.refresh(obj)
+    return obj
+
+
+@router.put("/modulos/{id_}", response_model=s.ModuloOut)
+async def atualizar_modulo(
+    id_: uuid.UUID,
+    payload: s.ModuloUpdate,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.admin_vertical)),
+):
+    """Atualiza um módulo do catálogo global. Restrito a admin_vertical."""
+    obj = await db.scalar(select(m.Modulos).where(m.Modulos.id == id_))
+    if obj is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "módulo não encontrado")
+    for k, v in payload.model_dump(exclude_unset=True).items():
+        setattr(obj, k, v)
+    await db.commit()
+    await db.refresh(obj)
+    return obj
+
+
+@router.delete("/modulos/{id_}", status_code=status.HTTP_204_NO_CONTENT)
+async def remover_modulo(
+    id_: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(UserRole.admin_vertical)),
+):
+    """Remove um módulo do catálogo global. Restrito a admin_vertical."""
+    obj = await db.scalar(select(m.Modulos).where(m.Modulos.id == id_))
+    if obj is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "módulo não encontrado")
+    await db.delete(obj)
+    await db.commit()
 
 
 # ── EmpresasModulos ───────────────────────────────────────────────────────────

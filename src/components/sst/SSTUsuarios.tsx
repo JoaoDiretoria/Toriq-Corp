@@ -328,27 +328,43 @@ export function SSTUsuarios() {
           return;
         }
         // Atualizar usuário existente via backend
-        // NOTA (migração): o endpoint PUT /admin/users/{id} (AdminUserUpdateIn) aceita
-        // apenas nome, role e ativo. Campos extendidos de perfil (telefone, cpf, endereço,
-        // setor_id, grupo_acesso, gestor_id) ainda não têm endpoint de atualização —
-        // enviamos apenas os campos suportados; os demais ficam sem persistência até
-        // que o backend implemente um endpoint de perfil completo.
         await api.put<any>(`/admin/users/${editingUsuario.id}`, {
           nome: usuarioForm.nome.trim(),
           role: usuarioForm.role,
+          telefone: usuarioForm.telefone || undefined,
+          cpf: usuarioForm.cpf || undefined,
+          cep: usuarioForm.cep || undefined,
+          logradouro: usuarioForm.logradouro || undefined,
+          numero: usuarioForm.numero || undefined,
+          complemento: usuarioForm.complemento || undefined,
+          bairro: usuarioForm.bairro || undefined,
+          cidade: usuarioForm.cidade || undefined,
+          uf: usuarioForm.uf || undefined,
+          setor_id: usuarioForm.setor_id || undefined,
+          grupo_acesso: usuarioForm.grupo_acesso || undefined,
+          gestor_id: usuarioForm.gestor_id || undefined,
         });
         toast({ title: 'Usuário atualizado com sucesso!' });
       } else {
         // Criar novo usuário via backend (substitui Edge Function admin-create-user)
-        // NOTA (migração): AdminUserCreateIn aceita email, nome, role, password, empresa_id.
-        // Campos extendidos de perfil (telefone, cpf, endereço, setor_id, grupo_acesso,
-        // gestor_id) não fazem parte do schema de criação atual — degradados silenciosamente.
         await api.post<any>('/admin/users', {
           email: usuarioForm.email.trim(),
           password: usuarioForm.senha || undefined,
           nome: usuarioForm.nome.trim(),
           role: usuarioForm.role,
           // empresa_id omitido: backend injeta pelo token
+          telefone: usuarioForm.telefone || undefined,
+          cpf: usuarioForm.cpf || undefined,
+          cep: usuarioForm.cep || undefined,
+          logradouro: usuarioForm.logradouro || undefined,
+          numero: usuarioForm.numero || undefined,
+          complemento: usuarioForm.complemento || undefined,
+          bairro: usuarioForm.bairro || undefined,
+          cidade: usuarioForm.cidade || undefined,
+          uf: usuarioForm.uf || undefined,
+          setor_id: usuarioForm.setor_id || undefined,
+          grupo_acesso: usuarioForm.grupo_acesso || undefined,
+          gestor_id: usuarioForm.gestor_id || undefined,
         });
 
         toast({ title: 'Usuário criado com sucesso!' });

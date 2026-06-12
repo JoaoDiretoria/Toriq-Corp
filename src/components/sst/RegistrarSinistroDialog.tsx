@@ -195,33 +195,25 @@ export function RegistrarSinistroDialog({
         return;
       }
 
-      // NOTA (migração): endpoint sinistros_colaborador não existe no backend (tabela sem
-      // empresa_id; risco IDOR). O insert é degradado: registra localmente e prossegue para
-      // atualizar o resultado do colaborador. Revisar quando endpoint for criado.
-      const sinistroData: any = await api.post<any>('/treinamentos/turmas/' + turmaId + '/sinistros', {
+      const sinistroData: any = await api.post<any>('/sst/turmas/' + turmaId + '/sinistros', {
         turma_colaborador_id: colaborador.id,
-        turma_id: turmaId,
         tipo_sinistro_id: tipoSinistroId,
         acao: acao,
         descricao: descricao.trim(),
-        registrado_por: profile?.id
-      }).catch(() => ({ id: null }));
+      });
 
-      // Upload das fotos (para o storage via backend RustFS)
+      // Upload das fotos (para o storage via backend RustFS) e registro de metadados
       if (fotos.length > 0 && sinistroData?.id) {
         for (let i = 0; i < fotos.length; i++) {
           const foto = fotos[i];
           try {
             const fotoUrl = await uploadFotoToStorage(foto.file, sinistroData.id, i);
-            // NOTA (migração): endpoint sinistro_fotos não existe no backend.
-            // O upload do arquivo foi feito; o registro na tabela sinistro_fotos é degradado.
-            await api.post<any>('/treinamentos/turmas/' + turmaId + '/sinistros/' + sinistroData.id + '/fotos', {
-              sinistro_id: sinistroData.id,
+            await api.post<any>('/sst/sinistros/' + sinistroData.id + '/fotos', {
               foto_url: fotoUrl,
               descricao: foto.descricao || null,
               data_captura: foto.data_captura ? new Date(foto.data_captura).toISOString() : null,
               ordem: i
-            }).catch(() => null);
+            });
           } catch (fotoError) {
             console.error('Erro ao fazer upload da foto:', fotoError);
           }

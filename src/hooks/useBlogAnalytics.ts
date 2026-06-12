@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/integrations/api/client';
 
 const SESSION_KEY = 'blog_session_id';
-const PREFERENCES_KEY = 'blog_user_preferences';
 
 function generateSessionId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
@@ -75,68 +74,30 @@ export function useBlogAnalytics() {
 }
 
 async function updateUserPreferences(blogId: string, sessionId: string) {
-  // NOTA (migração): blog_user_preferences não tem endpoint no backend — lógica
-  // de preferências persiste localmente via localStorage para manter comportamento.
   try {
     // Buscar dados do blog para pegar categoria e tags
     const blog = await api.get<any>(`/blog/${blogId}`).catch(() => null);
 
     if (!blog) return;
 
-    // Buscar preferências existentes do localStorage
-    const prefsRaw = localStorage.getItem(PREFERENCES_KEY);
-    const existingPrefs = prefsRaw ? JSON.parse(prefsRaw) : null;
+    // Build the incremental payload for PUT /blog/preferences/{session_id}
+    const payload: {
+      categoria_ids?: string[];
+      tags_interesse?: string[];
+      blogs_visualizados?: string[];
+    } = {
+      blogs_visualizados: [blogId],
+    };
 
-    if (existingPrefs) {
-      // Atualizar preferências existentes
-      const categoriaIds = existingPrefs.categoria_ids || [];
-      const tagsInteresse = existingPrefs.tags_interesse || [];
-      const blogsVisualizados = existingPrefs.blogs_visualizados || [];
-
-      // Adicionar categoria se não existir
-      if (blog.categoria_id && !categoriaIds.includes(blog.categoria_id)) {
-        categoriaIds.push(blog.categoria_id);
-      }
-
-      // Adicionar tags se não existirem
-      if (blog.tags) {
-        blog.tags.forEach((tag: string) => {
-          if (!tagsInteresse.includes(tag)) {
-            tagsInteresse.push(tag);
-          }
-        });
-      }
-
-      // Adicionar blog visualizado
-      if (!blogsVisualizados.includes(blogId)) {
-        blogsVisualizados.push(blogId);
-      }
-
-      // Manter apenas os últimos 50 blogs visualizados
-      const recentBlogs = blogsVisualizados.slice(-50);
-
-      localStorage.setItem(
-        PREFERENCES_KEY,
-        JSON.stringify({
-          ...existingPrefs,
-          categoria_ids: categoriaIds.slice(-10), // Manter últimas 10 categorias
-          tags_interesse: tagsInteresse.slice(-30), // Manter últimas 30 tags
-          blogs_visualizados: recentBlogs,
-          ultimo_acesso: new Date().toISOString(),
-        })
-      );
-    } else {
-      // Criar novas preferências
-      localStorage.setItem(
-        PREFERENCES_KEY,
-        JSON.stringify({
-          session_id: sessionId,
-          categoria_ids: blog.categoria_id ? [blog.categoria_id] : [],
-          tags_interesse: blog.tags || [],
-          blogs_visualizados: [blogId],
-        })
-      );
+    if (blog.categoria_id) {
+      payload.categoria_ids = [blog.categoria_id];
     }
+    if (blog.tags && blog.tags.length > 0) {
+      payload.tags_interesse = blog.tags;
+    }
+
+    // Persist to backend — server merges arrays and enforces size limits
+    await api.put<any>(`/blog/preferences/${sessionId}`, payload);
   } catch (error) {
     console.error('Erro ao atualizar preferências:', error);
   }
@@ -154,58 +115,17 @@ export function useRecommendedBlogs(currentBlogId?: string) {
   const fetchRecommendations = async () => {
     setLoading(true);
     try {
-      // NOTA (migração): blog_user_preferences não tem endpoint no backend —
-      // preferências são lidas do localStorage (persistidas por updateUserPreferences).
-      const prefsRaw = localStorage.getItem(PREFERENCES_KEY);
-      const prefs = prefsRaw ? JSON.parse(prefsRaw) : null;
-
-      // Buscar posts publicados (backend já filtra status='publicado')
-      let posts: any[] = await api.get<any[]>('/blog').catch(() => [] as any[]);
-
-      // Excluir blog atual
+      // Build query params
+      const params = new URLSearchParams({ session_id: sessionId, limit: '6' });
       if (currentBlogId) {
-        posts = posts.filter((p: any) => p.id !== currentBlogId);
+        params.set('exclude_id', currentBlogId);
       }
 
-      // Excluir blogs já visualizados
-      if (prefs?.blogs_visualizados?.length > 0) {
-        posts = posts.filter((p: any) => !prefs.blogs_visualizados.includes(p.id));
-      }
+      const posts = await api
+        .get<any[]>(`/blog/recommendations?${params.toString()}`)
+        .catch(() => [] as any[]);
 
-      // Priorizar categorias de interesse
-      let prioritized = posts;
-      if (prefs?.categoria_ids?.length > 0) {
-        const preferred = posts.filter((p: any) =>
-          prefs.categoria_ids.includes(p.categoria_id)
-        );
-        prioritized = preferred.length > 0 ? preferred : posts;
-      }
-
-      // Ordenar por publicado_em desc e limitar
-      prioritized = prioritized
-        .sort((a: any, b: any) => {
-          const da = a.publicado_em ? new Date(a.publicado_em).getTime() : 0;
-          const db_ = b.publicado_em ? new Date(b.publicado_em).getTime() : 0;
-          return db_ - da;
-        })
-        .slice(0, 6);
-
-      // Se não houver resultados suficientes, buscar mais sem filtros
-      if (prioritized.length < 3) {
-        const fallback = await api.get<any[]>('/blog').catch(() => [] as any[]);
-        const filtered = fallback
-          .filter((p: any) => p.id !== (currentBlogId || ''))
-          .sort((a: any, b: any) => {
-            const da = a.publicado_em ? new Date(a.publicado_em).getTime() : 0;
-            const db_ = b.publicado_em ? new Date(b.publicado_em).getTime() : 0;
-            return db_ - da;
-          })
-          .slice(0, 6);
-
-        setRecommendations(filtered);
-      } else {
-        setRecommendations(prioritized);
-      }
+      setRecommendations(posts);
     } catch (error) {
       console.error('Erro ao buscar recomendações:', error);
     } finally {

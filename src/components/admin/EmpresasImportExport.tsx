@@ -633,15 +633,12 @@ export function EmpresasImportExport({ empresas, onImportSuccess }: EmpresasImpo
           instagram: row.data['Instagram']?.toString().trim() || null,
         };
 
-        // NOTA (migracao): POST /empresas nao existe no backend novo; degrade graciosamente
         const empresaInserida = await api.post<{ id: string }>('/empresas', empresaData as any)
-          .catch((err: any) => { throw new Error(err?.detail || err?.message || 'Endpoint de criação de empresa indisponível'); });
+          .catch((err: any) => { throw new Error(err?.detail || err?.message || 'Erro ao criar empresa'); });
 
-        // NOTA (migracao): POST /empresa_contatos nao existe no backend novo; degrade graciosamente
         const contatoNome = row.data['Contato - Nome']?.toString().trim();
         if (contatoNome && empresaInserida?.id) {
           const contatoData = {
-            empresa_id: empresaInserida.id,
             nome: contatoNome,
             cargo: row.data['Contato - Cargo']?.toString().trim() || null,
             email: row.data['Contato - E-mail']?.toString().trim() || null,
@@ -650,9 +647,8 @@ export function EmpresasImportExport({ empresas, onImportSuccess }: EmpresasImpo
             principal: true,
           };
 
-          await api.post('/empresa-contatos', contatoData as any).catch(() => {
-            // NOTA (migracao): endpoint empresa_contatos nao existe — contato ignorado
-          });
+          await api.post(`/empresas/${empresaInserida.id}/contatos`, contatoData as any)
+            .catch((err: any) => { throw new Error(err?.detail || err?.message || 'Erro ao criar contato'); });
         }
 
         results.success++;

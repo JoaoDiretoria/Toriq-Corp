@@ -33,6 +33,29 @@ from app.schemas.admin_users import (
     HierarquiaUserOut,
 )
 
+# Campos estendidos que vivem no Profiles (e não no User).
+_PROFILE_EXTENDED_FIELDS = (
+    "telefone", "cpf", "cep", "logradouro", "numero", "complemento",
+    "bairro", "cidade", "uf", "setor_id", "grupo_acesso", "gestor_id",
+    "lider_setor",
+)
+
+
+def _merge_user_profile(user: User, profile: Profiles | None) -> AdminUserOut:
+    """Constrói AdminUserOut mesclando User + Profiles estendido."""
+    data = {
+        "id": user.id,
+        "email": user.email,
+        "nome": user.nome,
+        "role": user.role,
+        "empresa_id": user.empresa_id,
+        "ativo": user.ativo,
+    }
+    if profile is not None:
+        for field in _PROFILE_EXTENDED_FIELDS:
+            data[field] = getattr(profile, field, None)
+    return AdminUserOut(**data)
+
 router = APIRouter(prefix="/admin/users", tags=["admin-users"])
 password_router = APIRouter(prefix="/auth", tags=["admin-users"])
 
@@ -123,22 +146,29 @@ async def create_user(
     db.add(user)
     await db.flush()
 
-    db.add(
-        Profiles(
-            id=user.id,
-            email=user.email,
-            nome=user.nome,
-            role=user.role.value,
-            empresa_id=user.empresa_id,
-            senha_alterada=False,
-            primeiro_acesso=True,
-            ativo=True,
-        )
+    # Montar campos estendidos de perfil a partir do payload.
+    profile_extended = {
+        field: getattr(payload, field, None)
+        for field in _PROFILE_EXTENDED_FIELDS
+    }
+    profile = Profiles(
+        id=user.id,
+        email=user.email,
+        nome=user.nome,
+        role=user.role.value,
+        empresa_id=user.empresa_id,
+        senha_alterada=False,
+        primeiro_acesso=True,
+        ativo=True,
+        **{k: v for k, v in profile_extended.items() if v is not None},
     )
+    db.add(profile)
     await db.commit()
     await db.refresh(user)
+    await db.refresh(profile)
 
-    out = AdminUserCreatedOut.model_validate(user)
+    base = _merge_user_profile(user, profile)
+    out = AdminUserCreatedOut(**base.model_dump())
     out.temp_password = temp_password
     return out
 
@@ -172,14 +202,27 @@ async def list_users(
         require_role(UserRole.admin_vertical, UserRole.cliente_torq)
     ),
     db: AsyncSession = Depends(get_db),
-) -> list[User]:
+) -> list[AdminUserOut]:
     stmt = select(User)
     if actor.role == UserRole.cliente_torq:
         stmt = stmt.where(User.empresa_id == actor.empresa_id)
     elif empresa_id is not None:
         stmt = stmt.where(User.empresa_id == empresa_id)
-    result = await db.scalars(stmt)
-    return list(result.all())
+    users = list((await db.scalars(stmt)).all())
+
+    # Buscar profiles de uma vez só para evitar N+1
+    user_ids = [u.id for u in users]
+    if user_ids:
+        profiles_result = await db.scalars(
+            select(Profiles).where(Profiles.id.in_(user_ids))
+        )
+        profile_map: dict[uuid.UUID, Profiles] = {
+            p.id: p for p in profiles_result.all()
+        }
+    else:
+        profile_map = {}
+
+    return [_merge_user_profile(u, profile_map.get(u.id)) for u in users]
 
 
 @router.put("/{user_id}", response_model=AdminUserOut)
@@ -190,7 +233,7 @@ async def update_user(
         require_role(UserRole.admin_vertical, UserRole.cliente_torq)
     ),
     db: AsyncSession = Depends(get_db),
-) -> User:
+) -> AdminUserOut:
     target = await _get_scoped_user(db, actor, user_id)
 
     if payload.role is not None:
@@ -216,10 +259,17 @@ async def update_user(
             profile.role = payload.role.value
         if payload.ativo is not None:
             profile.ativo = payload.ativo
+        # Atualizar campos estendidos no Profiles quando fornecidos no payload
+        for field in _PROFILE_EXTENDED_FIELDS:
+            value = getattr(payload, field, None)
+            if value is not None:
+                setattr(profile, field, value)
 
     await db.commit()
     await db.refresh(target)
-    return target
+    if profile is not None:
+        await db.refresh(profile)
+    return _merge_user_profile(target, profile)
 
 
 @router.post("/{user_id}/reset-password", response_model=AdminUserCreatedOut)
@@ -247,8 +297,11 @@ async def reset_password(
 
     await db.commit()
     await db.refresh(target)
+    if profile is not None:
+        await db.refresh(profile)
 
-    out = AdminUserCreatedOut.model_validate(target)
+    base = _merge_user_profile(target, profile)
+    out = AdminUserCreatedOut(**base.model_dump())
     out.temp_password = temp_password
     return out
 
@@ -260,7 +313,7 @@ async def deactivate_user(
         require_role(UserRole.admin_vertical, UserRole.cliente_torq)
     ),
     db: AsyncSession = Depends(get_db),
-) -> User:
+) -> AdminUserOut:
     if user_id == actor.id:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, "não é possível desativar a si mesmo"
@@ -274,7 +327,9 @@ async def deactivate_user(
 
     await db.commit()
     await db.refresh(target)
-    return target
+    if profile is not None:
+        await db.refresh(profile)
+    return _merge_user_profile(target, profile)
 
 
 @password_router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)

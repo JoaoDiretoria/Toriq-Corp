@@ -14,7 +14,21 @@ from typing import Optional
 from pydantic import BaseModel
 
 
-# ── Modulos (catálogo global, somente leitura) ────────────────────────────────
+# ── Modulos (catálogo global — leitura para todos; escrita só admin_vertical) ──
+
+class ModuloIn(BaseModel):
+    nome: str
+    rota: str
+    descricao: Optional[str] = None
+    icone: Optional[str] = None
+
+
+class ModuloUpdate(BaseModel):
+    nome: Optional[str] = None
+    rota: Optional[str] = None
+    descricao: Optional[str] = None
+    icone: Optional[str] = None
+
 
 class ModuloOut(BaseModel):
     id: uuid.UUID

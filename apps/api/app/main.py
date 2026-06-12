@@ -22,12 +22,14 @@ from app.api.funil import router as funil_router
 from app.api.sst_cadastros import router as sst_router
 from app.api.sst_saude import router as sst_saude_router
 from app.api.sst_epi import router as sst_epi_router
+from app.api.sinistros import router as sinistros_router
 from app.api.frota import router as frota_router
 from app.api.produtos import router as produtos_router
 from app.api.notificacoes import router as notificacoes_router
 from app.api.suporte import router as suporte_router
 from app.api.agenda import router as agenda_router
 from app.api.white_label import router as white_label_router
+from app.api.blog_reco import router as blog_reco_router
 from app.api.blog import router as blog_router
 from app.api.pesquisas import router as pesquisas_router
 from app.api.modelos import router as modelos_router
@@ -127,6 +129,8 @@ def create_app() -> FastAPI:
     app.include_router(sst_router)
     app.include_router(sst_saude_router)
     app.include_router(sst_epi_router)
+    # Sinistros (tipos global + sinistros/fotos escopados via turma→empresa)
+    app.include_router(sinistros_router)
     # Frota — veículos, motoristas, manutenções, checklists, custos, documentos, ocorrências
     app.include_router(frota_router)
     # Catálogo, notificações, suporte, agenda
@@ -139,6 +143,9 @@ def create_app() -> FastAPI:
     app.include_router(rpcs_router)
     # White Label (config/módulos da empresa) e Blog/Newsletter (conteúdo global)
     app.include_router(white_label_router)
+    # blog_reco ANTES de blog: /blog/recommendations e /blog/preferences/{sid} não
+    # podem ser capturadas por /blog/{id_}.
+    app.include_router(blog_reco_router)
     app.include_router(blog_router)
     app.include_router(pesquisas_router)
     # Onda 1 Fatia 5 — empresa/plataforma, cadastros e funil comercial
