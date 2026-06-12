@@ -1,48 +1,307 @@
-# Toriq Corp
+# TORIQ Corp — Plataforma SST + Gestão Empresarial
 
-Sistema completo de gestão empresarial com foco em SST (Segurança e Saúde no Trabalho), RH, Treinamentos e CRM.
+Plataforma multi-tenant de **SST (Saúde e Segurança do Trabalho)** + **gestão empresarial/CRM**.
+Em **migração** de uma arquitetura *frontend-direto-no-Supabase* para um **backend próprio em Python (FastAPI)**.
 
-## Stack Técnico
+> **Status (2026-06-12):** Backend novo **em produção** em `https://api.toriqcorp.com.br`
+> (125 endpoints GET validados, 350 testes verdes). Front em migração incremental e **invisível**
+> (auth + dashboard já no backend novo; demais telas em andamento).
 
-- **Frontend:** React + TypeScript + Vite
-- **UI:** shadcn/ui + Tailwind CSS
-- **Backend:** Supabase (PostgreSQL 17.6)
-- **Package Manager:** npm
-- **Containerização:** Docker
+---
 
-## Instalação
+## Índice
+1. [Arquitetura e stack](#arquitetura-e-stack)
+2. [Estrutura do repositório](#estrutura-do-repositório)
+3. [Banco de dados](#banco-de-dados)
+4. [Variáveis de ambiente](#variáveis-de-ambiente)
+5. [Como rodar localmente](#como-rodar-localmente)
+6. [Deploy (EasyPanel)](#deploy-easypanel)
+7. [Manual das APIs](#manual-das-apis)
+8. [Autenticação e multi-tenancy](#autenticação-e-multi-tenancy)
+9. [Testes](#testes)
+10. [O que falta migrar (front)](#o-que-falta-migrar-front)
+11. [O que falta para terminar o desenvolvimento](#o-que-falta-para-terminar-o-desenvolvimento)
 
-```sh
-# Clone o repositório
-git clone https://github.com/JoaoDiretoria/Toriq-Corp.git
+---
 
-# Entre no diretório
-cd Toriq-Corp
+## Arquitetura e stack
 
-# Instale as dependências
-npm install
+| Camada | Tecnologia |
+|---|---|
+| **Backend (API)** | **Python 3.12** · **FastAPI** · **SQLAlchemy 2.0** (async/asyncpg) · **Alembic** (migrations) · gerenciado por **`uv`** |
+| **Auth** | JWT próprio (access 15 min + refresh 14 dias) em **cookie httpOnly** · senhas com **argon2** (passlib) |
+| **Jobs** | **APScheduler** (in-process, no lifespan do FastAPI) — recorrências, automações de funil |
+| **Storage** | **RustFS** (S3-compatível) via **boto3** |
+| **Banco** | **PostgreSQL** (`db-toriq-corp`) |
+| **Frontend** | **Vite + React + TypeScript** + shadcn/ui · TanStack Query · React Router |
+| **Tipos front↔back** | **OpenAPI → TypeScript** (`schema.d.ts` gerado) |
+| **Infra** | **EasyPanel** na VPS (`69.62.89.220`) — Postgres + RustFS + serviços Docker |
 
-# Configure as variáveis de ambiente
-# Copie .env.example para .env e configure suas credenciais Supabase
+**Por que FastAPI:** isolamento de tenant estrutural no repositório base (substitui o RLS do Supabase),
+JWT próprio para assinar tudo, e portabilidade da lógica que hoje vive no front/triggers para Python.
 
-# Inicie o servidor de desenvolvimento
-npm run dev
+---
+
+## Estrutura do repositório
+
+```
+Toriq corp/
+├── apps/
+│   └── api/                      # 🟢 BACKEND FastAPI (Python)
+│       ├── app/
+│       │   ├── api/              # routers (endpoints) por módulo
+│       │   ├── core/             # config, db, security, tokens, storage
+│       │   ├── models/           # SQLAlchemy: generated.py (introspectado) + treinamentos.py + user.py
+│       │   ├── repositories/     # TenantRepository (isolamento por empresa_id)
+│       │   ├── schemas/          # Pydantic (entrada/saída)
+│       │   ├── services/         # lógica reutilizável (automações, white-label, notificações)
+│       │   ├── jobs/             # APScheduler (scheduler + tasks)
+│       │   └── main.py           # wiring de todos os routers
+│       ├── migrations/           # Alembic
+│       ├── tests/                # 350 testes (Postgres de teste, rollback por teste)
+│       ├── Dockerfile            # build do backend (contexto = RAIZ do repo)
+│       ├── pyproject.toml        # deps (uv)
+│       └── .env                  # credenciais (GITIGNORED)
+│
+├── src/                          # FRONTEND React/Vite (na raiz, legado em migração)
+│   ├── integrations/api/         # 🟢 client novo: client.ts, auth.ts, schema.d.ts (gerado)
+│   ├── integrations/supabase/    # legado (sai no cutover)
+│   ├── hooks/useAuth.tsx         # 🟢 auth migrado para o backend novo
+│   ├── components/ · pages/      # telas (em migração)
+│   └── lib/accessLog.ts          # 🟢 migrado
+│
+├── backend-esocial/              # backend Node/TS do eSocial (a reescrever em Python — Fatia 4)
+├── docs/superpowers/             # specs, planos, mapas da migração
+├── Dockerfile                    # build do FRONT (Vite → nginx)
+├── package.json                  # deps do front
+└── README.md
 ```
 
-## Estrutura do Projeto
+---
 
-- **234 tabelas** no banco de dados
-- **Módulos principais:** Colaboradores, Treinamentos, EPI, Financeiro, CRM, SST, Suporte
-- **RLS habilitado** em todas as tabelas
-- **Assinatura Digital ICP-Brasil** integrada
+## Banco de dados
 
-## Scripts Disponíveis
+- **Postgres** `db-toriq-corp` na VPS (`69.62.89.220:5432`, user `toriq_corp`).
+- **188 tabelas**: 175 introspectadas do schema original + **13 criadas do zero** (cluster Treinamentos,
+  instrutores, empresas_parceiras, certificados, anexos).
+- **Sem triggers/funções no banco** — toda a lógica (229 triggers + 108 funções do legado) é portada
+  para **Python** (services + jobs).
+- **Migrations:** Alembic. No deploy, o container roda **`alembic upgrade head` automaticamente** antes
+  do uvicorn. Banco de teste separado: `db-toriq-test`.
 
-- `npm run dev` - Inicia servidor de desenvolvimento (porta 8080)
-- `npm run build` - Build de produção
-- `npm run preview` - Preview do build
-- `npm run lint` - Executa linter
+```bash
+# rodar migrations manualmente (apps/api)
+uv run alembic upgrade head
+uv run alembic history          # ver histórico
+uv run alembic revision -m "x"  # nova migration
+```
 
-## Documentação
+---
 
-Consulte a pasta `docs/` para documentação técnica detalhada.
+## Variáveis de ambiente
+
+### Backend (`apps/api/.env` em dev · env vars do container em produção)
+
+| Variável | Obrigatória | Descrição | Exemplo (produção) |
+|---|---|---|---|
+| `DATABASE_URL` | ✅ | URL async do Postgres (driver `asyncpg`) | `postgresql+asyncpg://toriq_corp:SENHA@db-toriq-corp:5432/db-toriq-corp` |
+| `JWT_SECRET` | ✅ | Segredo para assinar os JWT (forte, aleatório) | `<64+ chars aleatórios>` |
+| `JWT_ACCESS_TTL_SECONDS` | — | TTL do access token (default 900 = 15 min) | `900` |
+| `JWT_REFRESH_TTL_SECONDS` | — | TTL do refresh token (default 1209600 = 14 dias) | `1209600` |
+| `COOKIE_SECURE` | — | `true` em produção (HTTPS); `false` só em dev local HTTP | `true` |
+| `DB_SSL` | — | `true` = exige TLS no Postgres; `false` em rede interna/dev | `false` |
+| `S3_ENDPOINT_URL` | p/ storage | Endpoint do RustFS (**hostname interno** em produção) | `http://rustfs:9000` |
+| `S3_ACCESS_KEY` | p/ storage | Access key do RustFS | `rustfsadmin` |
+| `S3_SECRET_KEY` | p/ storage | Secret key do RustFS | `<secret>` |
+| `S3_REGION` | — | Região S3 (default `us-east-1`) | `us-east-1` |
+| `S3_PUBLIC_BASE_URL` | — | Base pública opcional (CDN/proxy) p/ URLs de arquivo | — |
+| `CORS_ORIGINS` | ✅* | Origens permitidas (separadas por vírgula) — domínios do front | `https://toriqcorp.com.br,https://www.toriqcorp.com.br` |
+| `SUPABASE_DB_URL` | só dev | URL do Supabase original (introspecção/port de RPCs) — **não usar em produção** | — |
+| `TEST_DATABASE_URL` | só teste | Banco de teste (`db-toriq-test`) | `postgresql+asyncpg://...@.../db-toriq-test` |
+
+> ⚠️ Sem `S3_*` configurado, os endpoints `/storage/*` respondem **503** (o resto funciona normal).
+> Em produção, use **hostnames internos** (`db-toriq-corp`, `rustfs`) — mais rápido e não sai pra internet.
+> ⚠️ `.env` é **gitignored**. Cada variável em **uma linha** (`CHAVE=valor`).
+
+### Frontend (`.env` na raiz · build-args do Vite)
+
+| Variável | Descrição |
+|---|---|
+| `VITE_API_URL` | URL pública da API nova (ex.: `https://api.toriqcorp.com.br`). **Queimada no bundle em build-time** — em produção precisa apontar pra API real, senão cai no default `http://localhost:8000`. |
+| `VITE_SUPABASE_URL` / `VITE_SUPABASE_PUBLISHABLE_KEY` / `VITE_SUPABASE_PROJECT_ID` | Legado (telas ainda não migradas). Sai no cutover. |
+| `VITE_TURNSTILE_SITE_KEY` | Captcha Cloudflare Turnstile (widget de login). |
+| `VITE_ESOCIAL_BACKEND_URL` / `VITE_ESOCIAL_CONFIG_API_KEY` | Backend eSocial (Fatia 4). |
+
+---
+
+## Como rodar localmente
+
+**Pré-requisitos:** [`uv`](https://docs.astral.sh/uv/) (Python), Node 20+ (front).
+
+### Backend
+```bash
+cd apps/api
+# uv instala o Python 3.12 fixado + deps automaticamente
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
+#  → API em http://localhost:8000
+#  → Swagger interativo em http://localhost:8000/docs
+#  → OpenAPI JSON em http://localhost:8000/openapi.json
+```
+
+### Frontend
+```bash
+npm install
+npm run dev          # → http://localhost:8080
+npm run gen:api      # regenera src/integrations/api/schema.d.ts a partir do OpenAPI (API tem que estar no ar)
+npm run build        # build de produção
+```
+
+---
+
+## Deploy (EasyPanel)
+
+### Backend (serviço `toriq_corp_back`)
+- **Fonte:** Git · Ramo `main`
+- **Construção:** Dockerfile · Arquivo `apps/api/Dockerfile`
+- **Caminho de Build:** `/` (raiz) — o Dockerfile builda a partir da raiz (`COPY apps/api/...`)
+- **Porta:** `8000`
+- **Variáveis de ambiente:** ver tabela acima (com `db-toriq-corp:5432` e `rustfs:9000` internos)
+- O container roda **`alembic upgrade head && uvicorn`** no start (migrations automáticas).
+- **Domínio:** servir num **subdomínio de `toriqcorp.com.br`** (ex.: `api.toriqcorp.com.br`) para o
+  cookie httpOnly `SameSite=lax` funcionar entre front e API.
+
+### Frontend (serviço `toriq_corp_front`)
+- Dockerfile da raiz (Vite → nginx, porta 80). Build-arg `VITE_API_URL=https://api.toriqcorp.com.br`.
+
+---
+
+## Manual das APIs
+
+Base URL produção: `https://api.toriqcorp.com.br` · **Swagger completo em `/docs`**.
+Padrão REST: `GET` lista · `GET /{id}` detalha · `POST` cria · `PUT /{id}` atualiza · `DELETE /{id}` remove.
+Quase tudo exige autenticação (cookie). Payloads e respostas tipados — ver `/docs`.
+
+### 🔐 Autenticação (`/auth`)
+| Método | Rota | Descrição |
+|---|---|---|
+| POST | `/auth/login` | Login; grava cookies httpOnly (access + refresh). Body: `{email, password}` |
+| GET | `/auth/me` | Sessão atual: `{user, profile, empresa}` (restaura sessão no front) |
+| POST | `/auth/refresh` | Renova o access token a partir do refresh cookie |
+| POST | `/auth/logout` | Limpa os cookies |
+| POST | `/auth/register` | Cria usuário (⚠️ hoje aberto — virar admin-gated antes do deploy real) |
+| POST | `/auth/change-password` | Troca de senha (valida a atual) |
+| POST | `/auth/first-access-password` | Troca forçada no 1º acesso (sem a senha atual; só com `senha_alterada=false`) |
+
+### 👤 Gestão de usuários (`/admin/users`) — admin
+CRUD de usuários (admin_vertical: todas as empresas; cliente_torq: só a própria, sem criar admin).
+Soft-delete, senha temporária via `secrets`, reset de senha. `senha_hash` nunca é serializada.
+
+### 💰 Financeiro
+- `/financeiro/cadastros/*` — fornecedores, centros-custo, condições/formas de pagamento e cobrança, contas bancárias, plano de despesas/receitas.
+- `/contas-pagar` · `/contas-receber` — kanban (cards + colunas + `/mover` + `/reorder`), atividades, movimentações.
+- `/financeiro/contas` · `/financeiro/modelos-atividade` — extras.
+
+### 📊 Funil / CRM
+- `/funil` — funis, etapas, cards, etiquetas, atividades. **Motor de automações** dispara em mover/criar/ganhar/perder (gatilhos `negocio_chegar_etapa`, `negocio_ganho/perdido`).
+- `/funil/cards/*` — orçamentos, propostas, comparações; `/funil/cards/{id}/anexos`.
+- `/funil-comercial` — automações, configurações, propostas comerciais (treinamentos/SST/vertical365).
+- `/kanban/{closer,prospeccao,pos_venda,cross_selling}` — kanbans legados.
+
+### 📄 Contratos e modelos
+`/contratos` (+cláusulas, módulos; numeração `TQ-{ano}-{seq}`) · `/modelos` (templates de atividade/proposta).
+
+### 🦺 SST
+`/sst/*` (cargos, clientes, colaboradores, setores, grupos, perigos, riscos, categorias) ·
+`/sst/saude/*` (exames, profissionais de saúde/segurança) · `/sst/epi/*` (equipamentos, kits, movimentações, etc.).
+
+### 🎓 Treinamentos
+`/treinamentos/*` (catálogo, turmas + aulas, turma-colaboradores, colaboradores-treinamentos + datas, certificados) ·
+`/treinamentos/instrutores` (+datas indisponíveis) · `/treinamentos/empresas-parceiras` · `/treinamentos/reconhecimento-facial-config`.
+
+### 🚚 Frota
+`/frota/*` — veículos, motoristas, manutenções, checklists, custos, documentos, ocorrências, utilizações.
+
+### 📦 Produtos/Serviços
+`/produtos/*` — catálogo, categorias, classificações, naturezas, pacotes, planos, serviços, tipos.
+
+### 🏢 Empresa / Plataforma
+`/empresas` (+`/empresas/me`) · `/modulos` (global) · `/empresas-modulos` (+telas) ·
+`/setores/{id}/permissoes` (regra legada: lista vazia = libera tudo) · `/cadastros/*` (contatos, categorias, origens) ·
+configurações de empresa.
+
+### 🎨 White Label · 📰 Conteúdo
+`/white-label` (config) · `/white-label/me` (resolve a empresa SST pai → tema) ·
+`/blog` (+`/blog/trending`) · `/pesquisas` · newsletter — conteúdo global.
+
+### 🔔 Operação
+`/notificacoes` · `/suporte` (tickets) · `/agenda` (eventos, compartilhamentos) ·
+`/sistema/access-logs` · `/sistema/system-updates` (+`/register`) · `/sistema/import-queue` · `/sistema/cbo-ocupacoes`.
+
+### 📁 Storage (`/storage`)
+`POST /storage/{bucket}/upload` (multipart; allowlist de buckets; key prefixada por empresa; MIME validado) ·
+`DELETE /storage/{bucket}/{key}` · `GET /storage/{bucket}/{key}/url` (presigned). Isolado por tenant.
+
+### 🌐 Públicos (sem auth)
+`POST /leads-landing` · `GET /vagas` + `POST /vagas/{id}/candidaturas` · `GET /blog/trending` · health `GET /health`.
+
+---
+
+## Autenticação e multi-tenancy
+
+- **JWT em cookie httpOnly** (`access_token` em `/`, `refresh_token` em `/auth`). O front usa
+  `credentials: 'include'`; o client faz **refresh automático no 401**.
+- **RBAC** via `require_role` com 6 papéis: `admin_vertical`, `cliente_torq`, `cliente_final`,
+  `empresa_parceira`, `instrutor`.
+- **Multi-tenancy estrutural:** o `TenantRepository` filtra **toda** query por `empresa_id` (ou
+  `empresa_sst_id` em tabelas como `clientes_sst`/`empresas_parceiras`). Tabelas-filhas são escopadas
+  via o pai (JOIN validando o tenant). Substitui o RLS do Supabase.
+- **Padrões de segurança** (auditados): schemas de UPDATE sem FKs de parentesco (anti mass-assignment);
+  validação de FKs do payload contra o tenant do JWT; segredos nunca serializados.
+
+---
+
+## Testes
+
+```bash
+cd apps/api
+uv run pytest                 # 350 testes (Postgres de teste, rollback transacional por teste)
+uv run pytest tests/test_x.py # um arquivo
+```
+- Rodam contra `db-toriq-test` (mesmas tabelas reais), com rollback por teste (banco limpo sempre).
+- Cobrem CRUD, isolamento cross-tenant, regras de segurança, motor de automações, etc.
+- **Smoke test de produção:** 125/125 endpoints GET respondem 200, zero erros 5xx.
+
+---
+
+## O que falta migrar (front)
+
+A migração é **invisível** (mesma UI; só troca `supabase.from()` → client novo). Já migrado:
+auth (`useAuth`), dashboard admin, log de acesso, troca de senha.
+
+**Falta** (esteira, ~134 arquivos ainda com `supabase`): telas de Empresas, Usuários, Colaboradores,
+Comercial/Funil, Financeiro, SST, Frota, Produtos, Agenda, Suporte, Blog. Mapa completo (tabela→endpoint,
+contratos de "invisibilidade", riscos) em `docs/superpowers/migracao-front-map.md`.
+
+**Bloqueios conhecidos por tela:**
+- **Upload** (fotos/certificados/anexos) → usar `/storage` (já pronto).
+- **Realtime** (notificações, kanban, tickets) → front faz **polling** nos GETs existentes (sem backend novo).
+- **eSocial / Google Meet** → dependem da Fatia 4 (eSocial em Python).
+
+---
+
+## O que falta para terminar o desenvolvimento
+
+- [ ] **Migrar as telas restantes do front** (a maior parte — esteira invisível).
+- [ ] **Apontar o serviço de front** (`VITE_API_URL`) para `https://api.toriqcorp.com.br`.
+- [ ] **Auth avançado:** reset de senha por **email** (precisa SMTP) + validação de **captcha** Turnstile no backend.
+- [ ] **Realtime → push** (opcional; hoje resolvido com polling).
+- [ ] **Fatia 0 (pré-deploy):** tornar `/auth/register` **admin-gated** + seed do 1º admin (hoje aberto, proposital p/ testes).
+- [ ] **Fatia 4 — eSocial em Python:** reescrever `backend-esocial` (assinatura digital, SOAP gov.br).
+- [ ] **Rotação de senha do banco + TLS/exposição** (decisão: deixado para o fim do projeto).
+- [ ] **Cutover (big-bang):** desligar o Supabase, limpar legado, mover o front para `apps/web`.
+
+---
+
+### Documentação técnica adicional
+Specs, planos e mapas em **`docs/superpowers/`** (ex.: `migracao-front-map.md`,
+`automacoes-funil-semantica.md`, planos por fatia). Issue-âncora de status: **GitHub #3**.
