@@ -318,7 +318,7 @@ removido no cutover). Guia/contrato da esteira em `docs/migracao-front-esteira.m
   + seed do 1º admin (`python -m app.seed_admin`).
 - [x] **Realtime → push:** ✅ resolvido com **polling**/recarga (era opcional).
 - [ ] **Fechar as lacunas de backend** descobertas pela esteira (ver abaixo) — para
-  as telas parciais voltarem a 100%. **5 de ~13 já fechadas.**
+  as telas parciais voltarem a 100%. **10 de ~13 já fechadas.**
 - [ ] **Apontar o serviço de front** (`VITE_API_URL`) para `https://api.toriqcorp.com.br`.
 - [ ] **Validar paridade** tela-a-tela contra o backend novo.
 - [ ] **Auth avançado:** reset de senha por **email** (precisa SMTP) + validação de **captcha** Turnstile no backend.
@@ -340,19 +340,22 @@ não existem. Para fechá-las, criar no backend (`apps/api`):
 - ~~**Kanbans legados — atividades, etiquetas e vínculos card↔etiqueta**~~
   (`/kanban/{closer,prospeccao,pos-venda,cross-selling}/{cardId}/atividades`,
   `.../etiquetas`, `.../{cardId}/etiquetas`) — AdminCloser/Prospeccao/PosVenda/CrossSelling.
+- ~~**Sinistros**~~ (`/sst/tipos-sinistro`, `/sst/turmas/{id}/sinistros`,
+  `/sst/sinistros/{id}/fotos` — escopo via turma→empresa, anti-IDOR) — RegistrarSinistroDialog.
+- ~~**Campos estendidos de usuário**~~ (telefone/cpf/endereço/setor/grupo/gestor em
+  `/admin/users`, gravados no Profiles) — SSTUsuarios.
+- ~~**Catálogo de módulos gravável**~~ (`POST`/`PUT`/`DELETE /white-label/modulos`,
+  admin_vertical) — AdminModulos.
+- ~~**`blog_user_preferences` / recomendações**~~ (`/blog/recommendations`,
+  `/blog/preferences/{sid}`, público) — useBlogAnalytics.
+- ~~**Importação de empresas em lote**~~ (religada ao `POST /empresas` +
+  `/empresas/{id}/contatos`) — EmpresasImportExport, useImportQueue.
 
-**🔴 Restantes:**
-- **Sinistros:** `tipos_sinistro` / `sinistros_colaborador` / `sinistro_fotos`
-  (foram removidos por risco de IDOR — precisam de versão tenant-scoped) — RegistrarSinistroDialog.
-- **Campos estendidos de usuário** em `AdminUserCreateIn`/`UpdateIn` (telefone, cpf,
-  endereço, setor) — SSTUsuarios. *(rápido)*
-- **`blog_user_preferences`** (recomendações) — hoje degrada para "posts recentes".
-- **`normas_regulamentadoras`** (precisa criar tabela/migration) — AdminCadastrosSST.
-- **`send-newsletter`** (era edge function) — disparo de newsletter.
-- **Catálogo de módulos graváveis** (`AdminModulos` × `/white-label/modulos`,
-  hoje read-only por design) — decidir.
-- **Outras degradações pontuais** das telas de kanban: movimentações/modelos de
-  prospecção, cópia de atividades entre funis (sem endpoint de histórico).
+**🔴 Restantes (3):**
+- **`normas_regulamentadoras`** — precisa criar tabela + migration (não é só endpoint) — AdminCadastrosSST.
+- **`send-newsletter`** — precisa infra de email/SMTP (parte do "Auth avançado") — newsletter.
+- **Degradações pontuais dos kanbans:** movimentações/modelos de prospecção, cópia
+  de atividades entre funis (sem endpoint de histórico).
 
 ---
 
