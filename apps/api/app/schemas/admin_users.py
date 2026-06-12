@@ -62,3 +62,12 @@ class ChangePasswordIn(BaseModel):
 
     current_password: str
     new_password: str = Field(min_length=MIN_SENHA)
+
+
+class FirstAccessPasswordIn(BaseModel):
+    """Troca de senha forçada no primeiro acesso (sem exigir a senha atual).
+
+    Só é aceita enquanto o perfil tem ``senha_alterada=False``.
+    """
+
+    new_password: str = Field(min_length=MIN_SENHA)

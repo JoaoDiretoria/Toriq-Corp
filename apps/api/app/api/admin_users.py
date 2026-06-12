@@ -29,6 +29,7 @@ from app.schemas.admin_users import (
     AdminUserOut,
     AdminUserUpdateIn,
     ChangePasswordIn,
+    FirstAccessPasswordIn,
 )
 
 router = APIRouter(prefix="/admin/users", tags=["admin-users"])
@@ -264,6 +265,30 @@ async def change_password(
 
     user.senha_hash = hash_password(payload.new_password)
     profile = await db.get(Profiles, user.id)
+    if profile is not None:
+        profile.senha_alterada = True
+
+    await db.commit()
+
+
+@password_router.post(
+    "/first-access-password", status_code=status.HTTP_204_NO_CONTENT
+)
+async def first_access_password(
+    payload: FirstAccessPasswordIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Troca forçada no 1º acesso: define a nova senha sem exigir a atual.
+
+    O usuário já está autenticado (logou com a senha temporária); só é permitido
+    enquanto `senha_alterada` ainda é False. Depois disso, usar /change-password.
+    """
+    profile = await db.get(Profiles, user.id)
+    if profile is not None and profile.senha_alterada:
+        raise HTTPException(status.HTTP_409_CONFLICT, "senha já foi alterada")
+
+    user.senha_hash = hash_password(payload.new_password)
     if profile is not None:
         profile.senha_alterada = True
 

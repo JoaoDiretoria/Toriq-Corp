@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -55,31 +55,16 @@ export default function AlterarSenha() {
 
     setLoading(true);
     try {
-      // 1. Atualizar senha no Supabase Auth
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: novaSenha
-      });
-
-      if (updateError) throw updateError;
-
-      // 2. Atualizar senha_alterada = TRUE no profile
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ senha_alterada: true })
-        .eq('id', user!.id);
-
-      if (profileError) {
-        console.error('Erro ao atualizar profile:', profileError);
-        throw new Error('Erro ao atualizar perfil');
-      }
+      // Define a nova senha no backend (1º acesso — sem exigir a senha atual)
+      // e marca senha_alterada = true.
+      await api.post('/auth/first-access-password', { new_password: novaSenha });
 
       toast.success('Senha alterada com sucesso! Redirecionando...');
-      
-      // Fazer logout e login novamente para recarregar o profile com senha_alterada = true
-      // Isso garante que o RequireSenhaAlterada não bloqueie mais o acesso
-      await supabase.auth.signOut();
-      
-      // Pequeno delay para o toast aparecer e depois redirecionar para login
+
+      // Logout + redirect para login: força re-login com a nova senha e
+      // recarrega o profile (senha_alterada = true) para o guard liberar o acesso.
+      await signOut();
+
       setTimeout(() => {
         window.location.href = '/auth';
       }, 1000);

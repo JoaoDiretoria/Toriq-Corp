@@ -168,6 +168,19 @@ async def test_change_password(client, db_session):
     assert login.status_code == 200
 
 
+async def test_first_access_password(client, db_session):
+    """1º acesso: troca senha sem exigir a atual; 2ª vez bloqueia (409)."""
+    await login_as(client, db_session, role="cliente_torq", email="fa@e.com", password="tempSenha1")
+    r = await client.post("/auth/first-access-password", json={"new_password": "NovaForte1"})
+    assert r.status_code == 204, r.text
+    # senha_alterada virou True → nova tentativa 409
+    r2 = await client.post("/auth/first-access-password", json={"new_password": "OutraForte2"})
+    assert r2.status_code == 409
+    # loga com a nova senha
+    login = await client.post("/auth/login", json={"email": "fa@e.com", "password": "NovaForte1"})
+    assert login.status_code == 200
+
+
 async def test_lista_escopada_por_tenant(client, db_session):
     # admin_vertical cria usuário na empresa B
     await login_as(client, db_session, role="admin_vertical", email="adm6@v.com")
