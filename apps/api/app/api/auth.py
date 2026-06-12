@@ -8,8 +8,8 @@ from app.core.config import settings
 from app.core.db import get_db
 from app.core.security import hash_password, verify_password
 from app.core.tokens import TokenError, create_token, decode_token
-from app.api.deps import get_current_user
-from app.models.user import User
+from app.api.deps import get_current_user, get_optional_user
+from app.models.user import User, UserRole
 from app.schemas.auth import EmpresaOut, LoginIn, MeOut, ProfileOut, RegisterIn, UserOut
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -32,13 +32,22 @@ def _set_auth_cookies(response: Response, user: User) -> None:
                         max_age=settings.jwt_refresh_ttl_seconds, path="/auth", **common)
 
 
-# 🔴 SEGURANÇA (BLOQUEANTE DE PRÉ-DEPLOY): este endpoint aceita `role` e `empresa_id`
-# de entrada NÃO autenticada — privilege escalation. É proposital no esqueleto andante
-# (o teste de isolamento de tenant precisa criar usuários em empresas distintas).
-# ANTES DE QUALQUER DEPLOY: bootstrap do 1º admin via seed/CLI + criação admin-gated
-# (Depends(require_role(UserRole.admin_vertical))). Ver spec §3.3.
+# Cadastro gated (Fatia 0). Como o endpoint aceita `role`/`empresa_id`, deixá-lo
+# aberto é privilege escalation. Regra:
+#   - settings.open_register=False (default, prod): exige admin_vertical autenticado;
+#   - settings.open_register=True: aberto (bootstrap controlado / suíte de testes).
+# O 1º admin entra pelo seed (app.seed_admin), nunca pela rota aberta em produção.
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-async def register(payload: RegisterIn, db: AsyncSession = Depends(get_db)) -> User:
+async def register(
+    payload: RegisterIn,
+    db: AsyncSession = Depends(get_db),
+    actor: User | None = Depends(get_optional_user),
+) -> User:
+    if not settings.open_register and (actor is None or actor.role != UserRole.admin_vertical):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "cadastro restrito: requer admin_vertical autenticado",
+        )
     exists = await db.scalar(select(User).where(User.email == payload.email))
     if exists:
         raise HTTPException(status.HTTP_409_CONFLICT, "email já cadastrado")

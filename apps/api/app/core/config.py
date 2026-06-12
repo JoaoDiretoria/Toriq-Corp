@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     # roda em :8080 — daí o default. Necessário para o front enviar o cookie httpOnly.
     cors_origins: str = "http://localhost:8080,http://127.0.0.1:8080"
 
+    # Cadastro aberto. False (default, seguro) → /auth/register exige admin_vertical
+    # autenticado. O 1º admin entra via seed (app.seed_admin), não pela rota aberta.
+    # Ligue (OPEN_REGISTER=true) só em cenários de teste/bootstrap controlado.
+    open_register: bool = False
+
     # Storage S3-compatível (RustFS) — substitui o supabase.storage. Opcionais:
     # sem credenciais o StorageService levanta 503 ao ser usado.
     s3_endpoint_url: str | None = None

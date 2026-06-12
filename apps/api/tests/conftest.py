@@ -14,6 +14,17 @@ from app.main import app
 TEST_DB_URL = os.environ.get("TEST_DATABASE_URL", settings.database_url)
 
 
+@pytest.fixture(autouse=True)
+def _open_register_for_tests():
+    """A suíte cria usuários via /auth/register (helper login_as), então o
+    cadastro precisa estar aberto por padrão nos testes. O teste dedicado de
+    gating (test_register_gating) sobrescreve isto pontualmente."""
+    original = settings.open_register
+    settings.open_register = True
+    yield
+    settings.open_register = original
+
+
 @pytest.fixture(scope="session")
 async def engine():
     eng = create_async_engine(

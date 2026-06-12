@@ -28,6 +28,27 @@ async def get_current_user(
     return user
 
 
+async def get_optional_user(
+    access_token: Annotated[str | None, Cookie()] = None,
+    db: AsyncSession = Depends(get_db),
+) -> User | None:
+    """Como ``get_current_user``, mas devolve ``None`` em vez de 401 quando não
+    há sessão válida. Para rotas que mudam de comportamento conforme autenticado
+    ou não (ex.: /auth/register gated pós-bootstrap)."""
+    if not access_token:
+        return None
+    try:
+        payload = decode_token(access_token)
+    except TokenError:
+        return None
+    if payload.get("type") != "access":
+        return None
+    user = await db.get(User, uuid.UUID(payload["sub"]))
+    if not user or not user.ativo:
+        return None
+    return user
+
+
 CurrentUser = User
 
 
