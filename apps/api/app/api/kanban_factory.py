@@ -106,7 +106,7 @@ def make_kanban_router(
         if existe:
             return {"criadas": 0}
         for i, nome in enumerate(default_colunas):
-            db.add(coluna_model(empresa_id=user.empresa_id, nome=nome, ordem=i))
+            db.add(coluna_model(id=uuid.uuid4(), empresa_id=user.empresa_id, nome=nome, ordem=i))
         await db.commit()
         return {"criadas": len(default_colunas)}
 
@@ -143,7 +143,7 @@ def make_kanban_router(
         # Monta o registro de movimentação somente com os campos que o modelo possui.
         # Os 4 kanbans legados NÃO têm empresa_id nas movimentações.
         descricao = body.justificativa or "Movido para outra coluna"
-        mov_fields: dict = {"card_id": card_id}
+        mov_fields: dict = {"id": uuid.uuid4(), "card_id": card_id}
         if "empresa_id" in _mov_columns:
             mov_fields["empresa_id"] = r.empresa_id
         if "tipo" in _mov_columns:

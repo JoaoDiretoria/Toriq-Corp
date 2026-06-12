@@ -522,6 +522,256 @@ _CADASTRO_DDL = [
         coluna_destino_id CHAR(32)
     )
     """,
+    # ── Kanbans Legados ───────────────────────────────────────────────────────
+    # Closer
+    """
+    CREATE TABLE IF NOT EXISTS closer_colunas (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        nome VARCHAR(255) NOT NULL,
+        cor VARCHAR(7) DEFAULT '#6366f1',
+        ordem INTEGER DEFAULT 0,
+        meta_valor NUMERIC(15,2) DEFAULT 0,
+        created_at DATETIME DEFAULT (now()),
+        updated_at DATETIME DEFAULT (now())
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS closer_cards (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        coluna_id CHAR(32) NOT NULL REFERENCES closer_colunas(id) ON DELETE CASCADE,
+        titulo VARCHAR(255) NOT NULL,
+        descricao TEXT,
+        valor NUMERIC(15,2) DEFAULT 0,
+        responsavel_id CHAR(32),
+        contato_nome VARCHAR(255),
+        contato_email VARCHAR(255),
+        contato_telefone VARCHAR(50),
+        contato_empresa VARCHAR(255),
+        origem VARCHAR(100),
+        temperatura VARCHAR(20) DEFAULT 'morno',
+        data_contato DATE,
+        data_followup DATE,
+        ordem INTEGER DEFAULT 0,
+        arquivado BOOLEAN DEFAULT 0,
+        empresa_lead_id CHAR(32),
+        contatos TEXT,
+        created_at DATETIME DEFAULT (now()),
+        updated_at DATETIME DEFAULT (now()),
+        dados_orcamento TEXT,
+        dados_orcamento_mensal TEXT,
+        dados_custo_mensal TEXT,
+        dados_comparacao TEXT,
+        valor_a_vista NUMERIC(15,2) DEFAULT 0,
+        valor_3x NUMERIC(15,2) DEFAULT 0,
+        valor_leasing NUMERIC(15,2) DEFAULT 0,
+        forma_pagamento VARCHAR(20) DEFAULT 'a_vista',
+        dados_proposta TEXT,
+        origem_card_id CHAR(32),
+        origem_kanban VARCHAR(50)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS closer_card_movimentacoes (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        card_id CHAR(32) NOT NULL REFERENCES closer_cards(id) ON DELETE CASCADE,
+        tipo TEXT NOT NULL DEFAULT 'mudanca_coluna',
+        descricao TEXT NOT NULL,
+        usuario_id CHAR(32),
+        coluna_origem_id CHAR(32),
+        coluna_destino_id CHAR(32),
+        pagina_origem TEXT,
+        pagina_destino TEXT,
+        dados_anteriores TEXT,
+        dados_novos TEXT,
+        created_at DATETIME DEFAULT (now()),
+        kanban_origem VARCHAR(100) DEFAULT 'Closer',
+        kanban_destino VARCHAR(100) DEFAULT 'Closer'
+    )
+    """,
+    # Prospecção
+    """
+    CREATE TABLE IF NOT EXISTS prospeccao_colunas (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        nome VARCHAR(100) NOT NULL,
+        ordem INTEGER NOT NULL DEFAULT 0,
+        cor VARCHAR(20) DEFAULT '#6366f1',
+        meta_valor NUMERIC(15,2) DEFAULT 0,
+        created_at DATETIME DEFAULT (now()),
+        updated_at DATETIME DEFAULT (now())
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS prospeccao_cards (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        coluna_id CHAR(32) NOT NULL REFERENCES prospeccao_colunas(id) ON DELETE CASCADE,
+        titulo VARCHAR(255) NOT NULL,
+        ordem INTEGER NOT NULL DEFAULT 0,
+        lead_numero INTEGER NOT NULL,
+        descricao TEXT,
+        valor NUMERIC(15,2) DEFAULT 0,
+        responsavel_id CHAR(32),
+        contato_nome VARCHAR(255),
+        contato_email VARCHAR(255),
+        contato_telefone VARCHAR(50),
+        contato_empresa VARCHAR(255),
+        origem VARCHAR(100),
+        temperatura VARCHAR(20) DEFAULT 'morno',
+        data_contato DATE,
+        data_followup DATE,
+        arquivado BOOLEAN DEFAULT 0,
+        created_at DATETIME DEFAULT (now()),
+        updated_at DATETIME DEFAULT (now()),
+        empresa_lead_id CHAR(32),
+        contatos TEXT,
+        forma_pagamento VARCHAR(20) DEFAULT 'a_vista'
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS prospeccao_card_movimentacoes (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        card_id CHAR(32) NOT NULL REFERENCES prospeccao_cards(id) ON DELETE CASCADE,
+        tipo TEXT NOT NULL DEFAULT 'mudanca_coluna',
+        descricao TEXT NOT NULL,
+        usuario_id CHAR(32),
+        coluna_origem_id CHAR(32),
+        coluna_destino_id CHAR(32),
+        pagina_origem TEXT,
+        pagina_destino TEXT,
+        dados_anteriores TEXT,
+        dados_novos TEXT,
+        created_at DATETIME DEFAULT (now()),
+        kanban_origem VARCHAR(100),
+        kanban_destino VARCHAR(100)
+    )
+    """,
+    # Pós-Venda
+    """
+    CREATE TABLE IF NOT EXISTS pos_venda_colunas (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        nome VARCHAR(100) NOT NULL,
+        cor VARCHAR(20) DEFAULT '#6366f1',
+        ordem INTEGER DEFAULT 0,
+        meta_valor NUMERIC(15,2) DEFAULT 0,
+        created_at DATETIME DEFAULT (now())
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS pos_venda_cards (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        coluna_id CHAR(32) NOT NULL REFERENCES pos_venda_colunas(id) ON DELETE CASCADE,
+        titulo VARCHAR(255) NOT NULL,
+        descricao TEXT,
+        valor NUMERIC(15,2) DEFAULT 0,
+        responsavel_id CHAR(32),
+        cliente_nome VARCHAR(255),
+        cliente_email VARCHAR(255),
+        cliente_telefone VARCHAR(50),
+        cliente_empresa VARCHAR(255),
+        cliente_id CHAR(32),
+        tipo_servico VARCHAR(100),
+        data_venda DATE,
+        data_implementacao DATE,
+        data_followup DATE,
+        status_satisfacao VARCHAR(20) DEFAULT 'pendente',
+        nota_nps INTEGER,
+        ordem INTEGER DEFAULT 0,
+        arquivado BOOLEAN DEFAULT 0,
+        created_at DATETIME DEFAULT (now()),
+        created_by CHAR(32),
+        forma_pagamento VARCHAR(20),
+        valor_a_vista NUMERIC(15,2),
+        valor_3x NUMERIC(15,2),
+        valor_leasing NUMERIC(15,2),
+        temperatura VARCHAR(20) DEFAULT 'morno',
+        origem VARCHAR(100),
+        dados_orcamento TEXT,
+        dados_custo_mensal TEXT,
+        dados_comparacao TEXT,
+        dados_proposta TEXT,
+        contatos TEXT,
+        closer_card_id CHAR(32),
+        origem_card_id CHAR(32),
+        origem_kanban VARCHAR(50)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS pos_venda_card_movimentacoes (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        card_id CHAR(32) NOT NULL REFERENCES pos_venda_cards(id) ON DELETE CASCADE,
+        tipo VARCHAR(50) NOT NULL DEFAULT 'mudanca_coluna',
+        descricao TEXT NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT (now()),
+        usuario_id CHAR(32),
+        coluna_origem_id CHAR(32),
+        coluna_destino_id CHAR(32),
+        kanban_origem VARCHAR(100),
+        kanban_destino VARCHAR(100),
+        dados_anteriores TEXT,
+        dados_novos TEXT
+    )
+    """,
+    # Cross-Selling
+    """
+    CREATE TABLE IF NOT EXISTS cross_selling_colunas (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        nome TEXT NOT NULL,
+        cor TEXT NOT NULL DEFAULT '#6366f1',
+        ordem INTEGER NOT NULL DEFAULT 0,
+        created_at DATETIME NOT NULL DEFAULT (now()),
+        updated_at DATETIME NOT NULL DEFAULT (now()),
+        meta_valor NUMERIC(15,2) DEFAULT 0
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS cross_selling_cards (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        empresa_id CHAR(32) NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+        coluna_id CHAR(32) NOT NULL REFERENCES cross_selling_colunas(id) ON DELETE CASCADE,
+        titulo TEXT NOT NULL,
+        ordem INTEGER NOT NULL DEFAULT 0,
+        arquivado BOOLEAN NOT NULL DEFAULT 0,
+        created_at DATETIME NOT NULL DEFAULT (now()),
+        updated_at DATETIME NOT NULL DEFAULT (now()),
+        descricao TEXT,
+        valor NUMERIC(15,2) DEFAULT 0,
+        responsavel_id CHAR(32),
+        cliente_nome TEXT,
+        cliente_email TEXT,
+        cliente_telefone TEXT,
+        cliente_empresa TEXT,
+        cliente_id CHAR(32),
+        tipo_servico TEXT,
+        data_venda TEXT,
+        data_implementacao TEXT,
+        data_followup TEXT,
+        status_satisfacao TEXT DEFAULT 'pendente',
+        nota_nps INTEGER,
+        created_by CHAR(32)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS cross_selling_card_movimentacoes (
+        id CHAR(32) NOT NULL PRIMARY KEY,
+        card_id CHAR(32) NOT NULL REFERENCES cross_selling_cards(id) ON DELETE CASCADE,
+        tipo VARCHAR(50) NOT NULL DEFAULT 'mudanca_coluna',
+        descricao TEXT NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT (now()),
+        usuario_id CHAR(32),
+        coluna_origem_id CHAR(32),
+        coluna_destino_id CHAR(32),
+        kanban_origem VARCHAR(100),
+        kanban_destino VARCHAR(100),
+        dados_anteriores TEXT,
+        dados_novos TEXT
+    )
+    """,
 ]
 
 

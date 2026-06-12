@@ -18,6 +18,7 @@ from app.api.contratos import router as contratos_router
 from app.api.financeiro_cadastros import router as fin_cadastros_router
 from app.api.funil import router as funil_router
 from app.api.health import router as health_router
+from app.api.kanbans_legados import router as kanbans_legados_router
 from app.jobs.scheduler import build_scheduler
 
 
@@ -52,6 +53,8 @@ def create_app() -> FastAPI:
     # Contratos — rotas filhas (/{id}/clausulas, /{id}/modulos) registradas pelo
     # router único (rota específica antes de /{id} garantida pela ordem no arquivo)
     app.include_router(contratos_router)
+    # Kanbans legados — Closer, Prospecção, Pós-Venda, Cross-Selling
+    app.include_router(kanbans_legados_router)
     return app
 
 
