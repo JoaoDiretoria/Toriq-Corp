@@ -12,6 +12,7 @@ from app.models import generated as m
 from app.models.user import User
 from app.repositories.base import TenantRepository
 from app.schemas import funil as s
+from app.services import automacoes_engine as eng
 from app.services.funil import criar_configuracao_padrao
 
 # ── Repositórios tenant-scoped ────────────────────────────────────────────────
@@ -297,6 +298,11 @@ async def mover_card(
             etapa_destino_id=body.etapa_destino_id,
         )
     )
+    # Automações: cancela agendamentos da etapa origem e dispara "chegou na etapa".
+    await eng.cancelar_agendamentos_pendentes(db, card_id, etapa_origem_id)
+    await eng.executar_automacoes_evento(
+        db, card_id, "negocio_chegar_etapa", empresa_id=user.empresa_id
+    )
     await db.commit()
     await db.refresh(card)
     return card
@@ -352,6 +358,11 @@ async def criar_card(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "etapa não encontrada no funil")
     card = m.FunilCards(id=uuid.uuid4(), **payload.model_dump())
     db.add(card)
+    await db.flush()
+    # Automações: card criado já na etapa → dispara "chegou na etapa".
+    await eng.executar_automacoes_evento(
+        db, card.id, "negocio_chegar_etapa", empresa_id=user.empresa_id
+    )
     await db.commit()
     await db.refresh(card)
     return card
@@ -378,8 +389,14 @@ async def atualizar_card(
     if user.empresa_id is None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "usuário sem empresa")
     card = await _get_card_scoped(card_id, db, user.empresa_id)
+    status_antigo = getattr(card, "status_negocio", None)
     for k, v in payload.model_dump(exclude_unset=True).items():
         setattr(card, k, v)
+    novo_status = getattr(card, "status_negocio", None)
+    if novo_status != status_antigo and novo_status in ("ganho", "perdido"):
+        await eng.executar_automacoes_evento(
+            db, card_id, f"negocio_{novo_status}", empresa_id=user.empresa_id
+        )
     await db.commit()
     await db.refresh(card)
     return card

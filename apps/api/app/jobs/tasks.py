@@ -6,3 +6,21 @@ async def job_contas_recorrentes() -> None:
 async def job_automacao_colunas() -> None:
     from app.services.automacao_colunas import aplicar_automacao_colunas_todas_empresas
     await aplicar_automacao_colunas_todas_empresas()
+
+
+async def job_automacoes_agendadas() -> None:
+    """Processa as automações de funil agendadas que venceram (~1min)."""
+    from app.core.db import SessionLocal
+    from app.services.automacoes_engine import processar_agendadas
+    async with SessionLocal() as db:
+        await processar_agendadas(db)
+        await db.commit()
+
+
+async def job_automacoes_negocio_parado() -> None:
+    """Cria atividades para cards parados além do limite (diário)."""
+    from app.core.db import SessionLocal
+    from app.services.automacoes_engine import processar_negocio_parado
+    async with SessionLocal() as db:
+        await processar_negocio_parado(db)
+        await db.commit()
