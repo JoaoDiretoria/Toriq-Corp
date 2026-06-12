@@ -18,6 +18,9 @@ from app.api.contratos import router as contratos_router
 from app.api.financeiro_cadastros import router as fin_cadastros_router
 from app.api.funil import router as funil_router
 from app.api.sst_cadastros import router as sst_router
+from app.api.sst_saude import router as sst_saude_router
+from app.api.sst_epi import router as sst_epi_router
+from app.api.frota import router as frota_router
 from app.api.health import router as health_router
 from app.api.kanbans_legados import router as kanbans_legados_router
 from app.jobs.scheduler import build_scheduler
@@ -56,8 +59,12 @@ def create_app() -> FastAPI:
     app.include_router(contratos_router)
     # Kanbans legados — Closer, Prospecção, Pós-Venda, Cross-Selling
     app.include_router(kanbans_legados_router)
-    # SST — cadastros base
+    # SST — cadastros base + saúde ocupacional + EPI/equipamentos
     app.include_router(sst_router)
+    app.include_router(sst_saude_router)
+    app.include_router(sst_epi_router)
+    # Frota — veículos, motoristas, manutenções, checklists, custos, documentos, ocorrências
+    app.include_router(frota_router)
     return app
 
 
