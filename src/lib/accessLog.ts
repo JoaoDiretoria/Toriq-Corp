@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 
 interface LogData {
   acao: 'login' | 'logout' | 'view' | 'create' | 'update' | 'delete';
@@ -56,37 +56,33 @@ const getPublicIP = async (): Promise<string | null> => {
   }
 };
 
-// Função principal para registrar log - NÃO usa hooks, pode ser chamada de qualquer lugar
+// Função principal para registrar log - NÃO usa hooks, pode ser chamada de qualquer lugar.
+// Backend novo: identidade (empresa_id/user_id/email/nome) é derivada do usuário
+// autenticado; os primeiros parâmetros são mantidos só por compatibilidade de assinatura.
 export const logAccess = async (
-  empresaId: string,
-  userId: string | null,
-  userEmail: string | null,
-  userNome: string | null,
+  _empresaId: string,
+  _userId: string | null,
+  _userEmail: string | null,
+  _userNome: string | null,
   data: LogData
 ): Promise<void> => {
   try {
     const ip = await getPublicIP();
-    
-    await (supabase as any)
-      .from('access_logs')
-      .insert({
-        empresa_id: empresaId,
-        user_id: userId,
-        user_email: userEmail,
-        user_nome: userNome,
-        acao: data.acao,
-        modulo: data.modulo || null,
-        pagina: data.pagina || null,
-        descricao: data.descricao || null,
-        ip_address: ip,
-        user_agent: navigator.userAgent,
-        device_type: getDeviceType(),
-        browser: getBrowser(),
-        os: getOS(),
-        metadata: data.metadata || {}
-      });
+
+    await api.post('/sistema/access-logs', {
+      acao: data.acao,
+      modulo: data.modulo || null,
+      pagina: data.pagina || null,
+      descricao: data.descricao || null,
+      ip_address: ip,
+      user_agent: navigator.userAgent,
+      device_type: getDeviceType(),
+      browser: getBrowser(),
+      os: getOS(),
+      metadata_: data.metadata || {},
+    });
   } catch (error) {
-    console.error('Erro ao registrar log de acesso:', error);
+    // Best-effort: log de acesso nunca deve quebrar o fluxo do usuário.
   }
 };
 

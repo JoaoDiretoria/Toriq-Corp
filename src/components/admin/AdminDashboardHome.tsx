@@ -16,7 +16,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 
 interface KPIData {
@@ -59,50 +59,38 @@ export function AdminDashboardHome({ onNavigate }: AdminDashboardHomeProps) {
 
   const fetchDashboardData = async () => {
     try {
-      // Buscar total de empresas
-      const { count: empresasCount } = await supabase
-        .from('empresas')
-        .select('*', { count: 'exact', head: true });
+      // Backend novo: empresas e usuários (admin_vertical vê todos), cards e
+      // colunas do kanban de prospecção para calcular os leads.
+      const [empresas, usuarios, cards, colunas] = await Promise.all([
+        api.get<any[]>('/empresas').catch(() => [] as any[]),
+        api.get<any[]>('/admin/users').catch(() => [] as any[]),
+        api.get<any[]>('/kanban/prospeccao').catch(() => [] as any[]),
+        api.get<any[]>('/kanban/prospeccao/colunas').catch(() => [] as any[]),
+      ]);
 
-      // Buscar total de usuários
-      const { count: usuariosCount } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true });
-
-      // Buscar leads (cards de prospecção)
-      const { data: cards } = await supabase
-        .from('prospeccao_cards')
-        .select('*, coluna:prospeccao_colunas(nome, ordem)');
-
-      const leadsNovos = cards?.filter(c => c.coluna?.ordem === 0).length || 0;
-      const leadsEmProgresso = cards?.filter(c => c.coluna?.ordem > 0 && c.coluna?.ordem < 4).length || 0;
-
-      // Buscar atividades de hoje
-      const hoje = new Date();
-      hoje.setHours(0, 0, 0, 0);
-      
-      const { count: atividadesCount } = await supabase
-        .from('prospeccao_atividades')
-        .select('*', { count: 'exact', head: true })
-        .gte('created_at', hoje.toISOString());
-
-      // Buscar atividades recentes
-      const { data: atividadesRecentes } = await supabase
-        .from('prospeccao_atividades')
-        .select('id, tipo, descricao, created_at, usuario:profiles(nome)')
-        .order('created_at', { ascending: false })
-        .limit(5);
+      const ordemPorColuna = new Map<string, number>(
+        (colunas || []).map((c: any) => [c.id, c.ordem])
+      );
+      const leadsNovos = (cards || []).filter(
+        (c: any) => ordemPorColuna.get(c.coluna_id) === 0
+      ).length;
+      const leadsEmProgresso = (cards || []).filter((c: any) => {
+        const ord = ordemPorColuna.get(c.coluna_id);
+        return ord !== undefined && ord > 0 && ord < 4;
+      }).length;
 
       setKpis({
-        totalEmpresas: empresasCount || 0,
-        totalUsuarios: usuariosCount || 0,
+        totalEmpresas: empresas?.length || 0,
+        totalUsuarios: usuarios?.length || 0,
         leadsNovos,
         leadsEmProgresso,
         conversaoMes: 12, // Placeholder - calcular baseado em dados reais
-        atividadesHoje: atividadesCount || 0,
+        atividadesHoje: 0,
       });
 
-      setAtividades(atividadesRecentes || []);
+      // Atividades recentes do kanban legado ainda não têm endpoint dedicado —
+      // mantém vazio (mesma exibição "Nenhuma atividade recente").
+      setAtividades([]);
     } catch (error) {
       console.error('Erro ao buscar dados do dashboard:', error);
     } finally {
