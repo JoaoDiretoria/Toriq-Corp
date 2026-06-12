@@ -289,3 +289,12 @@ async def test_requer_auth(notif_client):
         )
     ).status_code == 401
     assert (await notif_client.delete(f"/notificacoes/{dummy_id}")).status_code == 401
+
+
+async def test_config_patch_requer_admin(notif_client, db_session):
+    """A config global de notificações só pode ser alterada por admin_vertical."""
+    await _login(notif_client, db_session, email="naoadmin@n.com")  # cliente_torq
+    r = await notif_client.patch(
+        "/notificacoes/config/contas_pagar", json={"ativo": False}
+    )
+    assert r.status_code == 403

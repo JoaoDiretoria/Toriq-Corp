@@ -17,10 +17,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_role
 from app.core.db import get_db
 from app.models import generated as m
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.repositories.base import TenantRepository
 from app.schemas import notificacoes as s
 
@@ -71,9 +71,10 @@ async def obter_config(
 async def atualizar_config(
     tabela: str,
     payload: s.NotificacaoConfigUpdateIn,
-    _user: User = Depends(get_current_user),
+    _admin: User = Depends(require_role(UserRole.admin_vertical)),
     db: AsyncSession = Depends(get_db),
 ):
+    # NotificacaoConfig é uma tabela GLOBAL (afeta todos os tenants) — só admin_vertical edita.
     cfg = await db.get(m.NotificacaoConfig, tabela)
     if cfg is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "configuração não encontrada")
