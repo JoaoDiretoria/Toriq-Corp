@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -65,26 +65,19 @@ export function ClienteCargos() {
     queryKey: ['cargos', profile?.empresa_id],
     queryFn: async () => {
       if (!profile?.empresa_id) return [];
-      const { data, error } = await supabase
-        .from('cargos')
-        .select('*')
-        .eq('empresa_id', profile.empresa_id)
-        .order('nome');
-      if (error) throw error;
-      return data as Cargo[];
+      const data = await api.get<any[]>('/sst/cargos').catch(() => [] as any[]);
+      return (data as Cargo[]).sort((a, b) => a.nome.localeCompare(b.nome));
     },
     enabled: !!profile?.empresa_id,
   });
 
   const createMutation = useMutation({
     mutationFn: async (data: { nome: string; descricao: string; ativo: boolean }) => {
-      const { error } = await supabase.from('cargos').insert({
-        empresa_id: profile?.empresa_id,
+      await api.post<any>('/sst/cargos', {
         nome: data.nome,
         descricao: data.descricao || null,
         ativo: data.ativo,
       });
-      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cargos'] });
@@ -92,7 +85,7 @@ export function ClienteCargos() {
       handleCloseDialog();
     },
     onError: (error: any) => {
-      if (error.code === '23505') {
+      if (error.status === 409 || error.status === 400) {
         toast({ title: 'Já existe um cargo com este nome', variant: 'destructive' });
       } else {
         toast({ title: 'Erro ao criar cargo', variant: 'destructive' });
@@ -102,15 +95,11 @@ export function ClienteCargos() {
 
   const updateMutation = useMutation({
     mutationFn: async (data: { id: string; nome: string; descricao: string; ativo: boolean }) => {
-      const { error } = await supabase
-        .from('cargos')
-        .update({
-          nome: data.nome,
-          descricao: data.descricao || null,
-          ativo: data.ativo,
-        })
-        .eq('id', data.id);
-      if (error) throw error;
+      await api.put<any>(`/sst/cargos/${data.id}`, {
+        nome: data.nome,
+        descricao: data.descricao || null,
+        ativo: data.ativo,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cargos'] });
@@ -118,7 +107,7 @@ export function ClienteCargos() {
       handleCloseDialog();
     },
     onError: (error: any) => {
-      if (error.code === '23505') {
+      if (error.status === 409 || error.status === 400) {
         toast({ title: 'Já existe um cargo com este nome', variant: 'destructive' });
       } else {
         toast({ title: 'Erro ao atualizar cargo', variant: 'destructive' });
@@ -128,8 +117,7 @@ export function ClienteCargos() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('cargos').delete().eq('id', id);
-      if (error) throw error;
+      await api.del<any>(`/sst/cargos/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cargos'] });

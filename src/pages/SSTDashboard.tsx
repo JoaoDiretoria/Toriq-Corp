@@ -40,7 +40,7 @@ import { ToriqCorpFinanceiroDashboard } from '@/components/sst/toriq-corp/ToriqC
 import { ToriqCorpContasReceber } from '@/components/sst/toriq-corp/ToriqCorpContasReceber';
 import { SSTContasPagar } from '@/components/sst/toriq-corp/SSTContasPagar';
 import { SSTFluxoCaixa } from '@/components/sst/toriq-corp/SSTFluxoCaixa';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Agenda } from '@/components/shared/Agenda';
 
 interface Modulo {
@@ -147,27 +147,26 @@ const SSTDashboard = () => {
       if (!empresaIdEfetivo) return;
 
       try {
-        const { data, error } = await supabase
-          .from('empresas_modulos')
-          .select(`
-            modulo_id,
-            modulos (
-              id,
-              nome,
-              icone,
-              rota
-            )
-          `)
-          .eq('empresa_id', empresaIdEfetivo)
-          .eq('ativo', true);
+        const [empresaModulos, catalogoModulos] = await Promise.all([
+          api.get<any[]>('/white-label/empresa-modulos').catch(() => [] as any[]),
+          api.get<any[]>('/white-label/modulos').catch(() => [] as any[]),
+        ]);
 
-        if (error) throw error;
+        // Filtrar somente os vínculos ativos (backend retorna todos)
+        const ativos = (empresaModulos || []).filter((em: any) => em.ativo === true);
 
-        const modulos = data
-          ?.map((item: any) => item.modulos)
-          .filter((m: any) => m !== null) as Modulo[];
+        // Montar mapa de id -> modulo do catálogo
+        const catalogoMap: Record<string, any> = {};
+        for (const mod of catalogoModulos || []) {
+          catalogoMap[mod.id] = mod;
+        }
 
-        setModulosAtivos(modulos || []);
+        // Join client-side: produz a mesma forma Modulo[] esperada pela UI
+        const modulos: Modulo[] = ativos
+          .map((em: any) => catalogoMap[em.modulo_id])
+          .filter((m: any) => m != null) as Modulo[];
+
+        setModulosAtivos(modulos);
       } catch (error) {
         console.error('Erro ao buscar módulos:', error);
       } finally {
@@ -186,14 +185,12 @@ const SSTDashboard = () => {
       if (!empresaIdEfetivo) return;
 
       try {
-        const { data, error } = await (supabase as any)
-          .from('funis')
-          .select('id, nome, setor_id, setor:setores(nome)')
-          .eq('empresa_id', empresaIdEfetivo)
-          .eq('ativo', true);
-
-        if (error) throw error;
-        setFunis(data || []);
+        const data = await api.get<any[]>('/funil/funis').catch(() => [] as any[]);
+        // Filtrar somente funis ativos (backend escopa por empresa via token)
+        // Nota: setor.nome não é retornado pelo endpoint; getFunilBackSection
+        // usa setor_id diretamente como fallback, mantendo comportamento correto.
+        const ativos = (data || []).filter((f: any) => f.ativo === true);
+        setFunis(ativos);
       } catch (error) {
         console.error('Erro ao buscar funis:', error);
       }
@@ -209,18 +206,12 @@ const SSTDashboard = () => {
     if (!empresaIdEfetivo) return;
 
     try {
-      const { data, error } = await (supabase as any)
-        .from('setores')
-        .select('id, nome, descricao')
-        .eq('empresa_id', empresaIdEfetivo)
-        .eq('ativo', true);
-
-      if (error) throw error;
-      
+      const data = await api.get<any[]>('/sst/setores').catch(() => [] as any[]);
+      // Filtrar somente setores ativos (backend retorna todos, escopa por empresa via token)
       // Filtrar todos os setores exceto Financeiro (que tem página dedicada)
-      const setoresDinamicos = (data || []).filter((s: Setor) => 
-        s.nome.toLowerCase() !== 'financeiro'
-      );
+      const setoresDinamicos = (data || [])
+        .filter((s: any) => s.ativo === true)
+        .filter((s: Setor) => s.nome.toLowerCase() !== 'financeiro');
       setSetoresPersonalizados(setoresDinamicos);
     } catch (error) {
       console.error('Erro ao buscar setores:', error);

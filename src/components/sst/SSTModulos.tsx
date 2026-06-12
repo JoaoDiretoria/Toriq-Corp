@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
 import { useToast } from '@/hooks/use-toast';
@@ -30,33 +30,28 @@ export function SSTModulos() {
     const fetchModulos = async () => {
       if (!empresaId) return;
 
-      const { data, error } = await supabase
-        .from('empresas_modulos')
-        .select(`
-          modulo_id,
-          ativo,
-          modulos (
-            id,
-            nome,
-            descricao,
-            icone,
-            rota
-          )
-        `)
-        .eq('empresa_id', empresaId)
-        .eq('ativo', true);
+      try {
+        const [empresaModulos, catalogoModulos] = await Promise.all([
+          api.get<any[]>('/white-label/empresa-modulos').catch(() => [] as any[]),
+          api.get<any[]>('/white-label/modulos').catch(() => [] as any[]),
+        ]);
 
-      if (error) {
+        // Filtra somente os ativos (backend devolve todos) e junta com o catálogo
+        const modulosAtivos: Modulo[] = empresaModulos
+          .filter((em: any) => em.ativo === true)
+          .map((em: any) => {
+            const modulo = catalogoModulos.find((m: any) => m.id === em.modulo_id);
+            return modulo ? (modulo as Modulo) : null;
+          })
+          .filter(Boolean) as Modulo[];
+
+        setModulos(modulosAtivos);
+      } catch {
         toast({
           title: "Erro ao carregar módulos",
-          description: error.message,
+          description: "Não foi possível carregar os módulos ativos.",
           variant: "destructive",
         });
-      } else {
-        const modulosAtivos = data
-          ?.filter(item => item.modulos)
-          .map(item => item.modulos as Modulo) || [];
-        setModulos(modulosAtivos);
       }
       setLoading(false);
     };

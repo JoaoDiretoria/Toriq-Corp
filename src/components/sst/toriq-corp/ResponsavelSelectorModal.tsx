@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Search, User, Check, ChevronLeft, ChevronRight, X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 
 interface Responsavel {
   id: string;
@@ -77,40 +77,55 @@ export function ResponsavelSelectorModal({
 
     setLoading(true);
     try {
-      const from = (currentPage - 1) * ITEMS_PER_PAGE;
-      const to = from + ITEMS_PER_PAGE - 1;
+      // Busca usuários e hierarquia em paralelo para obter grupo_acesso
+      const [usuarios, hierarquia] = await Promise.all([
+        api.get<any[]>('/admin/users').catch(() => [] as any[]),
+        api.get<any[]>('/admin/users/hierarquia').catch(() => [] as any[]),
+      ]);
 
-      let query = (supabase as any)
-        .from('profiles')
-        .select('id, nome, email, role, grupo_acesso', { count: 'exact' })
-        .eq('empresa_id', empresaId)
-        .eq('role', 'cliente_torq') // Apenas usuários da empresa (não instrutores/parceiros/clientes)
-        .order('nome', { ascending: true });
+      // Mapa de grupo_acesso por id (da hierarquia)
+      const grupoMap: Record<string, string | null> = {};
+      for (const h of hierarquia) {
+        grupoMap[h.id] = h.grupo_acesso ?? null;
+      }
+
+      // Filtros client-side (o backend já escopa por empresa_id do token)
+      // Apenas usuários da empresa (não instrutores/parceiros/clientes)
+      let lista: any[] = (usuarios || []).filter((u: any) => u.role === 'cliente_torq');
 
       // Filtrar por usuários visíveis (baseado na hierarquia)
       // Se não é administrador e tem lista de usuários visíveis, filtrar
       if (!isAdministrador && usuariosVisiveis.length > 0) {
-        query = query.in('id', usuariosVisiveis);
+        const visiveisSet = new Set(usuariosVisiveis);
+        lista = lista.filter((u: any) => visiveisSet.has(u.id));
       }
 
       // Aplicar filtro de busca
       if (debouncedSearch.trim()) {
-        const termo = debouncedSearch.trim();
-        query = query.or(`nome.ilike.%${termo}%,email.ilike.%${termo}%`);
+        const termo = debouncedSearch.trim().toLowerCase();
+        lista = lista.filter((u: any) =>
+          (u.nome && u.nome.toLowerCase().includes(termo)) ||
+          (u.email && u.email.toLowerCase().includes(termo))
+        );
       }
 
-      // Aplicar paginação
-      query = query.range(from, to);
+      // Ordenar por nome
+      lista.sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
 
-      const { data, error, count } = await query;
+      // Enriquecer com grupo_acesso da hierarquia
+      lista = lista.map((u: any) => ({
+        ...u,
+        grupo_acesso: grupoMap[u.id] ?? u.grupo_acesso ?? null,
+      }));
 
-      if (error) {
-        console.error('Erro ao buscar responsáveis:', error);
-        return;
-      }
+      const total = lista.length;
 
-      setResponsaveis(data || []);
-      setTotalCount(count || 0);
+      // Aplicar paginação client-side
+      const from = (currentPage - 1) * ITEMS_PER_PAGE;
+      const paginated = lista.slice(from, from + ITEMS_PER_PAGE);
+
+      setResponsaveis(paginated);
+      setTotalCount(total);
     } catch (err) {
       console.error('Erro ao buscar responsáveis:', err);
     } finally {
@@ -127,13 +142,10 @@ export function ResponsavelSelectorModal({
   useEffect(() => {
     if (selectedResponsavelId && !displayNome) {
       (async () => {
-        const { data } = await (supabase as any)
-          .from('profiles')
-          .select('nome')
-          .eq('id', selectedResponsavelId)
-          .single();
-        if (data) {
-          setDisplayNome(data.nome);
+        const lista = await api.get<any[]>('/admin/users').catch(() => [] as any[]);
+        const found = (lista || []).find((u: any) => u.id === selectedResponsavelId);
+        if (found) {
+          setDisplayNome(found.nome);
         }
       })();
     }

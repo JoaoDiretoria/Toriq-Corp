@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,10 +13,10 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { 
-  ArrowLeft, 
-  Plus, 
-  Trash2, 
+import {
+  ArrowLeft,
+  Plus,
+  Trash2,
   GripVertical,
   Save,
   Eye
@@ -62,7 +62,7 @@ export function AdminPesquisaEditor({ pesquisa, onBack }: AdminPesquisaEditorPro
   const [loading, setLoading] = useState(false);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [autores, setAutores] = useState<Autor[]>([]);
-  
+
   // Form state
   const [titulo, setTitulo] = useState(pesquisa?.titulo || '');
   const [slug, setSlug] = useState(pesquisa?.slug || '');
@@ -86,18 +86,12 @@ export function AdminPesquisaEditor({ pesquisa, onBack }: AdminPesquisaEditorPro
   }, [pesquisa]);
 
   const fetchCategorias = async () => {
-    const { data } = await (supabase as any)
-      .from('blog_categorias')
-      .select('id, nome, cor')
-      .order('nome');
+    const data = await api.get<any[]>('/blog/categorias').catch(() => [] as any[]);
     setCategorias(data || []);
   };
 
   const fetchAutores = async () => {
-    const { data } = await (supabase as any)
-      .from('blog_autores')
-      .select('id, nome, sobrenome')
-      .order('nome');
+    const data = await api.get<any[]>('/blog/autores').catch(() => [] as any[]);
     setAutores(data || []);
   };
 
@@ -105,11 +99,7 @@ export function AdminPesquisaEditor({ pesquisa, onBack }: AdminPesquisaEditorPro
     if (!pesquisa) return;
 
     // Buscar dados completos da pesquisa
-    const { data: pesquisaData } = await (supabase as any)
-      .from('pesquisas_opiniao')
-      .select('*')
-      .eq('id', pesquisa.id)
-      .single();
+    const pesquisaData = await api.get<any>(`/pesquisas/${pesquisa.id}`).catch(() => null);
 
     if (pesquisaData) {
       setCategoriaId(pesquisaData.categoria_id || '');
@@ -119,11 +109,7 @@ export function AdminPesquisaEditor({ pesquisa, onBack }: AdminPesquisaEditorPro
     }
 
     // Buscar opções
-    const { data: opcoesData } = await (supabase as any)
-      .from('pesquisas_opcoes')
-      .select('*')
-      .eq('pesquisa_id', pesquisa.id)
-      .order('ordem');
+    const opcoesData = await api.get<any[]>(`/pesquisas/${pesquisa.id}/opcoes`).catch(() => [] as any[]);
 
     if (opcoesData && opcoesData.length > 0) {
       setOpcoes(opcoesData);
@@ -134,7 +120,7 @@ export function AdminPesquisaEditor({ pesquisa, onBack }: AdminPesquisaEditorPro
     return text
       .toLowerCase()
       .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[̀-ͯ]/g, '')
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/(^-|-$)/g, '');
   };
@@ -178,7 +164,7 @@ export function AdminPesquisaEditor({ pesquisa, onBack }: AdminPesquisaEditorPro
 
     // Determinar opções baseado no tipo
     let opcoesParaSalvar: { texto: string; ordem: number }[] = [];
-    
+
     if (tipo === 'sim_nao') {
       opcoesParaSalvar = [
         { texto: 'Sim', ordem: 0 },
@@ -193,7 +179,7 @@ export function AdminPesquisaEditor({ pesquisa, onBack }: AdminPesquisaEditorPro
       opcoesParaSalvar = opcoes
         .filter(o => o.texto.trim())
         .map((o, i) => ({ texto: o.texto, ordem: i }));
-      
+
       if (opcoesParaSalvar.length < 2) {
         toast.error('A pesquisa deve ter pelo menos 2 opções');
         return;
@@ -203,7 +189,7 @@ export function AdminPesquisaEditor({ pesquisa, onBack }: AdminPesquisaEditorPro
 
     setLoading(true);
     try {
-      const pesquisaData = {
+      const pesquisaPayload = {
         titulo,
         slug,
         descricao,
@@ -218,51 +204,39 @@ export function AdminPesquisaEditor({ pesquisa, onBack }: AdminPesquisaEditorPro
 
       if (pesquisa) {
         // Atualizar pesquisa existente
-        const { error } = await (supabase as any)
-          .from('pesquisas_opiniao')
-          .update(pesquisaData)
-          .eq('id', pesquisa.id);
-
-        if (error) throw error;
+        await api.put<any>(`/pesquisas/${pesquisa.id}`, pesquisaPayload);
       } else {
         // Criar nova pesquisa
-        const { data, error } = await (supabase as any)
-          .from('pesquisas_opiniao')
-          .insert(pesquisaData)
-          .select()
-          .single();
-
-        if (error) throw error;
+        const data = await api.post<any>('/pesquisas', pesquisaPayload);
         pesquisaId = data.id;
       }
 
       // Gerenciar opções
       if (tipo !== 'texto_livre' && opcoesParaSalvar.length > 0) {
-        // Deletar opções antigas
-        await (supabase as any)
-          .from('pesquisas_opcoes')
-          .delete()
-          .eq('pesquisa_id', pesquisaId);
+        // Deletar opções antigas (buscar IDs atuais e remover cada uma)
+        const opcoesAtuais = await api.get<any[]>(`/pesquisas/${pesquisaId}/opcoes`).catch(() => [] as any[]);
+        await Promise.all(
+          (opcoesAtuais || []).map((op: any) =>
+            api.del(`/pesquisas/${pesquisaId}/opcoes/${op.id}`).catch(() => null)
+          )
+        );
 
         // Inserir novas opções
-        const opcoesData = opcoesParaSalvar.map((o) => ({
-          pesquisa_id: pesquisaId,
-          texto: o.texto,
-          ordem: o.ordem,
-        }));
-
-        const { error: opcoesError } = await (supabase as any)
-          .from('pesquisas_opcoes')
-          .insert(opcoesData);
-
-        if (opcoesError) throw opcoesError;
+        await Promise.all(
+          opcoesParaSalvar.map((o) =>
+            api.post<any>(`/pesquisas/${pesquisaId}/opcoes`, {
+              texto: o.texto,
+              ordem: o.ordem,
+            })
+          )
+        );
       }
 
       toast.success(pesquisa ? 'Pesquisa atualizada!' : 'Pesquisa criada!');
       onBack();
     } catch (error: any) {
       console.error('Erro ao salvar pesquisa:', error);
-      if (error.code === '23505') {
+      if (error?.status === 409 || error?.detail?.includes?.('23505')) {
         toast.error('Já existe uma pesquisa com este slug');
       } else {
         toast.error('Erro ao salvar pesquisa');
@@ -467,8 +441,8 @@ export function AdminPesquisaEditor({ pesquisa, onBack }: AdminPesquisaEditorPro
                     Permite selecionar várias opções
                   </p>
                 </div>
-                <Switch 
-                  checked={permiteMultiplas} 
+                <Switch
+                  checked={permiteMultiplas}
                   onCheckedChange={setPermiteMultiplas}
                   disabled={tipo !== 'multipla_escolha'}
                 />
@@ -483,9 +457,9 @@ export function AdminPesquisaEditor({ pesquisa, onBack }: AdminPesquisaEditorPro
             <CardContent>
               <p className="text-sm text-muted-foreground">
                 Esta pesquisa segue as diretrizes da{' '}
-                <a 
-                  href="https://pt.wikipedia.org/wiki/Lei_Geral_de_Prote%C3%A7%C3%A3o_de_Dados_Pessoais" 
-                  target="_blank" 
+                <a
+                  href="https://pt.wikipedia.org/wiki/Lei_Geral_de_Prote%C3%A7%C3%A3o_de_Dados_Pessoais"
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary hover:underline"
                 >

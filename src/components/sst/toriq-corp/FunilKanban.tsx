@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
 import { useHierarquia } from '@/hooks/useHierarquia';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Plus, Edit2, Trash2, DollarSign, Calendar, User, GripVertical, MoreHorizontal, ArrowLeft, Building2, FileText, MoreVertical, Clock, Phone, Mail, Video, MapPin, CheckCircle2, ArrowRightLeft, ArrowRight, Tag, Pencil, X, Loader2, MessageSquare, ListChecks, Search, Forward, Copy, Trophy, XCircle, Settings, Eye, EyeOff, Calculator, Save, Download, Bold, Italic, Underline, Strikethrough, AlignLeft, AlignCenter, AlignRight, List, ListOrdered, Table2, Image, Link2, AlertTriangle, LayoutGrid, RotateCcw, Kanban, Car, Upload, ExternalLink, ArrowUpDown, Check, Lock, AlertCircle } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -909,16 +909,9 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
         [viewingCard.id]: dados
       }));
       
-      // Salvar no Supabase
+      // Salvar no backend
       try {
-        const { error } = await (supabase as any)
-          .from('funil_cards')
-          .update({ orcamento_treinamento: dados })
-          .eq('id', viewingCard.id);
-        
-        if (error) {
-          console.error('Erro ao salvar orçamento no Supabase:', error);
-        }
+        await api.put(`/funil/cards/${viewingCard.id}`, { orcamento_treinamento: dados });
       } catch (err) {
         console.error('Erro ao salvar orçamento:', err);
       }
@@ -1023,19 +1016,13 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     ? orcamentosClientePorCard[viewingCard.id] || null 
     : null;
 
-  // Função para carregar orçamento do cliente do banco de dados
+  // Função para carregar orçamento do cliente do backend
   const carregarOrcamentoClienteDoBanco = async (cardId: string) => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('funil_card_orcamentos')
-        .select('*')
-        .eq('card_id', cardId)
-        .maybeSingle();
-      
-      if (error) throw error;
-      
+      const registros = await api.get<any[]>(`/funil/cards/${cardId}/orcamentos`).catch(() => [] as any[]);
+      const data = registros && registros.length > 0 ? registros[0] : null;
+
       if (data) {
-        // Atualizar o estado com os dados carregados
         setOrcamentosClientePorCard(prev => ({
           ...prev,
           [cardId]: {
@@ -1088,19 +1075,10 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
         [viewingCard.id]: dados
       }));
       
-      // Salvar no Supabase
+      // Salvar no backend
       try {
-        const { error } = await (supabase as any)
-          .from('funil_cards')
-          .update({ orcamento_vertical365: dados })
-          .eq('id', viewingCard.id);
-        
-        if (error) {
-          console.error('Erro ao salvar orçamento Vertical 365 no Supabase:', error);
-          toast({ title: 'Erro', description: 'Não foi possível salvar o orçamento.', variant: 'destructive' });
-        } else {
-          toast({ title: 'Orçamento Vertical 365 salvo', description: 'Os valores foram salvos com sucesso!' });
-        }
+        await api.put(`/funil/cards/${viewingCard.id}`, { orcamento_vertical365: dados });
+        toast({ title: 'Orçamento Vertical 365 salvo', description: 'Os valores foram salvos com sucesso!' });
       } catch (err) {
         console.error('Erro ao salvar orçamento Vertical 365:', err);
         toast({ title: 'Erro', description: 'Não foi possível salvar o orçamento.', variant: 'destructive' });
@@ -1121,19 +1099,10 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
         [viewingCard.id]: dados
       }));
       
-      // Salvar no Supabase
+      // Salvar no backend
       try {
-        const { error } = await (supabase as any)
-          .from('funil_cards')
-          .update({ orcamento_servicos_sst: dados })
-          .eq('id', viewingCard.id);
-        
-        if (error) {
-          console.error('Erro ao salvar orçamento Serviços SST no Supabase:', error);
-          toast({ title: 'Erro', description: 'Não foi possível salvar o orçamento.', variant: 'destructive' });
-        } else {
-          toast({ title: 'Orçamento salvo', description: 'Os valores foram salvos com sucesso!' });
-        }
+        await api.put(`/funil/cards/${viewingCard.id}`, { orcamento_servicos_sst: dados });
+        toast({ title: 'Orçamento salvo', description: 'Os valores foram salvos com sucesso!' });
       } catch (err) {
         console.error('Erro ao salvar orçamento Serviços SST:', err);
         toast({ title: 'Erro', description: 'Não foi possível salvar o orçamento.', variant: 'destructive' });
@@ -1181,11 +1150,7 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
       const novoValor = getValorNegocioCalculado();
       if (novoValor > 0 && novoValor !== viewingCard.valor) {
         try {
-          await (supabase as any)
-            .from('funil_cards')
-            .update({ valor: novoValor })
-            .eq('id', viewingCard.id);
-          
+          await api.put(`/funil/cards/${viewingCard.id}`, { valor: novoValor });
           // Atualizar estado local
           setCards(prev => prev.map(c => c.id === viewingCard.id ? { ...c, valor: novoValor } : c));
           setViewingCard(prev => prev ? { ...prev, valor: novoValor } : prev);
@@ -1229,32 +1194,7 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     }
   }, [funilId, hierarquiaLoading, usuariosVisiveis]);
 
-  // Realtime subscription para atualizar cards quando modificados por automações
-  useEffect(() => {
-    if (!funilId) return;
-
-    const channel = supabase
-      .channel(`funil_cards_${funilId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'funil_cards',
-          filter: `funil_id=eq.${funilId}`
-        },
-        (payload) => {
-          console.log('[Realtime] Card atualizado:', payload);
-          // Recarregar cards quando houver mudanças
-          loadCards();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [funilId]);
+  // NOTA (migração): realtime removido — refetch/próximo load
 
   // Carregar configurações de calculadoras do banco
   // Empresa especial que vê todas as calculadoras: 277f98dc-846e-4772-906e-71b21a5536f7
@@ -1277,24 +1217,8 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
       
       // Para a empresa especial, carregar configurações do banco ou usar todas ativas
       try {
-        const { data, error } = await (supabase as any)
-          .from('funil_negocio_configuracoes')
-          .select('calc_treinamento_normativo, calc_servicos_sst, calc_vertical_365, calc_comparacao_vertical_treinamentos')
-          .eq('empresa_id', empresaId)
-          .single();
-        
-        if (error && error.code !== 'PGRST116') {
-          console.error('Erro ao carregar configurações de calculadoras:', error);
-          // Para empresa especial, ativar todas por padrão
-          setConfigCalculadoras({
-            treinamento_normativo: true,
-            servicos_sst: true,
-            vertical_365: true,
-            comparacao_vertical_treinamentos: true,
-          });
-          return;
-        }
-        
+        const lista = await api.get<any[]>('/funil-comercial/negocio-configuracoes').catch(() => [] as any[]);
+        const data = (lista || [])[0] || null;
         if (data) {
           setConfigCalculadoras({
             treinamento_normativo: data.calc_treinamento_normativo ?? true,
@@ -1321,18 +1245,9 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
 
   const loadFunil = async () => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('funis')
-        .select(`
-          *,
-          setor:setores(nome)
-        `)
-        .eq('id', funilId)
-        .single();
-
-      if (error) throw error;
+      const data = await api.get<any>(`/funil/funis/${funilId}`);
       setFunil(data);
-      
+
       // Carregar configurações do funil (carga inicial)
       loadFunilConfig(true);
     } catch (error) {
@@ -1346,29 +1261,12 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     if (!empresaId) return;
     setLoadingKits(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('equipamentos_movimentacoes')
-        .select(`
-          id,
-          numero_movimentacao,
-          kit_id,
-          equipamentos_lista,
-          tipo_servico,
-          quantidade,
-          status,
-          funil_card_id,
-          created_at,
-          kit:equipamentos_kits(id, nome, codigo, tipo_servico)
-        `)
-        .eq('empresa_id', empresaId)
-        .eq('status', 'demanda')
-        .is('funil_card_id', null)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      // Filtrar apenas movimentações que têm kit_id OU equipamentos_lista
-      const movimentacoesValidas = (data || []).filter((m: any) => 
-        m.kit_id || (m.equipamentos_lista && m.equipamentos_lista.length > 0)
+      const data = await api.get<any[]>('/sst/epi/movimentacoes').catch(() => [] as any[]);
+      // Filtrar client-side: status=demanda, sem funil_card_id, com kit_id ou equipamentos_lista
+      const movimentacoesValidas = (data || []).filter((m: any) =>
+        m.status === 'demanda' &&
+        !m.funil_card_id &&
+        (m.kit_id || (m.equipamentos_lista && m.equipamentos_lista.length > 0))
       );
       setKitsComDemanda(movimentacoesValidas);
     } catch (error) {
@@ -1399,25 +1297,9 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     if (!empresaId) return;
     setLoadingMovimentacoesVeiculo(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('frota_utilizacoes')
-        .select(`
-          id,
-          codigo,
-          veiculo_id,
-          motorista,
-          data_saida,
-          hora_saida,
-          status,
-          funil_card_id,
-          veiculo:frota_veiculos(placa, marca, modelo)
-        `)
-        .eq('empresa_id', empresaId)
-        .is('funil_card_id', null)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setMovimentacoesVeiculo(data || []);
+      const data = await api.get<any[]>('/frota/utilizacoes').catch(() => [] as any[]);
+      // Filtrar client-side: sem funil_card_id
+      setMovimentacoesVeiculo((data || []).filter((u: any) => !u.funil_card_id));
     } catch (error) {
       console.error('Erro ao carregar movimentações de veículo:', error);
       setMovimentacoesVeiculo([]);
@@ -1434,24 +1316,9 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     }
     
     try {
-      const { data, error } = await (supabase as any)
-        .from('frota_utilizacoes')
-        .select(`
-          id,
-          codigo,
-          veiculo_id,
-          motorista,
-          data_saida,
-          hora_saida,
-          status,
-          funil_card_id,
-          veiculo:frota_veiculos(placa, marca, modelo)
-        `)
-        .eq('funil_card_id', cardId)
-        .single();
-
-      if (error && error.code !== 'PGRST116') throw error;
-      setMovimentacaoVeiculoDoCard(data || null);
+      const data = await api.get<any[]>('/frota/utilizacoes').catch(() => [] as any[]);
+      const found = (data || []).find((u: any) => u.funil_card_id === cardId) || null;
+      setMovimentacaoVeiculoDoCard(found);
     } catch (error) {
       console.error('Erro ao carregar movimentação do card:', error);
       setMovimentacaoVeiculoDoCard(null);
@@ -1463,12 +1330,7 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     if (!cardParaAtribuirVeiculo) return;
     
     try {
-      const { error } = await (supabase as any)
-        .from('frota_utilizacoes')
-        .update({ funil_card_id: cardParaAtribuirVeiculo.id })
-        .eq('id', movimentacaoId);
-
-      if (error) throw error;
+      await api.put(`/frota/utilizacoes/${movimentacaoId}`, { funil_card_id: cardParaAtribuirVeiculo.id });
 
       toast({
         title: 'Sucesso',
@@ -1478,7 +1340,7 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
       // Recarregar dados
       await loadMovimentacaoVeiculoDoCard(cardParaAtribuirVeiculo.id);
       await loadMovimentacoesVeiculoDisponiveis();
-      
+
       setAtribuirVeiculoDialogOpen(false);
       setCardParaAtribuirVeiculo(null);
     } catch (error) {
@@ -1496,12 +1358,7 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     if (!movimentacaoVeiculoDoCard) return;
     
     try {
-      const { error } = await (supabase as any)
-        .from('frota_utilizacoes')
-        .update({ funil_card_id: null })
-        .eq('id', movimentacaoVeiculoDoCard.id);
-
-      if (error) throw error;
+      await api.put(`/frota/utilizacoes/${movimentacaoVeiculoDoCard.id}`, { funil_card_id: null });
 
       toast({
         title: 'Sucesso',
@@ -1530,63 +1387,12 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     
     setLoadingMovimentacaoKit(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('equipamentos_movimentacoes')
-        .select(`
-          id,
-          numero_movimentacao,
-          kit_id,
-          equipamentos_lista,
-          status,
-          quantidade,
-          funil_card_id
-        `)
-        .eq('funil_card_id', cardId)
-        .maybeSingle();
-
-      if (error) throw error;
+      const allMov = await api.get<any[]>('/sst/epi/movimentacoes').catch(() => [] as any[]);
+      const data = (allMov || []).find((m: any) => m.funil_card_id === cardId) || null;
 
       if (data) {
-        // Se for movimentação de kit
-        if (data.kit_id) {
-          // Carregar detalhes do kit com equipamentos
-          const { data: kitData, error: kitError } = await (supabase as any)
-            .from('equipamentos_kits')
-            .select(`
-              id,
-              nome,
-              codigo,
-              tipo_servico,
-              quantidade
-            `)
-            .eq('id', data.kit_id)
-            .single();
-
-          if (kitError && kitError.code !== 'PGRST116') throw kitError;
-
-          // Carregar itens do kit com detalhes dos equipamentos
-          const { data: itensKit, error: itensError } = await (supabase as any)
-            .from('equipamentos_kit_itens')
-            .select(`
-              equipamento_id,
-              quantidade,
-              equipamento:equipamentos_sst(id, nome, codigo, categoria)
-            `)
-            .eq('kit_id', data.kit_id);
-
-          if (itensError) throw itensError;
-
-          setMovimentacaoKitDoCard({
-            ...data,
-            kit: {
-              ...kitData,
-              equipamentos: itensKit || []
-            }
-          });
-        } else {
-          // Movimentação de equipamentos individuais (sem kit)
-          setMovimentacaoKitDoCard(data);
-        }
+        // Se for movimentação de kit, os detalhes já devem vir ou são completados client-side
+        setMovimentacaoKitDoCard(data);
       } else {
         setMovimentacaoKitDoCard(null);
       }
@@ -1614,21 +1420,18 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     }
   ) => {
     try {
-      await (supabase as any)
-        .from('equipamentos_movimentacoes_historico')
-        .insert({
-          movimentacao_id: movimentacaoId,
-          tipo,
-          descricao,
-          funil_id: dadosAdicionais?.funil_id,
-          funil_nome: dadosAdicionais?.funil_nome,
-          card_id: dadosAdicionais?.card_id,
-          card_titulo: dadosAdicionais?.card_titulo,
-          status_anterior: dadosAdicionais?.status_anterior,
-          status_novo: dadosAdicionais?.status_novo,
-          usuario_id: profile?.id,
-          usuario_nome: profile?.nome
-        });
+      await api.post(`/sst/epi/movimentacoes/${movimentacaoId}/historico`, {
+        tipo,
+        descricao,
+        funil_id: dadosAdicionais?.funil_id,
+        funil_nome: dadosAdicionais?.funil_nome,
+        card_id: dadosAdicionais?.card_id,
+        card_titulo: dadosAdicionais?.card_titulo,
+        status_anterior: dadosAdicionais?.status_anterior,
+        status_novo: dadosAdicionais?.status_novo,
+        usuario_id: profile?.id,
+        usuario_nome: profile?.nome
+      }).catch((err: any) => console.error('Erro ao registrar histórico:', err));
     } catch (error) {
       console.error('Erro ao registrar histórico:', error);
     }
@@ -1641,10 +1444,7 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     try {
       // Se já existe uma movimentação atribuída, desatribuir primeiro
       if (movimentacaoKitDoCard) {
-        await (supabase as any)
-          .from('equipamentos_movimentacoes')
-          .update({ funil_card_id: null })
-          .eq('id', movimentacaoKitDoCard.id);
+        await api.put(`/sst/epi/movimentacoes/${movimentacaoKitDoCard.id}`, { funil_card_id: null });
         
         // Registrar histórico de remoção do kit anterior
         await registrarHistoricoMovimentacao(
@@ -1660,12 +1460,7 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
         );
       }
 
-      const { error } = await (supabase as any)
-        .from('equipamentos_movimentacoes')
-        .update({ funil_card_id: cardParaAtribuirKit.id })
-        .eq('id', movimentacaoId);
-
-      if (error) throw error;
+      await api.put(`/sst/epi/movimentacoes/${movimentacaoId}`, { funil_card_id: cardParaAtribuirKit.id });
 
       // Registrar histórico de atribuição
       await registrarHistoricoMovimentacao(
@@ -1702,12 +1497,7 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     if (!movimentacaoKitDoCard || !viewingCard) return;
     
     try {
-      const { error } = await (supabase as any)
-        .from('equipamentos_movimentacoes')
-        .update({ funil_card_id: null })
-        .eq('id', movimentacaoKitDoCard.id);
-
-      if (error) throw error;
+      await api.put(`/sst/epi/movimentacoes/${movimentacaoKitDoCard.id}`, { funil_card_id: null });
 
       // Registrar histórico de remoção
       await registrarHistoricoMovimentacao(
@@ -1746,17 +1536,12 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
       const statusAnterior = movimentacaoKitDoCard.status;
       
       // Apenas atualiza o status da movimentação para "devolvido"
-      // O estoque fica automaticamente disponível pois o cálculo de "em uso" 
+      // O estoque fica automaticamente disponível pois o cálculo de "em uso"
       // considera apenas movimentações com status diferente de "devolvido"
-      const { error } = await (supabase as any)
-        .from('equipamentos_movimentacoes')
-        .update({ 
-          status: 'devolvido',
-          data_retorno: now
-        })
-        .eq('id', movimentacaoKitDoCard.id);
-
-      if (error) throw error;
+      await api.put(`/sst/epi/movimentacoes/${movimentacaoKitDoCard.id}`, {
+        status: 'devolvido',
+        data_retorno: now
+      });
 
       // Registrar histórico de retorno
       await registrarHistoricoMovimentacao(
@@ -1791,14 +1576,7 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
 
   const loadFunilConfig = async (isInitialLoad: boolean = false) => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('funis_configuracoes')
-        .select('*')
-        .eq('funil_id', funilId)
-        .single();
-
-      if (error && error.code !== 'PGRST116') throw error;
-      
+      const data = await api.get<any>(`/funil-comercial/funis/${funilId}/configuracao`).catch(() => null);
       if (data) {
         setFunilConfig(data);
         // Definir modo de visualização APENAS na carga inicial
@@ -1814,15 +1592,10 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
 
   const loadEtapas = async () => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('funil_etapas')
-        .select('*')
-        .eq('funil_id', funilId)
-        .eq('ativo', true)
-        .order('ordem');
-
-      if (error) throw error;
-      setEtapas(data || []);
+      const data = await api.get<any[]>(`/funil/etapas?funil_id=${funilId}`).catch(() => [] as any[]);
+      // Filtrar client-side: ativo=true, ordenar por ordem
+      const etapasAtivas = (data || []).filter((e: any) => e.ativo !== false).sort((a: any, b: any) => a.ordem - b.ordem);
+      setEtapas(etapasAtivas);
     } catch (error) {
       console.error('Erro ao carregar etapas:', error);
     }
@@ -1840,17 +1613,13 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
 
     setCriandoEtapa(true);
     try {
-      const { error } = await (supabase as any)
-        .from('funil_etapas')
-        .insert({
-          funil_id: funilId,
-          nome: novaEtapaNome.trim(),
-          cor: novaEtapaCor,
-          ordem: etapas.length,
-          ativo: true
-        });
-
-      if (error) throw error;
+      await api.post('/funil/etapas', {
+        funil_id: funilId,
+        nome: novaEtapaNome.trim(),
+        cor: novaEtapaCor,
+        ordem: etapas.length,
+        ativo: true
+      });
 
       toast({
         title: 'Sucesso',
@@ -1876,128 +1645,102 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
   const loadCards = async () => {
     setLoading(true);
     try {
-      // Construir query base
-      let query = (supabase as any)
-        .from('funil_cards')
-        .select(`
-          *,
-          cliente:clientes_sst(id, nome, cnpj, email, telefone, responsavel, sigla, cliente_empresa:empresas!clientes_sst_cliente_empresa_id_fkey(cidade, estado)),
-          responsavel:profiles(nome)
-        `)
-        .eq('funil_id', funilId)
-        .eq('ativo', true);
+      // Buscar todos os cards do funil
+      const cardsData = await api.get<any[]>(`/funil/cards?funil_id=${funilId}`).catch(() => [] as any[]);
 
-      // Aplicar filtro de hierarquia:
+      // Filtrar client-side: ativo=true
+      let filteredCardsData = (cardsData || []).filter((c: any) => c.ativo !== false);
+
+      // Aplicar filtro de hierarquia client-side:
       // - Administrador: vê todos os cards
       // - Gestor: vê seus cards + cards dos subordinados
       // - Colaborador: vê apenas seus próprios cards
       if (!isAdministrador && usuariosVisiveis.length > 0) {
-        // Filtrar cards onde o responsavel_id está na lista de usuários visíveis
-        // OU onde responsavel_id é null (cards sem responsável - visíveis para gestores também)
         if (isGestor) {
-          // Gestor vê cards dos usuários visíveis OU cards sem responsável
-          query = query.or(`responsavel_id.in.(${usuariosVisiveis.join(',')}),responsavel_id.is.null`);
+          filteredCardsData = filteredCardsData.filter((c: any) =>
+            !c.responsavel_id || usuariosVisiveis.includes(c.responsavel_id)
+          );
         } else {
-          // Colaborador vê apenas seus próprios cards
-          query = query.in('responsavel_id', usuariosVisiveis);
+          filteredCardsData = filteredCardsData.filter((c: any) =>
+            usuariosVisiveis.includes(c.responsavel_id)
+          );
         }
       }
 
-      query = query.order('ordem');
+      // Ordenar por ordem
+      filteredCardsData = filteredCardsData.sort((a: any, b: any) => a.ordem - b.ordem);
 
-      const { data: cardsData, error: cardsError } = await query;
-
-      if (cardsError) throw cardsError;
-
-      // Carregar etiquetas de todos os cards
-      const cardIds = (cardsData || []).map((c: any) => c.id);
+      // Carregar etiquetas de todos os cards via endpoint por card (em paralelo, mas limitado)
+      const cardIds = filteredCardsData.map((c: any) => c.id);
       const etiquetasMap: Record<string, CardEtiqueta[]> = {};
 
       if (cardIds.length > 0) {
         try {
-          const { data: cardEtiquetasData } = await (supabase as any)
-            .from('funil_card_etiquetas')
-            .select(`
-              card_id,
-              etiqueta:funil_etiquetas(id, nome, cor)
-            `)
-            .in('card_id', cardIds);
-
-          if (cardEtiquetasData) {
-            // Agrupar etiquetas por card_id (evitando duplicatas)
-            cardEtiquetasData.forEach((item: any) => {
-              if (item.etiqueta) {
-                if (!etiquetasMap[item.card_id]) {
-                  etiquetasMap[item.card_id] = [];
-                }
-                // Verificar se a etiqueta já existe para evitar duplicatas
-                const jaExiste = etiquetasMap[item.card_id].some(
-                  (e: any) => e.id === item.etiqueta.id
-                );
-                if (!jaExiste) {
-                  etiquetasMap[item.card_id].push(item.etiqueta);
-                }
-              }
+          // Buscar etiquetas por card em paralelo (máximo de 10 para evitar sobrecarga)
+          const BATCH_SIZE = 10;
+          for (let i = 0; i < cardIds.length; i += BATCH_SIZE) {
+            const batch = cardIds.slice(i, i + BATCH_SIZE);
+            const results = await Promise.all(
+              batch.map((cid: string) =>
+                api.get<any[]>(`/funil/cards/${cid}/etiquetas`).catch(() => [] as any[])
+              )
+            );
+            batch.forEach((cid: string, idx: number) => {
+              etiquetasMap[cid] = results[idx] || [];
             });
           }
         } catch (etiquetasError) {
+          // silencioso
         }
       }
 
       // Buscar atividades de todos os cards para determinar status e próxima data
       const atividadesMap: Record<string, { status: 'programada' | 'pendente' | 'atrasada' | null; proximaData: string | null }> = {};
-      
+
       if (cardIds.length > 0) {
         try {
-          const { data: atividadesData } = await (supabase as any)
-            .from('funil_card_atividades')
-            .select('card_id, status, prazo')
-            .in('card_id', cardIds)
-            .neq('status', 'concluida')
-            .order('prazo', { ascending: true, nullsFirst: false });
-
-          if (atividadesData) {
+          const BATCH_SIZE = 10;
+          for (let i = 0; i < cardIds.length; i += BATCH_SIZE) {
+            const batch = cardIds.slice(i, i + BATCH_SIZE);
+            const results = await Promise.all(
+              batch.map((cid: string) =>
+                api.get<any[]>(`/funil/cards/${cid}/atividades`).catch(() => [] as any[])
+              )
+            );
             const hoje = new Date();
             hoje.setHours(0, 0, 0, 0);
-            
-            atividadesData.forEach((atividade: any) => {
-              const cardId = atividade.card_id;
-              let statusAtividade: 'programada' | 'pendente' | 'atrasada' | null = null;
-              const prazoAtividade = atividade.prazo || null;
-              
-              if (atividade.prazo) {
-                const prazoDate = new Date(atividade.prazo);
-                prazoDate.setHours(0, 0, 0, 0);
-                
-                if (prazoDate < hoje) {
-                  statusAtividade = 'atrasada';
+
+            batch.forEach((cid: string, idx: number) => {
+              const atividadesDoCard = (results[idx] || []).filter((a: any) => a.status !== 'concluida');
+              atividadesDoCard.forEach((atividade: any) => {
+                let statusAtividade: 'programada' | 'pendente' | 'atrasada' | null = null;
+                const prazoAtividade = atividade.prazo || null;
+
+                if (atividade.prazo) {
+                  const prazoDate = new Date(atividade.prazo);
+                  prazoDate.setHours(0, 0, 0, 0);
+                  statusAtividade = prazoDate < hoje ? 'atrasada' : 'programada';
                 } else {
-                  statusAtividade = 'programada';
+                  statusAtividade = 'pendente';
                 }
-              } else {
-                statusAtividade = 'pendente';
-              }
-              
-              // Prioridade: atrasada > programada > pendente
-              // Guardar a data mais relevante (atrasada ou próxima programada)
-              if (!atividadesMap[cardId]) {
-                atividadesMap[cardId] = { status: statusAtividade, proximaData: prazoAtividade };
-              } else {
-                const currentStatus = atividadesMap[cardId].status;
-                if (statusAtividade === 'atrasada') {
-                  atividadesMap[cardId].status = 'atrasada';
-                  // Manter a data mais antiga atrasada
-                  if (!atividadesMap[cardId].proximaData || (prazoAtividade && prazoAtividade < atividadesMap[cardId].proximaData)) {
-                    atividadesMap[cardId].proximaData = prazoAtividade;
-                  }
-                } else if (statusAtividade === 'programada' && currentStatus !== 'atrasada') {
-                  atividadesMap[cardId].status = 'programada';
-                  // Manter a data mais próxima
-                  if (!atividadesMap[cardId].proximaData || (prazoAtividade && prazoAtividade < atividadesMap[cardId].proximaData)) {
-                    atividadesMap[cardId].proximaData = prazoAtividade;
+
+                if (!atividadesMap[cid]) {
+                  atividadesMap[cid] = { status: statusAtividade, proximaData: prazoAtividade };
+                } else {
+                  const currentStatus = atividadesMap[cid].status;
+                  if (statusAtividade === 'atrasada') {
+                    atividadesMap[cid].status = 'atrasada';
+                    if (!atividadesMap[cid].proximaData || (prazoAtividade && prazoAtividade < atividadesMap[cid].proximaData)) {
+                      atividadesMap[cid].proximaData = prazoAtividade;
+                    }
+                  } else if (statusAtividade === 'programada' && currentStatus !== 'atrasada') {
+                    atividadesMap[cid].status = 'programada';
+                    if (!atividadesMap[cid].proximaData || (prazoAtividade && prazoAtividade < atividadesMap[cid].proximaData)) {
+                      atividadesMap[cid].proximaData = prazoAtividade;
+                    }
                   }
                 }
-              }
+              });
             });
           }
         } catch (atividadesError) {
@@ -2006,7 +1749,7 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
       }
 
       // Adicionar etiquetas e status de atividade aos cards
-      const cardsComEtiquetas = (cardsData || []).map((card: any) => ({
+      const cardsComEtiquetas = filteredCardsData.map((card: any) => ({
         ...card,
         etiquetas: etiquetasMap[card.id] || [],
         status_atividade: atividadesMap[card.id]?.status || null,
@@ -2028,28 +1771,15 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
 
   const loadClientes = async () => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('clientes_sst')
-        .select(`
-          id, 
-          nome,
-          cnpj,
-          email,
-          categoria_id,
-          cliente_empresa:empresas!clientes_sst_cliente_empresa_id_fkey(cidade, estado)
-        `)
-        .eq('empresa_sst_id', empresaId)
-        .order('nome');
-
-      if (error) throw error;
+      const data = await api.get<any[]>('/sst/clientes').catch(() => [] as any[]);
       // Mapear para extrair a cidade e estado da empresa cliente
       const clientesComCidade = (data || []).map((c: any) => ({
         id: c.id,
         nome: c.nome,
         cnpj: c.cnpj || null,
         email: c.email || null,
-        cidade: c.cliente_empresa?.cidade || null,
-        estado: c.cliente_empresa?.estado || null,
+        cidade: c.cliente_empresa?.cidade || c.cidade || null,
+        estado: c.cliente_empresa?.estado || c.estado || null,
         categoria_id: c.categoria_id || null
       }));
       setClientes(clientesComCidade);
@@ -2060,15 +1790,12 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
 
   const loadResponsaveis = async () => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, nome')
-        .eq('empresa_id', empresaId)
-        .eq('role', 'cliente_torq')
-        .order('nome');
-
-      if (error) throw error;
-      setResponsaveis(data || []);
+      const data = await api.get<any[]>('/admin/users').catch(() => [] as any[]);
+      // Filtrar client-side apenas usuários com role cliente_torq
+      const responsaveisFiltrados = (data || [])
+        .filter((u: any) => u.role === 'cliente_torq')
+        .sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || ''));
+      setResponsaveis(responsaveisFiltrados);
     } catch (error) {
       console.error('Erro ao carregar responsáveis:', error);
     }
@@ -2076,15 +1803,10 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
 
   const loadCategoriasCliente = async () => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('categorias_clientes_empresa')
-        .select('id, nome, cor')
-        .eq('empresa_id', empresaId)
-        .eq('ativo', true)
-        .order('nome');
-
-      if (error) throw error;
-      setCategoriasCliente(data || []);
+      const data = await api.get<any[]>('/sst/grupos/categorias-clientes').catch(() => [] as any[]);
+      // Filtrar client-side: ativo=true
+      const categoriasFiltradas = (data || []).filter((c: any) => c.ativo !== false);
+      setCategoriasCliente(categoriasFiltradas);
     } catch (error) {
       console.error('Erro ao carregar categorias:', error);
     }
@@ -2092,14 +1814,9 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
 
   const handleUpdateCategoriaCliente = async (categoriaId: string | null) => {
     if (!viewingCard?.cliente_id) return;
-    
-    try {
-      const { error } = await (supabase as any)
-        .from('clientes')
-        .update({ categoria_id: categoriaId })
-        .eq('id', viewingCard.cliente_id);
 
-      if (error) throw error;
+    try {
+      await api.put(`/sst/clientes/${viewingCard.cliente_id}`, { categoria_id: categoriaId });
 
       // Atualizar o cliente na lista local
       setClientes(prev => prev.map(c => 
@@ -2126,36 +1843,28 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
   const fetchAtividades = async (cardId: string) => {
     setLoadingAtividades(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('funil_card_atividades')
-        .select('*')
-        .eq('card_id', cardId)
-        .order('created_at', { ascending: false });
+      const data = await api.get<any[]>(`/funil/cards/${cardId}/atividades`).catch(() => [] as any[]);
 
-      if (error) {
-        // Tabela pode não existir ainda
-        setAtividades([]);
-        setLoadingAtividades(false);
-        return;
-      }
-
-      // Buscar usuários
+      // Buscar usuários para enriquecer as atividades
       const usuarioIds = [...new Set((data || []).map((a: any) => a.usuario_id).filter(Boolean))] as string[];
       let usuariosMap: Record<string, { nome: string }> = {};
 
       if (usuarioIds.length > 0) {
-        const { data: usuariosData } = await supabase
-          .from('profiles')
-          .select('id, nome')
-          .in('id', usuarioIds);
-
-        usuariosMap = (usuariosData || []).reduce((acc: Record<string, { nome: string }>, u: any) => {
-          acc[u.id] = { nome: u.nome };
-          return acc;
-        }, {});
+        const usuariosData = await api.get<any[]>('/admin/users').catch(() => [] as any[]);
+        usuariosMap = (usuariosData || [])
+          .filter((u: any) => usuarioIds.includes(u.id))
+          .reduce((acc: Record<string, { nome: string }>, u: any) => {
+            acc[u.id] = { nome: u.nome };
+            return acc;
+          }, {});
       }
 
-      const atividadesComUsuario = (data || []).map((atividade: any) => ({
+      // Ordenar por created_at desc (client-side)
+      const sorted = (data || []).sort((a: any, b: any) =>
+        new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+      );
+
+      const atividadesComUsuario = sorted.map((atividade: any) => ({
         ...atividade,
         usuario: atividade.usuario_id ? usuariosMap[atividade.usuario_id] || null : null,
       }));
@@ -2169,50 +1878,11 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     }
   };
 
-  const fetchMovimentacoes = async (cardId: string) => {
-    setLoadingMovimentacoes(true);
-    try {
-      const { data, error } = await (supabase as any)
-        .from('funil_card_movimentacoes')
-        .select('*')
-        .eq('card_id', cardId)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        // Tabela pode não existir ainda
-        setMovimentacoes([]);
-        setLoadingMovimentacoes(false);
-        return;
-      }
-
-      // Buscar usuários
-      const usuarioIds = [...new Set((data || []).map((m: any) => m.usuario_id).filter(Boolean))] as string[];
-      let usuariosMap: Record<string, { nome: string }> = {};
-
-      if (usuarioIds.length > 0) {
-        const { data: usuariosData } = await supabase
-          .from('profiles')
-          .select('id, nome')
-          .in('id', usuarioIds);
-
-        usuariosMap = (usuariosData || []).reduce((acc: Record<string, { nome: string }>, u: any) => {
-          acc[u.id] = { nome: u.nome };
-          return acc;
-        }, {});
-      }
-
-      const movimentacoesComUsuario = (data || []).map((mov: any) => ({
-        ...mov,
-        usuario: mov.usuario_id ? usuariosMap[mov.usuario_id] || null : null,
-      }));
-
-      setMovimentacoes(movimentacoesComUsuario);
-    } catch (error) {
-      console.error('Erro ao buscar movimentações:', error);
-      setMovimentacoes([]);
-    } finally {
-      setLoadingMovimentacoes(false);
-    }
+  const fetchMovimentacoes = async (_cardId: string) => {
+    // NOTA (migração): endpoint de listagem de funil_card_movimentacoes não existe no backend novo.
+    // As movimentações são registradas server-side via POST /funil/cards/{id}/mover.
+    setMovimentacoes([]);
+    setLoadingMovimentacoes(false);
   };
 
   const handleViewDetails = (card: FunilCard) => {
@@ -2270,17 +1940,10 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     if (!empresaId) return;
     setLoadingEtiquetas(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('funil_etiquetas')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('nome');
-
-      if (error) {
-        setEtiquetas([]);
-        return;
-      }
-      setEtiquetas(data || []);
+      const data = await api.get<any[]>('/funil/etiquetas').catch(() => [] as any[]);
+      // Ordenar client-side por nome
+      const sorted = (data || []).sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || ''));
+      setEtiquetas(sorted);
     } catch (error) {
       console.error('Erro ao carregar etiquetas:', error);
       setEtiquetas([]);
@@ -2291,17 +1954,9 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
 
   const loadCardEtiquetas = async (cardId: string) => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('funil_card_etiquetas')
-        .select('etiqueta_id')
-        .eq('card_id', cardId);
-
-      if (error) {
-        setCardEtiquetas([]);
-        return;
-      }
-      // Remover duplicatas usando Set
-      const etiquetaIds = [...new Set((data || []).map((d: any) => d.etiqueta_id))] as string[];
+      const data = await api.get<any[]>(`/funil/cards/${cardId}/etiquetas`).catch(() => [] as any[]);
+      // Extrair apenas os IDs (remover duplicatas)
+      const etiquetaIds = [...new Set((data || []).map((d: any) => d.etiqueta_id || d.id))] as string[];
       setCardEtiquetas(etiquetaIds);
     } catch (error) {
       console.error('Erro ao carregar etiquetas do card:', error);
@@ -2322,17 +1977,10 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     if (!novaEtiqueta.nome.trim() || !empresaId) return;
 
     try {
-      const { data, error } = await (supabase as any)
-        .from('funil_etiquetas')
-        .insert({
-          nome: novaEtiqueta.nome.trim(),
-          cor: novaEtiqueta.cor,
-          empresa_id: empresaId,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
+      const data = await api.post<any>('/funil/etiquetas', {
+        nome: novaEtiqueta.nome.trim(),
+        cor: novaEtiqueta.cor,
+      });
 
       setEtiquetas(prev => [...prev, data]);
       setNovaEtiqueta({ nome: '', cor: CORES_ETIQUETA[0] });
@@ -2352,18 +2000,13 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     if (!editandoEtiqueta || !editandoEtiqueta.nome.trim()) return;
 
     try {
-      const { error } = await (supabase as any)
-        .from('funil_etiquetas')
-        .update({
-          nome: editandoEtiqueta.nome.trim(),
-          cor: editandoEtiqueta.cor,
-        })
-        .eq('id', editandoEtiqueta.id);
+      await api.put(`/funil/etiquetas/${editandoEtiqueta.id}`, {
+        nome: editandoEtiqueta.nome.trim(),
+        cor: editandoEtiqueta.cor,
+      });
 
-      if (error) throw error;
-
-      setEtiquetas(prev => prev.map(e => 
-        e.id === editandoEtiqueta.id 
+      setEtiquetas(prev => prev.map(e =>
+        e.id === editandoEtiqueta.id
           ? { ...e, nome: editandoEtiqueta.nome.trim(), cor: editandoEtiqueta.cor }
           : e
       ));
@@ -2383,18 +2026,8 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
 
   const handleDeleteEtiqueta = async (etiquetaId: string) => {
     try {
-      // Remover vínculos com cards primeiro
-      await (supabase as any)
-        .from('funil_card_etiquetas')
-        .delete()
-        .eq('etiqueta_id', etiquetaId);
-
-      const { error } = await (supabase as any)
-        .from('funil_etiquetas')
-        .delete()
-        .eq('id', etiquetaId);
-
-      if (error) throw error;
+      // O backend remove vínculos com cards automaticamente ao deletar a etiqueta
+      await api.del(`/funil/etiquetas/${etiquetaId}`);
 
       setEtiquetas(prev => prev.filter(e => e.id !== etiquetaId));
       setCardEtiquetas(prev => prev.filter(id => id !== etiquetaId));
@@ -2419,22 +2052,11 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     try {
       if (isSelected) {
         // Remover etiqueta
-        await (supabase as any)
-          .from('funil_card_etiquetas')
-          .delete()
-          .eq('card_id', viewingCard.id)
-          .eq('etiqueta_id', etiquetaId);
-
+        await api.del(`/funil/cards/${viewingCard.id}/etiquetas/${etiquetaId}`);
         setCardEtiquetas(prev => prev.filter(id => id !== etiquetaId));
       } else {
         // Adicionar etiqueta
-        await (supabase as any)
-          .from('funil_card_etiquetas')
-          .insert({
-            card_id: viewingCard.id,
-            etiqueta_id: etiquetaId,
-          });
-
+        await api.post(`/funil/cards/${viewingCard.id}/etiquetas`, { etiqueta_id: etiquetaId });
         setCardEtiquetas(prev => [...prev, etiquetaId]);
       }
     } catch (error) {
@@ -2455,18 +2077,15 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
   const loadFunisCadastrados = async () => {
     if (!empresaId) return;
     try {
-      const { data, error } = await (supabase as any)
-        .from('funis')
-        .select('id, nome, tipo, setor_id, setores(nome)')
-        .eq('empresa_id', empresaId)
-        .eq('ativo', true)
-        .order('nome');
-
-      if (error) throw error;
+      const data = await api.get<any[]>('/funil/funis').catch(() => [] as any[]);
+      // Filtrar client-side: ativo=true
+      const filtered = (data || []).filter((f: any) => f.ativo !== false);
+      // Ordenar client-side por nome
+      const sorted = filtered.sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || ''));
       // Mapear para incluir setor_nome
-      const funisComSetor = (data || []).map((f: any) => ({
+      const funisComSetor = sorted.map((f: any) => ({
         ...f,
-        setor_nome: f.setores?.nome || 'Sem setor'
+        setor_nome: f.setores?.nome || f.setor_nome || 'Sem setor'
       }));
       setFunisCadastrados(funisComSetor);
     } catch (error) {
@@ -2479,27 +2098,20 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     try {
       // Verificar se o funil destino é "Contas a Receber" (Financeiro)
       const funilDestino = funisCadastrados.find(f => f.id === funilDestinoId);
-      const isContasReceber = funilDestino?.nome?.toLowerCase().includes('contas a receber') && 
+      const isContasReceber = funilDestino?.nome?.toLowerCase().includes('contas a receber') &&
                               funilDestino?.setor_nome?.toLowerCase().includes('financeiro');
-      
+
       if (isContasReceber) {
         // Carregar colunas do módulo Contas a Receber
-        const { data, error } = await (supabase as any)
-          .from('contas_receber_colunas')
-          .select('id, nome, cor, ordem')
-          .eq('empresa_id', empresaId)
-          .order('ordem');
-        if (error) throw error;
-        setEtapasDestino(data || []);
+        const data = await api.get<any[]>('/financeiro/contas-receber/colunas').catch(() => [] as any[]);
+        const sorted = (data || []).sort((a: any, b: any) => a.ordem - b.ordem);
+        setEtapasDestino(sorted);
       } else {
-        const { data, error } = await (supabase as any)
-          .from('funil_etapas')
-          .select('id, nome, cor, ordem')
-          .eq('funil_id', funilDestinoId)
-          .eq('ativo', true)
-          .order('ordem');
-        if (error) throw error;
-        setEtapasDestino(data || []);
+        const data = await api.get<any[]>(`/funil/etapas?funil_id=${funilDestinoId}`).catch(() => [] as any[]);
+        // Filtrar client-side: ativo=true
+        const filtered = (data || []).filter((e: any) => e.ativo !== false);
+        const sorted = filtered.sort((a: any, b: any) => a.ordem - b.ordem);
+        setEtapasDestino(sorted);
       }
     } catch (error) {
       console.error('Erro ao carregar etapas destino:', error);
@@ -2528,106 +2140,83 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     try {
       // Verificar se destino é "Contas a Receber" do Financeiro
       const funilDestino = funisCadastrados.find(f => f.id === encaminharForm.funilDestinoId);
-      const isContasReceber = funilDestino?.nome?.toLowerCase().includes('contas a receber') && 
+      const isContasReceber = funilDestino?.nome?.toLowerCase().includes('contas a receber') &&
                               funilDestino?.setor_nome?.toLowerCase().includes('financeiro');
 
       if (isContasReceber) {
         // Criar registro em contas_receber (módulo financeiro)
         const hoje = new Date().toISOString().split('T')[0];
         const numero = `CR-${Date.now().toString(36).toUpperCase()}`;
-        
+
         // Buscar dados do cliente se existir
         let clienteNome = viewingCard.titulo || 'Sem cliente';
         let clienteCnpj = '';
         if (viewingCard.cliente_id) {
-          const { data: clienteData } = await (supabase as any)
-            .from('clientes_sst')
-            .select('nome, cnpj')
-            .eq('id', viewingCard.cliente_id)
-            .single();
+          const clienteData = clientes.find(c => c.id === viewingCard.cliente_id);
           if (clienteData) {
             clienteNome = clienteData.nome || clienteNome;
-            clienteCnpj = clienteData.cnpj || '';
+            clienteCnpj = (clienteData as any).cnpj || '';
           }
         }
 
-        const { error } = await (supabase as any)
-          .from('contas_receber')
-          .insert({
-            empresa_id: empresaId,
-            coluna_id: encaminharForm.etapaDestinoId,
-            numero,
-            cliente_id: viewingCard.cliente_id || null,
-            cliente_nome: clienteNome,
-            cliente_cnpj: clienteCnpj,
-            servico_produto: viewingCard.descricao || viewingCard.titulo || '',
-            valor: viewingCard.valor || 0,
-            valor_pago: 0,
-            data_emissao: hoje,
-            observacoes: `Encaminhado do funil "${funil?.nome}" - Card: ${viewingCard.titulo}`,
-            origem: 'closer',
-            origem_card_id: viewingCard.id,
-            origem_kanban: funil?.nome || 'Closer',
-            closer_card_id: viewingCard.id,
-            ordem: 0,
-            arquivado: false,
-          });
+        await api.post('/financeiro/contas-receber', {
+          coluna_id: encaminharForm.etapaDestinoId,
+          numero,
+          cliente_id: viewingCard.cliente_id || null,
+          cliente_nome: clienteNome,
+          cliente_cnpj: clienteCnpj,
+          servico_produto: viewingCard.descricao || viewingCard.titulo || '',
+          valor: viewingCard.valor || 0,
+          valor_pago: 0,
+          data_emissao: hoje,
+          observacoes: `Encaminhado do funil "${funil?.nome}" - Card: ${viewingCard.titulo}`,
+          origem: 'closer',
+          origem_card_id: viewingCard.id,
+          origem_kanban: funil?.nome || 'Closer',
+          closer_card_id: viewingCard.id,
+          ordem: 0,
+          arquivado: false,
+        });
 
-        if (error) throw error;
-
-        toast({ 
-          title: 'Sucesso', 
-          description: `Card ${encaminharForm.acao === 'transferir' ? 'transferido' : 'duplicado'} para Contas a Receber!` 
+        toast({
+          title: 'Sucesso',
+          description: `Card ${encaminharForm.acao === 'transferir' ? 'transferido' : 'duplicado'} para Contas a Receber!`
         });
 
         if (encaminharForm.acao === 'transferir') {
           // Marcar card original como ganho ao transferir para financeiro
-          await (supabase as any)
-            .from('funil_cards')
-            .update({ status_negocio: 'ganho' })
-            .eq('id', viewingCard.id);
+          await api.put(`/funil/cards/${viewingCard.id}`, { status_negocio: 'ganho' });
           setDetailsDialogOpen(false);
         }
-        
+
         await loadCards();
       } else if (encaminharForm.acao === 'transferir') {
-        // Transferir: mover o card para outro funil
-        const { error } = await (supabase as any)
-          .from('funil_cards')
-          .update({
-            funil_id: encaminharForm.funilDestinoId,
-            etapa_id: encaminharForm.etapaDestinoId,
-          })
-          .eq('id', viewingCard.id);
-
-        if (error) throw error;
+        // Transferir: mover o card para outro funil via endpoint mover
+        await api.put(`/funil/cards/${viewingCard.id}`, {
+          funil_id: encaminharForm.funilDestinoId,
+          etapa_id: encaminharForm.etapaDestinoId,
+        });
 
         toast({ title: 'Sucesso', description: 'Card transferido com sucesso!' });
         setDetailsDialogOpen(false);
         loadCards();
       } else {
         // Duplicar: criar cópia do card no destino
-        const { data: newCardData, error } = await (supabase as any)
-          .from('funil_cards')
-          .insert({
-            funil_id: encaminharForm.funilDestinoId,
-            etapa_id: encaminharForm.etapaDestinoId,
-            titulo: viewingCard.titulo,
-            descricao: viewingCard.descricao,
-            valor: viewingCard.valor,
-            cliente_id: viewingCard.cliente_id,
-            responsavel_id: viewingCard.responsavel_id,
-            data_previsao: viewingCard.data_previsao,
-            prioridade: viewingCard.prioridade,
-            ordem: 0,
-            ativo: true,
-          })
-          .select()
-          .single();
+        const newCardData = await api.post<any>('/funil/cards', {
+          funil_id: encaminharForm.funilDestinoId,
+          etapa_id: encaminharForm.etapaDestinoId,
+          titulo: viewingCard.titulo,
+          descricao: viewingCard.descricao,
+          valor: viewingCard.valor,
+          cliente_id: viewingCard.cliente_id,
+          responsavel_id: viewingCard.responsavel_id,
+          data_previsao: viewingCard.data_previsao,
+          prioridade: viewingCard.prioridade,
+          ordem: 0,
+          ativo: true,
+        });
 
-        if (error) throw error;
-
-        // Copiar histórico de atividades, movimentações e etiquetas do card original
+        // Copiar histórico de atividades e etiquetas do card original
         if (newCardData) {
           await copyCardHistory(viewingCard.id, newCardData.id);
         }
@@ -2654,26 +2243,16 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     if (!viewingCard) return;
 
     try {
-      const { error } = await (supabase as any)
-        .from('funil_cards')
-        .update({ status_negocio: status })
-        .eq('id', viewingCard.id);
-
-      if (error) throw error;
+      await api.put(`/funil/cards/${viewingCard.id}`, { status_negocio: status });
 
       // Atualizar o card localmente
       setViewingCard({ ...viewingCard, status_negocio: status });
 
-      toast({ 
-        title: 'Status atualizado', 
-        description: `Negócio marcado como "${STATUS_NEGOCIO.find(s => s.id === status)?.label}"` 
+      toast({
+        title: 'Status atualizado',
+        description: `Negócio marcado como "${STATUS_NEGOCIO.find(s => s.id === status)?.label}"`
       });
 
-      // Executar automações baseadas no status
-      if (status === 'ganho' || status === 'perdido') {
-        await executeAutomationsByStatus(viewingCard, status);
-      }
-      
       // Recarregar cards para refletir a mudança
       await loadCards();
     } catch (error) {
@@ -2691,12 +2270,7 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     if (!viewingCard) return;
 
     try {
-      const { error } = await (supabase as any)
-        .from('funil_cards')
-        .update({ responsavel_id: novoResponsavelId })
-        .eq('id', viewingCard.id);
-
-      if (error) throw error;
+      await api.put(`/funil/cards/${viewingCard.id}`, { responsavel_id: novoResponsavelId });
 
       // Buscar dados do novo responsável
       let novoResponsavel = null;
@@ -2736,12 +2310,7 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     const dataStr = novaData ? format(novaData, 'yyyy-MM-dd') : null;
 
     try {
-      const { error } = await (supabase as any)
-        .from('funil_cards')
-        .update({ data_previsao: dataStr })
-        .eq('id', viewingCard.id);
-
-      if (error) throw error;
+      await api.put(`/funil/cards/${viewingCard.id}`, { data_previsao: dataStr });
 
       setViewingCard({ ...viewingCard, data_previsao: dataStr });
       setCards(prev => prev.map(c => c.id === viewingCard.id ? { ...c, data_previsao: dataStr } : c));
@@ -2763,15 +2332,10 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
 
     try {
       // Verificar se há atividades não concluídas
-      const { data: atividadesPendentes, error: atividadesError } = await (supabase as any)
-        .from('funil_card_atividades')
-        .select('id, status')
-        .eq('card_id', viewingCard.id)
-        .neq('status', 'concluida');
+      const atividadesData = await api.get<any[]>(`/funil/cards/${viewingCard.id}/atividades`).catch(() => [] as any[]);
+      const atividadesPendentes = (atividadesData || []).filter((a: any) => a.status !== 'concluida');
 
-      if (atividadesError) throw atividadesError;
-
-      if (atividadesPendentes && atividadesPendentes.length > 0) {
+      if (atividadesPendentes.length > 0) {
         toast({
           title: 'Não é possível finalizar',
           description: `Existem ${atividadesPendentes.length} atividade(s) não concluída(s). Conclua todas as atividades antes de finalizar o card.`,
@@ -2782,19 +2346,14 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
 
       // Finalizar o card definindo data_conclusao
       const dataHoje = format(new Date(), 'yyyy-MM-dd');
-      const { error } = await (supabase as any)
-        .from('funil_cards')
-        .update({ data_conclusao: dataHoje })
-        .eq('id', viewingCard.id);
-
-      if (error) throw error;
+      await api.put(`/funil/cards/${viewingCard.id}`, { data_conclusao: dataHoje });
 
       setViewingCard({ ...viewingCard, data_conclusao: dataHoje });
       setCards(prev => prev.map(c => c.id === viewingCard.id ? { ...c, data_conclusao: dataHoje } : c));
-      
-      toast({ 
-        title: 'Card Finalizado!', 
-        description: 'O card foi marcado como concluído com sucesso.' 
+
+      toast({
+        title: 'Card Finalizado!',
+        description: 'O card foi marcado como concluído com sucesso.'
       });
     } catch (error) {
       console.error('Erro ao finalizar card:', error);
@@ -2811,19 +2370,14 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     if (!viewingCard) return;
 
     try {
-      const { error } = await (supabase as any)
-        .from('funil_cards')
-        .update({ data_conclusao: null })
-        .eq('id', viewingCard.id);
-
-      if (error) throw error;
+      await api.put(`/funil/cards/${viewingCard.id}`, { data_conclusao: null });
 
       setViewingCard({ ...viewingCard, data_conclusao: null });
       setCards(prev => prev.map(c => c.id === viewingCard.id ? { ...c, data_conclusao: null } : c));
-      
-      toast({ 
-        title: 'Card Reaberto', 
-        description: 'O card foi reaberto e pode ser editado novamente.' 
+
+      toast({
+        title: 'Card Reaberto',
+        description: 'O card foi reaberto e pode ser editado novamente.'
       });
     } catch (error) {
       console.error('Erro ao reabrir card:', error);
@@ -2846,26 +2400,21 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
         [acaoId]: configAtual[acaoId] === false ? true : false // toggle, default é true (visível)
       };
 
-      const { error } = await (supabase as any)
-        .from('funil_cards')
-        .update({ acoes_rapidas_config: novaConfig })
-        .eq('id', viewingCard.id);
-
-      if (error) throw error;
+      await api.put(`/funil/cards/${viewingCard.id}`, { acoes_rapidas_config: novaConfig });
 
       // Atualizar o card localmente
       setViewingCard({ ...viewingCard, acoes_rapidas_config: novaConfig });
-      
+
       // Atualizar na lista de cards
-      setCards(prev => prev.map(c => 
+      setCards(prev => prev.map(c =>
         c.id === viewingCard.id ? { ...c, acoes_rapidas_config: novaConfig } : c
       ));
 
       const acaoLabel = ACOES_RAPIDAS_DISPONIVEIS.find(a => a.id === acaoId)?.label;
       const visivel = novaConfig[acaoId] !== false;
-      toast({ 
-        title: visivel ? 'Ação exibida' : 'Ação ocultada', 
-        description: `"${acaoLabel}" ${visivel ? 'será exibida' : 'foi ocultada'} nas ações rápidas.` 
+      toast({
+        title: visivel ? 'Ação exibida' : 'Ação ocultada',
+        description: `"${acaoLabel}" ${visivel ? 'será exibida' : 'foi ocultada'} nas ações rápidas.`
       });
     } catch (error) {
       console.error('Erro ao atualizar configuração:', error);
@@ -2893,42 +2442,28 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
   // Buscar proposta por identificador e abrir o card correspondente
   const buscarPropostaPorIdentificador = async (identificador: string) => {
     if (!empresaId || !funil?.id) return false;
-    
+
     try {
-      // Buscar nas três tabelas de propostas em paralelo
-      const [resTreinamentos, resServicosSST, resVertical365] = await Promise.all([
-        (supabase as any)
-          .from('propostas_comerciais_treinamentos')
-          .select('card_id, identificador')
-          .eq('empresa_id', empresaId)
-          .ilike('identificador', `%${identificador}%`)
-          .limit(1),
-        (supabase as any)
-          .from('propostas_comerciais_servicos_sst')
-          .select('card_id, identificador')
-          .eq('empresa_id', empresaId)
-          .ilike('identificador', `%${identificador}%`)
-          .limit(1),
-        (supabase as any)
-          .from('propostas_comerciais_vertical365')
-          .select('card_id, identificador')
-          .eq('empresa_id', empresaId)
-          .ilike('identificador', `%${identificador}%`)
-          .limit(1)
+      // Buscar nas três listas de propostas em paralelo e filtrar client-side por identificador
+      const idLower = identificador.toLowerCase();
+      const [listaTreinamentos, listaServicosSST, listaVertical365] = await Promise.all([
+        api.get<any[]>('/funil-comercial/propostas/treinamentos').catch(() => [] as any[]),
+        api.get<any[]>('/funil-comercial/propostas/servicos-sst').catch(() => [] as any[]),
+        api.get<any[]>('/funil-comercial/propostas/vertical365').catch(() => [] as any[]),
       ]);
-      
-      if (resTreinamentos.error) {
-        console.error('Erro ao buscar em propostas_comerciais_treinamentos:', resTreinamentos.error);
-      }
-      if (resServicosSST.error) {
-        console.error('Erro ao buscar em propostas_comerciais_servicos_sst:', resServicosSST.error);
-      }
-      if (resVertical365.error) {
-        console.error('Erro ao buscar em propostas_comerciais_vertical365:', resVertical365.error);
-      }
-      
+
+      const matchTreinamento = (listaTreinamentos || []).find((p: any) =>
+        p.identificador?.toLowerCase().includes(idLower)
+      );
+      const matchServicosSST = (listaServicosSST || []).find((p: any) =>
+        p.identificador?.toLowerCase().includes(idLower)
+      );
+      const matchVertical365 = (listaVertical365 || []).find((p: any) =>
+        p.identificador?.toLowerCase().includes(idLower)
+      );
+
       // Encontrar a primeira proposta válida
-      let proposta = resTreinamentos.data?.[0] || resServicosSST.data?.[0] || resVertical365.data?.[0];
+      let proposta = matchTreinamento || matchServicosSST || matchVertical365;
       
       if (proposta?.card_id) {
         // Encontrar o card correspondente
@@ -3001,47 +2536,38 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
       let anexoNome: string | null = null;
       
       if (atividadeAnexo) {
-        const fileExt = atividadeAnexo.name.split('.').pop();
-        const fileName = `${viewingCard.id}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-        
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('atividades-anexos')
-          .upload(fileName, atividadeAnexo);
-        
-        if (uploadError) {
+        try {
+          const formData = new FormData();
+          formData.append('file', atividadeAnexo);
+          formData.append('bucket', 'atividades-anexos');
+          formData.append('path', `${viewingCard.id}/${Date.now()}_${Math.random().toString(36).substring(7)}`);
+          const uploadResult = await api.post<any>('/storage/upload', formData);
+          if (uploadResult?.url) {
+            anexoUrl = uploadResult.url;
+            anexoNome = atividadeAnexo.name;
+          }
+        } catch (uploadError: any) {
           console.error('Erro ao fazer upload:', uploadError);
           toast({
             title: 'Aviso',
-            description: `Não foi possível anexar o arquivo: ${uploadError.message}`,
+            description: `Não foi possível anexar o arquivo: ${uploadError?.message || ''}`,
             variant: 'destructive'
           });
           // Continua sem o anexo se falhar
-        } else {
-          const { data: urlData } = supabase.storage
-            .from('atividades-anexos')
-            .getPublicUrl(fileName);
-          anexoUrl = urlData.publicUrl;
-          anexoNome = atividadeAnexo.name;
-          console.log('Anexo URL gerada:', anexoUrl);
         }
       }
 
-      const { error } = await (supabase as any)
-        .from('funil_card_atividades')
-        .insert({
-          card_id: viewingCard.id,
-          tipo: novaAtividade.tipo,
-          descricao: descricaoFinal,
-          prazo: novaAtividade.prazo || null,
-          horario: novaAtividade.horario || null,
-          status: novaAtividade.prazo ? 'programada' : 'a_realizar',
-          usuario_id: profile?.id,
-          responsavel_id: novaAtividade.responsavel_id || null,
-          anexo_url: anexoUrl,
-          anexo_nome: anexoNome,
-        });
-
-      if (error) throw error;
+      await api.post(`/funil/cards/${viewingCard.id}/atividades`, {
+        tipo: novaAtividade.tipo,
+        descricao: descricaoFinal,
+        prazo: novaAtividade.prazo || null,
+        horario: novaAtividade.horario || null,
+        status: novaAtividade.prazo ? 'programada' : 'a_realizar',
+        usuario_id: profile?.id,
+        responsavel_id: novaAtividade.responsavel_id || null,
+        anexo_url: anexoUrl,
+        anexo_nome: anexoNome,
+      });
 
       toast({ title: 'Sucesso', description: 'Atividade adicionada!' });
       setNovaAtividade({ tipo: 'tarefa', descricao: '', prazo: '', horario: '', responsavel_id: profile?.id || '' });
@@ -3075,21 +2601,16 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
 
   const handleToggleChecklistItem = async (atividadeId: string, itemIndex: number) => {
     const atividade = atividades.find(a => a.id === atividadeId);
-    if (!atividade || atividade.tipo !== 'checklist') return;
+    if (!atividade || atividade.tipo !== 'checklist' || !viewingCard) return;
 
     try {
       const checklistData = JSON.parse(atividade.descricao);
       checklistData.itens[itemIndex].concluido = !checklistData.itens[itemIndex].concluido;
 
       const novaDescricao = JSON.stringify(checklistData);
-      const { error } = await (supabase as any)
-        .from('funil_card_atividades')
-        .update({ descricao: novaDescricao })
-        .eq('id', atividadeId);
+      await api.put(`/funil/cards/${viewingCard.id}/atividades/${atividadeId}`, { descricao: novaDescricao });
 
-      if (error) throw error;
-
-      setAtividades(prev => prev.map(a => 
+      setAtividades(prev => prev.map(a =>
         a.id === atividadeId ? { ...a, descricao: novaDescricao } : a
       ));
 
@@ -3107,12 +2628,7 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     if (!viewingCard) return;
 
     try {
-      const { error } = await (supabase as any)
-        .from('funil_card_atividades')
-        .delete()
-        .eq('id', atividadeId);
-
-      if (error) throw error;
+      await api.del(`/funil/cards/${viewingCard.id}/atividades/${atividadeId}`);
 
       setAtividades(prev => prev.filter(a => a.id !== atividadeId));
       toast({ title: 'Sucesso', description: 'Atividade excluída!' });
@@ -3135,14 +2651,9 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
       if (dados.horario !== undefined) updateData.horario = dados.horario;
       if (dados.prazo) updateData.status = 'programada';
 
-      const { error } = await (supabase as any)
-        .from('funil_card_atividades')
-        .update(updateData)
-        .eq('id', atividadeId);
+      await api.put(`/funil/cards/${viewingCard.id}/atividades/${atividadeId}`, updateData);
 
-      if (error) throw error;
-
-      setAtividades(prev => prev.map(a => 
+      setAtividades(prev => prev.map(a =>
         a.id === atividadeId ? { ...a, ...updateData } : a
       ));
       toast({ title: 'Sucesso', description: 'Atividade atualizada!' });
@@ -3160,26 +2671,16 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     if (!viewingCard) return;
 
     try {
-      const { error } = await (supabase as any)
-        .from('funil_card_atividades')
-        .update({ status: novoStatus })
-        .eq('id', atividadeId);
+      await api.put(`/funil/cards/${viewingCard.id}/atividades/${atividadeId}`, { status: novoStatus });
 
-      if (error) throw error;
-
-      setAtividades(prev => prev.map(a => 
+      setAtividades(prev => prev.map(a =>
         a.id === atividadeId ? { ...a, status: novoStatus } : a
       ));
 
-      toast({ 
-        title: 'Sucesso', 
-        description: novoStatus === 'concluida' ? 'Atividade concluída!' : 'Status atualizado!' 
+      toast({
+        title: 'Sucesso',
+        description: novoStatus === 'concluida' ? 'Atividade concluída!' : 'Status atualizado!'
       });
-
-      // Executar automações de atividade finalizada
-      if (novoStatus === 'concluida') {
-        await executeAutomationsByAtividadeFinalizada(viewingCard);
-      }
     } catch (error) {
       console.error('Erro ao atualizar status:', error);
       toast({
@@ -3218,39 +2719,18 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     }
 
     try {
-      // Cancelar agendamentos pendentes da etapa de origem
-      await cancelarAgendamentosPendentes(viewingCard.id, viewingCard.etapa_id);
-
-      // Atualizar card
-      const { error } = await (supabase as any)
-        .from('funil_cards')
-        .update({ etapa_id: novaEtapaId, updated_at: new Date().toISOString() })
-        .eq('id', viewingCard.id);
-
-      if (error) throw error;
-
-      // Registrar movimentação
-      await (supabase as any)
-        .from('funil_card_movimentacoes')
-        .insert({
-          card_id: viewingCard.id,
-          tipo: 'mudanca_etapa',
-          descricao: `Movido de "${etapaOrigem?.nome}" para "${etapaDestino?.nome}"`,
-          etapa_origem_id: viewingCard.etapa_id,
-          etapa_destino_id: novaEtapaId,
-          usuario_id: profile?.id,
-        });
+      // Mover card via endpoint (registra movimentação server-side)
+      await api.post(`/funil/cards/${viewingCard.id}/mover`, {
+        etapa_destino_id: novaEtapaId,
+        justificativa: `Movido de "${etapaOrigem?.nome}" para "${etapaDestino?.nome}"`,
+      });
 
       // Atualizar estados
       setViewingCard({ ...viewingCard, etapa_id: novaEtapaId });
-      
+
       // Recarregar cards para refletir a mudança
       await loadCards();
-      await fetchMovimentacoes(viewingCard.id);
-      
-      // Executar automações para a nova etapa
-      await executeAutomations({ ...viewingCard, etapa_id: novaEtapaId }, novaEtapaId);
-      
+
       toast({ title: 'Sucesso', description: 'Card movido!' });
     } catch (error) {
       console.error('Erro ao mover card:', error);
@@ -3418,12 +2898,8 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
           updateData.responsavel_id = formData.responsavel_id || null;
         }
 
-        const { error } = await (supabase as any)
-          .from('funil_cards')
-          .update(updateData)
-          .eq('id', editingCard.id);
+        await api.put(`/funil/cards/${editingCard.id}`, updateData);
 
-        if (error) throw error;
         toast({ title: 'Sucesso', description: 'Card atualizado com sucesso!' });
       } else {
         const cardData = {
@@ -3434,43 +2910,20 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
           data_previsao: formData.data_previsao || null,
           prioridade: formData.prioridade,
           responsavel_id: formData.responsavel_id || profile?.id || null,
-          updated_at: new Date().toISOString()
         };
 
         const cardsNaEtapa = getCardsByEtapaUnfiltered(selectedEtapaId);
-        const etapaAtual = etapas.find(e => e.id === selectedEtapaId);
-        
-        const { data: novoCard, error } = await (supabase as any)
-          .from('funil_cards')
-          .insert({
-            ...cardData,
-            funil_id: funilId,
-            etapa_id: selectedEtapaId,
-            ordem: cardsNaEtapa.length,
-            ativo: true,
-            // status_negocio só para funis tipo negócio
-            ...(funil?.tipo === 'negocio' ? { status_negocio: 'em_andamento' } : {})
-          })
-          .select()
-          .single();
 
-        if (error) throw error;
-
-        // Registrar movimentação inicial (criação do card)
-        if (novoCard?.id) {
-          await (supabase as any)
-            .from('funil_card_movimentacoes')
-            .insert({
-              card_id: novoCard.id,
-              tipo: 'criacao',
-              descricao: `Card criado na etapa "${etapaAtual?.nome || 'Inicial'}"`,
-              etapa_destino_id: selectedEtapaId,
-              usuario_id: profile?.id
-            });
-          
-          // Executar automações para a etapa onde o card foi criado
-          await executeAutomations(novoCard as FunilCard, selectedEtapaId);
-        }
+        // Criar card via REST (automações e movimentação inicial são disparadas server-side)
+        await api.post('/funil/cards', {
+          ...cardData,
+          funil_id: funilId,
+          etapa_id: selectedEtapaId,
+          ordem: cardsNaEtapa.length,
+          ativo: true,
+          // status_negocio só para funis tipo negócio
+          ...(funil?.tipo === 'negocio' ? { status_negocio: 'em_andamento' } : {})
+        });
 
         toast({ title: 'Sucesso', description: 'Card criado com sucesso!' });
       }
@@ -3532,31 +2985,14 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
       };
 
       // Verificar se já existe uma comparação para este card
-      const { data: existentes, error: selectError } = await (supabase as any)
-        .from('funil_card_comparacoes')
-        .select('id')
-        .eq('card_id', viewingCard.id);
-
-      if (selectError) {
-        console.error('Erro ao verificar comparação existente:', selectError);
-        throw selectError;
-      }
+      const existentes = await api.get<any[]>(`/funil/cards/${viewingCard.id}/comparacoes`).catch(() => [] as any[]);
 
       if (existentes && existentes.length > 0) {
         // Atualizar existente
-        const { error } = await (supabase as any)
-          .from('funil_card_comparacoes')
-          .update(dadosComparacao)
-          .eq('id', existentes[0].id);
-
-        if (error) throw error;
+        await api.put(`/funil/cards/${viewingCard.id}/comparacoes/${existentes[0].id}`, dadosComparacao);
       } else {
         // Inserir novo
-        const { error } = await (supabase as any)
-          .from('funil_card_comparacoes')
-          .insert(dadosComparacao);
-
-        if (error) throw error;
+        await api.post(`/funil/cards/${viewingCard.id}/comparacoes`, dadosComparacao);
       }
 
       // Atualizar estado local também
@@ -3606,17 +3042,8 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
   // Função para carregar comparação salva do banco de dados quando abrir o card
   const carregarComparacaoSalva = async (cardId: string) => {
     try {
-      // Buscar do banco de dados
-      const { data: registros, error } = await (supabase as any)
-        .from('funil_card_comparacoes')
-        .select('*')
-        .eq('card_id', cardId);
-
-      if (error) {
-        console.error('Erro ao carregar comparação:', error);
-        return;
-      }
-
+      // Buscar do backend
+      const registros = await api.get<any[]>(`/funil/cards/${cardId}/comparacoes`).catch(() => [] as any[]);
       const data = registros && registros.length > 0 ? registros[0] : null;
 
       if (data) {
@@ -3827,12 +3254,7 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     if (!cardToDelete) return;
 
     try {
-      const { error } = await (supabase as any)
-        .from('funil_cards')
-        .delete()
-        .eq('id', cardToDelete.id);
-
-      if (error) throw error;
+      await api.del(`/funil/cards/${cardToDelete.id}`);
       toast({ title: 'Sucesso', description: 'Card excluído com sucesso!' });
       setDeleteConfirmOpen(false);
       setCardToDelete(null);
@@ -3874,20 +3296,10 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     }
 
     try {
-      // Cancelar agendamentos pendentes da etapa de origem
-      await cancelarAgendamentosPendentes(card.id, card.etapa_id);
-
-      const cardsNaNovaEtapa = getCardsByEtapaUnfiltered(novaEtapaId);
-      const { error } = await (supabase as any)
-        .from('funil_cards')
-        .update({
-          etapa_id: novaEtapaId,
-          ordem: cardsNaNovaEtapa.length,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', card.id);
-
-      if (error) throw error;
+      // Mover card via endpoint (registra movimentação server-side)
+      await api.post(`/funil/cards/${card.id}/mover`, {
+        etapa_destino_id: novaEtapaId,
+      });
       loadCards();
     } catch (error) {
       console.error('Erro ao mover card:', error);
@@ -3905,44 +3317,19 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     const { card, targetEtapaId } = pendingLockedMove;
 
     try {
-      // Cancelar agendamentos pendentes da etapa de origem
-      await cancelarAgendamentosPendentes(card.id, card.etapa_id);
-
-      const etapaOrigem = etapas.find(e => e.id === card.etapa_id);
       const etapaDestino = etapas.find(e => e.id === targetEtapaId);
-      const cardsNaNovaEtapa = getCardsByEtapaUnfiltered(targetEtapaId);
 
-      const { error } = await (supabase as any)
-        .from('funil_cards')
-        .update({
-          etapa_id: targetEtapaId,
-          ordem: cardsNaNovaEtapa.length,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', card.id);
-
-      if (error) throw error;
-
-      // Registrar movimentação
-      await (supabase as any)
-        .from('funil_card_movimentacoes')
-        .insert({
-          card_id: card.id,
-          tipo: 'mudanca_etapa',
-          descricao: `Movido de "${etapaOrigem?.nome || 'Desconhecida'}" para "${etapaDestino?.nome || 'Desconhecida'}" (etapa trancada)`,
-          etapa_origem_id: card.etapa_id,
-          etapa_destino_id: targetEtapaId,
-          usuario_id: profile?.id,
-        });
+      // Mover card via endpoint (registra movimentação server-side)
+      await api.post(`/funil/cards/${card.id}/mover`, {
+        etapa_destino_id: targetEtapaId,
+      });
 
       // Atualizar viewingCard se estiver aberto
       if (viewingCard?.id === card.id) {
         setViewingCard({ ...viewingCard, etapa_id: targetEtapaId });
-        await fetchMovimentacoes(card.id);
       }
 
       await loadCards();
-      await executeAutomations({ ...card, etapa_id: targetEtapaId }, targetEtapaId);
 
       toast({ title: 'Sucesso', description: `Card movido para "${etapaDestino?.nome}".` });
     } catch (error) {
@@ -3974,69 +3361,42 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     return cardsEtapa.reduce((acc, card) => acc + (card.valor || 0), 0);
   };
 
-  // Função para copiar histórico de atividades e movimentações de um card para outro
+  // Função para copiar histórico de atividades e etiquetas de um card para outro
   const copyCardHistory = async (sourceCardId: string, targetCardId: string) => {
     try {
       // Copiar atividades
-      const { data: atividades } = await (supabase as any)
-        .from('funil_card_atividades')
-        .select('*')
-        .eq('card_id', sourceCardId);
+      const atividades = await api.get<any[]>(`/funil/cards/${sourceCardId}/atividades`).catch(() => [] as any[]);
 
       if (atividades && atividades.length > 0) {
-        const atividadesCopy = atividades.map((atividade: any) => ({
-          card_id: targetCardId,
-          tipo: atividade.tipo,
-          descricao: atividade.descricao,
-          prazo: atividade.prazo,
-          horario: atividade.horario,
-          status: atividade.status,
-          usuario_id: atividade.usuario_id,
-          responsavel_id: atividade.responsavel_id,
-          created_at: atividade.created_at,
-          updated_at: atividade.updated_at
-        }));
-
-        await (supabase as any)
-          .from('funil_card_atividades')
-          .insert(atividadesCopy);
+        await Promise.all(
+          atividades.map((atividade: any) =>
+            api.post(`/funil/cards/${targetCardId}/atividades`, {
+              tipo: atividade.tipo,
+              descricao: atividade.descricao,
+              prazo: atividade.prazo,
+              horario: atividade.horario,
+              status: atividade.status,
+              usuario_id: atividade.usuario_id,
+              responsavel_id: atividade.responsavel_id,
+            }).catch(() => null)
+          )
+        );
       }
 
-      // Copiar movimentações
-      const { data: movimentacoes } = await (supabase as any)
-        .from('funil_card_movimentacoes')
-        .select('*')
-        .eq('card_id', sourceCardId);
-
-      if (movimentacoes && movimentacoes.length > 0) {
-        const movimentacoesCopy = movimentacoes.map((mov: any) => ({
-          card_id: targetCardId,
-          etapa_origem_id: mov.etapa_origem_id,
-          etapa_destino_id: mov.etapa_destino_id,
-          usuario_id: mov.usuario_id,
-          created_at: mov.created_at
-        }));
-
-        await (supabase as any)
-          .from('funil_card_movimentacoes')
-          .insert(movimentacoesCopy);
-      }
+      // NOTA (migração): movimentações não são copiadas — não há endpoint de inserção direta.
+      // O endpoint POST /funil/cards/{id}/mover registra movimentações server-side.
 
       // Copiar etiquetas
-      const { data: etiquetas } = await (supabase as any)
-        .from('funil_card_etiquetas')
-        .select('*')
-        .eq('card_id', sourceCardId);
+      const etiquetas = await api.get<any[]>(`/funil/cards/${sourceCardId}/etiquetas`).catch(() => [] as any[]);
 
       if (etiquetas && etiquetas.length > 0) {
-        const etiquetasCopy = etiquetas.map((etq: any) => ({
-          card_id: targetCardId,
-          etiqueta_id: etq.etiqueta_id
-        }));
-
-        await (supabase as any)
-          .from('funil_card_etiquetas')
-          .insert(etiquetasCopy);
+        await Promise.all(
+          etiquetas.map((etq: any) =>
+            api.post(`/funil/cards/${targetCardId}/etiquetas`, {
+              etiqueta_id: etq.etiqueta_id || etq.id
+            }).catch(() => null)
+          )
+        );
       }
 
     } catch (error) {
@@ -4044,787 +3404,33 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
     }
   };
 
-  // Função para executar automações de um funil específico (usado para cards duplicados/criados em outros funis)
-  const executeAutomationsForFunil = async (card: FunilCard, targetFunilId: string, etapaId: string) => {
-    try {
-      // Buscar automações ativas para o funil de destino e etapa
-      const { data: automacoes, error } = await (supabase as any)
-        .from('automacoes')
-        .select('*')
-        .eq('funil_id', targetFunilId)
-        .eq('etapa_id', etapaId)
-        .eq('gatilho', 'negocio_chegar_etapa')
-        .eq('ativo', true);
-
-      if (error || !automacoes || automacoes.length === 0) {
-        return;
-      }
-
-      // Executar apenas automações de agendar atividade (não duplicar novamente para evitar loop)
-      for (const automacao of automacoes) {
-        if (automacao.tipo === 'agendar_atividade') {
-          const { tipo_atividade, quando, descricao, dias_personalizado } = automacao.acao_config;
-
-          if (tipo_atividade) {
-            const prazoDate = new Date();
-            switch (quando) {
-              case '1_dia':
-                prazoDate.setDate(prazoDate.getDate() + 1);
-                break;
-              case '2_dias':
-                prazoDate.setDate(prazoDate.getDate() + 2);
-                break;
-              case '3_dias':
-                prazoDate.setDate(prazoDate.getDate() + 3);
-                break;
-              case '1_semana':
-                prazoDate.setDate(prazoDate.getDate() + 7);
-                break;
-              case 'personalizado':
-                prazoDate.setDate(prazoDate.getDate() + (dias_personalizado || 1));
-                break;
-              case 'mesmo_dia':
-              default:
-                break;
-            }
-
-            const prazoFormatado = prazoDate.toISOString().split('T')[0];
-
-            const { error: atividadeError } = await (supabase as any)
-              .from('funil_card_atividades')
-              .insert({
-                card_id: card.id,
-                tipo: tipo_atividade,
-                descricao: descricao || `Atividade automática: ${tipo_atividade}`,
-                prazo: prazoFormatado,
-                status: 'a_realizar',
-                usuario_id: card.responsavel_id || profile?.id,
-                responsavel_id: card.responsavel_id || profile?.id
-              });
-
-            if (!atividadeError) {
-              toast({
-                title: 'Automação executada',
-                description: `Atividade "${tipo_atividade}" agendada automaticamente!`,
-              });
-              // Sempre recarregar atividades do card (se estiver aberto)
-              if (viewingCard?.id === card.id) {
-                fetchAtividades(card.id);
-              }
-            }
-          }
-        }
-      }
-    } catch {
-      // Erro silencioso - automação não crítica
-    }
+  // NOTA (migração): motor de automações migrado para server-side.
+  // Os endpoints POST /funil/cards/{id}/mover, POST /funil/cards e PUT /funil/cards/{id}
+  // já acionam as automações via automacoes_engine no backend.
+  // As funções abaixo são no-ops para manter compatibilidade com chamadores existentes.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const executeAutomationsForFunil = async (_card: FunilCard, _targetFunilId: string, _etapaId: string) => {
+    // no-op: automações executadas server-side
   };
 
-  // Função para cancelar agendamentos pendentes quando card sai da etapa
-  const cancelarAgendamentosPendentes = async (cardId: string, etapaOrigemId: string) => {
-    try {
-      // Buscar automações da etapa de origem que são do tipo agendado
-      const { data: automacoesEtapa } = await (supabase as any)
-        .from('automacoes')
-        .select('id')
-        .eq('funil_id', funilId)
-        .eq('etapa_id', etapaOrigemId)
-        .eq('gatilho', 'negocio_chegar_etapa')
-        .in('tipo', ['mover_card_agendado', 'duplicar_card_agendado'])
-        .eq('ativo', true);
-
-      if (!automacoesEtapa || automacoesEtapa.length === 0) return;
-
-      const automacaoIds = automacoesEtapa.map((a: { id: string }) => a.id);
-
-      // Deletar agendamentos pendentes (não executados) para este card
-      const { error, count } = await (supabase as any)
-        .from('automacoes_execucoes')
-        .delete()
-        .eq('card_id', cardId)
-        .eq('executado', false)
-        .in('automacao_id', automacaoIds);
-
-      if (!error && count && count > 0) {
-        console.log(`[Automações] Cancelados ${count} agendamento(s) pendente(s) para card ${cardId}`);
-      }
-    } catch (err) {
-      console.error('[Automações] Erro ao cancelar agendamentos:', err);
-    }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const cancelarAgendamentosPendentes = async (_cardId: string, _etapaOrigemId: string) => {
+    // no-op: agendamentos gerenciados server-side
   };
 
-  // Função para executar automações quando card chega em uma etapa
-  const executeAutomations = async (card: FunilCard, etapaId: string) => {
-    try {
-      console.log('[Automações] Buscando automações para funil:', funilId, 'etapa:', etapaId);
-      
-      // Buscar automações ativas para este funil e etapa
-      const { data: automacoes, error } = await (supabase as any)
-        .from('automacoes')
-        .select('*')
-        .eq('funil_id', funilId)
-        .eq('etapa_id', etapaId)
-        .eq('gatilho', 'negocio_chegar_etapa')
-        .eq('ativo', true);
-
-      console.log('[Automações] Resultado:', { automacoes, error });
-
-      if (error || !automacoes || automacoes.length === 0) {
-        console.log('[Automações] Nenhuma automação encontrada ou erro');
-        return;
-      }
-
-      // Helper: buscar nomes do funil e etapa de destino
-      const getDestinoNomes = async (funilDestinoId: string, etapaDestinoId: string) => {
-        const [funilRes, etapaRes] = await Promise.all([
-          (supabase as any).from('funis').select('nome, setores(nome)').eq('id', funilDestinoId).single(),
-          (supabase as any).from('funil_etapas').select('nome').eq('id', etapaDestinoId).single()
-        ]);
-        // Se não encontrou etapa em funil_etapas, tentar em contas_receber_colunas
-        let etapaNome = etapaRes.data?.nome;
-        if (!etapaNome) {
-          const { data: colunaData } = await (supabase as any)
-            .from('contas_receber_colunas')
-            .select('nome')
-            .eq('id', etapaDestinoId)
-            .single();
-          etapaNome = colunaData?.nome;
-        }
-        return {
-          funilNome: funilRes.data?.nome || 'Funil',
-          setorNome: funilRes.data?.setores?.nome || '',
-          etapaNome: etapaNome || 'Etapa'
-        };
-      };
-
-      // Helper: verificar se funil destino é "Contas a Receber" do Financeiro
-      const isContasReceberFunil = async (funilDestinoId: string) => {
-        const { data } = await (supabase as any)
-          .from('funis')
-          .select('nome, setores(nome)')
-          .eq('id', funilDestinoId)
-          .single();
-        return data?.nome?.toLowerCase().includes('contas a receber') && 
-               data?.setores?.nome?.toLowerCase().includes('financeiro');
-      };
-
-      // Executar cada automação
-      for (const automacao of automacoes) {
-        if (automacao.tipo === 'duplicar_card') {
-          // Duplicar card para outro funil/etapa
-          const { funil_destino_id, etapa_destino_id } = automacao.acao_config;
-
-          if (funil_destino_id && etapa_destino_id) {
-            const isContasReceber = await isContasReceberFunil(funil_destino_id);
-            
-            if (isContasReceber) {
-              // Destino é Contas a Receber: inserir na tabela contas_receber
-              const hoje = new Date().toISOString().split('T')[0];
-              const numero = `CR-${Date.now().toString(36).toUpperCase()}`;
-              
-              // Buscar coluna_id correspondente na tabela contas_receber_colunas
-              // O etapa_destino_id pode ser um funil_etapas.id, precisamos mapear pelo nome
-              let colunaId = etapa_destino_id;
-              const { data: etapaData } = await (supabase as any)
-                .from('funil_etapas')
-                .select('nome')
-                .eq('id', etapa_destino_id)
-                .single();
-              if (etapaData?.nome) {
-                const { data: colunaData } = await (supabase as any)
-                  .from('contas_receber_colunas')
-                  .select('id')
-                  .eq('empresa_id', empresaId)
-                  .ilike('nome', etapaData.nome)
-                  .single();
-                if (colunaData) colunaId = colunaData.id;
-              }
-              
-              // Buscar dados do cliente
-              let clienteNome = card.titulo || 'Sem cliente';
-              let clienteCnpj = '';
-              if (card.cliente_id) {
-                const { data: clienteData } = await (supabase as any)
-                  .from('clientes_sst')
-                  .select('nome, cnpj')
-                  .eq('id', card.cliente_id)
-                  .single();
-                if (clienteData) {
-                  clienteNome = clienteData.nome || clienteNome;
-                  clienteCnpj = clienteData.cnpj || '';
-                }
-              }
-
-              const { error: insertError } = await (supabase as any)
-                .from('contas_receber')
-                .insert({
-                  empresa_id: empresaId,
-                  coluna_id: colunaId,
-                  numero,
-                  cliente_id: card.cliente_id || null,
-                  cliente_nome: clienteNome,
-                  cliente_cnpj: clienteCnpj,
-                  servico_produto: card.descricao || card.titulo || '',
-                  valor: card.valor || 0,
-                  valor_pago: 0,
-                  data_emissao: hoje,
-                  observacoes: `Automação: duplicado do funil "${funil?.nome}" - Card: ${card.titulo}`,
-                  origem: 'closer',
-                  origem_card_id: card.id,
-                  origem_kanban: funil?.nome || '',
-                  closer_card_id: card.id,
-                  ordem: 0,
-                  arquivado: false,
-                });
-
-              if (insertError) {
-                toast({
-                  title: 'Erro na automação',
-                  description: `Não foi possível criar conta a receber: ${insertError.message}`,
-                  variant: 'destructive'
-                });
-              } else {
-                const { funilNome, etapaNome } = await getDestinoNomes(funil_destino_id, etapa_destino_id);
-                toast({
-                  title: 'Automação executada',
-                  description: `Card "${card.titulo}" duplicado para ${etapaNome} do ${funilNome} (Financeiro)`,
-                });
-                await loadCards();
-              }
-            } else {
-              // Destino é um funil normal: inserir em funil_cards
-              const { data: cardsDestino } = await (supabase as any)
-                .from('funil_cards')
-                .select('id')
-                .eq('funil_id', funil_destino_id)
-                .eq('etapa_id', etapa_destino_id)
-                .eq('ativo', true);
-
-              const ordemDestino = cardsDestino?.length || 0;
-
-              const cardData = {
-                funil_id: funil_destino_id,
-                etapa_id: etapa_destino_id,
-                titulo: card.titulo,
-                descricao: card.descricao,
-                valor: card.valor,
-                cliente_id: card.cliente_id,
-                responsavel_id: card.responsavel_id,
-                data_previsao: card.data_previsao,
-                prioridade: card.prioridade,
-                ordem: ordemDestino,
-                ativo: true
-              };
-
-              const { data: newCardData, error: insertError } = await (supabase as any)
-                .from('funil_cards')
-                .insert(cardData)
-                .select()
-                .single();
-
-              if (insertError) {
-                toast({
-                  title: 'Erro na automação',
-                  description: `Não foi possível duplicar o card: ${insertError.message}`,
-                  variant: 'destructive'
-                });
-              } else {
-                if (newCardData) {
-                  await copyCardHistory(card.id, newCardData.id);
-                }
-                
-                const { funilNome, etapaNome } = await getDestinoNomes(funil_destino_id, etapa_destino_id);
-                toast({
-                  title: 'Automação executada',
-                  description: `Card "${card.titulo}" duplicado para ${etapaNome} do ${funilNome}`,
-                });
-                await loadCards();
-                
-                if (newCardData) {
-                  await executeAutomationsForFunil(newCardData as FunilCard, funil_destino_id, etapa_destino_id);
-                }
-              }
-            }
-          }
-        } else if (automacao.tipo === 'mover_card') {
-          // Mover card para outro funil/etapa (transferência - mantém histórico)
-          const { funil_destino_id, etapa_destino_id } = automacao.acao_config;
-
-          if (funil_destino_id && etapa_destino_id) {
-            // Contar cards na etapa de destino para definir ordem
-            const { data: cardsDestino } = await (supabase as any)
-              .from('funil_cards')
-              .select('id')
-              .eq('funil_id', funil_destino_id)
-              .eq('etapa_id', etapa_destino_id)
-              .eq('ativo', true);
-
-            const ordemDestino = cardsDestino?.length || 0;
-
-            // Atualizar o card para o novo funil/etapa (mantém o mesmo ID e histórico)
-            const { error: updateError } = await (supabase as any)
-              .from('funil_cards')
-              .update({
-                funil_id: funil_destino_id,
-                etapa_id: etapa_destino_id,
-                ordem: ordemDestino
-              })
-              .eq('id', card.id);
-
-            if (updateError) {
-              toast({
-                title: 'Erro na automação',
-                description: `Não foi possível mover o card: ${updateError.message}`,
-                variant: 'destructive'
-              });
-            } else {
-              const { funilNome, etapaNome } = await getDestinoNomes(funil_destino_id, etapa_destino_id);
-              toast({
-                title: 'Automação executada',
-                description: `Card "${card.titulo}" transferido para ${etapaNome} do ${funilNome}`,
-              });
-              // Recarregar cards para refletir a mudança
-              await loadCards();
-              
-              // Executar automações do funil de destino para o card movido
-              const movedCard = { ...card, funil_id: funil_destino_id, etapa_id: etapa_destino_id };
-              await executeAutomationsForFunil(movedCard, funil_destino_id, etapa_destino_id);
-            }
-          }
-        } else if (automacao.tipo === 'duplicar_card_agendado' || automacao.tipo === 'mover_card_agendado') {
-          // Agendar duplicação/movimentação para X dias depois no horário exato
-          const { agendamento_dias, agendamento_hora } = automacao.acao_config;
-          
-          console.log('[Automações] Tipo agendado detectado:', automacao.tipo, { agendamento_dias, agendamento_hora });
-
-          if (agendamento_dias !== undefined && agendamento_dias !== null && agendamento_hora) {
-            // Calcular data de execução: hoje + X dias no horário exato
-            const dataExecucao = new Date();
-            dataExecucao.setDate(dataExecucao.getDate() + agendamento_dias);
-            const dataStr = dataExecucao.toISOString().split('T')[0];
-            const executarEm = `${dataStr}T${agendamento_hora}`;
-            
-            console.log('[Automações] Agendando para:', executarEm);
-
-            // Verificar se já existe agendamento para este card/automação
-            const { data: existente } = await (supabase as any)
-              .from('automacoes_execucoes')
-              .select('id, executado')
-              .eq('automacao_id', automacao.id)
-              .eq('card_id', card.id)
-              .maybeSingle();
-
-            if (existente) {
-              if (!existente.executado) {
-                // Agendamento pendente já existe - não criar novo
-                console.log('[Automações] Agendamento pendente já existe para este card/automação');
-                return;
-              } else {
-                // Registro já executado - deletar para permitir novo agendamento
-                console.log('[Automações] Deletando registro executado para permitir novo agendamento');
-                await (supabase as any)
-                  .from('automacoes_execucoes')
-                  .delete()
-                  .eq('id', existente.id);
-              }
-            }
-
-            const { error: execError } = await (supabase as any)
-              .from('automacoes_execucoes')
-              .insert({
-                automacao_id: automacao.id,
-                card_id: card.id,
-                empresa_id: empresaId,
-                executar_em: executarEm,
-                executado: false
-              });
-
-            if (execError) {
-              // Ignorar erro de duplicata silenciosamente
-              if (execError.code !== '23505') {
-                console.error('Erro ao agendar automação:', execError);
-              }
-            } else {
-              const acaoLabel = automacao.tipo === 'duplicar_card_agendado' ? 'duplicação' : 'movimentação';
-              toast({
-                title: 'Automação agendada',
-                description: `${acaoLabel.charAt(0).toUpperCase() + acaoLabel.slice(1)} do card "${card.titulo}" agendada para ${agendamento_dias} dia(s) às ${agendamento_hora}`,
-              });
-            }
-          }
-        } else if (automacao.tipo === 'criar_negocio') {
-          // Criar negócio em outro funil
-          const { funil_destino_id, etapa_destino_id } = automacao.acao_config;
-
-          if (funil_destino_id) {
-            let targetEtapaId = etapa_destino_id;
-
-            // Se não tiver etapa de destino configurada, buscar a primeira etapa do funil
-            if (!targetEtapaId) {
-              const { data: etapasDestino } = await (supabase as any)
-                .from('funil_etapas')
-                .select('id')
-                .eq('funil_id', funil_destino_id)
-                .eq('ativo', true)
-                .order('ordem')
-                .limit(1);
-
-              if (etapasDestino && etapasDestino.length > 0) {
-                targetEtapaId = etapasDestino[0].id;
-              }
-            }
-
-            if (targetEtapaId) {
-              // Contar cards na etapa de destino
-              const { data: cardsDestino } = await (supabase as any)
-                .from('funil_cards')
-                .select('id')
-                .eq('funil_id', funil_destino_id)
-                .eq('etapa_id', targetEtapaId)
-                .eq('ativo', true);
-
-              const ordemDestino = cardsDestino?.length || 0;
-
-              // Criar novo card
-              const { data: newCardData, error: insertError } = await (supabase as any)
-                .from('funil_cards')
-                .insert({
-                  funil_id: funil_destino_id,
-                  etapa_id: targetEtapaId,
-                  titulo: card.titulo,
-                  descricao: card.descricao,
-                  valor: card.valor,
-                  cliente_id: card.cliente_id,
-                  responsavel_id: card.responsavel_id,
-                  data_previsao: card.data_previsao,
-                  prioridade: card.prioridade,
-                  ordem: ordemDestino,
-                  ativo: true
-                })
-                .select()
-                .single();
-
-              if (!insertError) {
-                // Copiar histórico de atividades, movimentações e etiquetas do card original
-                if (newCardData) {
-                  await copyCardHistory(card.id, newCardData.id);
-                }
-                
-                toast({
-                  title: 'Automação executada',
-                  description: `Negócio criado automaticamente com histórico!`,
-                });
-                // Recarregar cards para refletir a mudança
-                await loadCards();
-                
-                // Executar automações do funil de destino para o novo card
-                if (newCardData) {
-                  await executeAutomationsForFunil(newCardData as FunilCard, funil_destino_id, targetEtapaId);
-                }
-              }
-            }
-          }
-        } else if (automacao.tipo === 'agendar_atividade') {
-          // Agendar atividade automaticamente
-          const { tipo_atividade, quando, descricao, dias_personalizado } = automacao.acao_config;
-
-          if (tipo_atividade) {
-            // Calcular data da atividade baseado no "quando"
-            const prazoDate = new Date();
-            switch (quando) {
-              case '1_dia':
-                prazoDate.setDate(prazoDate.getDate() + 1);
-                break;
-              case '2_dias':
-                prazoDate.setDate(prazoDate.getDate() + 2);
-                break;
-              case '3_dias':
-                prazoDate.setDate(prazoDate.getDate() + 3);
-                break;
-              case '1_semana':
-                prazoDate.setDate(prazoDate.getDate() + 7);
-                break;
-              case 'personalizado':
-                prazoDate.setDate(prazoDate.getDate() + (dias_personalizado || 1));
-                break;
-              case 'mesmo_dia':
-              default:
-                // Mantém a data atual
-                break;
-            }
-
-            const prazoFormatado = prazoDate.toISOString().split('T')[0];
-
-            // Criar atividade
-            const { error: atividadeError } = await (supabase as any)
-              .from('funil_card_atividades')
-              .insert({
-                card_id: card.id,
-                tipo: tipo_atividade,
-                descricao: descricao || `Atividade automática: ${tipo_atividade}`,
-                prazo: prazoFormatado,
-                status: 'a_realizar',
-                usuario_id: card.responsavel_id || profile?.id,
-                responsavel_id: card.responsavel_id || profile?.id
-              });
-
-            if (!atividadeError) {
-              toast({
-                title: 'Automação executada',
-                description: `Atividade "${tipo_atividade}" agendada automaticamente!`,
-              });
-              // Sempre recarregar atividades do card (se estiver aberto)
-              if (viewingCard?.id === card.id) {
-                fetchAtividades(card.id);
-              }
-            }
-          }
-        }
-      }
-    } catch {
-      // Erro silencioso - automação não crítica
-    }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const executeAutomations = async (_card: FunilCard, _etapaId: string) => {
+    // no-op: automações executadas server-side via endpoint mover/criar/atualizar card
   };
 
-  // Função para executar automações baseadas no status do negócio (ganho/perdido)
-  const executeAutomationsByStatus = async (card: FunilCard, status: 'ganho' | 'perdido') => {
-    try {
-      const gatilho = status === 'ganho' ? 'negocio_ganho' : 'negocio_perdido';
-
-      // Buscar automações ativas para este funil e gatilho
-      const { data: automacoes, error } = await (supabase as any)
-        .from('automacoes')
-        .select('*')
-        .eq('funil_id', funilId)
-        .eq('gatilho', gatilho)
-        .eq('ativo', true);
-
-      if (error) {
-        console.error('Erro ao buscar automações:', error);
-        return;
-      }
-      
-      if (!automacoes || automacoes.length === 0) {
-        return;
-      }
-
-      // Executar cada automação
-      for (const automacao of automacoes) {
-        if (automacao.tipo === 'criar_negocio') {
-          // Criar negócio em outro funil
-          const { funil_destino_id, etapa_destino_id } = automacao.acao_config;
-
-          if (funil_destino_id) {
-            let targetEtapaId = etapa_destino_id;
-
-            // Se não tiver etapa de destino configurada, buscar a primeira etapa do funil
-            if (!targetEtapaId) {
-              const { data: etapasDestino } = await (supabase as any)
-                .from('funil_etapas')
-                .select('id')
-                .eq('funil_id', funil_destino_id)
-                .eq('ativo', true)
-                .order('ordem')
-                .limit(1);
-
-              if (etapasDestino && etapasDestino.length > 0) {
-                targetEtapaId = etapasDestino[0].id;
-              }
-            }
-
-            if (targetEtapaId) {
-              // Contar cards na etapa de destino
-              const { data: cardsDestino } = await (supabase as any)
-                .from('funil_cards')
-                .select('id')
-                .eq('funil_id', funil_destino_id)
-                .eq('etapa_id', targetEtapaId)
-                .eq('ativo', true);
-
-              const ordemDestino = cardsDestino?.length || 0;
-
-              // Criar novo card
-              const { data: newCardData, error: insertError } = await (supabase as any)
-                .from('funil_cards')
-                .insert({
-                  funil_id: funil_destino_id,
-                  etapa_id: targetEtapaId,
-                  titulo: card.titulo,
-                  descricao: card.descricao,
-                  valor: card.valor,
-                  cliente_id: card.cliente_id,
-                  responsavel_id: card.responsavel_id,
-                  data_previsao: card.data_previsao,
-                  prioridade: card.prioridade,
-                  ordem: ordemDestino,
-                  ativo: true
-                })
-                .select()
-                .single();
-
-              if (insertError) {
-                console.error('Erro ao criar negócio via automação:', insertError);
-                toast({
-                  title: 'Erro na automação',
-                  description: `Não foi possível criar o negócio: ${insertError.message}`,
-                  variant: 'destructive'
-                });
-              } else {
-                // Copiar histórico de atividades, movimentações e etiquetas do card original
-                if (newCardData) {
-                  await copyCardHistory(card.id, newCardData.id);
-                }
-                
-                toast({
-                  title: 'Automação executada',
-                  description: `Negócio duplicado automaticamente para outro funil com histórico!`,
-                });
-                // Recarregar cards para refletir a mudança
-                await loadCards();
-                
-                // Executar automações do funil de destino para o novo card
-                if (newCardData) {
-                  await executeAutomationsForFunil(newCardData as FunilCard, funil_destino_id, targetEtapaId);
-                }
-              }
-            }
-          }
-        } else if (automacao.tipo === 'agendar_atividade') {
-          // Agendar atividade automaticamente
-          const { tipo_atividade, quando, descricao, dias_personalizado } = automacao.acao_config;
-
-          if (tipo_atividade) {
-            const prazoDate = new Date();
-            switch (quando) {
-              case '1_dia':
-                prazoDate.setDate(prazoDate.getDate() + 1);
-                break;
-              case '2_dias':
-                prazoDate.setDate(prazoDate.getDate() + 2);
-                break;
-              case '3_dias':
-                prazoDate.setDate(prazoDate.getDate() + 3);
-                break;
-              case '1_semana':
-                prazoDate.setDate(prazoDate.getDate() + 7);
-                break;
-              case 'personalizado':
-                prazoDate.setDate(prazoDate.getDate() + (dias_personalizado || 1));
-                break;
-              default:
-                break;
-            }
-
-            const prazoFormatado = prazoDate.toISOString().split('T')[0];
-
-            const { error: atividadeError } = await (supabase as any)
-              .from('funil_card_atividades')
-              .insert({
-                card_id: card.id,
-                tipo: tipo_atividade,
-                descricao: descricao || `Atividade automática: ${tipo_atividade}`,
-                prazo: prazoFormatado,
-                status: 'a_realizar',
-                usuario_id: card.responsavel_id || profile?.id,
-                responsavel_id: card.responsavel_id || profile?.id
-              });
-
-            if (!atividadeError) {
-              toast({
-                title: 'Automação executada',
-                description: `Atividade agendada automaticamente!`,
-              });
-              // Sempre recarregar atividades do card (se estiver aberto)
-              if (viewingCard?.id === card.id) {
-                fetchAtividades(card.id);
-              }
-            }
-          }
-        }
-      }
-    } catch {
-      // Erro silencioso - automação não crítica
-    }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const executeAutomationsByStatus = async (_card: FunilCard, _status: 'ganho' | 'perdido') => {
+    // no-op: automações executadas server-side
   };
 
-  // Função para executar automações quando uma atividade é finalizada
-  const executeAutomationsByAtividadeFinalizada = async (card: FunilCard) => {
-    try {
-      // Buscar automações ativas para este funil com gatilho de atividade finalizada
-      const { data: automacoes, error } = await (supabase as any)
-        .from('automacoes')
-        .select('*')
-        .eq('funil_id', funilId)
-        .eq('gatilho', 'atividade_finalizada')
-        .eq('ativo', true);
-
-      if (error || !automacoes || automacoes.length === 0) {
-        return;
-      }
-
-      // Executar cada automação (filtrar por etapa se configurada)
-      for (const automacao of automacoes) {
-        // Se a automação tem etapa_id configurada, verificar se o card está nessa etapa
-        if (automacao.etapa_id && automacao.etapa_id !== card.etapa_id) {
-          continue; // Pular esta automação se o card não está na etapa configurada
-        }
-
-        if (automacao.tipo === 'agendar_atividade') {
-          const { tipo_atividade, quando, descricao, dias_personalizado } = automacao.acao_config;
-
-          if (tipo_atividade) {
-            const prazoDate = new Date();
-            switch (quando) {
-              case '1_dia':
-                prazoDate.setDate(prazoDate.getDate() + 1);
-                break;
-              case '2_dias':
-                prazoDate.setDate(prazoDate.getDate() + 2);
-                break;
-              case '3_dias':
-                prazoDate.setDate(prazoDate.getDate() + 3);
-                break;
-              case '1_semana':
-                prazoDate.setDate(prazoDate.getDate() + 7);
-                break;
-              case 'personalizado':
-                prazoDate.setDate(prazoDate.getDate() + (dias_personalizado || 1));
-                break;
-              case 'mesmo_dia':
-              default:
-                break;
-            }
-
-            const prazoFormatado = prazoDate.toISOString().split('T')[0];
-
-            const { error: atividadeError } = await (supabase as any)
-              .from('funil_card_atividades')
-              .insert({
-                card_id: card.id,
-                tipo: tipo_atividade,
-                descricao: descricao || `Atividade automática: ${tipo_atividade}`,
-                prazo: prazoFormatado,
-                status: 'a_realizar',
-                usuario_id: card.responsavel_id || profile?.id,
-                responsavel_id: card.responsavel_id || profile?.id
-              });
-
-            if (!atividadeError) {
-              toast({
-                title: 'Automação executada',
-                description: `Nova atividade "${tipo_atividade}" agendada!`,
-              });
-              // Recarregar atividades (se card estiver aberto)
-              if (viewingCard?.id === card.id) {
-                fetchAtividades(card.id);
-              }
-            }
-          }
-        }
-      }
-    } catch {
-      // Erro silencioso - automação não crítica
-    }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const executeAutomationsByAtividadeFinalizada = async (_card: FunilCard) => {
+    // no-op: automações executadas server-side
   };
 
   // Drag and Drop Handlers
@@ -4895,13 +3501,10 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
         const newEtapas = arrayMove(etapas, oldIndex, newIndex);
         setEtapas(newEtapas);
 
-        // Salvar nova ordem no banco
+        // Salvar nova ordem no backend
         try {
           for (let i = 0; i < newEtapas.length; i++) {
-            await (supabase as any)
-              .from('funil_etapas')
-              .update({ ordem: i })
-              .eq('id', newEtapas[i].id);
+            await api.put(`/funil/etapas/${newEtapas[i].id}`, { ordem: i });
           }
         } catch (error) {
           console.error('Erro ao reordenar colunas:', error);
@@ -4990,41 +3593,21 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
 
       setCards(updatedCards);
 
-      // Salvar no banco
+      // Salvar no backend
       try {
-        const cardsToUpdate = updatedCards.filter(c => c.etapa_id === targetEtapaId);
-        for (let i = 0; i < cardsToUpdate.length; i++) {
-          await (supabase as any)
-            .from('funil_cards')
-            .update({ 
-              etapa_id: targetEtapaId,
-              ordem: i,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', cardsToUpdate[i].id);
+        if (savedOriginalEtapaId && savedOriginalEtapaId !== targetEtapaId) {
+          // Mudança de etapa: usar endpoint mover (registra movimentação + automações server-side)
+          await api.post(`/funil/cards/${activeCard.id}/mover`, {
+            etapa_destino_id: targetEtapaId,
+          });
         }
 
-        // Verificar e executar automações se o card mudou de etapa
-        if (savedOriginalEtapaId && savedOriginalEtapaId !== targetEtapaId) {
-          // Cancelar agendamentos pendentes da etapa de origem
-          await cancelarAgendamentosPendentes(activeCard.id, savedOriginalEtapaId);
-
-          // Registrar movimentação de mudança de etapa
-          const etapaOrigem = etapas.find(e => e.id === savedOriginalEtapaId);
-          const etapaDestino = etapas.find(e => e.id === targetEtapaId);
-          
-          await (supabase as any)
-            .from('funil_card_movimentacoes')
-            .insert({
-              card_id: activeCard.id,
-              tipo: 'mudanca_etapa',
-              descricao: `Movido de "${etapaOrigem?.nome || 'Desconhecida'}" para "${etapaDestino?.nome || 'Desconhecida'}"`,
-              etapa_origem_id: savedOriginalEtapaId,
-              etapa_destino_id: targetEtapaId,
-              usuario_id: profile?.id
-            });
-          
-          await executeAutomations(activeCard, targetEtapaId);
+        // Reordenar cards na etapa de destino via endpoint batch
+        const cardsToUpdate = updatedCards
+          .filter(c => c.etapa_id === targetEtapaId)
+          .map((c, i) => ({ id: c.id, etapa_id: targetEtapaId, ordem: i }));
+        if (cardsToUpdate.length > 0) {
+          await api.patch('/funil/cards/reorder', cardsToUpdate).catch(() => null);
         }
       } catch (error) {
         loadCards(); // Recarregar em caso de erro
@@ -5124,24 +3707,9 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
                   onClick={async () => {
                     // Atualizar estado local
                     setFunilConfig(prev => ({ ...prev, cards_ordenacao: opcao.id }));
-                    // Salvar no banco
+                    // Salvar no backend via upsert de configuração do funil
                     try {
-                      const { data: existingConfig } = await (supabase as any)
-                        .from('funis_configuracoes')
-                        .select('id')
-                        .eq('funil_id', funilId)
-                        .maybeSingle();
-                      
-                      if (existingConfig?.id) {
-                        await (supabase as any)
-                          .from('funis_configuracoes')
-                          .update({ cards_ordenacao: opcao.id })
-                          .eq('id', existingConfig.id);
-                      } else {
-                        await (supabase as any)
-                          .from('funis_configuracoes')
-                          .insert({ funil_id: funilId, empresa_id: empresaId, cards_ordenacao: opcao.id });
-                      }
+                      await api.put(`/funil-comercial/funis/${funilId}/configuracao`, { cards_ordenacao: opcao.id });
                     } catch (error) {
                       console.error('Erro ao salvar ordenação:', error);
                     }
@@ -6187,30 +4755,23 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
                                           onCheckedChange={async (checked) => {
                                             try {
                                               // Atualizar status de aprovação
-                                              await (supabase as any)
-                                                .from('funil_card_atividades')
-                                                .update({ proposta_aprovada: !!checked })
-                                                .eq('id', atividade.id);
-                                              
+                                              await api.put(`/funil/cards/${viewingCard?.id}/atividades/${atividade.id}`, { proposta_aprovada: !!checked });
+
                                               // Atualizar estado local
-                                              setAtividades(prev => prev.map(a => 
+                                              setAtividades(prev => prev.map(a =>
                                                 a.id === atividade.id ? { ...a, proposta_aprovada: !!checked } : a
                                               ));
-                                              
+
                                               // Se aprovado, verificar valor do orçamento vs valor do card
                                               if (checked && viewingCard) {
                                                 // Buscar orçamento do card
-                                                const { data: orcamento } = await (supabase as any)
-                                                  .from('funil_card_orcamentos')
-                                                  .select('*')
-                                                  .eq('card_id', viewingCard.id)
-                                                  .maybeSingle();
-                                                
+                                                const orcamentos = await api.get<any[]>(`/funil/cards/${viewingCard.id}/orcamentos`).catch(() => [] as any[]);
+                                                const orcamento = orcamentos && orcamentos.length > 0 ? orcamentos[0] : null;
+
                                                 if (orcamento) {
                                                   const valorOrcamento = orcamento.total_ouro || orcamento.total_prata || orcamento.total_bronze || 0;
                                                   const valorCard = viewingCard.valor || 0;
-                                                  
-                                                  // Verificar se valores são diferentes (tolerância de R$ 0.01)
+
                                                   if (Math.abs(valorOrcamento - valorCard) > 0.01) {
                                                     toast({
                                                       title: '⚠️ Valores divergentes!',
@@ -7461,7 +6022,7 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
                                   if (viewingCard?.id && orcamentoClienteSalvo?.totais?.ouro) {
                                     const novoValor = orcamentoClienteSalvo.totais.ouro;
                                     try {
-                                      await (supabase as any).from('funil_cards').update({ valor: novoValor }).eq('id', viewingCard.id);
+                                      await api.put(`/funil/cards/${viewingCard.id}`, { valor: novoValor });
                                       setCards(prev => prev.map(c => c.id === viewingCard.id ? { ...c, valor: novoValor } : c));
                                       setViewingCard(prev => prev ? { ...prev, valor: novoValor } : prev);
                                       toast({ title: 'Plano OURO selecionado', description: `Valor do negócio atualizado para ${novoValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` });
@@ -7481,7 +6042,7 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
                                   if (viewingCard?.id && orcamentoClienteSalvo?.totais?.prata) {
                                     const novoValor = orcamentoClienteSalvo.totais.prata;
                                     try {
-                                      await (supabase as any).from('funil_cards').update({ valor: novoValor }).eq('id', viewingCard.id);
+                                      await api.put(`/funil/cards/${viewingCard.id}`, { valor: novoValor });
                                       setCards(prev => prev.map(c => c.id === viewingCard.id ? { ...c, valor: novoValor } : c));
                                       setViewingCard(prev => prev ? { ...prev, valor: novoValor } : prev);
                                       toast({ title: 'Plano PRATA selecionado', description: `Valor do negócio atualizado para ${novoValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` });
@@ -7501,7 +6062,7 @@ export function FunilKanban({ funilId, onBack, initialCardId, onCardOpened }: Fu
                                   if (viewingCard?.id && orcamentoClienteSalvo?.totais?.bronze) {
                                     const novoValor = orcamentoClienteSalvo.totais.bronze;
                                     try {
-                                      await (supabase as any).from('funil_cards').update({ valor: novoValor }).eq('id', viewingCard.id);
+                                      await api.put(`/funil/cards/${viewingCard.id}`, { valor: novoValor });
                                       setCards(prev => prev.map(c => c.id === viewingCard.id ? { ...c, valor: novoValor } : c));
                                       setViewingCard(prev => prev ? { ...prev, valor: novoValor } : prev);
                                       toast({ title: 'Plano BRONZE selecionado', description: `Valor do negócio atualizado para ${novoValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` });

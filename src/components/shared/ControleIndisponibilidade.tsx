@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -82,9 +82,7 @@ interface ControleIndisponibilidadeProps {
   tipo: 'sst' | 'parceira';
 }
 
-const db = supabase as any;
-
-export function ControleIndisponibilidade({ 
+export function ControleIndisponibilidade({
   empresaParceiraId, 
   empresaSstId,
   tipo 
@@ -140,21 +138,19 @@ export function ControleIndisponibilidade({
   const fetchInstrutores = async () => {
     try {
       setLoading(true);
-      let query = supabase
-        .from('instrutores')
-        .select('id, nome, email, ativo, empresa_parceira_id, empresa_id')
-        .eq('ativo', true)
-        .order('nome');
+      const data = await api.get<any[]>('/treinamentos/instrutores').catch(() => [] as any[]);
+
+      // Filtros client-side (backend devolve todos do tenant)
+      let resultado = (data || []).filter((i: any) => i.ativo === true);
 
       if (tipo === 'parceira' && empresaParceiraId) {
-        query = query.eq('empresa_parceira_id', empresaParceiraId);
+        resultado = resultado.filter((i: any) => i.empresa_parceira_id === empresaParceiraId);
       } else if (tipo === 'sst' && empresaSstId) {
-        query = query.eq('empresa_id', empresaSstId).is('empresa_parceira_id', null);
+        resultado = resultado.filter((i: any) => i.empresa_parceira_id == null);
       }
 
-      const { data, error } = await query;
-      if (error) throw error;
-      setInstrutores(data || []);
+      resultado.sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || ''));
+      setInstrutores(resultado);
     } catch (error) {
       console.error('Erro ao buscar instrutores:', error);
       toast.error('Erro ao carregar instrutores');
@@ -167,56 +163,43 @@ export function ControleIndisponibilidade({
     if (instrutores.length === 0) return;
 
     try {
-      const instrutorIds = instrutores.map(i => i.id);
-      
-      // Buscar solicitações pendentes
-      let queryPendentes = db
-        .from('instrutor_datas_indisponiveis')
-        .select('*')
-        .in('instrutor_id', instrutorIds)
-        .eq('status', 'pendente')
-        .order('created_at', { ascending: false });
-
-      if (filtroInstrutor !== 'todos') {
-        queryPendentes = queryPendentes.eq('instrutor_id', filtroInstrutor);
-      }
-
-      const { data: pendentes, error: errorPendentes } = await queryPendentes;
-      if (errorPendentes) throw errorPendentes;
-
-      // Buscar indisponibilidades aprovadas
-      let queryAprovadas = db
-        .from('instrutor_datas_indisponiveis')
-        .select('*')
-        .in('instrutor_id', instrutorIds)
-        .eq('status', 'aprovado')
-        .order('data', { ascending: true });
-
-      if (filtroInstrutor !== 'todos') {
-        queryAprovadas = queryAprovadas.eq('instrutor_id', filtroInstrutor);
-      }
-      if (filtroDataInicio) {
-        queryAprovadas = queryAprovadas.gte('data', filtroDataInicio);
-      }
-      if (filtroDataFim) {
-        queryAprovadas = queryAprovadas.lte('data', filtroDataFim);
-      }
-
-      const { data: aprovadas, error: errorAprovadas } = await queryAprovadas;
-      if (errorAprovadas) throw errorAprovadas;
-
-      // Mapear nomes dos instrutores
+      // Fan-out: busca datas de cada instrutor individualmente e agrega
       const instrutorMap = Object.fromEntries(instrutores.map(i => [i.id, i.nome]));
 
-      setSolicitacoesPendentes((pendentes || []).map((s: any) => ({
-        ...s,
-        instrutor_nome: instrutorMap[s.instrutor_id] || 'Instrutor'
-      })));
+      const idsParaBuscar = filtroInstrutor !== 'todos'
+        ? instrutores.filter(i => i.id === filtroInstrutor)
+        : instrutores;
 
-      setIndisponibilidadesAprovadas((aprovadas || []).map((s: any) => ({
-        ...s,
-        instrutor_nome: instrutorMap[s.instrutor_id] || 'Instrutor'
-      })));
+      const resultados = await Promise.all(
+        idsParaBuscar.map((inst) =>
+          api.get<any[]>(`/treinamentos/instrutores/${inst.id}/datas`)
+            .catch(() => [] as any[])
+            .then((datas) => (datas || []).map((d: any) => ({
+              ...d,
+              instrutor_nome: instrutorMap[d.instrutor_id] || 'Instrutor'
+            })))
+        )
+      );
+
+      const todas: any[] = resultados.flat();
+
+      // Pendentes — ordenados por created_at desc
+      const pendentes = todas
+        .filter((d: any) => d.status === 'pendente')
+        .sort((a: any, b: any) => (b.created_at || '').localeCompare(a.created_at || ''));
+
+      // Aprovadas — filtros client-side + ordenação por data asc
+      let aprovadas = todas.filter((d: any) => d.status === 'aprovado');
+      if (filtroDataInicio) {
+        aprovadas = aprovadas.filter((d: any) => d.data >= filtroDataInicio);
+      }
+      if (filtroDataFim) {
+        aprovadas = aprovadas.filter((d: any) => d.data <= filtroDataFim);
+      }
+      aprovadas.sort((a: any, b: any) => (a.data || '').localeCompare(b.data || ''));
+
+      setSolicitacoesPendentes(pendentes);
+      setIndisponibilidadesAprovadas(aprovadas);
 
     } catch (error) {
       console.error('Erro ao buscar indisponibilidades:', error);
@@ -232,29 +215,20 @@ export function ControleIndisponibilidade({
 
     setSalvando(true);
     try {
-      const insercoes = datasSelecionadas.map(data => ({
-        instrutor_id: instrutorCriar,
-        data: format(data, 'yyyy-MM-dd'),
-        motivo: motivoCriar.trim() || null,
-        status: 'aprovado',
-        origem: 'admin',
-        solicitado_por: profile?.id,
-        aprovado_por: profile?.id,
-        aprovado_em: new Date().toISOString()
-      }));
-
-      const { error } = await db
-        .from('instrutor_datas_indisponiveis')
-        .insert(insercoes);
-
-      if (error) {
-        if (error.code === '23505') {
-          toast.error('Uma ou mais datas já estão cadastradas');
-        } else {
-          throw error;
-        }
-        return;
-      }
+      // Bulk client-side: um POST por data (backend não tem endpoint de inserção em lote)
+      await Promise.all(
+        datasSelecionadas.map((data) =>
+          api.post(`/treinamentos/instrutores/${instrutorCriar}/datas`, {
+            data: format(data, 'yyyy-MM-dd'),
+            motivo: motivoCriar.trim() || null,
+            status: 'aprovado',
+            origem: 'admin',
+            solicitado_por: profile?.id,
+            aprovado_por: profile?.id,
+            aprovado_em: new Date().toISOString(),
+          })
+        )
+      );
 
       toast.success(`${datasSelecionadas.length} indisponibilidade(s) criada(s) com sucesso!`);
       setDialogCriarOpen(false);
@@ -262,9 +236,13 @@ export function ControleIndisponibilidade({
       setMotivoCriar('');
       setInstrutorCriar('');
       fetchIndisponibilidades();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao criar indisponibilidade:', error);
-      toast.error('Erro ao criar indisponibilidade');
+      if (error?.status === 409 || error?.detail?.includes('unique') || error?.detail?.includes('23505')) {
+        toast.error('Uma ou mais datas já estão cadastradas');
+      } else {
+        toast.error('Erro ao criar indisponibilidade');
+      }
     } finally {
       setSalvando(false);
     }
@@ -275,16 +253,14 @@ export function ControleIndisponibilidade({
 
     setProcessando(true);
     try {
-      const { error } = await db
-        .from('instrutor_datas_indisponiveis')
-        .update({
+      await api.put(
+        `/treinamentos/instrutores/${solicitacaoSelecionada.instrutor_id}/datas/${solicitacaoSelecionada.id}`,
+        {
           status: 'aprovado',
           aprovado_por: profile?.id,
-          aprovado_em: new Date().toISOString()
-        })
-        .eq('id', solicitacaoSelecionada.id);
-
-      if (error) throw error;
+          aprovado_em: new Date().toISOString(),
+        }
+      );
 
       toast.success('Solicitação aprovada com sucesso!');
       setDialogAprovarOpen(false);
@@ -303,17 +279,15 @@ export function ControleIndisponibilidade({
 
     setProcessando(true);
     try {
-      const { error } = await db
-        .from('instrutor_datas_indisponiveis')
-        .update({
+      await api.put(
+        `/treinamentos/instrutores/${solicitacaoSelecionada.instrutor_id}/datas/${solicitacaoSelecionada.id}`,
+        {
           status: 'rejeitado',
           aprovado_por: profile?.id,
           aprovado_em: new Date().toISOString(),
-          motivo_rejeicao: motivoRejeicao.trim() || null
-        })
-        .eq('id', solicitacaoSelecionada.id);
-
-      if (error) throw error;
+          motivo_rejeicao: motivoRejeicao.trim() || null,
+        }
+      );
 
       toast.success('Solicitação rejeitada');
       setDialogAprovarOpen(false);
@@ -333,12 +307,9 @@ export function ControleIndisponibilidade({
 
     setProcessando(true);
     try {
-      const { error } = await db
-        .from('instrutor_datas_indisponiveis')
-        .delete()
-        .eq('id', indisponibilidadeExcluir.id);
-
-      if (error) throw error;
+      await api.del(
+        `/treinamentos/instrutores/${indisponibilidadeExcluir.instrutor_id}/datas/${indisponibilidadeExcluir.id}`
+      );
 
       toast.success('Indisponibilidade excluída');
       setDialogExcluirOpen(false);

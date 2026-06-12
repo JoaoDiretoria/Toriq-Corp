@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import {
   Briefcase,
   MapPin,
@@ -141,14 +141,12 @@ export default function TrabalheConosco() {
 
   const fetchVagas = async () => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('vagas')
-        .select('*')
-        .eq('ativa', true)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setVagas(data || []);
+      const data = await api.get<any[]>('/vagas').catch(() => [] as any[]);
+      // Backend já filtra ativa=true; ordenar por created_at desc no cliente
+      const sorted = (data || []).slice().sort(
+        (a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+      setVagas(sorted);
     } catch (error) {
       console.error('Erro ao buscar vagas:', error);
     } finally {
@@ -265,33 +263,37 @@ export default function TrabalheConosco() {
       return;
     }
 
+    // NOTA (migração): banco de talentos (sem vaga) não tem endpoint POST dedicado.
+    // Exige que o candidato selecione uma vaga para enviar pelo backend.
+    if (!selectedVagaId) {
+      toast.error('Por favor, selecione uma vaga para se candidatar. O banco de talentos geral estará disponível em breve.');
+      return;
+    }
+
     setSubmitting(true);
     try {
-      const { error } = await (supabase as any)
-        .from('candidaturas')
-        .insert({
-          vaga_id: selectedVagaId || null,
-          nome_completo: nomeCompleto.trim(),
-          data_nascimento: dataNascimento || null,
-          email: email.trim(),
-          telefone: telefone.trim(),
-          cep: cep.replace(/\D/g, '') || null,
-          logradouro: logradouro.trim() || null,
-          numero: numero.trim() || null,
-          complemento: complemento.trim() || null,
-          bairro: bairro.trim() || null,
-          cidade: cidade.trim() || null,
-          estado: estado.trim() || null,
-          grau_escolaridade: grauEscolaridade || null,
-          formacoes: formacoes.map(({ id, ...rest }) => rest),
-          cursos: cursos.map(({ id, ...rest }) => rest),
-          experiencias: experiencias.map(({ id, ...rest }) => rest),
-          sobre_voce: sobreVoce.trim() || null,
-          diferenciais: diferenciais.trim() || null,
-          observacoes: observacoes.trim() || null,
-        });
+      const payload = {
+        nome_completo: nomeCompleto.trim(),
+        data_nascimento: dataNascimento || null,
+        email: email.trim(),
+        telefone: telefone.trim(),
+        cep: cep.replace(/\D/g, '') || null,
+        logradouro: logradouro.trim() || null,
+        numero: numero.trim() || null,
+        complemento: complemento.trim() || null,
+        bairro: bairro.trim() || null,
+        cidade: cidade.trim() || null,
+        estado: estado.trim() || null,
+        grau_escolaridade: grauEscolaridade || null,
+        formacoes: formacoes.map(({ id, ...rest }) => rest),
+        cursos: cursos.map(({ id, ...rest }) => rest),
+        experiencias: experiencias.map(({ id, ...rest }) => rest),
+        sobre_voce: sobreVoce.trim() || null,
+        diferenciais: diferenciais.trim() || null,
+        observacoes: observacoes.trim() || null,
+      };
 
-      if (error) throw error;
+      await api.post<any>(`/vagas/${selectedVagaId}/candidaturas`, payload);
 
       setSubmitted(true);
       toast.success('Candidatura enviada com sucesso!');

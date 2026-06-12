@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -50,20 +50,42 @@ export function AdminFinanceiro() {
   }, []);
 
   const fetchData = async () => {
-    const [contasRes, empresasRes] = await Promise.all([
-      supabase.from('financeiro_contas').select('*').order('vencimento'),
-      supabase.from('empresas').select('id, nome').order('nome'),
+    const [contasPagar, contasReceber, empresasData] = await Promise.all([
+      api.get<any[]>('/financeiro/contas-pagar').catch(() => [] as any[]),
+      api.get<any[]>('/financeiro/contas-receber').catch(() => [] as any[]),
+      api.get<any[]>('/empresas').catch(() => [] as any[]),
     ]);
 
-    if (contasRes.error) {
-      console.error(contasRes.error);
-    } else {
-      setContas(contasRes.data || []);
-    }
+    // Normaliza os dois arrays para o shape da interface Conta
+    const pagar: Conta[] = (contasPagar || []).map((c: any) => ({
+      id: c.id,
+      tipo: 'pagar',
+      descricao: c.descricao || c.fornecedor_nome || '',
+      valor: Number(c.valor ?? 0),
+      vencimento: c.data_vencimento || '',
+      status: c.status_pagamento || 'pendente',
+      empresa_id: c.empresa_id ?? null,
+    }));
+    const receber: Conta[] = (contasReceber || []).map((c: any) => ({
+      id: c.id,
+      tipo: 'receber',
+      descricao: c.descricao || c.cliente_nome || '',
+      valor: Number(c.valor ?? 0),
+      vencimento: c.data_vencimento || '',
+      status: c.status_recebimento || 'pendente',
+      empresa_id: c.empresa_id ?? null,
+    }));
 
-    if (!empresasRes.error) {
-      setEmpresas(empresasRes.data || []);
-    }
+    const todas = [...pagar, ...receber].sort((a, b) =>
+      a.vencimento.localeCompare(b.vencimento)
+    );
+    setContas(todas);
+
+    setEmpresas(
+      (empresasData || [])
+        .map((e: any) => ({ id: e.id, nome: e.nome }))
+        .sort((a: Empresa, b: Empresa) => a.nome.localeCompare(b.nome))
+    );
 
     setLoading(false);
   };
@@ -109,19 +131,36 @@ export function AdminFinanceiro() {
 
     setSaving(true);
 
-    const { error } = await supabase.from('financeiro_contas').insert({
-      tipo: formData.tipo,
-      descricao: formData.descricao.trim(),
-      valor: parseFloat(formData.valor),
-      vencimento: formData.vencimento,
-      status: formData.status,
-      empresa_id: formData.empresa_id || null,
-    });
+    try {
+      const isPagar = formData.tipo === 'pagar';
+      const prefix = isPagar ? '/financeiro/contas-pagar' : '/financeiro/contas-receber';
 
-    if (error) {
-      console.error(error);
-      toast.error('Erro ao cadastrar conta');
-    } else {
+      // Garante que as colunas padrão existem e obtém a primeira coluna disponível
+      await api.post(`${prefix}/bootstrap-colunas`).catch(() => null);
+      const colunas = await api.get<any[]>(`${prefix}/colunas`).catch(() => [] as any[]);
+      const coluna = (colunas || [])[0];
+      if (!coluna) {
+        toast.error('Erro ao cadastrar conta: nenhuma coluna disponível');
+        setSaving(false);
+        return;
+      }
+
+      const payload: Record<string, any> = {
+        coluna_id: coluna.id,
+        descricao: formData.descricao.trim(),
+        valor: parseFloat(formData.valor),
+        data_vencimento: formData.vencimento || null,
+      };
+      if (isPagar) {
+        payload.fornecedor_nome = formData.descricao.trim();
+        payload.status_pagamento = formData.status;
+      } else {
+        payload.cliente_nome = formData.descricao.trim();
+        payload.status_recebimento = formData.status;
+      }
+
+      await api.post(prefix, payload);
+
       toast.success('Conta cadastrada com sucesso!');
       setFormData({
         tipo: 'pagar',
@@ -133,6 +172,9 @@ export function AdminFinanceiro() {
       });
       setDialogOpen(false);
       fetchData();
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao cadastrar conta');
     }
 
     setSaving(false);

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
 import { useToast } from '@/hooks/use-toast';
@@ -92,21 +92,13 @@ export function SSTInformacoesEmpresa() {
 
   const fetchInformacoes = async () => {
     if (!empresaId) return;
-    
+
     setLoading(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('informacoes_empresa')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .maybeSingle();
+      const list = await api.get<any[]>('/informacoes-empresa').catch(() => [] as any[]);
+      const d = list?.[0] ?? null;
 
-      if (error) {
-        throw error;
-      }
-
-      if (data) {
-        const d = data as any;
+      if (d) {
         setFormData({
           id: d.id,
           empresa_id: d.empresa_id,
@@ -146,7 +138,6 @@ export function SSTInformacoesEmpresa() {
     setSaving(true);
     try {
       const dataToSave = {
-        empresa_id: empresaId,
         missao: formData.missao,
         visao: formData.visao,
         valores: formData.valores,
@@ -165,21 +156,10 @@ export function SSTInformacoesEmpresa() {
 
       if (formData.id) {
         // Update
-        const { error } = await (supabase as any)
-          .from('informacoes_empresa')
-          .update(dataToSave)
-          .eq('id', formData.id);
-
-        if (error) throw error;
+        await api.put<any>(`/informacoes-empresa/${formData.id}`, dataToSave);
       } else {
         // Insert
-        const { data, error } = await (supabase as any)
-          .from('informacoes_empresa')
-          .insert(dataToSave)
-          .select()
-          .single();
-
-        if (error) throw error;
+        const data = await api.post<any>('/informacoes-empresa', dataToSave);
         if (data) {
           setFormData(prev => ({ ...prev, id: data.id }));
         }
@@ -227,25 +207,20 @@ export function SSTInformacoesEmpresa() {
 
     setUploading(true);
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `assinatura_diretor_${empresaId}_${Date.now()}.${fileExt}`;
-      const filePath = `assinaturas/${fileName}`;
-
-      // Upload para o storage (usando bucket 'treinamentos' que já existe)
-      const { error: uploadError } = await supabase.storage
-        .from('treinamentos')
-        .upload(filePath, file, { upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      // Obter URL pública
-      const { data: urlData } = supabase.storage
-        .from('treinamentos')
-        .getPublicUrl(filePath);
+      const API_URL: string = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:8000';
+      const formPayload = new FormData();
+      formPayload.append('file', file);
+      const uploadRes = await fetch(`${API_URL}/storage/logos-empresas/upload`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formPayload,
+      });
+      if (!uploadRes.ok) throw new Error('Upload falhou');
+      const uploadData = await uploadRes.json();
 
       setFormData(prev => ({
         ...prev,
-        diretor_tecnico_assinatura_url: urlData.publicUrl
+        diretor_tecnico_assinatura_url: uploadData.url
       }));
 
       toast({
@@ -283,25 +258,21 @@ export function SSTInformacoesEmpresa() {
       // Converter base64 para blob
       const response = await fetch(signatureData);
       const blob = await response.blob();
-      
-      const fileName = `assinatura_diretor_${empresaId}_${Date.now()}.png`;
-      const filePath = `assinaturas/${fileName}`;
 
-      // Upload para o storage (usando bucket 'treinamentos' que já existe)
-      const { error: uploadError } = await supabase.storage
-        .from('treinamentos')
-        .upload(filePath, blob, { upsert: true, contentType: 'image/png' });
-
-      if (uploadError) throw uploadError;
-
-      // Obter URL pública
-      const { data: urlData } = supabase.storage
-        .from('treinamentos')
-        .getPublicUrl(filePath);
+      const API_URL: string = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:8000';
+      const formPayload = new FormData();
+      formPayload.append('file', blob, `assinatura_diretor_${empresaId}_${Date.now()}.png`);
+      const uploadRes = await fetch(`${API_URL}/storage/logos-empresas/upload`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formPayload,
+      });
+      if (!uploadRes.ok) throw new Error('Upload falhou');
+      const uploadData = await uploadRes.json();
 
       setFormData(prev => ({
         ...prev,
-        diretor_tecnico_assinatura_url: urlData.publicUrl,
+        diretor_tecnico_assinatura_url: uploadData.url,
         diretor_tecnico_assinatura_tipo: 'desenho'
       }));
 
@@ -352,26 +323,20 @@ export function SSTInformacoesEmpresa() {
 
     setUploadingImage(imageType);
     try {
-      const fileExt = file.name.split('.').pop();
-      const typePrefix = imageType.replace('_url', '');
-      const fileName = `${typePrefix}_${empresaId}_${Date.now()}.${fileExt}`;
-      const filePath = `empresa-imagens/${fileName}`;
-
-      // Upload para o storage
-      const { error: uploadError } = await supabase.storage
-        .from('treinamentos')
-        .upload(filePath, file, { upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      // Obter URL pública
-      const { data: urlData } = supabase.storage
-        .from('treinamentos')
-        .getPublicUrl(filePath);
+      const API_URL: string = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:8000';
+      const formPayload = new FormData();
+      formPayload.append('file', file);
+      const uploadRes = await fetch(`${API_URL}/storage/logos-empresas/upload`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formPayload,
+      });
+      if (!uploadRes.ok) throw new Error('Upload falhou');
+      const uploadData = await uploadRes.json();
 
       setFormData(prev => ({
         ...prev,
-        [imageType]: urlData.publicUrl
+        [imageType]: uploadData.url
       }));
 
       toast({

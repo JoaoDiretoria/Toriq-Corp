@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -59,20 +59,18 @@ export function SSTComercial() {
   const fetchLeads = async () => {
     if (!empresa?.id) return;
 
-    const { data, error } = await supabase
-      .from('comercial_funil')
-      .select('*')
-      .eq('empresa_id', empresa.id)
-      .order('created_at', { ascending: false });
-
-    if (error) {
+    try {
+      const data = await api.get<any[]>('/funil-comercial/comercial-funil');
+      const sorted = (data || []).slice().sort(
+        (a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+      setLeads(sorted);
+    } catch (err: any) {
       toast({
         title: "Erro ao carregar leads",
-        description: error.message,
+        description: err?.detail ?? err?.message ?? 'Erro desconhecido',
         variant: "destructive",
       });
-    } else {
-      setLeads(data || []);
     }
     setLoading(false);
   };
@@ -85,10 +83,8 @@ export function SSTComercial() {
     e.preventDefault();
     if (!empresa?.id) return;
 
-    const { error } = await supabase
-      .from('comercial_funil')
-      .insert({
-        empresa_id: empresa.id,
+    try {
+      await api.post('/funil-comercial/comercial-funil', {
         nome_lead: formData.nome_lead,
         email: formData.email || null,
         telefone: formData.telefone || null,
@@ -96,14 +92,6 @@ export function SSTComercial() {
         valor_estimado: formData.valor_estimado ? parseFloat(formData.valor_estimado) : null,
         observacoes: formData.observacoes || null,
       });
-
-    if (error) {
-      toast({
-        title: "Erro ao cadastrar lead",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
       toast({
         title: "Lead cadastrado",
         description: "O lead foi adicionado com sucesso.",
@@ -118,27 +106,29 @@ export function SSTComercial() {
         observacoes: '',
       });
       fetchLeads();
+    } catch (err: any) {
+      toast({
+        title: "Erro ao cadastrar lead",
+        description: err?.detail ?? err?.message ?? 'Erro desconhecido',
+        variant: "destructive",
+      });
     }
   };
 
   const handleChangeEtapa = async (leadId: string, novaEtapa: string) => {
-    const { error } = await supabase
-      .from('comercial_funil')
-      .update({ etapa: novaEtapa })
-      .eq('id', leadId);
-
-    if (error) {
-      toast({
-        title: "Erro ao atualizar etapa",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
+    try {
+      await api.put(`/funil-comercial/comercial-funil/${leadId}`, { etapa: novaEtapa });
       toast({
         title: "Etapa atualizada",
         description: "O lead foi movido para a nova etapa.",
       });
       fetchLeads();
+    } catch (err: any) {
+      toast({
+        title: "Erro ao atualizar etapa",
+        description: err?.detail ?? err?.message ?? 'Erro desconhecido',
+        variant: "destructive",
+      });
     }
   };
 

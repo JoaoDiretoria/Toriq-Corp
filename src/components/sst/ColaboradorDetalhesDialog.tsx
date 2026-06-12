@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useToast } from '@/hooks/use-toast';
 import {
   Dialog,
@@ -149,24 +149,11 @@ export function ColaboradorDetalhesDialog({ colaborador, open, onOpenChange }: C
 
   const fetchEpisColaborador = async () => {
     if (!colaborador?.id) return;
-    
+
     setLoadingEpis(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('entregas_epis')
-        .select(`
-          id,
-          colaborador_id,
-          epi_id,
-          data_entrega,
-          quantidade,
-          observacoes,
-          cadastro_epis(nome_modelo, tipo_epi, numero_ca)
-        `)
-        .eq('colaborador_id', colaborador.id)
-        .order('data_entrega', { ascending: false });
-
-      if (error) throw error;
+      // NOTA (migração): endpoint para entregas_epis por colaborador não existe no backend ainda — degradando para lista vazia.
+      const data = await api.get<any[]>(`/sst/epi/colaboradores/${colaborador.id}/entregas`).catch(() => [] as any[]);
       setEpisColaborador(data || []);
     } catch (error: any) {
       console.error('Erro ao carregar EPIs do colaborador:', error);
@@ -177,20 +164,17 @@ export function ColaboradorDetalhesDialog({ colaborador, open, onOpenChange }: C
 
   const fetchCertificados = async () => {
     if (!colaborador?.id) return;
-    
+
     setLoadingCertificados(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('colaboradores_certificados')
-        .select(`
-          *,
-          treinamento:catalogo_treinamentos(nome, norma)
-        `)
-        .eq('colaborador_id', colaborador.id)
-        .order('data_emissao', { ascending: false });
-
-      if (error) throw error;
-      setCertificados(data || []);
+      const data = await api.get<any[]>(`/treinamentos/colaboradores/${colaborador.id}/certificados`).catch(() => [] as any[]);
+      // Ordenar client-side por data_emissao desc (o backend não garante ordenação)
+      const sorted = (data || []).sort((a: any, b: any) => {
+        if (!a.data_emissao) return 1;
+        if (!b.data_emissao) return -1;
+        return b.data_emissao.localeCompare(a.data_emissao);
+      });
+      setCertificados(sorted);
     } catch (error: any) {
       console.error('Erro ao carregar certificados:', error);
     } finally {
@@ -200,35 +184,17 @@ export function ColaboradorDetalhesDialog({ colaborador, open, onOpenChange }: C
 
   const fetchTreinamentos = async () => {
     if (!colaborador?.id) return;
-    
+
     setLoadingTreinamentos(true);
     try {
       // Buscar treinamentos necessários baseado no grupo homogêneo
       let treinamentosDoGrupo: any[] = [];
-      
+
       treinamentosDoGrupo = [];
 
-      // Buscar treinamentos realizados pelo colaborador
-      const { data: realizados, error: realizadosError } = await (supabase as any)
-        .from('turma_colaboradores')
-        .select(`
-          id,
-          resultado,
-          nota_pos_teste,
-          turma:turmas_treinamento(
-            id,
-            numero_turma,
-            tipo_treinamento,
-            treinamento:catalogo_treinamentos(id, nome, norma, validade),
-            instrutor:instrutores(nome),
-            aulas:turmas_treinamento_aulas(data)
-          )
-        `)
-        .eq('colaborador_id', colaborador.id);
-
-      if (realizadosError) {
-        console.error('Erro ao buscar treinamentos realizados:', realizadosError);
-      }
+      // NOTA (migração): endpoint para turma_colaboradores por colaborador_id com joins profundos
+      // não existe no backend ainda — treinamentos realizados via turmas degradam para lista vazia.
+      const realizados: any[] = [];
 
       // Processar treinamentos realizados
       const treinamentosRealizadosProcessados: TreinamentoRealizado[] = [];
@@ -327,30 +293,29 @@ export function ColaboradorDetalhesDialog({ colaborador, open, onOpenChange }: C
     setUploading(true);
     try {
       const fileExt = file.name.split('.').pop();
-      const fileName = `${colaborador.id}/${Date.now()}.${fileExt}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('certificados-colaboradores')
-        .upload(fileName, file);
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('certificados-colaboradores')
-        .getPublicUrl(fileName);
+      // Upload do arquivo via storage do backend (multipart/form-data)
+      const formData = new FormData();
+      formData.append('file', file);
+      const uploadRes = await fetch(
+        `${import.meta.env.VITE_API_URL ?? 'http://localhost:8000'}/storage/certificados-colaboradores/upload`,
+        { method: 'POST', credentials: 'include', body: formData }
+      );
+      if (!uploadRes.ok) {
+        const detail = await uploadRes.json().catch(() => ({}));
+        throw new Error(detail?.detail ?? 'Erro ao enviar arquivo');
+      }
+      const uploadData: any = await uploadRes.json();
+      const publicUrl: string = uploadData.url ?? '';
+      const filePath: string = uploadData.key ?? '';
 
       // Criar registro do certificado
-      const { error: insertError } = await (supabase as any)
-        .from('colaboradores_certificados')
-        .insert({
-          colaborador_id: colaborador.id,
-          nome: file.name.replace(`.${fileExt}`, ''),
-          arquivo_url: publicUrl,
-          arquivo_path: fileName,
-          data_emissao: new Date().toISOString().split('T')[0],
-        });
-
-      if (insertError) throw insertError;
+      await api.post(`/treinamentos/colaboradores/${colaborador.id}/certificados`, {
+        nome: file.name.replace(`.${fileExt}`, ''),
+        arquivo_url: publicUrl,
+        arquivo_path: filePath,
+        data_emissao: new Date().toISOString().split('T')[0],
+      });
 
       toast({
         title: "Certificado enviado",
@@ -377,11 +342,14 @@ export function ColaboradorDetalhesDialog({ colaborador, open, onOpenChange }: C
     if (!certificado.arquivo_path) return;
 
     try {
-      const { data, error } = await supabase.storage
-        .from('certificados-colaboradores')
-        .download(certificado.arquivo_path);
-
-      if (error) throw error;
+      // Obter URL pré-assinada do backend e baixar via fetch
+      const encodedKey = encodeURIComponent(certificado.arquivo_path);
+      const { url: presignedUrl } = await api.get<{ url: string }>(
+        `/storage/certificados-colaboradores/${encodedKey}/url`
+      );
+      const blobRes = await fetch(presignedUrl);
+      if (!blobRes.ok) throw new Error('Erro ao baixar arquivo');
+      const data = await blobRes.blob();
 
       const url = URL.createObjectURL(data);
       const a = document.createElement('a');
@@ -401,23 +369,17 @@ export function ColaboradorDetalhesDialog({ colaborador, open, onOpenChange }: C
   };
 
   const handleDeleteCertificado = async () => {
-    if (!certificadoToDelete) return;
+    if (!certificadoToDelete || !colaborador) return;
 
     try {
       // Deletar arquivo do storage
       if (certificadoToDelete.arquivo_path) {
-        await supabase.storage
-          .from('certificados-colaboradores')
-          .remove([certificadoToDelete.arquivo_path]);
+        const encodedKey = encodeURIComponent(certificadoToDelete.arquivo_path);
+        await api.del(`/storage/certificados-colaboradores/${encodedKey}`).catch(() => null);
       }
 
       // Deletar registro
-      const { error } = await (supabase as any)
-        .from('colaboradores_certificados')
-        .delete()
-        .eq('id', certificadoToDelete.id);
-
-      if (error) throw error;
+      await api.del(`/treinamentos/colaboradores/${colaborador.id}/certificados/${certificadoToDelete.id}`);
 
       toast({
         title: "Certificado excluído",

@@ -15,7 +15,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaEfetiva } from '@/hooks/useEmpresaMode';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import {
   Plus,
   Pencil,
@@ -202,28 +202,20 @@ export function AdminFinanceiroCadastros() {
   const [currentTipoReceita, setCurrentTipoReceita] = useState<string>('');
   const [currentTipoDespesa, setCurrentTipoDespesa] = useState<string>('');
 
-  // Carregar dados do Supabase
+  // Carregar dados do backend
   const loadPlanoReceitas = async () => {
     if (!empresaId) return;
     setLoadingReceitas(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('plano_receitas')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      if (data) {
-        setPlanoReceitas(data.map((item: any) => ({
-          id: item.id,
-          nome: item.nome,
-          descricao: item.descricao || '',
-          tipo: item.tipo,
-          ativo: item.ativo,
-          created_at: item.created_at,
-        })));
-      }
+      const data = await api.get<any[]>('/financeiro/cadastros/plano-receitas').catch(() => [] as any[]);
+      setPlanoReceitas((data ?? []).map((item: any) => ({
+        id: item.id,
+        nome: item.nome,
+        descricao: item.descricao || '',
+        tipo: item.tipo,
+        ativo: item.ativo,
+        created_at: item.created_at,
+      })));
     } catch (error) {
       console.error('Erro ao carregar plano de receitas:', error);
       toast({ title: 'Erro ao carregar receitas', variant: 'destructive' });
@@ -236,23 +228,15 @@ export function AdminFinanceiroCadastros() {
     if (!empresaId) return;
     setLoadingDespesas(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('plano_despesas')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      if (data) {
-        setPlanoDespesas(data.map((item: any) => ({
-          id: item.id,
-          nome: item.nome,
-          descricao: item.descricao || '',
-          tipo: item.tipo,
-          ativo: item.ativo,
-          created_at: item.created_at,
-        })));
-      }
+      const data = await api.get<any[]>('/financeiro/cadastros/plano-despesas').catch(() => [] as any[]);
+      setPlanoDespesas((data ?? []).map((item: any) => ({
+        id: item.id,
+        nome: item.nome,
+        descricao: item.descricao || '',
+        tipo: item.tipo,
+        ativo: item.ativo,
+        created_at: item.created_at,
+      })));
     } catch (error) {
       console.error('Erro ao carregar plano de despesas:', error);
       toast({ title: 'Erro ao carregar despesas', variant: 'destructive' });
@@ -265,25 +249,17 @@ export function AdminFinanceiroCadastros() {
     if (!empresaId) return;
     setLoadingCondicoes(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('condicoes_pagamento')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      if (data) {
-        setCondicoesPagamento(data.map((item: any) => ({
-          id: item.id,
-          nome: item.nome,
-          descricao: item.descricao || '',
-          parcelas: item.parcelas,
-          intervalo_dias: item.intervalo_dias,
-          entrada_percentual: item.entrada_percentual || 0,
-          ativo: item.ativo,
-          created_at: item.created_at,
-        })));
-      }
+      const data = await api.get<any[]>('/financeiro/cadastros/condicoes-pagamento').catch(() => [] as any[]);
+      setCondicoesPagamento((data ?? []).map((item: any) => ({
+        id: item.id,
+        nome: item.nome,
+        descricao: item.descricao || '',
+        parcelas: item.parcelas,
+        intervalo_dias: item.intervalo_dias,
+        entrada_percentual: item.entrada_percentual || 0,
+        ativo: item.ativo,
+        created_at: item.created_at,
+      })));
     } catch (error) {
       console.error('Erro ao carregar condições de pagamento:', error);
       toast({ title: 'Erro ao carregar condições de pagamento', variant: 'destructive' });
@@ -295,29 +271,24 @@ export function AdminFinanceiroCadastros() {
   const loadFornecedores = async () => {
     if (!empresaId) return;
     try {
-      const { data, error } = await (supabase as any)
-        .from('fornecedores')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('nome_fantasia', { ascending: true });
-
-      if (error) throw error;
-      if (data) {
-        setFornecedores(data.map((item: any) => ({
-          id: item.id,
-          razao_social: item.razao_social,
-          nome_fantasia: item.nome_fantasia || '',
-          cnpj_cpf: item.cnpj_cpf || '',
-          email: item.email || '',
-          telefone: item.telefone || '',
-          endereco: item.endereco || '',
-          observacoes: item.observacoes || '',
-          classificacao_despesa_padrao: item.classificacao_despesa_padrao || '',
-          descricao_despesa_padrao: item.descricao_despesa_padrao || '',
-          ativo: item.ativo,
-          created_at: item.created_at,
-        })));
-      }
+      const data = await api.get<any[]>('/financeiro/cadastros/fornecedores').catch(() => [] as any[]);
+      const sorted = (data ?? []).slice().sort((a: any, b: any) =>
+        (a.nome_fantasia || '').localeCompare(b.nome_fantasia || '')
+      );
+      setFornecedores(sorted.map((item: any) => ({
+        id: item.id,
+        razao_social: item.razao_social,
+        nome_fantasia: item.nome_fantasia || '',
+        cnpj_cpf: item.cnpj_cpf || '',
+        email: item.email || '',
+        telefone: item.telefone || '',
+        endereco: item.endereco || '',
+        observacoes: item.observacoes || '',
+        classificacao_despesa_padrao: item.classificacao_despesa_padrao || '',
+        descricao_despesa_padrao: item.descricao_despesa_padrao || '',
+        ativo: item.ativo,
+        created_at: item.created_at,
+      })));
     } catch (error) {
       console.error('Erro ao carregar fornecedores:', error);
     }
@@ -326,26 +297,21 @@ export function AdminFinanceiroCadastros() {
   const loadContasBancarias = async () => {
     if (!empresaId) return;
     try {
-      const { data, error } = await (supabase as any)
-        .from('contas_bancarias')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('banco', { ascending: true });
-
-      if (error) throw error;
-      if (data) {
-        setContasBancarias(data.map((item: any) => ({
-          id: item.id,
-          banco: item.banco,
-          agencia: item.agencia,
-          conta: item.conta,
-          tipo: item.tipo,
-          descricao: item.descricao || '',
-          saldo_inicial: item.saldo_inicial || 0,
-          ativo: item.ativo,
-          created_at: item.created_at,
-        })));
-      }
+      const data = await api.get<any[]>('/financeiro/cadastros/contas-bancarias').catch(() => [] as any[]);
+      const sorted = (data ?? []).slice().sort((a: any, b: any) =>
+        (a.banco || '').localeCompare(b.banco || '')
+      );
+      setContasBancarias(sorted.map((item: any) => ({
+        id: item.id,
+        banco: item.banco,
+        agencia: item.agencia,
+        conta: item.conta,
+        tipo: item.tipo,
+        descricao: item.descricao || '',
+        saldo_inicial: item.saldo_inicial || 0,
+        ativo: item.ativo,
+        created_at: item.created_at,
+      })));
     } catch (error) {
       console.error('Erro ao carregar contas bancárias:', error);
     }
@@ -354,23 +320,18 @@ export function AdminFinanceiroCadastros() {
   const loadCentrosCusto = async () => {
     if (!empresaId) return;
     try {
-      const { data, error } = await (supabase as any)
-        .from('centros_custo')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('nome', { ascending: true });
-
-      if (error) throw error;
-      if (data) {
-        setCentrosCusto(data.map((item: any) => ({
-          id: item.id,
-          nome: item.nome,
-          descricao: item.descricao || '',
-          tipo: item.tipo,
-          ativo: item.ativo,
-          created_at: item.created_at,
-        })));
-      }
+      const data = await api.get<any[]>('/financeiro/cadastros/centros-custo').catch(() => [] as any[]);
+      const sorted = (data ?? []).slice().sort((a: any, b: any) =>
+        (a.nome || '').localeCompare(b.nome || '')
+      );
+      setCentrosCusto(sorted.map((item: any) => ({
+        id: item.id,
+        nome: item.nome,
+        descricao: item.descricao || '',
+        tipo: item.tipo,
+        ativo: item.ativo,
+        created_at: item.created_at,
+      })));
     } catch (error) {
       console.error('Erro ao carregar centros de custo:', error);
     }
@@ -379,24 +340,19 @@ export function AdminFinanceiroCadastros() {
   const loadFormasPagamento = async () => {
     if (!empresaId) return;
     try {
-      const { data, error } = await (supabase as any)
-        .from('formas_pagamento')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('nome', { ascending: true });
-
-      if (error) throw error;
-      if (data) {
-        setFormasPagamento(data.map((item: any) => ({
-          id: item.id,
-          nome: item.nome,
-          descricao: item.descricao || '',
-          taxa_percentual: item.taxa_percentual || 0,
-          dias_recebimento: item.dias_recebimento || 0,
-          ativo: item.ativo,
-          created_at: item.created_at,
-        })));
-      }
+      const data = await api.get<any[]>('/financeiro/cadastros/formas-pagamento').catch(() => [] as any[]);
+      const sorted = (data ?? []).slice().sort((a: any, b: any) =>
+        (a.nome || '').localeCompare(b.nome || '')
+      );
+      setFormasPagamento(sorted.map((item: any) => ({
+        id: item.id,
+        nome: item.nome,
+        descricao: item.descricao || '',
+        taxa_percentual: item.taxa_percentual || 0,
+        dias_recebimento: item.dias_recebimento || 0,
+        ativo: item.ativo,
+        created_at: item.created_at,
+      })));
     } catch (error) {
       console.error('Erro ao carregar formas de pagamento:', error);
     }
@@ -415,44 +371,30 @@ export function AdminFinanceiroCadastros() {
 
     try {
       if (editingItem) {
-        const { error } = await (supabase as any)
-          .from('centros_custo')
-          .update({
-            nome: formCentroCusto.nome,
-            descricao: formCentroCusto.descricao || null,
-            tipo: formCentroCusto.tipo || 'ambos',
-          })
-          .eq('id', editingItem.id);
-
-        if (error) throw error;
-        setCentrosCusto(prev => prev.map(item => 
-          item.id === editingItem.id ? { ...item, ...formCentroCusto } : item
+        const data = await api.put<any>(`/financeiro/cadastros/centros-custo/${editingItem.id}`, {
+          nome: formCentroCusto.nome,
+          descricao: formCentroCusto.descricao || null,
+          tipo: formCentroCusto.tipo || 'ambos',
+        });
+        setCentrosCusto(prev => prev.map(item =>
+          item.id === editingItem.id ? { ...item, ...data } : item
         ));
         toast({ title: 'Centro de custo atualizado!' });
       } else {
-        const { data, error } = await (supabase as any)
-          .from('centros_custo')
-          .insert({
-            empresa_id: empresaId,
-            nome: formCentroCusto.nome,
-            descricao: formCentroCusto.descricao || null,
-            tipo: formCentroCusto.tipo || 'ambos',
-            ativo: true,
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-        if (data) {
-          setCentrosCusto(prev => [...prev, {
-            id: data.id,
-            nome: data.nome,
-            descricao: data.descricao || '',
-            tipo: data.tipo,
-            ativo: data.ativo,
-            created_at: data.created_at,
-          }]);
-        }
+        const data = await api.post<any>('/financeiro/cadastros/centros-custo', {
+          nome: formCentroCusto.nome,
+          descricao: formCentroCusto.descricao || null,
+          tipo: formCentroCusto.tipo || 'ambos',
+          ativo: true,
+        });
+        setCentrosCusto(prev => [...prev, {
+          id: data.id,
+          nome: data.nome,
+          descricao: data.descricao || '',
+          tipo: data.tipo,
+          ativo: data.ativo,
+          created_at: data.created_at,
+        }]);
         toast({ title: 'Centro de custo cadastrado!' });
       }
 
@@ -466,12 +408,7 @@ export function AdminFinanceiroCadastros() {
 
   const handleDeleteCentroCusto = async (id: string) => {
     try {
-      const { error } = await (supabase as any)
-        .from('centros_custo')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await api.del(`/financeiro/cadastros/centros-custo/${id}`);
       setCentrosCusto(prev => prev.filter(item => item.id !== id));
       toast({ title: 'Centro de custo excluído com sucesso!' });
     } catch (error) {
@@ -493,47 +430,33 @@ export function AdminFinanceiroCadastros() {
 
     try {
       if (editingItem) {
-        const { error } = await (supabase as any)
-          .from('formas_pagamento')
-          .update({
-            nome: formFormaPagamento.nome,
-            descricao: formFormaPagamento.descricao || null,
-            taxa_percentual: formFormaPagamento.taxa_percentual || 0,
-            dias_recebimento: formFormaPagamento.dias_recebimento || 0,
-          })
-          .eq('id', editingItem.id);
-
-        if (error) throw error;
-        setFormasPagamento(prev => prev.map(item => 
-          item.id === editingItem.id ? { ...item, ...formFormaPagamento } : item
+        const data = await api.put<any>(`/financeiro/cadastros/formas-pagamento/${editingItem.id}`, {
+          nome: formFormaPagamento.nome,
+          descricao: formFormaPagamento.descricao || null,
+          taxa_percentual: formFormaPagamento.taxa_percentual || 0,
+          dias_recebimento: formFormaPagamento.dias_recebimento || 0,
+        });
+        setFormasPagamento(prev => prev.map(item =>
+          item.id === editingItem.id ? { ...item, ...data } : item
         ));
         toast({ title: 'Forma de pagamento atualizada!' });
       } else {
-        const { data, error } = await (supabase as any)
-          .from('formas_pagamento')
-          .insert({
-            empresa_id: empresaId,
-            nome: formFormaPagamento.nome,
-            descricao: formFormaPagamento.descricao || null,
-            taxa_percentual: formFormaPagamento.taxa_percentual || 0,
-            dias_recebimento: formFormaPagamento.dias_recebimento || 0,
-            ativo: true,
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-        if (data) {
-          setFormasPagamento(prev => [...prev, {
-            id: data.id,
-            nome: data.nome,
-            descricao: data.descricao || '',
-            taxa_percentual: data.taxa_percentual || 0,
-            dias_recebimento: data.dias_recebimento || 0,
-            ativo: data.ativo,
-            created_at: data.created_at,
-          }]);
-        }
+        const data = await api.post<any>('/financeiro/cadastros/formas-pagamento', {
+          nome: formFormaPagamento.nome,
+          descricao: formFormaPagamento.descricao || null,
+          taxa_percentual: formFormaPagamento.taxa_percentual || 0,
+          dias_recebimento: formFormaPagamento.dias_recebimento || 0,
+          ativo: true,
+        });
+        setFormasPagamento(prev => [...prev, {
+          id: data.id,
+          nome: data.nome,
+          descricao: data.descricao || '',
+          taxa_percentual: data.taxa_percentual || 0,
+          dias_recebimento: data.dias_recebimento || 0,
+          ativo: data.ativo,
+          created_at: data.created_at,
+        }]);
         toast({ title: 'Forma de pagamento cadastrada!' });
       }
 
@@ -547,12 +470,7 @@ export function AdminFinanceiroCadastros() {
 
   const handleDeleteFormaPagamento = async (id: string) => {
     try {
-      const { error } = await (supabase as any)
-        .from('formas_pagamento')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await api.del(`/financeiro/cadastros/formas-pagamento/${id}`);
       setFormasPagamento(prev => prev.filter(item => item.id !== id));
       toast({ title: 'Forma de pagamento excluída com sucesso!' });
     } catch (error) {
@@ -574,53 +492,39 @@ export function AdminFinanceiroCadastros() {
 
     try {
       if (editingItem) {
-        const { error } = await (supabase as any)
-          .from('contas_bancarias')
-          .update({
-            banco: formContaBancaria.banco,
-            agencia: formContaBancaria.agencia || '',
-            conta: formContaBancaria.conta || '',
-            tipo: formContaBancaria.tipo || 'corrente',
-            descricao: formContaBancaria.descricao || null,
-            saldo_inicial: formContaBancaria.saldo_inicial || 0,
-          })
-          .eq('id', editingItem.id);
-
-        if (error) throw error;
-        setContasBancarias(prev => prev.map(item => 
-          item.id === editingItem.id ? { ...item, ...formContaBancaria } : item
+        const data = await api.put<any>(`/financeiro/cadastros/contas-bancarias/${editingItem.id}`, {
+          banco: formContaBancaria.banco,
+          agencia: formContaBancaria.agencia || '',
+          conta: formContaBancaria.conta || '',
+          tipo: formContaBancaria.tipo || 'corrente',
+          descricao: formContaBancaria.descricao || null,
+          saldo_inicial: formContaBancaria.saldo_inicial || 0,
+        });
+        setContasBancarias(prev => prev.map(item =>
+          item.id === editingItem.id ? { ...item, ...data } : item
         ));
         toast({ title: 'Conta bancária atualizada!' });
       } else {
-        const { data, error } = await (supabase as any)
-          .from('contas_bancarias')
-          .insert({
-            empresa_id: empresaId,
-            banco: formContaBancaria.banco,
-            agencia: formContaBancaria.agencia || '',
-            conta: formContaBancaria.conta || '',
-            tipo: formContaBancaria.tipo || 'corrente',
-            descricao: formContaBancaria.descricao || null,
-            saldo_inicial: formContaBancaria.saldo_inicial || 0,
-            ativo: true,
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-        if (data) {
-          setContasBancarias(prev => [...prev, {
-            id: data.id,
-            banco: data.banco,
-            agencia: data.agencia,
-            conta: data.conta,
-            tipo: data.tipo,
-            descricao: data.descricao || '',
-            saldo_inicial: data.saldo_inicial || 0,
-            ativo: data.ativo,
-            created_at: data.created_at,
-          }]);
-        }
+        const data = await api.post<any>('/financeiro/cadastros/contas-bancarias', {
+          banco: formContaBancaria.banco,
+          agencia: formContaBancaria.agencia || '',
+          conta: formContaBancaria.conta || '',
+          tipo: formContaBancaria.tipo || 'corrente',
+          descricao: formContaBancaria.descricao || null,
+          saldo_inicial: formContaBancaria.saldo_inicial || 0,
+          ativo: true,
+        });
+        setContasBancarias(prev => [...prev, {
+          id: data.id,
+          banco: data.banco,
+          agencia: data.agencia,
+          conta: data.conta,
+          tipo: data.tipo,
+          descricao: data.descricao || '',
+          saldo_inicial: data.saldo_inicial || 0,
+          ativo: data.ativo,
+          created_at: data.created_at,
+        }]);
         toast({ title: 'Conta bancária cadastrada!' });
       }
 
@@ -634,12 +538,7 @@ export function AdminFinanceiroCadastros() {
 
   const handleDeleteContaBancaria = async (id: string) => {
     try {
-      const { error } = await (supabase as any)
-        .from('contas_bancarias')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await api.del(`/financeiro/cadastros/contas-bancarias/${id}`);
       setContasBancarias(prev => prev.filter(item => item.id !== id));
       toast({ title: 'Conta bancária excluída com sucesso!' });
     } catch (error) {
@@ -810,12 +709,7 @@ export function AdminFinanceiroCadastros() {
 
   const handleDeletePlanoReceita = async (id: string) => {
     try {
-      const { error } = await (supabase as any)
-        .from('plano_receitas')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await api.del(`/financeiro/cadastros/plano-receitas/${id}`);
       setPlanoReceitas(prev => prev.filter(item => item.id !== id));
       toast({ title: 'Item excluído com sucesso!' });
     } catch (error) {
@@ -833,45 +727,31 @@ export function AdminFinanceiroCadastros() {
     try {
       if (editingItem) {
         // Atualizar
-        const { error } = await (supabase as any)
-          .from('plano_receitas')
-          .update({
-            nome: formPlanoReceita.nome,
-            descricao: formPlanoReceita.descricao || null,
-            tipo: formPlanoReceita.tipo,
-          })
-          .eq('id', editingItem.id);
-
-        if (error) throw error;
-        setPlanoReceitas(prev => prev.map(item => 
-          item.id === editingItem.id ? { ...item, ...formPlanoReceita } : item
+        const data = await api.put<any>(`/financeiro/cadastros/plano-receitas/${editingItem.id}`, {
+          nome: formPlanoReceita.nome,
+          descricao: formPlanoReceita.descricao || null,
+          tipo: formPlanoReceita.tipo,
+        });
+        setPlanoReceitas(prev => prev.map(item =>
+          item.id === editingItem.id ? { ...item, ...data } : item
         ));
         toast({ title: 'Item atualizado!' });
       } else {
         // Criar novo
-        const { data, error } = await (supabase as any)
-          .from('plano_receitas')
-          .insert({
-            empresa_id: empresaId,
-            nome: formPlanoReceita.nome,
-            descricao: formPlanoReceita.descricao || null,
-            tipo: formPlanoReceita.tipo,
-            ativo: true,
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-        if (data) {
-          setPlanoReceitas(prev => [...prev, {
-            id: data.id,
-            nome: data.nome,
-            descricao: data.descricao || '',
-            tipo: data.tipo,
-            ativo: data.ativo,
-            created_at: data.created_at,
-          }]);
-        }
+        const data = await api.post<any>('/financeiro/cadastros/plano-receitas', {
+          nome: formPlanoReceita.nome,
+          descricao: formPlanoReceita.descricao || null,
+          tipo: formPlanoReceita.tipo,
+          ativo: true,
+        });
+        setPlanoReceitas(prev => [...prev, {
+          id: data.id,
+          nome: data.nome,
+          descricao: data.descricao || '',
+          tipo: data.tipo,
+          ativo: data.ativo,
+          created_at: data.created_at,
+        }]);
         toast({ title: 'Item cadastrado!' });
       }
 
@@ -908,12 +788,7 @@ export function AdminFinanceiroCadastros() {
 
   const handleDeletePlanoDespesa = async (id: string) => {
     try {
-      const { error } = await (supabase as any)
-        .from('plano_despesas')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await api.del(`/financeiro/cadastros/plano-despesas/${id}`);
       setPlanoDespesas(prev => prev.filter(item => item.id !== id));
       toast({ title: 'Item excluído com sucesso!' });
     } catch (error) {
@@ -931,45 +806,31 @@ export function AdminFinanceiroCadastros() {
     try {
       if (editingItem) {
         // Atualizar
-        const { error } = await (supabase as any)
-          .from('plano_despesas')
-          .update({
-            nome: formPlanoDespesa.nome,
-            descricao: formPlanoDespesa.descricao || null,
-            tipo: formPlanoDespesa.tipo,
-          })
-          .eq('id', editingItem.id);
-
-        if (error) throw error;
-        setPlanoDespesas(prev => prev.map(item => 
-          item.id === editingItem.id ? { ...item, ...formPlanoDespesa } : item
+        const data = await api.put<any>(`/financeiro/cadastros/plano-despesas/${editingItem.id}`, {
+          nome: formPlanoDespesa.nome,
+          descricao: formPlanoDespesa.descricao || null,
+          tipo: formPlanoDespesa.tipo,
+        });
+        setPlanoDespesas(prev => prev.map(item =>
+          item.id === editingItem.id ? { ...item, ...data } : item
         ));
         toast({ title: 'Item atualizado!' });
       } else {
         // Criar novo
-        const { data, error } = await (supabase as any)
-          .from('plano_despesas')
-          .insert({
-            empresa_id: empresaId,
-            nome: formPlanoDespesa.nome,
-            descricao: formPlanoDespesa.descricao || null,
-            tipo: formPlanoDespesa.tipo,
-            ativo: true,
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-        if (data) {
-          setPlanoDespesas(prev => [...prev, {
-            id: data.id,
-            nome: data.nome,
-            descricao: data.descricao || '',
-            tipo: data.tipo,
-            ativo: data.ativo,
-            created_at: data.created_at,
-          }]);
-        }
+        const data = await api.post<any>('/financeiro/cadastros/plano-despesas', {
+          nome: formPlanoDespesa.nome,
+          descricao: formPlanoDespesa.descricao || null,
+          tipo: formPlanoDespesa.tipo,
+          ativo: true,
+        });
+        setPlanoDespesas(prev => [...prev, {
+          id: data.id,
+          nome: data.nome,
+          descricao: data.descricao || '',
+          tipo: data.tipo,
+          ativo: data.ativo,
+          created_at: data.created_at,
+        }]);
         toast({ title: 'Item cadastrado!' });
       }
 
@@ -1000,12 +861,7 @@ export function AdminFinanceiroCadastros() {
 
   const handleDeleteCondicaoPagamento = async (id: string) => {
     try {
-      const { error } = await (supabase as any)
-        .from('condicoes_pagamento')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await api.del(`/financeiro/cadastros/condicoes-pagamento/${id}`);
       setCondicoesPagamento(prev => prev.filter(item => item.id !== id));
       toast({ title: 'Condição excluída com sucesso!' });
     } catch (error) {
@@ -1027,50 +883,36 @@ export function AdminFinanceiroCadastros() {
 
     try {
       if (editingItem) {
-        const { error } = await (supabase as any)
-          .from('condicoes_pagamento')
-          .update({
-            nome: formCondicaoPagamento.nome,
-            descricao: formCondicaoPagamento.descricao || null,
-            parcelas: formCondicaoPagamento.parcelas || 1,
-            intervalo_dias: formCondicaoPagamento.intervalo_dias || 30,
-            entrada_percentual: formCondicaoPagamento.entrada_percentual || 0,
-          })
-          .eq('id', editingItem.id);
-
-        if (error) throw error;
-        setCondicoesPagamento(prev => prev.map(item => 
-          item.id === editingItem.id ? { ...item, ...formCondicaoPagamento } : item
+        const data = await api.put<any>(`/financeiro/cadastros/condicoes-pagamento/${editingItem.id}`, {
+          nome: formCondicaoPagamento.nome,
+          descricao: formCondicaoPagamento.descricao || null,
+          parcelas: formCondicaoPagamento.parcelas || 1,
+          intervalo_dias: formCondicaoPagamento.intervalo_dias || 30,
+          entrada_percentual: formCondicaoPagamento.entrada_percentual || 0,
+        });
+        setCondicoesPagamento(prev => prev.map(item =>
+          item.id === editingItem.id ? { ...item, ...data } : item
         ));
         toast({ title: 'Condição atualizada!' });
       } else {
-        const { data, error } = await (supabase as any)
-          .from('condicoes_pagamento')
-          .insert({
-            empresa_id: empresaId,
-            nome: formCondicaoPagamento.nome,
-            descricao: formCondicaoPagamento.descricao || null,
-            parcelas: formCondicaoPagamento.parcelas || 1,
-            intervalo_dias: formCondicaoPagamento.intervalo_dias || 30,
-            entrada_percentual: formCondicaoPagamento.entrada_percentual || 0,
-            ativo: true,
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-        if (data) {
-          setCondicoesPagamento(prev => [...prev, {
-            id: data.id,
-            nome: data.nome,
-            descricao: data.descricao || '',
-            parcelas: data.parcelas,
-            intervalo_dias: data.intervalo_dias,
-            entrada_percentual: data.entrada_percentual || 0,
-            ativo: data.ativo,
-            created_at: data.created_at,
-          }]);
-        }
+        const data = await api.post<any>('/financeiro/cadastros/condicoes-pagamento', {
+          nome: formCondicaoPagamento.nome,
+          descricao: formCondicaoPagamento.descricao || null,
+          parcelas: formCondicaoPagamento.parcelas || 1,
+          intervalo_dias: formCondicaoPagamento.intervalo_dias || 30,
+          entrada_percentual: formCondicaoPagamento.entrada_percentual || 0,
+          ativo: true,
+        });
+        setCondicoesPagamento(prev => [...prev, {
+          id: data.id,
+          nome: data.nome,
+          descricao: data.descricao || '',
+          parcelas: data.parcelas,
+          intervalo_dias: data.intervalo_dias,
+          entrada_percentual: data.entrada_percentual || 0,
+          ativo: data.ativo,
+          created_at: data.created_at,
+        }]);
         toast({ title: 'Condição cadastrada!' });
       }
 
@@ -1097,12 +939,7 @@ export function AdminFinanceiroCadastros() {
 
   const handleDeleteFornecedor = async (id: string) => {
     try {
-      const { error } = await (supabase as any)
-        .from('fornecedores')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await api.del(`/financeiro/cadastros/fornecedores/${id}`);
       setFornecedores(prev => prev.filter(item => item.id !== id));
       toast({ title: 'Fornecedor excluído com sucesso!' });
     } catch (error) {
@@ -1124,60 +961,46 @@ export function AdminFinanceiroCadastros() {
 
     try {
       if (editingItem) {
-        const { error } = await (supabase as any)
-          .from('fornecedores')
-          .update({
-            razao_social: formFornecedor.razao_social,
-            nome_fantasia: formFornecedor.nome_fantasia || null,
-            cnpj_cpf: formFornecedor.cnpj_cpf || null,
-            email: formFornecedor.email || null,
-            telefone: formFornecedor.telefone || null,
-            endereco: formFornecedor.endereco || null,
-            observacoes: formFornecedor.observacoes || null,
-            classificacao_despesa_padrao: formFornecedor.classificacao_despesa_padrao || null,
-            descricao_despesa_padrao: formFornecedor.descricao_despesa_padrao || null,
-          })
-          .eq('id', editingItem.id);
-
-        if (error) throw error;
-        setFornecedores(prev => prev.map(item => 
-          item.id === editingItem.id ? { ...item, ...formFornecedor } : item
+        const data = await api.put<any>(`/financeiro/cadastros/fornecedores/${editingItem.id}`, {
+          razao_social: formFornecedor.razao_social,
+          nome_fantasia: formFornecedor.nome_fantasia || null,
+          cnpj_cpf: formFornecedor.cnpj_cpf || null,
+          email: formFornecedor.email || null,
+          telefone: formFornecedor.telefone || null,
+          endereco: formFornecedor.endereco || null,
+          observacoes: formFornecedor.observacoes || null,
+          classificacao_despesa_padrao: formFornecedor.classificacao_despesa_padrao || null,
+          descricao_despesa_padrao: formFornecedor.descricao_despesa_padrao || null,
+        });
+        setFornecedores(prev => prev.map(item =>
+          item.id === editingItem.id ? { ...item, ...data } : item
         ));
         toast({ title: 'Fornecedor atualizado!' });
       } else {
-        const { data, error } = await (supabase as any)
-          .from('fornecedores')
-          .insert({
-            empresa_id: empresaId,
-            razao_social: formFornecedor.razao_social,
-            nome_fantasia: formFornecedor.nome_fantasia || null,
-            cnpj_cpf: formFornecedor.cnpj_cpf || null,
-            email: formFornecedor.email || null,
-            telefone: formFornecedor.telefone || null,
-            endereco: formFornecedor.endereco || null,
-            observacoes: formFornecedor.observacoes || null,
-            classificacao_despesa_padrao: formFornecedor.classificacao_despesa_padrao || null,
-            descricao_despesa_padrao: formFornecedor.descricao_despesa_padrao || null,
-            ativo: true,
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-        if (data) {
-          setFornecedores(prev => [...prev, {
-            id: data.id,
-            razao_social: data.razao_social,
-            nome_fantasia: data.nome_fantasia || '',
-            cnpj_cpf: data.cnpj_cpf || '',
-            email: data.email || '',
-            telefone: data.telefone || '',
-            endereco: data.endereco || '',
-            observacoes: data.observacoes || '',
-            ativo: data.ativo,
-            created_at: data.created_at,
-          }]);
-        }
+        const data = await api.post<any>('/financeiro/cadastros/fornecedores', {
+          razao_social: formFornecedor.razao_social,
+          nome_fantasia: formFornecedor.nome_fantasia || null,
+          cnpj_cpf: formFornecedor.cnpj_cpf || null,
+          email: formFornecedor.email || null,
+          telefone: formFornecedor.telefone || null,
+          endereco: formFornecedor.endereco || null,
+          observacoes: formFornecedor.observacoes || null,
+          classificacao_despesa_padrao: formFornecedor.classificacao_despesa_padrao || null,
+          descricao_despesa_padrao: formFornecedor.descricao_despesa_padrao || null,
+          ativo: true,
+        });
+        setFornecedores(prev => [...prev, {
+          id: data.id,
+          razao_social: data.razao_social,
+          nome_fantasia: data.nome_fantasia || '',
+          cnpj_cpf: data.cnpj_cpf || '',
+          email: data.email || '',
+          telefone: data.telefone || '',
+          endereco: data.endereco || '',
+          observacoes: data.observacoes || '',
+          ativo: data.ativo,
+          created_at: data.created_at,
+        }]);
         toast({ title: 'Fornecedor cadastrado!' });
       }
 

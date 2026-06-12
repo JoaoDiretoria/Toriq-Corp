@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -245,17 +245,12 @@ export function AdminColaboradores() {
 
   const fetchColaboradores = async () => {
     if (!empresaId) return;
-    
+
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('colaboradores')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('nome');
-      
-      if (error) throw error;
-      setColaboradores((data || []) as Colaborador[]);
+      const data = await api.get<any[]>('/sst/colaboradores').catch(() => [] as any[]);
+      const sorted = (data || []).slice().sort((a: any, b: any) => a.nome.localeCompare(b.nome));
+      setColaboradores(sorted as Colaborador[]);
     } catch (error) {
       console.error('Erro ao buscar colaboradores:', error);
       toast({
@@ -274,17 +269,14 @@ export function AdminColaboradores() {
 
   const fetchSetores = async () => {
     if (!empresaId) return;
-    
+
     try {
-      const { data, error } = await supabase
-        .from('setores')
-        .select('id, nome')
-        .eq('empresa_id', empresaId)
-        .eq('ativo', true)
-        .order('nome');
-      
-      if (error) throw error;
-      setSetores(data || []);
+      const data = await api.get<any[]>('/sst/setores').catch(() => [] as any[]);
+      // Filtro ativo e ordenação replicados no cliente (backend devolve todos)
+      const filtered = (data || [])
+        .filter((s: any) => s.ativo !== false)
+        .sort((a: any, b: any) => a.nome.localeCompare(b.nome));
+      setSetores(filtered);
     } catch (error) {
       console.error('Erro ao buscar setores:', error);
     }
@@ -292,17 +284,14 @@ export function AdminColaboradores() {
 
   const fetchCargos = async () => {
     if (!empresaId) return;
-    
+
     try {
-      const { data, error } = await supabase
-        .from('cargos')
-        .select('id, nome')
-        .eq('empresa_id', empresaId)
-        .eq('ativo', true)
-        .order('nome');
-      
-      if (error) throw error;
-      setCargos(data || []);
+      const data = await api.get<any[]>('/sst/cargos').catch(() => [] as any[]);
+      // Filtro ativo e ordenação replicados no cliente (backend devolve todos)
+      const filtered = (data || [])
+        .filter((c: any) => c.ativo !== false)
+        .sort((a: any, b: any) => a.nome.localeCompare(b.nome));
+      setCargos(filtered);
     } catch (error) {
       console.error('Erro ao buscar cargos:', error);
     }
@@ -424,7 +413,6 @@ export function AdminColaboradores() {
     
     try {
       const payload = {
-        empresa_id: empresaId,
         nome: formData.nome.trim(),
         cpf: formData.cpf.trim() || null,
         rg: formData.rg.trim() || null,
@@ -473,22 +461,13 @@ export function AdminColaboradores() {
       };
 
       if (editingColaborador) {
-        const { error } = await supabase
-          .from('colaboradores')
-          .update(payload)
-          .eq('id', editingColaborador.id);
-        
-        if (error) throw error;
+        await api.put<any>(`/sst/colaboradores/${editingColaborador.id}`, payload);
         toast({
           title: 'Sucesso',
           description: 'Colaborador atualizado com sucesso.',
         });
       } else {
-        const { error } = await supabase
-          .from('colaboradores')
-          .insert(payload);
-        
-        if (error) throw error;
+        await api.post<any>('/sst/colaboradores', payload);
         toast({
           title: 'Sucesso',
           description: 'Colaborador cadastrado com sucesso.',
@@ -511,18 +490,13 @@ export function AdminColaboradores() {
     if (!colaboradorToDelete) return;
 
     try {
-      const { error } = await supabase
-        .from('colaboradores')
-        .delete()
-        .eq('id', colaboradorToDelete.id);
-      
-      if (error) throw error;
-      
+      await api.del<any>(`/sst/colaboradores/${colaboradorToDelete.id}`);
+
       toast({
         title: 'Sucesso',
         description: 'Colaborador excluído com sucesso.',
       });
-      
+
       setDeleteDialogOpen(false);
       setColaboradorToDelete(null);
       fetchColaboradores();
@@ -538,18 +512,13 @@ export function AdminColaboradores() {
 
   const handleToggleStatus = async (colaborador: Colaborador) => {
     try {
-      const { error } = await supabase
-        .from('colaboradores')
-        .update({ ativo: !colaborador.ativo })
-        .eq('id', colaborador.id);
-      
-      if (error) throw error;
-      
+      await api.put<any>(`/sst/colaboradores/${colaborador.id}`, { ativo: !colaborador.ativo });
+
       toast({
         title: 'Sucesso',
         description: `Colaborador ${colaborador.ativo ? 'desativado' : 'ativado'} com sucesso.`,
       });
-      
+
       fetchColaboradores();
     } catch (error) {
       console.error('Erro ao alterar status:', error);

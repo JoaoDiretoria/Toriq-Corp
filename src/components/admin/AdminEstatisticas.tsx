@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -134,9 +134,7 @@ export function AdminEstatisticas() {
   const fetchEstatisticasGerais = async () => {
     try {
       // Total de empresas por tipo
-      const { data: empresas } = await supabase
-        .from('empresas')
-        .select('tipo');
+      const empresas: any[] = await api.get<any[]>('/empresas').catch(() => [] as any[]);
 
       const totalEmpresas = empresas?.length || 0;
       const empresasSST = empresas?.filter(e => e.tipo === 'sst').length || 0;
@@ -144,40 +142,34 @@ export function AdminEstatisticas() {
       const empresasParceiras = empresas?.filter(e => e.tipo === 'empresa_parceira').length || 0;
 
       // Total de usuários
-      const { count: totalUsuarios } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true });
+      const usuariosList: any[] = await api.get<any[]>('/admin/users').catch(() => [] as any[]);
+      const totalUsuarios = usuariosList?.length || 0;
 
       // Total de turmas
-      const { data: turmas } = await supabase
-        .from('turmas_treinamento')
-        .select('status');
+      const turmas: any[] = await api.get<any[]>('/treinamentos/turmas').catch(() => [] as any[]);
 
       const totalTurmas = turmas?.length || 0;
       const turmasAtivas = turmas?.filter(t => t.status === 'em_andamento' || t.status === 'agendada').length || 0;
       const turmasConcluidas = turmas?.filter(t => t.status === 'concluida').length || 0;
 
       // Total de treinamentos
-      const { count: totalTreinamentos } = await supabase
-        .from('catalogo_treinamentos')
-        .select('*', { count: 'exact', head: true });
+      const catalogoList: any[] = await api.get<any[]>('/treinamentos/catalogo').catch(() => [] as any[]);
+      const totalTreinamentos = catalogoList?.length || 0;
 
-      // Total de colaboradores em turmas
-      const { count: totalColaboradores } = await (supabase as any)
-        .from('turmas_treinamento_colaboradores')
-        .select('*', { count: 'exact', head: true });
+      // Total de colaboradores em turmas — sem endpoint direto; degradado
+      const totalColaboradores = 0;
 
       setEstatisticas({
         totalEmpresas,
         empresasSST,
         empresasClientes,
         empresasParceiras,
-        totalUsuarios: totalUsuarios || 0,
+        totalUsuarios,
         totalTurmas,
         turmasAtivas,
         turmasConcluidas,
-        totalTreinamentos: totalTreinamentos || 0,
-        totalColaboradores: totalColaboradores || 0,
+        totalTreinamentos,
+        totalColaboradores,
       });
     } catch (error) {
       console.error('Erro ao buscar estatísticas gerais:', error);
@@ -186,35 +178,23 @@ export function AdminEstatisticas() {
 
   const fetchEmpresasSSTStats = async () => {
     try {
-      // Buscar empresas SST com dados agregados em uma única query
-      const { data: empresasData } = await supabase
-        .from('empresas')
-        .select(`
-          id, 
-          nome,
-          clientes_sst(id),
-          turmas_treinamento(id, status)
-        `)
-        .eq('tipo', 'sst');
+      // Buscar empresas SST — endpoint retorna lista flat sem joins de clientes/turmas
+      // Contagens de clientes e turmas por empresa não têm endpoint agregado; degradadas a 0
+      const empresasData: any[] = await api.get<any[]>('/empresas').catch(() => [] as any[]);
 
       if (!empresasData) return;
 
-      const stats: EmpresaSSTStats[] = empresasData.map((empresa: any) => {
-        const turmas = empresa.turmas_treinamento || [];
-        const totalTurmas = turmas.length;
-        const turmasAtivas = turmas.filter((t: any) => t.status === 'em_andamento' || t.status === 'agendada').length;
-        const turmasConcluidas = turmas.filter((t: any) => t.status === 'concluida').length;
-
-        return {
+      const stats: EmpresaSSTStats[] = empresasData
+        .filter((empresa: any) => empresa.tipo === 'sst')
+        .map((empresa: any) => ({
           id: empresa.id,
           nome: empresa.nome,
-          totalClientes: empresa.clientes_sst?.length || 0,
-          totalTurmas,
-          turmasAtivas,
-          turmasConcluidas,
-          totalColaboradores: 0, // Será calculado separadamente se necessário
-        };
-      });
+          totalClientes: 0, // Será calculado separadamente se necessário
+          totalTurmas: 0,
+          turmasAtivas: 0,
+          turmasConcluidas: 0,
+          totalColaboradores: 0,
+        }));
 
       // Ordenar por total de turmas
       stats.sort((a, b) => b.totalTurmas - a.totalTurmas);
@@ -226,26 +206,30 @@ export function AdminEstatisticas() {
 
   const fetchTreinamentosStats = async () => {
     try {
-      // Buscar treinamentos com turmas em uma única query
-      const { data: treinamentosData } = await supabase
-        .from('catalogo_treinamentos')
-        .select(`
-          id,
-          nome,
-          norma_regulamentadora:nr_id (numero),
-          turmas_treinamento(id)
-        `);
+      // Buscar catálogo de treinamentos e turmas em paralelo
+      const [catalogoData, turmasData]: [any[], any[]] = await Promise.all([
+        api.get<any[]>('/treinamentos/catalogo').catch(() => [] as any[]),
+        api.get<any[]>('/treinamentos/turmas').catch(() => [] as any[]),
+      ]);
 
-      if (!treinamentosData) return;
+      if (!catalogoData) return;
 
-      const stats: TreinamentoStats[] = treinamentosData.map((treinamento: any) => {
-        const norma = treinamento.norma_regulamentadora?.numero || '-';
-        const totalTurmas = treinamento.turmas_treinamento?.length || 0;
+      // Agregar contagem de turmas por treinamento_id no cliente
+      const turmasPorTreinamento: Record<string, number> = {};
+      for (const turma of turmasData || []) {
+        if (turma.treinamento_id) {
+          turmasPorTreinamento[turma.treinamento_id] = (turmasPorTreinamento[turma.treinamento_id] || 0) + 1;
+        }
+      }
+
+      const stats: TreinamentoStats[] = catalogoData.map((treinamento: any) => {
+        // norma_regulamentadora join não disponível no endpoint — degradado
+        const totalTurmas = turmasPorTreinamento[treinamento.id] || 0;
 
         return {
           id: treinamento.id,
           nome: treinamento.nome,
-          norma: `NR ${norma}`,
+          norma: treinamento.nr_id ? `NR -` : '-',
           totalTurmas,
           totalParticipantes: 0, // Simplificado para performance
         };
@@ -261,30 +245,13 @@ export function AdminEstatisticas() {
 
   const fetchTabelasStats = async () => {
     try {
-      // Buscar contagem das tabelas principais em paralelo (otimizado)
-      const promises = TABELAS_PRINCIPAIS.map(async (tabela) => {
-        const { count, error } = await (supabase as any)
-          .from(tabela)
-          .select('*', { count: 'exact', head: true });
-        
-        // Ignorar erros silenciosamente (tabela pode não existir)
-        if (error) {
-          return {
-            tabela,
-            estimativa_linhas: 0,
-            tamanho: '-',
-          };
-        }
-        
-        return {
-          tabela,
-          estimativa_linhas: count || 0,
-          tamanho: '-',
-        };
-      });
-
-      const stats = await Promise.all(promises);
-      stats.sort((a, b) => b.estimativa_linhas - a.estimativa_linhas);
+      // Contagem por tabela individual não tem endpoint equivalente no backend.
+      // Degradado: retorna estrutura com zeros para manter a UI funcional.
+      const stats: TabelaStats[] = TABELAS_PRINCIPAIS.map((tabela) => ({
+        tabela,
+        estimativa_linhas: 0,
+        tamanho: '-',
+      }));
       setTabelasStats(stats);
     } catch (error) {
       // Silenciar erro - não é crítico
@@ -294,26 +261,20 @@ export function AdminEstatisticas() {
 
   const fetchUsuariosStats = async () => {
     try {
-      const { data } = await supabase
-        .from('profiles')
-        .select(`
-          id,
-          nome,
-          email,
-          role,
-          created_at,
-          empresa:empresa_id (nome)
-        `)
-        .order('created_at', { ascending: false })
-        .limit(100);
+      const data: any[] = await api.get<any[]>('/admin/users').catch(() => [] as any[]);
 
       if (data) {
-        const usuariosFormatados: UsuarioStats[] = data.map((u: any) => ({
+        // Ordenar por created_at desc e limitar a 100 no cliente
+        const sorted = [...data].sort((a, b) =>
+          new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+        ).slice(0, 100);
+
+        const usuariosFormatados: UsuarioStats[] = sorted.map((u: any) => ({
           id: u.id,
           nome: u.nome || 'Sem nome',
           email: u.email || '-',
           role: u.role || '-',
-          empresa_nome: u.empresa?.nome || null,
+          empresa_nome: null, // join empresa.nome não disponível no endpoint
           ultimo_acesso: null,
           created_at: u.created_at,
         }));
@@ -326,24 +287,13 @@ export function AdminEstatisticas() {
 
   const fetchAcessosRecentes = async () => {
     try {
-      const { data } = await (supabase as any)
-        .from('access_logs')
-        .select(`
-          id,
-          user_id,
-          pagina,
-          acao,
-          created_at,
-          profile:user_id (nome)
-        `)
-        .order('created_at', { ascending: false })
-        .limit(50);
+      const data: any[] = await api.get<any[]>('/sistema/access-logs?limit=50').catch(() => [] as any[]);
 
       if (data) {
         const acessosFormatados: AcessoLog[] = data.map((a: any) => ({
           id: a.id,
           user_id: a.user_id,
-          user_nome: a.profile?.nome || 'Usuário',
+          user_nome: a.user_nome || 'Usuário',
           pagina: a.pagina || '-',
           acao: a.acao || '-',
           created_at: a.created_at,

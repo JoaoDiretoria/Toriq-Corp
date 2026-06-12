@@ -21,8 +21,7 @@ import {
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertTriangle } from 'lucide-react';
 import {
@@ -686,7 +685,6 @@ function SortableBlock({
 
 export function GeradorProposta({ onClose, clienteNome, cardId, dadosOrcamento }: GeradorPropostaProps) {
   const { toast } = useToast();
-  const { profile } = useAuth();
   const [view, setView] = useState<'list' | 'new' | 'editor'>('list');
   const [searchProposals, setSearchProposals] = useState('');
   const [searchTemplates, setSearchTemplates] = useState('');
@@ -718,11 +716,7 @@ export function GeradorProposta({ onClose, clienteNome, cardId, dadosOrcamento }
   const fetchValorCard = useCallback(async () => {
     if (!cardId) return;
     try {
-      const { data } = await (supabase as any)
-        .from('funil_cards')
-        .select('valor')
-        .eq('id', cardId)
-        .maybeSingle();
+      const data = await api.get<any>(`/funil/cards/${cardId}`).catch(() => null);
       if (data) setValorCard(data.valor || 0);
     } catch (error) {
       console.error('Erro ao buscar valor do card:', error);
@@ -762,16 +756,12 @@ export function GeradorProposta({ onClose, clienteNome, cardId, dadosOrcamento }
         const dataFormatada = agora.toISOString().split('T')[0];
         const horaFormatada = agora.toTimeString().slice(0, 5);
 
-        await (supabase as any)
-          .from('funil_card_atividades')
-          .insert({
-            card_id: cardId,
+        await api.post(`/funil/cards/${cardId}/atividades`, {
             tipo: 'tarefa',
             descricao: `Enviar proposta comercial: ${editingDoc.title}`,
             prazo: dataFormatada,
             horario: horaFormatada,
             status: 'programada',
-            usuario_id: profile?.id,
           });
 
         toast({ 

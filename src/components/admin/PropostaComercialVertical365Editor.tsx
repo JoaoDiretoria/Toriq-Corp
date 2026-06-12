@@ -35,7 +35,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 
 interface TreinamentoIncluso {
   id: string;
@@ -257,19 +257,21 @@ export function PropostaComercialVertical365Editor({
     const loadEmpresaData = async () => {
       if (!empresaId) return;
       try {
-        const { data: empresaData } = await (supabase as any).from('empresas').select('nome, razao_social, cnpj, telefone').eq('id', empresaId).single();
+        const empresaData = await api.get<any>('/empresas/me').catch(() => null);
         if (empresaData) {
           setEmpresaSST({ nome: empresaData.nome || '', razaoSocial: empresaData.razao_social || '', cnpj: empresaData.cnpj || '', telefone: empresaData.telefone || '' });
           if (!propostaExistente) setIdentificadorProposta(gerarIdentificadorProposta(empresaData.nome || 'V365'));
         }
-        const { data: whiteLabelData } = await (supabase as any).from('white_label_config').select('logo_url').eq('empresa_id', empresaId).single();
+        const whiteLabelData = await api.get<any>('/white-label/config').catch(() => null);
         if (whiteLabelData?.logo_url) setLogoUrl(whiteLabelData.logo_url);
         if (user?.id) {
-          const { data: profileData } = await (supabase as any).from('profiles').select('nome, email, telefone').eq('id', user.id).single();
+          const meData = await api.get<any>('/auth/me').catch(() => null);
+          const profileData = meData?.profile || null;
           const profilePhone = profileData?.telefone || '';
           let phone = profilePhone;
           if (!phone) {
-            const { data: colaboradorData } = await (supabase as any).from('colaboradores').select('telefone').eq('email', user.email).eq('empresa_id', empresaId).single();
+            const colaboradores = await api.get<any[]>('/sst/colaboradores').catch(() => [] as any[]);
+            const colaboradorData = colaboradores.find((c: any) => c.email === user.email) || null;
             phone = colaboradorData?.telefone || '';
           }
           setVendedor({ nome: profileData?.nome || user?.user_metadata?.nome || '', email: profileData?.email || user?.email || '', telefone: phone });
@@ -383,12 +385,11 @@ export function PropostaComercialVertical365Editor({
       const valorTotal = dadosOrcamento?.totais?.totalComDesconto || 0;
       
       const propostaData = {
-        empresa_id: empresaId,
         card_id: cardId || null,
         identificador: identificadorProposta,
         status: statusProposta,
         modo_exibicao_valores: modoExibicao,
-        
+
         cliente_empresa: formData.clienteEmpresa,
         cliente_razao_social: formData.clienteRazaoSocial,
         cliente_cnpj: formData.clienteCnpj,
@@ -400,10 +401,10 @@ export function PropostaComercialVertical365Editor({
         cliente_uf: formData.clienteUf,
         cliente_cep: formData.clienteCep,
         cliente_distancia: formData.clienteDistancia ? parseInt(formData.clienteDistancia) : null,
-        
+
         data_proposta: formData.dataProposta,
         validade_dias: parseInt(formData.validadeDias) || 10,
-        
+
         titulo: formData.titulo,
         titulo_modulo: formData.tituloModulo,
         titulo_dores: formData.tituloDores,
@@ -413,7 +414,7 @@ export function PropostaComercialVertical365Editor({
         titulo_pagamento: formData.tituloPagamento,
         titulo_infos: formData.tituloInfos,
         titulo_passos: formData.tituloPassos,
-        
+
         descricao: formData.descricao,
         modulo: formData.modulo,
         publico: formData.publico,
@@ -423,36 +424,18 @@ export function PropostaComercialVertical365Editor({
         pagamento: formData.pagamento,
         infos: formData.infos,
         passos: formData.passos,
-        
+
         dados_orcamento: dadosOrcamento || {},
         valor_total: valorTotal,
-        
-        created_by: user?.id,
-        updated_at: new Date().toISOString()
       };
-      
+
       let result;
-      
+
       if (propostaId) {
-        const { data, error } = await (supabase as any)
-          .from('propostas_comerciais_vertical365')
-          .update(propostaData)
-          .eq('id', propostaId)
-          .select()
-          .single();
-        
-        if (error) throw error;
-        result = data;
+        result = await api.put<any>(`/funil-comercial/propostas/vertical365/${propostaId}`, propostaData);
         toast.success('Proposta atualizada com sucesso!');
       } else {
-        const { data, error } = await (supabase as any)
-          .from('propostas_comerciais_vertical365')
-          .insert(propostaData)
-          .select()
-          .single();
-        
-        if (error) throw error;
-        result = data;
+        result = await api.post<any>('/funil-comercial/propostas/vertical365', propostaData);
         setPropostaId(result.id);
         toast.success('Proposta salva com sucesso!');
       }
@@ -478,10 +461,9 @@ export function PropostaComercialVertical365Editor({
     if (!empresaId || !modelName.trim()) { toast.error('Informe um nome para o modelo'); return; }
     setSavingModel(true);
     try {
-      const data: Record<string, any> = { empresa_id: empresaId, nome: modelName.trim(), tipo_orcamento: 'vertical365', created_by: user?.id };
+      const data: Record<string, any> = { nome: modelName.trim(), tipo_orcamento: 'vertical365' };
       templateFields365.forEach(f => { data[fieldToColumn365[f]] = formData[f]; });
-      const { error } = await (supabase as any).from('modelos_proposta_comercial').insert(data);
-      if (error) throw error;
+      await api.post<any>('/modelos/propostas-comerciais', data);
       toast.success('Modelo salvo com sucesso!');
       setShowSaveModelDialog(false);
       setModelName('');
@@ -493,9 +475,12 @@ export function PropostaComercialVertical365Editor({
     setShowLoadModelDialog(true);
     setLoadingModelos(true);
     try {
-      const { data, error } = await (supabase as any).from('modelos_proposta_comercial').select('*').eq('empresa_id', empresaId).eq('tipo_orcamento', 'vertical365').order('created_at', { ascending: false });
-      if (error) throw error;
-      setModelos(data || []);
+      const allModelos = await api.get<any[]>('/modelos/propostas-comerciais').catch(() => [] as any[]);
+      // Filtro client-side: apenas vertical365, ordem decrescente por created_at
+      const filtered = (allModelos || [])
+        .filter((m: any) => m.tipo_orcamento === 'vertical365')
+        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      setModelos(filtered);
     } catch (error: any) { console.error('Erro ao carregar modelos:', error); toast.error('Erro ao carregar modelos'); } finally { setLoadingModelos(false); }
   };
 
@@ -521,8 +506,7 @@ export function PropostaComercialVertical365Editor({
     try {
       const data: Record<string, any> = {};
       templateFields365.forEach(f => { data[fieldToColumn365[f]] = formData[f]; });
-      const { error } = await (supabase as any).from('modelos_proposta_comercial').update(data).eq('id', activeModelId);
-      if (error) throw error;
+      await api.put<any>(`/modelos/propostas-comerciais/${activeModelId}`, data);
       modelSnapshotRef.current = JSON.stringify(formData);
       toast.success(`Modelo "${activeModelName}" atualizado com sucesso!`);
     } catch (error: any) { console.error('Erro ao atualizar modelo:', error); toast.error(error.message || 'Erro ao atualizar modelo'); } finally { setUpdatingModel(false); }
@@ -535,8 +519,7 @@ export function PropostaComercialVertical365Editor({
   const handleDeleteModel = async (id: string) => {
     setDeletingModelId(id);
     try {
-      const { error } = await (supabase as any).from('modelos_proposta_comercial').delete().eq('id', id);
-      if (error) throw error;
+      await api.del<void>(`/modelos/propostas-comerciais/${id}`);
       setModelos(prev => prev.filter(m => m.id !== id));
       toast.success('Modelo excluído');
     } catch (error: any) { toast.error('Erro ao excluir modelo'); } finally { setDeletingModelId(null); }

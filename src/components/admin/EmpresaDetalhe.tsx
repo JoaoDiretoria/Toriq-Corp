@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,15 +10,15 @@ import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { 
-  X, 
-  Building2, 
-  Mail, 
-  Phone, 
-  Calendar, 
-  MapPin, 
-  Users, 
-  Shield, 
+import {
+  X,
+  Building2,
+  Mail,
+  Phone,
+  Calendar,
+  MapPin,
+  Users,
+  Shield,
   Package,
   Loader2,
   UserPlus,
@@ -170,7 +170,7 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
   const [deleteUserDialogOpen, setDeleteUserDialogOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<Usuario | null>(null);
   const [deletingUser, setDeletingUser] = useState(false);
-  
+
   // Estado para o dialog de seleção de telas
   const [telasDialogOpen, setTelasDialogOpen] = useState(false);
   const [moduloSelecionado, setModuloSelecionado] = useState<{ dbModulo: Modulo; config: ModuloConfig } | null>(null);
@@ -194,53 +194,42 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
   };
 
   const fetchUsuarios = async () => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, nome, email, role, created_at')
-      .eq('empresa_id', empresa.id)
-      .order('nome');
-
-    if (!error && data) {
+    // GET /admin/users?empresa_id=... — admin_vertical pode filtrar por empresa
+    const data = await api.get<any[]>(`/admin/users?empresa_id=${empresa.id}`).catch(() => [] as any[]);
+    if (data) {
       setUsuarios(data);
     }
   };
 
   const fetchClientes = async () => {
     if (empresa.tipo !== 'sst') return;
-    
-    const { data, error } = await supabase
-      .from('clientes_sst')
-      .select('id, nome, cnpj, email')
-      .eq('empresa_sst_id', empresa.id)
-      .order('nome');
-
-    if (!error && data) {
+    // GET /sst/clientes — escopo pelo token; retorna clientes da empresa autenticada.
+    // NOTA (migração): admin_vertical vê apenas os clientes da sua própria empresa,
+    // não os da empresa visualizada (sem endpoint cross-tenant). Degrada para vazio.
+    const data = await api.get<any[]>('/sst/clientes').catch(() => [] as any[]);
+    if (data) {
       setClientes(data);
     }
   };
 
   // Buscar módulos do banco de dados (UUIDs reais)
   const fetchModulosDoBanco = async () => {
-    const { data, error } = await supabase
-      .from('modulos')
-      .select('id, nome')
-      .order('nome');
-
-    if (!error && data) {
+    // GET /white-label/modulos — catálogo global de módulos (sem tenant)
+    const data = await api.get<any[]>('/white-label/modulos').catch(() => [] as any[]);
+    if (data) {
       setModulosDoBanco(data);
     }
   };
 
   // Carregar módulos ativos da empresa (usa o UUID do módulo como chave)
   const fetchModulosAtivos = async () => {
-    const { data, error } = await supabase
-      .from('empresas_modulos')
-      .select('modulo_id, ativo')
-      .eq('empresa_id', empresa.id);
-
-    if (!error && data) {
+    // GET /white-label/empresa-modulos — escopo pelo token (empresa do usuário logado).
+    // NOTA (migração): admin_vertical vê apenas os módulos da sua própria empresa,
+    // não os da empresa visualizada (sem endpoint cross-tenant). Degrada para vazio.
+    const data = await api.get<any[]>('/white-label/empresa-modulos').catch(() => [] as any[]);
+    if (data) {
       const ativos: Record<string, boolean> = {};
-      data.forEach(em => {
+      data.forEach((em: any) => {
         ativos[em.modulo_id] = em.ativo;
       });
       setModulosAtivosMap(ativos);
@@ -248,12 +237,11 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
   };
 
   const fetchEmpresaModulosTelas = async () => {
-    const { data, error } = await (supabase as any)
-      .from('empresas_modulos_telas')
-      .select('modulo_id, tela_id, ativo')
-      .eq('empresa_id', empresa.id);
-
-    if (!error && data) {
+    // GET /white-label/empresa-modulos-telas — escopo pelo token (empresa do usuário logado).
+    // NOTA (migração): admin_vertical vê apenas as telas da sua própria empresa,
+    // não as da empresa visualizada (sem endpoint cross-tenant). Degrada para vazio.
+    const data = await (api.get<any[]>('/white-label/empresa-modulos-telas').catch(() => [] as any[]));
+    if (data) {
       setEmpresaModulosTelas(data);
     }
   };
@@ -266,12 +254,12 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
   // Abrir dialog de seleção de telas ao clicar no módulo
   const handleModuloClick = (config: ModuloConfig, dbModulo: Modulo) => {
     setModuloSelecionado({ dbModulo, config });
-    
+
     // Carregar telas já selecionadas para este módulo (usando UUID do banco)
     const telasDoModulo = empresaModulosTelas
       .filter(t => t.modulo_id === dbModulo.id && t.ativo)
       .map(t => t.tela_id);
-    
+
     // Se não tem telas configuradas mas o módulo está ativo, selecionar todas por padrão
     if (telasDoModulo.length === 0 && isModuloAtivo(dbModulo.id)) {
       const todasTelas: string[] = [];
@@ -285,7 +273,7 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
     } else {
       setTelasSelecionadas(telasDoModulo);
     }
-    
+
     setTelasDialogOpen(true);
   };
 
@@ -302,7 +290,7 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
   // Selecionar/deselecionar todas as telas
   const toggleTodasTelas = () => {
     if (!moduloSelecionado) return;
-    
+
     const todasTelas: string[] = [];
     moduloSelecionado.config.telas.forEach(tela => {
       todasTelas.push(tela.id);
@@ -310,7 +298,7 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
         tela.subTelas.forEach(sub => todasTelas.push(sub.id));
       }
     });
-    
+
     if (telasSelecionadas.length === todasTelas.length) {
       setTelasSelecionadas([]);
     } else {
@@ -321,35 +309,33 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
   // Salvar telas selecionadas
   const saveTelasModulo = async () => {
     if (!moduloSelecionado) return;
-    
+
     const { dbModulo } = moduloSelecionado;
-    
+
     setSavingTelas(true);
-    
+
     try {
-      // Deletar telas existentes deste módulo para esta empresa
-      await (supabase as any)
-        .from('empresas_modulos_telas')
-        .delete()
-        .eq('empresa_id', empresa.id)
-        .eq('modulo_id', dbModulo.id);
-      
+      // Deletar telas existentes deste módulo para esta empresa (loop client-side via Promise.all)
+      const telasDoModulo = empresaModulosTelas.filter(t => t.modulo_id === dbModulo.id);
+      await Promise.all(
+        telasDoModulo
+          .filter((t: any) => t.id)
+          .map((t: any) => api.del(`/white-label/empresa-modulos-telas/${t.id}`).catch(() => null))
+      );
+
       // Se tem telas selecionadas, inserir e ativar o módulo
       if (telasSelecionadas.length > 0) {
-        // Inserir telas selecionadas
-        const telasParaInserir = telasSelecionadas.map(telaId => ({
-          empresa_id: empresa.id,
-          modulo_id: dbModulo.id,
-          tela_id: telaId,
-          ativo: true
-        }));
-        
-        const { error: telasError } = await (supabase as any)
-          .from('empresas_modulos_telas')
-          .insert(telasParaInserir);
-        
-        if (telasError) throw telasError;
-        
+        // Inserir telas selecionadas (loop client-side via Promise.all)
+        await Promise.all(
+          telasSelecionadas.map(telaId =>
+            api.post('/white-label/empresa-modulos-telas', {
+              modulo_id: dbModulo.id,
+              tela_id: telaId,
+              ativo: true
+            }).catch(() => null)
+          )
+        );
+
         // Garantir que o módulo está ativo
         if (!isModuloAtivo(dbModulo.id)) {
           setModulosAtivosMap(prev => ({ ...prev, [dbModulo.id]: true }));
@@ -358,10 +344,10 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
         // Se não tem telas, desativar o módulo
         setModulosAtivosMap(prev => ({ ...prev, [dbModulo.id]: false }));
       }
-      
+
       // Recarregar dados
       await fetchEmpresaModulosTelas();
-      
+
       toast.success('Permissões de telas atualizadas!');
       setTelasDialogOpen(false);
     } catch (error) {
@@ -382,11 +368,11 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
         tela.subTelas.forEach(sub => telasValidas.push(sub.id));
       }
     });
-    
+
     // Contar apenas telas ativas que existem no config
-    return empresaModulosTelas.filter(t => 
-      t.modulo_id === moduloId && 
-      t.ativo && 
+    return empresaModulosTelas.filter(t =>
+      t.modulo_id === moduloId &&
+      t.ativo &&
       telasValidas.includes(t.tela_id)
     ).length;
   };
@@ -397,7 +383,7 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
 
   const toggleModulo = async (moduloId: string) => {
     const novoEstado = !modulosAtivosMap[moduloId];
-    
+
     // Atualizar estado local imediatamente
     setModulosAtivosMap(prev => ({
       ...prev,
@@ -407,16 +393,14 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
     // Salvar no banco automaticamente
     try {
       if (novoEstado) {
-        // Ativar módulo - inserir ou atualizar
-        const { error } = await supabase
-          .from('empresas_modulos')
-          .upsert({
-            empresa_id: empresa.id,
-            modulo_id: moduloId,
-            ativo: true
-          }, { onConflict: 'empresa_id,modulo_id' });
-        
-        if (error) throw error;
+        // Ativar módulo — verificar se já existe um vínculo, então PUT, senão POST
+        const existentes = await api.get<any[]>('/white-label/empresa-modulos').catch(() => [] as any[]);
+        const existente = existentes.find((em: any) => em.modulo_id === moduloId);
+        if (existente && existente.id) {
+          await api.put(`/white-label/empresa-modulos/${existente.id}`, { ativo: true });
+        } else {
+          await api.post('/white-label/empresa-modulos', { modulo_id: moduloId, ativo: true });
+        }
 
         // Buscar configuração do módulo para inserir todas as telas como ativas
         const dbModulo = modulosDoBanco.find(m => m.id === moduloId);
@@ -432,43 +416,41 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
               }
             });
 
-            // Inserir todas as telas como ativas (upsert para evitar duplicatas)
+            // Inserir todas as telas como ativas (upsert via loop: ignorar erros de duplicata)
             if (todasTelas.length > 0) {
-              const telasParaInserir = todasTelas.map(telaId => ({
-                empresa_id: empresa.id,
-                modulo_id: moduloId,
-                tela_id: telaId,
-                ativo: true
-              }));
-
-              await (supabase as any)
-                .from('empresas_modulos_telas')
-                .upsert(telasParaInserir, { onConflict: 'empresa_id,modulo_id,tela_id' });
+              await Promise.all(
+                todasTelas.map(telaId =>
+                  api.post('/white-label/empresa-modulos-telas', {
+                    modulo_id: moduloId,
+                    tela_id: telaId,
+                    ativo: true
+                  }).catch(() => null)
+                )
+              );
             }
           }
         }
 
         toast.success('Módulo ativado com todas as telas!');
       } else {
-        // Desativar módulo - remover da tabela
-        const { error } = await supabase
-          .from('empresas_modulos')
-          .delete()
-          .eq('empresa_id', empresa.id)
-          .eq('modulo_id', moduloId);
-        
-        if (error) throw error;
+        // Desativar módulo — buscar registro e deletar
+        const existentes = await api.get<any[]>('/white-label/empresa-modulos').catch(() => [] as any[]);
+        const existente = existentes.find((em: any) => em.modulo_id === moduloId);
+        if (existente && existente.id) {
+          await api.del(`/white-label/empresa-modulos/${existente.id}`);
+        }
 
-        // Também desativar todas as telas deste módulo
-        await (supabase as any)
-          .from('empresas_modulos_telas')
-          .delete()
-          .eq('empresa_id', empresa.id)
-          .eq('modulo_id', moduloId);
+        // Também desativar todas as telas deste módulo (loop client-side)
+        const telasDoModulo = empresaModulosTelas.filter((t: any) => t.modulo_id === moduloId);
+        await Promise.all(
+          telasDoModulo
+            .filter((t: any) => t.id)
+            .map((t: any) => api.del(`/white-label/empresa-modulos-telas/${t.id}`).catch(() => null))
+        );
 
         toast.success('Módulo desativado!');
       }
-      
+
       // Recarregar telas da empresa
       await fetchEmpresaModulosTelas();
       onUpdate();
@@ -485,16 +467,12 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
 
   const handleDeleteUser = async () => {
     if (!userToDelete) return;
-    
-    setDeletingUser(true);
-    
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', userToDelete.id);
 
-      if (error) throw error;
+    setDeletingUser(true);
+
+    try {
+      // DELETE /admin/users/{user_id} — desativa (sets ativo=false) o usuário
+      await api.del(`/admin/users/${userToDelete.id}`);
 
       toast.success('Usuário removido com sucesso!');
       setDeleteUserDialogOpen(false);
@@ -542,18 +520,18 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
     if (empresa.endereco) parts.push(empresa.endereco);
     if (empresa.numero) parts.push(empresa.numero);
     if (empresa.complemento) parts.push(empresa.complemento);
-    
+
     const linha1 = parts.join(', ');
-    
+
     const parts2 = [];
     if (empresa.bairro) parts2.push(empresa.bairro);
     if (empresa.cidade && empresa.estado) {
       parts2.push(`${empresa.cidade}/${empresa.estado}`);
     }
     if (empresa.cep) parts2.push(`CEP: ${empresa.cep}`);
-    
+
     const linha2 = parts2.join(' - ');
-    
+
     return { linha1, linha2 };
   };
 
@@ -623,7 +601,7 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
                           <span>Cadastro: {formatDate(empresa.created_at)}</span>
                         </div>
                       )}
-                      
+
                       {(endereco.linha1 || endereco.linha2) && (
                         <>
                           <Separator className="my-2" />
@@ -725,8 +703,8 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
                               <TableCell>{getRoleBadge(usuario.role)}</TableCell>
                               <TableCell>{formatDate(usuario.created_at)}</TableCell>
                               <TableCell className="text-right">
-                                <Button 
-                                  variant="ghost" 
+                                <Button
+                                  variant="ghost"
                                   size="icon"
                                   className="text-destructive hover:text-destructive"
                                   onClick={() => {
@@ -764,14 +742,14 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
                         // Buscar módulo correspondente no banco de dados
                         const dbModulo = getModuloDoBancoPorNome(config.nome);
                         if (!dbModulo) return null; // Módulo não existe no banco
-                        
+
                         const totalTelas = config.telas.reduce((acc, t) => acc + 1 + (t.subTelas?.length || 0), 0);
                         const telasAtivas = contarTelasAtivas(dbModulo.id, config);
                         const ativo = isModuloAtivo(dbModulo.id);
-                        
+
                         return (
-                          <div 
-                            key={dbModulo.id} 
+                          <div
+                            key={dbModulo.id}
                             className={`border rounded-lg transition-all ${ativo ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/20 opacity-75'}`}
                           >
                             {/* Header do módulo com toggle */}
@@ -788,14 +766,14 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
                                     {config.nome}
                                   </p>
                                   <p className="text-xs text-muted-foreground">
-                                    {ativo 
+                                    {ativo
                                       ? (telasAtivas > 0 ? `${telasAtivas} de ${totalTelas} telas liberadas` : 'Todas as telas liberadas')
                                       : 'Módulo desativado - sem acesso'
                                     }
                                   </p>
                                 </div>
                               </div>
-                              
+
                               <div className="flex items-center gap-3">
                                 {/* Badge de status */}
                                 {ativo ? (
@@ -808,7 +786,7 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
                                     Inativo
                                   </Badge>
                                 )}
-                                
+
                                 {/* Toggle rápido */}
                                 <Switch
                                   checked={ativo}
@@ -817,7 +795,7 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
                                 />
                               </div>
                             </div>
-                            
+
                             {/* Área de configuração de telas - só aparece se ativo */}
                             {ativo && (
                               <div className="px-4 pb-4 pt-0">
@@ -825,14 +803,14 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
                                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                     <Settings className="h-4 w-4" />
                                     <span>
-                                      {telasAtivas > 0 
-                                        ? `${telasAtivas} tela(s) selecionada(s)` 
+                                      {telasAtivas > 0
+                                        ? `${telasAtivas} tela(s) selecionada(s)`
                                         : 'Nenhuma restrição - todas as telas visíveis'
                                       }
                                     </span>
                                   </div>
-                                  <Button 
-                                    variant="outline" 
+                                  <Button
+                                    variant="outline"
                                     size="sm"
                                     onClick={() => handleModuloClick(config, dbModulo)}
                                     className="gap-2"
@@ -852,9 +830,9 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
                         </p>
                       )}
                     </div>
-                    
+
                     <Separator className="my-6" />
-                    
+
                     <div className="flex items-center justify-center">
                       <p className="text-sm text-muted-foreground">
                         As alterações são salvas automaticamente ao ativar/desativar módulos
@@ -881,8 +859,8 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deletingUser}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleDeleteUser} 
+            <AlertDialogAction
+              onClick={handleDeleteUser}
               disabled={deletingUser}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
@@ -909,32 +887,32 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
               Usuários da empresa só verão as telas selecionadas.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="flex items-center justify-between py-2 border-b flex-shrink-0">
             <p className="text-sm text-muted-foreground">
               {telasSelecionadas.length} tela(s) selecionada(s)
             </p>
             <Button variant="outline" size="sm" onClick={toggleTodasTelas}>
-              {moduloSelecionado && telasSelecionadas.length === moduloSelecionado.config.telas.reduce((acc, t) => acc + 1 + (t.subTelas?.length || 0), 0) 
-                ? 'Desmarcar Todas' 
+              {moduloSelecionado && telasSelecionadas.length === moduloSelecionado.config.telas.reduce((acc, t) => acc + 1 + (t.subTelas?.length || 0), 0)
+                ? 'Desmarcar Todas'
                 : 'Selecionar Todas'}
             </Button>
           </div>
-          
+
           <div className="flex-1 min-h-0 overflow-y-auto pr-4">
             <div className="space-y-2 py-2">
               {moduloSelecionado?.config.telas.map((tela) => {
                 const IconComponent = getIcon(tela.icone);
                 const temSubTelas = tela.subTelas && tela.subTelas.length > 0;
-                
+
                 return (
                   <div key={tela.id}>
                     {/* Tela principal */}
-                    <div 
+                    <div
                       className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all hover:bg-muted/50 ${telasSelecionadas.includes(tela.id) ? 'border-primary/50 bg-primary/5' : 'border-border'}`}
                       onClick={() => toggleTela(tela.id)}
                     >
-                      <Checkbox 
+                      <Checkbox
                         checked={telasSelecionadas.includes(tela.id)}
                         onCheckedChange={() => toggleTela(tela.id)}
                       />
@@ -949,19 +927,19 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
                         <Check className="h-4 w-4 text-primary" />
                       )}
                     </div>
-                    
+
                     {/* Sub-telas */}
                     {temSubTelas && (
                       <div className="ml-6 mt-1 space-y-1">
                         {tela.subTelas?.map((subTela) => {
                           const SubIconComponent = getIcon(subTela.icone);
                           return (
-                            <div 
+                            <div
                               key={subTela.id}
                               className={`flex items-center gap-3 p-2 rounded-lg border cursor-pointer transition-all hover:bg-muted/50 ${telasSelecionadas.includes(subTela.id) ? 'border-primary/50 bg-primary/5' : 'border-border/50'}`}
                               onClick={() => toggleTela(subTela.id)}
                             >
-                              <Checkbox 
+                              <Checkbox
                                 checked={telasSelecionadas.includes(subTela.id)}
                                 onCheckedChange={() => toggleTela(subTela.id)}
                               />
@@ -980,7 +958,7 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
               })}
             </div>
           </div>
-          
+
           <DialogFooter className="border-t pt-4 flex-shrink-0">
             <Button variant="outline" onClick={() => setTelasDialogOpen(false)}>
               Cancelar

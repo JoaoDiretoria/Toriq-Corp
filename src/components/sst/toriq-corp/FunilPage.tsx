@@ -13,7 +13,7 @@ import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { format, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Plus, Search, Calendar as CalendarIcon, Eye, GripVertical, LayoutGrid, List, BarChart3, TrendingUp, Clock, AlertTriangle, Loader2, Settings, ArrowLeft, Columns } from 'lucide-react';
@@ -228,16 +228,7 @@ export function FunilPage({ funilId, onBack }: FunilPageProps) {
 
   const loadFunil = async () => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('funis')
-        .select(`
-          *,
-          setor:setores(nome)
-        `)
-        .eq('id', funilId)
-        .single();
-
-      if (error) throw error;
+      const data = await api.get<any>(`/funil/funis/${funilId}`).catch(() => null);
       setFunil(data);
     } catch (error) {
       console.error('Erro ao carregar funil:', error);
@@ -246,15 +237,10 @@ export function FunilPage({ funilId, onBack }: FunilPageProps) {
 
   const loadEtapas = async () => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('funil_etapas')
-        .select('*')
-        .eq('funil_id', funilId)
-        .eq('ativo', true)
-        .order('ordem');
-
-      if (error) throw error;
-      setEtapas(data || []);
+      const data = await api.get<any[]>(`/funil/etapas?funil_id=${funilId}`).catch(() => [] as any[]);
+      // Filtro ativo e ordenação aplicados no cliente (backend retorna tudo)
+      const ativos = (data || []).filter((e: any) => e.ativo).sort((a: any, b: any) => a.ordem - b.ordem);
+      setEtapas(ativos);
     } catch (error) {
       console.error('Erro ao carregar etapas:', error);
     }
@@ -263,14 +249,10 @@ export function FunilPage({ funilId, onBack }: FunilPageProps) {
   const loadCards = async () => {
     setLoading(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('funil_cards')
-        .select('*')
-        .eq('funil_id', funilId)
-        .order('ordem');
-
-      if (error) throw error;
-      setCards(data || []);
+      const data = await api.get<any[]>(`/funil/cards?funil_id=${funilId}`).catch(() => [] as any[]);
+      // Ordenação por ordem aplicada no cliente
+      const sorted = (data || []).sort((a: any, b: any) => a.ordem - b.ordem);
+      setCards(sorted);
     } catch (error) {
       console.error('Erro ao carregar cards:', error);
     } finally {
@@ -280,18 +262,12 @@ export function FunilPage({ funilId, onBack }: FunilPageProps) {
 
   const loadConfig = async () => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('funis_configuracoes')
-        .select('*')
-        .eq('funil_id', funilId)
-        .single();
+      const data = await api.get<any>(`/funil/funis/${funilId}/configuracao`).catch(() => null);
 
-      if (error && error.code !== 'PGRST116') throw error;
-      
       if (data) {
         setConfig(data);
       } else {
-        // Configuração padrão
+        // Configuração padrão (endpoint retornou 404 ou erro)
         setConfig({
           id: '',
           titulo_pagina: funil?.nome || 'Funil',
@@ -381,12 +357,9 @@ export function FunilPage({ funilId, onBack }: FunilPageProps) {
     if (etapaDestino && card.etapa_id !== etapaDestino.id) {
       // Mover para outra etapa
       try {
-        await (supabase as any)
-          .from('funil_cards')
-          .update({ etapa_id: etapaDestino.id })
-          .eq('id', cardId);
+        await api.post<any>(`/funil/cards/${cardId}/mover`, { etapa_destino_id: etapaDestino.id });
 
-        setCards(prev => prev.map(c => 
+        setCards(prev => prev.map(c =>
           c.id === cardId ? { ...c, etapa_id: etapaDestino.id } : c
         ));
       } catch (error) {
@@ -409,21 +382,17 @@ export function FunilPage({ funilId, onBack }: FunilPageProps) {
 
     try {
       const cardsNaEtapa = cards.filter(c => c.etapa_id === etapaId);
-      const { error } = await (supabase as any)
-        .from('funil_cards')
-        .insert({
-          funil_id: funilId,
-          etapa_id: etapaId,
-          titulo: cardForm.titulo,
-          descricao: cardForm.descricao || null,
-          cliente_id: cardForm.cliente_id || null,
-          valor: parseFloat(cardForm.valor) || 0,
-          data_previsao: cardForm.data_previsao ? format(cardForm.data_previsao, 'yyyy-MM-dd') : null,
-          responsavel_id: cardForm.responsavel_id || null,
-          ordem: cardsNaEtapa.length,
-        });
-
-      if (error) throw error;
+      await api.post<any>('/funil/cards', {
+        funil_id: funilId,
+        etapa_id: etapaId,
+        titulo: cardForm.titulo,
+        descricao: cardForm.descricao || null,
+        cliente_id: cardForm.cliente_id || null,
+        valor: parseFloat(cardForm.valor) || 0,
+        data_previsao: cardForm.data_previsao ? format(cardForm.data_previsao, 'yyyy-MM-dd') : null,
+        responsavel_id: cardForm.responsavel_id || null,
+        ordem: cardsNaEtapa.length,
+      });
 
       toast({ title: 'Sucesso', description: 'Card criado com sucesso!' });
       setNovoCardDialogOpen(false);
@@ -457,17 +426,13 @@ export function FunilPage({ funilId, onBack }: FunilPageProps) {
     setSavingEtapa(true);
     try {
       const novaOrdem = etapas.length;
-      const { error } = await (supabase as any)
-        .from('funil_etapas')
-        .insert({
-          funil_id: funilId,
-          nome: novaEtapaForm.nome.trim(),
-          cor: novaEtapaForm.cor,
-          ordem: novaOrdem,
-          ativo: true
-        });
-
-      if (error) throw error;
+      await api.post<any>('/funil/etapas', {
+        funil_id: funilId,
+        nome: novaEtapaForm.nome.trim(),
+        cor: novaEtapaForm.cor,
+        ordem: novaOrdem,
+        ativo: true,
+      });
 
       toast({ title: 'Sucesso', description: 'Etapa criada com sucesso!' });
       setNovaEtapaDialogOpen(false);

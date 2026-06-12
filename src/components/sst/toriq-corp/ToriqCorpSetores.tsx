@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
 import { usePermissoes } from '@/hooks/usePermissoes';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 
 interface Setor {
   id: string;
@@ -63,16 +63,12 @@ export function ToriqCorpSetores({ onNavigateToSetor }: ToriqCorpSetoresProps) {
   const loadSetores = async () => {
     try {
       setLoading(true);
-      const { data, error } = await (supabase as any)
-        .from('setores')
-        .select('id, nome, descricao')
-        .eq('empresa_id', empresaId)
-        .eq('ativo', true)
-        .neq('nome', 'Financeiro')
-        .order('nome');
-
-      if (error) throw error;
-      setSetores(data || []);
+      const data = await api.get<any[]>('/sst/setores').catch(() => [] as any[]);
+      // Filtros aplicados no cliente (backend retorna todos os setores da empresa)
+      const filtered = (data || [])
+        .filter((s: any) => s.ativo === true && s.nome !== 'Financeiro')
+        .sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || ''));
+      setSetores(filtered);
     } catch (error) {
       console.error('Erro ao carregar setores:', error);
       toast({
@@ -96,17 +92,12 @@ export function ToriqCorpSetores({ onNavigateToSetor }: ToriqCorpSetoresProps) {
 
     try {
       setSaving(true);
-      
-      const { error } = await (supabase as any)
-        .from('setores')
-        .insert({
-          empresa_id: empresaId,
-          nome: formData.nome.trim(),
-          descricao: formData.descricao.trim() || null,
-          ativo: true
-        });
 
-      if (error) throw error;
+      await api.post<any>('/sst/setores', {
+        nome: formData.nome.trim(),
+        descricao: formData.descricao.trim() || null,
+        ativo: true
+      });
 
       toast({
         title: 'Setor criado com sucesso!',

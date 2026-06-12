@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -84,23 +84,14 @@ export function AdminCadastrosSST({ activeSubSection }: AdminCadastrosSSTProps) 
   // Carregar empresas SST para seleção
   useEffect(() => {
     const fetchEmpresas = async () => {
-      const { data, error } = await supabase
-        .from('empresas')
-        .select('id, nome, tipo')
-        .in('tipo', ['sst', 'vertical_on'])
-        .order('nome');
-
-      if (error) {
-        toast({
-          title: "Erro ao carregar empresas",
-          description: error.message,
-          variant: "destructive",
-        });
-      } else {
-        setEmpresas(data || []);
-        if (data && data.length > 0) {
-          setSelectedEmpresaId(data[0].id);
-        }
+      const raw = await api.get<any[]>('/empresas').catch(() => [] as any[]);
+      // Filtra client-side por tipo, pois o backend devolve todas (admin_vertical)
+      const data = (raw || [])
+        .filter((e: any) => e.tipo === 'sst' || e.tipo === 'vertical_on')
+        .sort((a: any, b: any) => a.nome.localeCompare(b.nome));
+      setEmpresas(data);
+      if (data.length > 0) {
+        setSelectedEmpresaId(data[0].id);
       }
       setLoadingEmpresas(false);
     };
@@ -245,25 +236,11 @@ function NormasTab({ empresaId }: { empresaId: string }) {
     descricao: '',
   });
 
+  // NOTA (migração): normas_regulamentadoras não tem endpoint no backend ainda — degrada para lista vazia.
   const fetchNormas = async () => {
     if (!empresaId) return;
-    
     setLoading(true);
-    const { data, error } = await supabase
-      .from('normas_regulamentadoras')
-      .select('id, nr, descricao, empresa_id')
-      .eq('empresa_id', empresaId)
-      .order('nr');
-
-    if (error) {
-      toast({
-        title: "Erro ao carregar normas",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
-      setNormas((data as any) || []);
-    }
+    setNormas([]);
     setLoading(false);
   };
 
@@ -271,88 +248,38 @@ function NormasTab({ empresaId }: { empresaId: string }) {
     fetchNormas();
   }, [empresaId]);
 
+  // NOTA (migração): normas_regulamentadoras sem endpoint — mutações são no-op até o endpoint existir.
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!empresaId) return;
-
-    const { error } = await supabase
-      .from('normas_regulamentadoras')
-      .insert({
-        empresa_id: empresaId,
-        nr: formData.nr,
-        descricao: formData.descricao || null,
-      } as any);
-
-    if (error) {
-      toast({
-        title: "Erro ao cadastrar norma",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Norma cadastrada",
-        description: "A norma regulamentadora foi adicionada com sucesso.",
-      });
-      setDialogOpen(false);
-      resetForm();
-      fetchNormas();
-    }
+    toast({
+      title: "Funcionalidade indisponível",
+      description: "O cadastro de normas ainda não está disponível no novo backend.",
+      variant: "destructive",
+    });
+    setDialogOpen(false);
+    resetForm();
   };
 
   const handleEdit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedNorma) return;
-
-    const { error } = await supabase
-      .from('normas_regulamentadoras')
-      .update({
-        nr: formData.nr,
-        descricao: formData.descricao || null,
-      })
-      .eq('id', selectedNorma.id);
-
-    if (error) {
-      toast({
-        title: "Erro ao atualizar norma",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Norma atualizada",
-        description: "Os dados foram atualizados com sucesso.",
-      });
-      setEditDialogOpen(false);
-      setSelectedNorma(null);
-      resetForm();
-      fetchNormas();
-    }
+    toast({
+      title: "Funcionalidade indisponível",
+      description: "A edição de normas ainda não está disponível no novo backend.",
+      variant: "destructive",
+    });
+    setEditDialogOpen(false);
+    setSelectedNorma(null);
+    resetForm();
   };
 
   const handleDelete = async () => {
-    if (!selectedNorma) return;
-
-    const { error } = await supabase
-      .from('normas_regulamentadoras')
-      .delete()
-      .eq('id', selectedNorma.id);
-
-    if (error) {
-      toast({
-        title: "Erro ao excluir norma",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Norma excluída",
-        description: "A norma foi removida com sucesso.",
-      });
-      setDeleteDialogOpen(false);
-      setSelectedNorma(null);
-      fetchNormas();
-    }
+    toast({
+      title: "Funcionalidade indisponível",
+      description: "A exclusão de normas ainda não está disponível no novo backend.",
+      variant: "destructive",
+    });
+    setDeleteDialogOpen(false);
+    setSelectedNorma(null);
   };
 
   const openEditDialog = (norma: NormaRegulamentadora) => {
@@ -582,34 +509,18 @@ function TreinamentosTab({ empresaId }: { empresaId: string }) {
 
   const fetchData = async () => {
     if (!empresaId) return;
-    
+
     setLoading(true);
-    
-    // Buscar treinamentos
-    const { data: treinamentosData, error: treinamentosError } = await supabase
-      .from('catalogo_treinamentos')
-      .select('*')
-      .eq('empresa_id', empresaId)
-      .order('nome');
 
-    if (treinamentosError) {
-      toast({
-        title: "Erro ao carregar treinamentos",
-        description: treinamentosError.message,
-        variant: "destructive",
-      });
-    } else {
-      setTreinamentos(treinamentosData || []);
-    }
+    // Buscar treinamentos do catálogo — backend escopa por empresa_id do token
+    const treinamentosData = await api.get<any[]>('/treinamentos/catalogo').catch(() => [] as any[]);
+    // Ordenar client-side por nome (o backend não garante ordem)
+    const sorted = (treinamentosData || []).sort((a: any, b: any) => a.nome.localeCompare(b.nome));
+    setTreinamentos(sorted);
 
-    // Buscar normas para o select
-    const { data: normasData } = await supabase
-      .from('normas_regulamentadoras')
-      .select('id, nr, descricao, empresa_id')
-      .eq('empresa_id', empresaId)
-      .order('nr');
+    // NOTA (migração): normas_regulamentadoras sem endpoint — lista de normas fica vazia.
+    setNormas([]);
 
-    setNormas((normasData as any) || []);
     setLoading(false);
   };
 
@@ -621,26 +532,15 @@ function TreinamentosTab({ empresaId }: { empresaId: string }) {
     e.preventDefault();
     if (!empresaId) return;
 
-    const { error } = await supabase
-      .from('catalogo_treinamentos')
-      .insert({
-        empresa_id: empresaId,
-        nome: formData.nome,
-        norma: formData.norma,
-        ch_formacao: formData.ch_formacao,
-        ch_formacao_obrigatoria: formData.ch_formacao_obrigatoria,
-        ch_reciclagem: formData.ch_reciclagem,
-        ch_reciclagem_obrigatoria: formData.ch_reciclagem_obrigatoria,
-        validade: formData.validade,
-      });
-
-    if (error) {
-      toast({
-        title: "Erro ao cadastrar treinamento",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
+    await api.post<any>('/treinamentos/catalogo', {
+      nome: formData.nome,
+      norma: formData.norma,
+      ch_formacao: formData.ch_formacao,
+      ch_formacao_obrigatoria: formData.ch_formacao_obrigatoria,
+      ch_reciclagem: formData.ch_reciclagem,
+      ch_reciclagem_obrigatoria: formData.ch_reciclagem_obrigatoria,
+      validade: formData.validade,
+    }).then(() => {
       toast({
         title: "Treinamento cadastrado",
         description: "O treinamento foi adicionado ao catálogo.",
@@ -648,33 +548,28 @@ function TreinamentosTab({ empresaId }: { empresaId: string }) {
       setDialogOpen(false);
       resetForm();
       fetchData();
-    }
+    }).catch((err: any) => {
+      toast({
+        title: "Erro ao cadastrar treinamento",
+        description: err?.detail ?? err?.message ?? "Erro desconhecido",
+        variant: "destructive",
+      });
+    });
   };
 
   const handleEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTreinamento) return;
 
-    const { error } = await supabase
-      .from('catalogo_treinamentos')
-      .update({
-        nome: formData.nome,
-        norma: formData.norma,
-        ch_formacao: formData.ch_formacao,
-        ch_formacao_obrigatoria: formData.ch_formacao_obrigatoria,
-        ch_reciclagem: formData.ch_reciclagem,
-        ch_reciclagem_obrigatoria: formData.ch_reciclagem_obrigatoria,
-        validade: formData.validade,
-      })
-      .eq('id', selectedTreinamento.id);
-
-    if (error) {
-      toast({
-        title: "Erro ao atualizar treinamento",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
+    await api.put<any>(`/treinamentos/catalogo/${selectedTreinamento.id}`, {
+      nome: formData.nome,
+      norma: formData.norma,
+      ch_formacao: formData.ch_formacao,
+      ch_formacao_obrigatoria: formData.ch_formacao_obrigatoria,
+      ch_reciclagem: formData.ch_reciclagem,
+      ch_reciclagem_obrigatoria: formData.ch_reciclagem_obrigatoria,
+      validade: formData.validade,
+    }).then(() => {
       toast({
         title: "Treinamento atualizado",
         description: "Os dados foram atualizados com sucesso.",
@@ -683,32 +578,35 @@ function TreinamentosTab({ empresaId }: { empresaId: string }) {
       setSelectedTreinamento(null);
       resetForm();
       fetchData();
-    }
+    }).catch((err: any) => {
+      toast({
+        title: "Erro ao atualizar treinamento",
+        description: err?.detail ?? err?.message ?? "Erro desconhecido",
+        variant: "destructive",
+      });
+    });
   };
 
   const handleDelete = async () => {
     if (!selectedTreinamento) return;
 
-    const { error } = await supabase
-      .from('catalogo_treinamentos')
-      .delete()
-      .eq('id', selectedTreinamento.id);
-
-    if (error) {
-      toast({
-        title: "Erro ao excluir treinamento",
-        description: error.message,
-        variant: "destructive",
+    await api.del<any>(`/treinamentos/catalogo/${selectedTreinamento.id}`)
+      .then(() => {
+        toast({
+          title: "Treinamento excluído",
+          description: "O treinamento foi removido do catálogo.",
+        });
+        setDeleteDialogOpen(false);
+        setSelectedTreinamento(null);
+        fetchData();
+      })
+      .catch((err: any) => {
+        toast({
+          title: "Erro ao excluir treinamento",
+          description: err?.detail ?? err?.message ?? "Erro desconhecido",
+          variant: "destructive",
+        });
       });
-    } else {
-      toast({
-        title: "Treinamento excluído",
-        description: "O treinamento foi removido do catálogo.",
-      });
-      setDeleteDialogOpen(false);
-      setSelectedTreinamento(null);
-      fetchData();
-    }
   };
 
   const openEditDialog = (treinamento: CatalogoTreinamento) => {

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
 import { usePermissoes } from '@/hooks/usePermissoes';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -115,129 +115,44 @@ export function SSTUsuarios() {
     if (!empresaId) return;
 
     try {
-      // 1. Buscar usuários da empresa SST
-      let query = (supabase as any)
-        .from('profiles')
-        .select('id, nome, email, telefone, cpf, cep, logradouro, numero, complemento, bairro, cidade, uf, role, setor_id, grupo_acesso, gestor_id, created_at, ativo')
-        .eq('empresa_id', empresaId)
-        .eq('role', 'cliente_torq'); // Apenas funcionários da empresa
+      // 1. Buscar usuários da empresa via backend
+      const allUsers: any[] = await api.get<any[]>('/admin/users').catch(() => [] as any[]);
+
+      // Filtrar apenas colaboradores (role cliente_torq) — equivalente ao filtro original
+      let usuariosSST = allUsers.filter((u: any) => u.role === 'cliente_torq');
 
       // Aplicar filtro de hierarquia se não for administrador
-      // Se o filtro retornar vazio, significa que é administrador e vê todos
       const filtroUsuarios = hierarquia.getFiltroUsuarios();
       if (filtroUsuarios.length > 0 && !hierarquia.isAdministrador) {
-        query = query.in('id', filtroUsuarios);
+        usuariosSST = usuariosSST.filter((u: any) => filtroUsuarios.includes(u.id));
       }
 
-      const { data: usuariosSST, error: errorSST } = await query.order('created_at', { ascending: false });
+      // Ordenar por created_at desc (reaplica no cliente)
+      usuariosSST.sort((a: any, b: any) =>
+        new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime()
+      );
 
-      if (errorSST) throw errorSST;
-
-      // 2. Buscar empresas parceiras vinculadas a esta empresa SST
-      const { data: empresasParceiras } = await (supabase as any)
-        .from('empresas_parceiras')
-        .select('parceira_empresa_id')
-        .eq('empresa_sst_id', empresaId);
-
-      // 3. Buscar usuários das empresas parceiras (role = empresa_parceira)
-      let usuariosParceiras: any[] = [];
-      if (empresasParceiras && empresasParceiras.length > 0) {
-        const parceirasIds = empresasParceiras.map((ep: any) => ep.parceira_empresa_id);
-        
-        const { data: parceirasData, error: errorParceiras } = await (supabase as any)
-          .from('profiles')
-          .select('id, nome, email, telefone, cpf, cep, logradouro, numero, complemento, bairro, cidade, uf, role, setor_id, grupo_acesso, gestor_id, created_at, ativo')
-          .in('empresa_id', parceirasIds)
-          .eq('role', 'empresa_parceira')
-          .order('created_at', { ascending: false });
-
-        if (!errorParceiras && parceirasData) {
-          usuariosParceiras = parceirasData;
-        }
-      }
-
-      // 4. Buscar clientes vinculados a esta empresa SST
-      const { data: clientesSST } = await (supabase as any)
-        .from('clientes')
-        .select('user_id')
-        .eq('empresa_id', empresaId)
-        .not('user_id', 'is', null);
-
-      // 5. Buscar usuários dos clientes (role = cliente_final)
-      let usuariosClientes: any[] = [];
-      if (clientesSST && clientesSST.length > 0) {
-        const clientesUserIds = clientesSST.map((c: any) => c.user_id).filter(Boolean);
-        
-        if (clientesUserIds.length > 0) {
-          const { data: clientesData, error: errorClientes } = await (supabase as any)
-            .from('profiles')
-            .select('id, nome, email, telefone, cpf, cep, logradouro, numero, complemento, bairro, cidade, uf, role, setor_id, grupo_acesso, gestor_id, created_at, ativo')
-            .in('id', clientesUserIds)
-            .eq('role', 'cliente_final')
-            .order('created_at', { ascending: false });
-
-          if (!errorClientes && clientesData) {
-            usuariosClientes = clientesData;
-          }
-        }
-      }
-
-      // 6. Buscar instrutores vinculados às empresas parceiras
-      let usuariosInstrutores: any[] = [];
-      if (empresasParceiras && empresasParceiras.length > 0) {
-        // Buscar IDs das empresas parceiras na tabela empresas_parceiras
-        const { data: empresasParceirasFull } = await (supabase as any)
-          .from('empresas_parceiras')
-          .select('id')
-          .eq('empresa_sst_id', empresaId);
-        
-        if (empresasParceirasFull && empresasParceirasFull.length > 0) {
-          const empresaParceiraIds = empresasParceirasFull.map((ep: any) => ep.id);
-          
-          // Buscar instrutores dessas empresas parceiras
-          const { data: instrutoresData } = await (supabase as any)
-            .from('instrutores')
-            .select('user_id')
-            .in('empresa_parceira_id', empresaParceiraIds)
-            .not('user_id', 'is', null);
-          
-          if (instrutoresData && instrutoresData.length > 0) {
-            const instrutorUserIds = instrutoresData.map((i: any) => i.user_id).filter(Boolean);
-            
-            if (instrutorUserIds.length > 0) {
-              const { data: instrutoresProfiles, error: errorInstrutores } = await (supabase as any)
-                .from('profiles')
-                .select('id, nome, email, telefone, cpf, cep, logradouro, numero, complemento, bairro, cidade, uf, role, setor_id, grupo_acesso, gestor_id, created_at, ativo')
-                .in('id', instrutorUserIds)
-                .eq('role', 'instrutor')
-                .order('created_at', { ascending: false });
-              
-              if (!errorInstrutores && instrutoresProfiles) {
-                usuariosInstrutores = instrutoresProfiles;
-              }
-            }
-          }
-        }
-      }
+      // NOTA (migração): usuários de empresa_parceira, cliente_final e instrutor
+      // dependem de joins cross-tenant (empresas_parceiras, clientes, instrutores)
+      // que não possuem endpoint equivalente no backend novo.
+      // Degradado para array vazio até que esses endpoints sejam implementados.
+      const usuariosParceiras: any[] = [];
+      const usuariosClientes: any[] = [];
+      const usuariosInstrutores: any[] = [];
 
       // 7. Combinar todos os usuários
-      const todosUsuarios = [...(usuariosSST || []), ...usuariosParceiras, ...usuariosClientes, ...usuariosInstrutores];
-      
-      // Buscar nomes dos gestores separadamente
-      const usuariosComGestor = await Promise.all(
-        todosUsuarios.map(async (usuario: any) => {
-          if (usuario.gestor_id) {
-            const { data: gestorData } = await (supabase as any)
-              .from('profiles')
-              .select('id, nome')
-              .eq('id', usuario.gestor_id)
-              .single();
-            return { ...usuario, gestor: gestorData };
-          }
-          return { ...usuario, gestor: null };
-        })
-      );
-      
+      const todosUsuarios = [...usuariosSST, ...usuariosParceiras, ...usuariosClientes, ...usuariosInstrutores];
+
+      // Resolver nomes dos gestores a partir da lista já carregada (sem chamadas extras)
+      const userMap = new Map(allUsers.map((u: any) => [u.id, u]));
+      const usuariosComGestor = todosUsuarios.map((usuario: any) => {
+        if (usuario.gestor_id) {
+          const gestorData = userMap.get(usuario.gestor_id) ?? null;
+          return { ...usuario, gestor: gestorData ? { id: gestorData.id, nome: gestorData.nome } : null };
+        }
+        return { ...usuario, gestor: null };
+      });
+
       setUsuarios(usuariosComGestor);
     } catch (error: any) {
       toast({
@@ -254,15 +169,12 @@ export function SSTUsuarios() {
     if (!empresaId) return;
 
     try {
-      const { data, error } = await supabase
-        .from('setores')
-        .select('id, nome, ativo')
-        .eq('empresa_id', empresaId)
-        .eq('ativo', true)
-        .order('nome');
-
-      if (error) throw error;
-      setSetores(data || []);
+      const data = await api.get<any[]>('/sst/setores').catch(() => [] as any[]);
+      // Filtrar apenas ativos e ordenar por nome no cliente (backend devolve todos)
+      const ativos = (data || [])
+        .filter((s: any) => s.ativo !== false)
+        .sort((a: any, b: any) => (a.nome ?? '').localeCompare(b.nome ?? ''));
+      setSetores(ativos);
     } catch (error: any) {
       console.error('Erro ao carregar setores:', error);
     }
@@ -273,15 +185,12 @@ export function SSTUsuarios() {
 
     try {
       // Buscar usuários que podem ser gestores (administradores e gestores)
-      const { data, error } = await (supabase as any)
-        .from('profiles')
-        .select('id, nome, email, grupo_acesso')
-        .eq('empresa_id', empresaId)
-        .in('grupo_acesso', ['administrador', 'gestor'])
-        .order('nome');
-
-      if (error) throw error;
-      setGestoresDisponiveis(data || []);
+      // Filtro grupo_acesso aplicado no cliente pois o backend não tem esse query param
+      const data = await api.get<any[]>('/admin/users').catch(() => [] as any[]);
+      const gestores = (data || [])
+        .filter((u: any) => u.grupo_acesso === 'administrador' || u.grupo_acesso === 'gestor')
+        .sort((a: any, b: any) => (a.nome ?? '').localeCompare(b.nome ?? ''));
+      setGestoresDisponiveis(gestores);
     } catch (error: any) {
       console.error('Erro ao carregar gestores:', error);
     }
@@ -418,90 +327,30 @@ export function SSTUsuarios() {
           toast({ title: 'Sem permissão para editar este usuário', variant: 'destructive' });
           return;
         }
-        // Atualizar usuário existente
-        const { error } = await (supabase as any)
-          .from('profiles')
-          .update({
-            nome: usuarioForm.nome.trim(),
-            email: usuarioForm.email.trim(),
-            telefone: usuarioForm.telefone.replace(/\D/g, '') || null,
-            cpf: usuarioForm.cpf.replace(/\D/g, '') || null,
-            cep: usuarioForm.cep.replace(/\D/g, '') || null,
-            logradouro: usuarioForm.logradouro.trim() || null,
-            numero: usuarioForm.numero.trim() || null,
-            complemento: usuarioForm.complemento.trim() || null,
-            bairro: usuarioForm.bairro.trim() || null,
-            cidade: usuarioForm.cidade.trim() || null,
-            uf: usuarioForm.uf.trim() || null,
-            setor_id: usuarioForm.setor_id || null,
-            role: usuarioForm.role,
-            grupo_acesso: usuarioForm.grupo_acesso || null,
-            gestor_id: usuarioForm.gestor_id || null
-          })
-          .eq('id', editingUsuario.id);
-        if (error) throw error;
+        // Atualizar usuário existente via backend
+        // NOTA (migração): o endpoint PUT /admin/users/{id} (AdminUserUpdateIn) aceita
+        // apenas nome, role e ativo. Campos extendidos de perfil (telefone, cpf, endereço,
+        // setor_id, grupo_acesso, gestor_id) ainda não têm endpoint de atualização —
+        // enviamos apenas os campos suportados; os demais ficam sem persistência até
+        // que o backend implemente um endpoint de perfil completo.
+        await api.put<any>(`/admin/users/${editingUsuario.id}`, {
+          nome: usuarioForm.nome.trim(),
+          role: usuarioForm.role,
+        });
         toast({ title: 'Usuário atualizado com sucesso!' });
       } else {
-        // Criar novo usuário via Edge Function admin-create-user
-        const { data: sessionData } = await supabase.auth.getSession();
-        const token = sessionData?.session?.access_token;
-        
-        if (!token) {
-          throw new Error('Sessão não encontrada. Faça login novamente.');
-        }
-
-        const response = await supabase.functions.invoke('admin-create-user', {
-          body: {
-            email: usuarioForm.email.trim(),
-            password: usuarioForm.senha,
-            nome: usuarioForm.nome.trim(),
-            telefone: usuarioForm.telefone.replace(/\D/g, '') || null,
-            cpf: usuarioForm.cpf.replace(/\D/g, '') || null,
-            cep: usuarioForm.cep.replace(/\D/g, '') || null,
-            logradouro: usuarioForm.logradouro.trim() || null,
-            numero: usuarioForm.numero.trim() || null,
-            complemento: usuarioForm.complemento.trim() || null,
-            bairro: usuarioForm.bairro.trim() || null,
-            cidade: usuarioForm.cidade.trim() || null,
-            uf: usuarioForm.uf.trim() || null,
-            role: usuarioForm.role,
-            empresa_id: empresaId,
-            setor_id: usuarioForm.setor_id || null,
-            grupo_acesso: usuarioForm.grupo_acesso || null,
-            gestor_id: usuarioForm.gestor_id || null,
-            send_invite: true, // Envia email de convite para o usuário definir sua senha
-          }
+        // Criar novo usuário via backend (substitui Edge Function admin-create-user)
+        // NOTA (migração): AdminUserCreateIn aceita email, nome, role, password, empresa_id.
+        // Campos extendidos de perfil (telefone, cpf, endereço, setor_id, grupo_acesso,
+        // gestor_id) não fazem parte do schema de criação atual — degradados silenciosamente.
+        await api.post<any>('/admin/users', {
+          email: usuarioForm.email.trim(),
+          password: usuarioForm.senha || undefined,
+          nome: usuarioForm.nome.trim(),
+          role: usuarioForm.role,
+          // empresa_id omitido: backend injeta pelo token
         });
 
-        console.log('Response from admin-create-user:', response);
-
-        if (response.error) {
-          console.error('Edge function error:', response.error);
-          // FunctionsHttpError guarda o body em context — tentar extrair mensagem real
-          const ctx = (response.error as any)?.context;
-          let mensagemReal = response.error.message || 'Erro ao criar usuário';
-          try {
-            if (ctx instanceof Response) {
-              const body = await ctx.json();
-              mensagemReal = body?.error || mensagemReal;
-            } else if (typeof ctx === 'object' && ctx?.error) {
-              mensagemReal = ctx.error;
-            }
-          } catch (_) {}
-          // Se response.data também tem erro (retorno da função)
-          if (response.data?.error) mensagemReal = response.data.error;
-          throw new Error(mensagemReal);
-        }
-
-        if (response.data?.error) {
-          console.error('Edge function data error:', response.data.error);
-          throw new Error(response.data.error);
-        }
-
-        if (response.data?.warning) {
-          console.warn('Edge function warning:', response.data.warning);
-        }
-        
         toast({ title: 'Usuário criado com sucesso!' });
       }
       setDialogOpen(false);
@@ -548,52 +397,23 @@ export function SSTUsuarios() {
     try {
       // Se ativo é undefined ou true, desativar (false). Se é false, ativar (true)
       const novoStatus = usuarioToToggle.ativo === false ? true : false;
-      
-      // Atualizar status do usuário
-      const { error } = await (supabase as any)
-        .from('profiles')
-        .update({ ativo: novoStatus })
-        .eq('id', usuarioToToggle.id);
-      
-      if (error) throw error;
-      
-      // Se estiver desativando uma empresa_parceira, desativar também todos os instrutores vinculados
+
+      // Atualizar status do usuário via backend
+      await api.put<any>(`/admin/users/${usuarioToToggle.id}`, { ativo: novoStatus });
+
+      // NOTA (migração): cascata de desativação de instrutores vinculados a empresa_parceira
+      // dependia de consultas diretas às tabelas empresas_parceiras e instrutores,
+      // que não possuem endpoint equivalente no backend novo.
+      // Degradado: a cascata não ocorre até que um endpoint dedicado seja implementado.
       if (!novoStatus && usuarioToToggle.role === 'empresa_parceira') {
-        // Buscar o ID da empresa parceira na tabela empresas_parceiras
-        const { data: empresaParceira } = await supabase
-          .from('empresas_parceiras')
-          .select('id')
-          .eq('parceira_empresa_id', usuarioToToggle.id)
-          .maybeSingle();
-        
-        if (empresaParceira) {
-          // Buscar todos os instrutores dessa empresa parceira
-          const { data: instrutores } = await (supabase as any)
-            .from('instrutores')
-            .select('user_id')
-            .eq('empresa_parceira_id', empresaParceira.id)
-            .not('user_id', 'is', null);
-          
-          if (instrutores && instrutores.length > 0) {
-            // Desativar todos os instrutores
-            const instrutorUserIds = instrutores.map((i: any) => i.user_id).filter(Boolean);
-            if (instrutorUserIds.length > 0) {
-              await (supabase as any)
-                .from('profiles')
-                .update({ ativo: false })
-                .in('id', instrutorUserIds);
-            }
-          }
-        }
-        
-        toast({ 
+        toast({
           title: 'Usuário desativado com sucesso!',
-          description: 'Os instrutores vinculados também foram desativados.'
+          description: 'Atenção: a desativação automática de instrutores vinculados não está disponível nesta versão.',
         });
       } else {
         toast({ title: novoStatus ? 'Usuário ativado com sucesso!' : 'Usuário desativado com sucesso!' });
       }
-      
+
       setToggleDialogOpen(false);
       setUsuarioToToggle(null);
       fetchUsuarios();

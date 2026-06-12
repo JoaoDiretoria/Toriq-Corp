@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Plus, Trash2, Save, AlertTriangle, Search, FileText } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { TreinamentoSelectorModal } from './TreinamentoSelectorModal';
 
@@ -197,14 +197,12 @@ export function CalculadoraVertical365({ onClose, onSave, onOpenPropostaComercia
       }
       
       try {
-        const { data, error } = await (supabase as any)
-          .from('catalogo_treinamentos')
-          .select('id, nome, norma, ch_formacao, ch_reciclagem')
-          .eq('empresa_id', profile.empresa_id)
-          .order('norma', { ascending: true });
-        
-        if (error) throw error;
-        setCatalogoTreinamentos(data || []);
+        const data = await api.get<any[]>('/treinamentos/catalogo').catch(() => [] as any[]);
+        // Reaplica ordenação por norma (backend não garante ordem)
+        const sorted = (data || []).slice().sort((a: any, b: any) =>
+          (a.norma || '').localeCompare(b.norma || '')
+        );
+        setCatalogoTreinamentos(sorted);
       } catch (error) {
         console.error('Erro ao carregar catálogo de treinamentos:', error);
         toast({
@@ -230,23 +228,17 @@ export function CalculadoraVertical365({ onClose, onSave, onOpenPropostaComercia
       
       try {
         // Buscar produtos/serviços ativos (igual à calculadora de treinamento normativo)
-        const { data, error } = await (supabase as any)
-          .from('produtos_servicos')
-          .select(`
-            id, nome, codigo, preco, descricao, tipo, carga_horaria, ch_formacao, ch_reciclagem, colaboradores_por_turma,
-            classificacao_id, forma_cobranca_id, treinamento_id,
-            categoria:categorias_produtos(id, nome, cor),
-            classificacao:classificacoes_produtos(id, nome),
-            forma_cobranca:formas_cobranca(id, nome),
-            treinamento:catalogo_treinamentos(id, nome, norma, ch_formacao, ch_reciclagem)
-          `)
-          .eq('empresa_id', profile.empresa_id)
-          .eq('ativo', true)
-          .order('nome', { ascending: true });
-        
-        if (error) throw error;
-        
-        setProdutosServicosTreinamento(data || []);
+        // NOTA (migração): campos de join (categoria, classificacao, forma_cobranca, treinamento)
+        // não são retornados pelo endpoint REST — ficam undefined/null. A UI usa apenas
+        // campos escalares (nome, codigo, preco, tipo, carga_horaria, ch_formacao, ch_reciclagem,
+        // colaboradores_por_turma) que estão presentes na resposta do backend.
+        const raw = await api.get<any[]>('/produtos/catalogo').catch(() => [] as any[]);
+        // Reaplica filtro ativo=true e ordenação por nome (backend devolve tudo)
+        const data = (raw || [])
+          .filter((p: any) => p.ativo === true || p.ativo === undefined)
+          .sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || ''));
+
+        setProdutosServicosTreinamento(data);
       } catch (error) {
         console.error('Erro ao carregar produtos/serviços de treinamento:', error);
       } finally {

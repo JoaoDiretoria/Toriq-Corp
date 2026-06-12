@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -54,20 +54,20 @@ export function AdminComercial() {
   }, []);
 
   const fetchData = async () => {
-    const [leadsRes, empresasRes] = await Promise.all([
-      supabase.from('comercial_funil').select('*').order('created_at', { ascending: false }),
-      supabase.from('empresas').select('id, nome').order('nome'),
+    const [leadsData, empresasData] = await Promise.all([
+      api.get<any[]>('/funil-comercial/comercial-funil').catch(() => [] as any[]),
+      api.get<any[]>('/empresas').catch(() => [] as any[]),
     ]);
 
-    if (leadsRes.error) {
-      console.error(leadsRes.error);
-    } else {
-      setLeads(leadsRes.data || []);
-    }
+    const sortedLeads = (leadsData || []).slice().sort(
+      (a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+    setLeads(sortedLeads);
 
-    if (!empresasRes.error) {
-      setEmpresas(empresasRes.data || []);
-    }
+    const sortedEmpresas = (empresasData || []).slice().sort(
+      (a: any, b: any) => (a.nome || '').localeCompare(b.nome || '')
+    );
+    setEmpresas(sortedEmpresas);
 
     setLoading(false);
   };
@@ -85,20 +85,16 @@ export function AdminComercial() {
 
     setSaving(true);
 
-    const { error } = await supabase.from('comercial_funil').insert({
-      nome_lead: formData.nome_lead.trim(),
-      email: formData.email.trim() || null,
-      telefone: formData.telefone.trim() || null,
-      etapa: formData.etapa,
-      valor_estimado: formData.valor_estimado ? parseFloat(formData.valor_estimado) : null,
-      observacoes: formData.observacoes.trim() || null,
-      empresa_id: formData.empresa_id || null,
-    });
-
-    if (error) {
-      console.error(error);
-      toast.error('Erro ao cadastrar lead');
-    } else {
+    try {
+      await api.post<any>('/funil-comercial/comercial-funil', {
+        nome_lead: formData.nome_lead.trim(),
+        email: formData.email.trim() || null,
+        telefone: formData.telefone.trim() || null,
+        etapa: formData.etapa,
+        valor_estimado: formData.valor_estimado ? parseFloat(formData.valor_estimado) : null,
+        observacoes: formData.observacoes.trim() || null,
+        empresa_id: formData.empresa_id || null,
+      });
       toast.success('Lead cadastrado com sucesso!');
       setFormData({
         nome_lead: '',
@@ -111,6 +107,9 @@ export function AdminComercial() {
       });
       setDialogOpen(false);
       fetchData();
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao cadastrar lead');
     }
 
     setSaving(false);

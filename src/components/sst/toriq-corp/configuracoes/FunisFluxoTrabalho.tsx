@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Plus, Edit2, Trash2, GitBranch, DollarSign, ListTodo, GripVertical, ChevronDown, ChevronUp, Settings, Eye, EyeOff, X } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -89,20 +89,20 @@ function SortableEtapaItem({ etapa, index, onEdit, onDelete }: SortableEtapaItem
   };
 
   return (
-    <div 
+    <div
       ref={setNodeRef}
       style={style}
       className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg"
     >
-      <div 
-        {...attributes} 
+      <div
+        {...attributes}
         {...listeners}
         className="cursor-grab active:cursor-grabbing"
       >
         <GripVertical className="h-4 w-4 text-muted-foreground" />
       </div>
-      <div 
-        className="w-3 h-3 rounded-full flex-shrink-0" 
+      <div
+        className="w-3 h-3 rounded-full flex-shrink-0"
         style={{ backgroundColor: etapa.cor }}
       />
       <div className="flex-1 min-w-0">
@@ -117,16 +117,16 @@ function SortableEtapaItem({ etapa, index, onEdit, onDelete }: SortableEtapaItem
         )}
       </div>
       <div className="flex items-center gap-1">
-        <Button 
-          variant="ghost" 
+        <Button
+          variant="ghost"
           size="icon"
           className="h-8 w-8"
           onClick={onEdit}
         >
           <Edit2 className="h-3 w-3" />
         </Button>
-        <Button 
-          variant="ghost" 
+        <Button
+          variant="ghost"
           size="icon"
           className="h-8 w-8"
           onClick={onDelete}
@@ -174,7 +174,7 @@ export function FunisFluxoTrabalho() {
   // Handler para reordenar etapas via drag and drop
   const handleEtapaDragEnd = async (event: DragEndEvent, funilId: string) => {
     const { active, over } = event;
-    
+
     if (!over || active.id === over.id) return;
 
     const etapas = etapasPorFunil[funilId] || [];
@@ -184,34 +184,33 @@ export function FunisFluxoTrabalho() {
     if (oldIndex === -1 || newIndex === -1) return;
 
     const newEtapas = arrayMove(etapas, oldIndex, newIndex);
-    
+
     // Atualizar estado local imediatamente
     setEtapasPorFunil(prev => ({
       ...prev,
       [funilId]: newEtapas
     }));
 
-    // Atualizar ordem no banco de dados
+    // Atualizar ordem no backend
     try {
       const updates = newEtapas.map((etapa, index) => ({
         id: etapa.id,
         ordem: index
       }));
 
-      for (const update of updates) {
-        await (supabase as any)
-          .from('funil_etapas')
-          .update({ ordem: update.ordem })
-          .eq('id', update.id);
-      }
+      await Promise.all(
+        updates.map(update =>
+          api.put<any>(`/funil/etapas/${update.id}`, { ordem: update.ordem })
+        )
+      );
 
       toast({ title: 'Sucesso', description: 'Ordem das etapas atualizada!' });
     } catch (error) {
       console.error('Erro ao reordenar etapas:', error);
-      toast({ 
-        title: 'Erro', 
-        description: 'Não foi possível salvar a nova ordem.', 
-        variant: 'destructive' 
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível salvar a nova ordem.',
+        variant: 'destructive'
       });
       // Reverter em caso de erro
       loadEtapasForFunil(funilId);
@@ -247,6 +246,9 @@ export function FunisFluxoTrabalho() {
   const [funilToDelete, setFunilToDelete] = useState<Funil | null>(null);
   const [etapaToDelete, setEtapaToDelete] = useState<{ funilId: string; etapa: FunilEtapa } | null>(null);
 
+  // ID do registro de configNegocio no backend (necessário para o PUT de update)
+  const [configNegocioId, setConfigNegocioId] = useState<string | null>(null);
+
   // Configurações de Funil Negócios
   const [configNegocio, setConfigNegocio] = useState({
     campos: {
@@ -278,44 +280,37 @@ export function FunisFluxoTrabalho() {
     }
   });
 
-  // Carregar configurações do banco de dados
+  // Carregar configurações do backend
   const loadConfigNegocio = async () => {
     if (!empresaId) return;
-    
+
     try {
-      const { data, error } = await (supabase as any)
-        .from('funil_negocio_configuracoes')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .single();
-      
-      if (error && error.code !== 'PGRST116') {
-        console.error('Erro ao carregar configurações:', error);
-        return;
-      }
-      
-      if (data) {
+      const data = await api.get<any[]>('/funil-comercial/negocio-configuracoes').catch(() => [] as any[]);
+      const record = data && data.length > 0 ? data[0] : null;
+
+      if (record) {
+        setConfigNegocioId(record.id ?? null);
         setConfigNegocio({
           campos: {
-            valor: { ativo: data.campo_valor_ativo ?? true, obrigatorio: data.campo_valor_obrigatorio ?? true },
-            status_negocio: { ativo: data.campo_status_negocio_ativo ?? true, obrigatorio: data.campo_status_negocio_obrigatorio ?? true },
-            cliente: { ativo: data.campo_cliente_ativo ?? true, obrigatorio: data.campo_cliente_obrigatorio ?? false },
-            data_previsao: { ativo: data.campo_data_previsao_ativo ?? true, obrigatorio: data.campo_data_previsao_obrigatorio ?? false },
-            responsavel: { ativo: data.campo_responsavel_ativo ?? true, obrigatorio: data.campo_responsavel_obrigatorio ?? false },
-            descricao: { ativo: data.campo_descricao_ativo ?? true, obrigatorio: data.campo_descricao_obrigatorio ?? false },
+            valor: { ativo: record.campo_valor_ativo ?? true, obrigatorio: record.campo_valor_obrigatorio ?? true },
+            status_negocio: { ativo: record.campo_status_negocio_ativo ?? true, obrigatorio: record.campo_status_negocio_obrigatorio ?? true },
+            cliente: { ativo: record.campo_cliente_ativo ?? true, obrigatorio: record.campo_cliente_obrigatorio ?? false },
+            data_previsao: { ativo: record.campo_data_previsao_ativo ?? true, obrigatorio: record.campo_data_previsao_obrigatorio ?? false },
+            responsavel: { ativo: record.campo_responsavel_ativo ?? true, obrigatorio: record.campo_responsavel_obrigatorio ?? false },
+            descricao: { ativo: record.campo_descricao_ativo ?? true, obrigatorio: record.campo_descricao_obrigatorio ?? false },
           },
-          status: data.status_config || configNegocio.status,
+          status: record.status_config || configNegocio.status,
           acoes: {
-            etiquetas: data.acao_etiquetas ?? true,
-            encaminhar_card: data.acao_encaminhar_card ?? true,
-            elaborar_orcamento: data.acao_elaborar_orcamento ?? true,
-            enviar_email: data.acao_enviar_email ?? true,
+            etiquetas: record.acao_etiquetas ?? true,
+            encaminhar_card: record.acao_encaminhar_card ?? true,
+            elaborar_orcamento: record.acao_elaborar_orcamento ?? true,
+            enviar_email: record.acao_enviar_email ?? true,
           },
           calculadoras: {
-            treinamento_normativo: data.calc_treinamento_normativo ?? true,
-            servicos_sst: data.calc_servicos_sst ?? true,
-            vertical_365: data.calc_vertical_365 ?? true,
-            comparacao_vertical_treinamentos: data.calc_comparacao_vertical_treinamentos ?? true,
+            treinamento_normativo: record.calc_treinamento_normativo ?? true,
+            servicos_sst: record.calc_servicos_sst ?? true,
+            vertical_365: record.calc_vertical_365 ?? true,
+            comparacao_vertical_treinamentos: record.calc_comparacao_vertical_treinamentos ?? true,
           }
         });
       }
@@ -324,14 +319,13 @@ export function FunisFluxoTrabalho() {
     }
   };
 
-  // Salvar configurações no banco de dados
+  // Salvar configurações no backend
   const saveConfigNegocio = async () => {
     if (!empresaId) return;
-    
+
     setSavingConfigNegocio(true);
     try {
       const configData = {
-        empresa_id: empresaId,
         acao_etiquetas: configNegocio.acoes.etiquetas,
         acao_encaminhar_card: configNegocio.acoes.encaminhar_card,
         acao_elaborar_orcamento: configNegocio.acoes.elaborar_orcamento,
@@ -355,12 +349,14 @@ export function FunisFluxoTrabalho() {
         status_config: configNegocio.status,
       };
 
-      const { error } = await (supabase as any)
-        .from('funil_negocio_configuracoes')
-        .upsert(configData, { onConflict: 'empresa_id' });
-      
-      if (error) throw error;
-      
+      let savedRecord: any;
+      if (configNegocioId) {
+        savedRecord = await api.put<any>(`/funil-comercial/negocio-configuracoes/${configNegocioId}`, configData);
+      } else {
+        savedRecord = await api.post<any>('/funil-comercial/negocio-configuracoes', configData);
+        if (savedRecord?.id) setConfigNegocioId(savedRecord.id);
+      }
+
       toast({ title: 'Configurações salvas', description: 'As configurações do Funil Negócios foram atualizadas.' });
       setConfigNegocioOpen(false);
     } catch (err) {
@@ -410,15 +406,9 @@ export function FunisFluxoTrabalho() {
 
   const loadSetores = async () => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('setores')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .eq('ativo', true)
-        .order('nome');
-
-      if (error) throw error;
-      setSetores(data || []);
+      const data = await api.get<any[]>('/sst/setores').catch(() => [] as any[]);
+      // Filtro ativo=true aplicado no cliente (o backend retorna todos)
+      setSetores((data || []).filter((s: any) => s.ativo !== false));
     } catch (error) {
       console.error('Erro ao carregar setores:', error);
     }
@@ -427,31 +417,25 @@ export function FunisFluxoTrabalho() {
   const loadFunis = async () => {
     setLoading(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('funis')
-        .select(`
-          *,
-          setor:setores(id, nome, ativo)
-        `)
-        .eq('empresa_id', empresaId)
-        .order('ordem');
+      const data = await api.get<any[]>('/funil/funis').catch(() => [] as any[]);
 
-      if (error) throw error;
-      setFunis(data || []);
+      // Ordenar por ordem (o backend não garante ordering)
+      const sorted = (data || []).slice().sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
 
-      // Carregar contagem de etapas para todos os funis
-      if (data && data.length > 0) {
-        const funilIds = data.map((f: any) => f.id);
-        const { data: etapasData, error: etapasError } = await (supabase as any)
-          .from('funil_etapas')
-          .select('*')
-          .in('funil_id', funilIds)
-          .eq('ativo', true)
-          .order('ordem');
+      // O endpoint não retorna setor embutido; resolvemos via setores já carregados abaixo.
+      // Guardar funis sem setor por enquanto — o enriquecimento é feito após loadSetores.
+      setFunis(sorted);
 
-        if (!etapasError && etapasData) {
+      // Carregar todas as etapas da empresa de uma só vez
+      if (sorted.length > 0) {
+        const etapasData = await api.get<any[]>('/funil/etapas').catch(() => [] as any[]);
+        if (etapasData) {
+          // Filtrar ativas e ordenar por ordem
+          const etapasAtivas = etapasData
+            .filter((e: any) => e.ativo !== false)
+            .sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
           const etapasAgrupadas: Record<string, FunilEtapa[]> = {};
-          etapasData.forEach((etapa: FunilEtapa) => {
+          etapasAtivas.forEach((etapa: FunilEtapa) => {
             if (!etapasAgrupadas[etapa.funil_id]) {
               etapasAgrupadas[etapa.funil_id] = [];
             }
@@ -474,14 +458,9 @@ export function FunisFluxoTrabalho() {
 
   const loadEtapasForFunil = async (funilId: string) => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('funil_etapas')
-        .select('*')
-        .eq('funil_id', funilId)
-        .order('ordem');
-
-      if (error) throw error;
-      setEtapasPorFunil(prev => ({ ...prev, [funilId]: data || [] }));
+      const data = await api.get<any[]>(`/funil/etapas?funil_id=${funilId}`).catch(() => [] as any[]);
+      const sorted = (data || []).slice().sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
+      setEtapasPorFunil(prev => ({ ...prev, [funilId]: sorted }));
     } catch (error) {
       console.error('Erro ao carregar etapas:', error);
     }
@@ -555,33 +534,24 @@ export function FunisFluxoTrabalho() {
 
     try {
       if (editingFunil) {
-        const { error } = await (supabase as any)
-          .from('funis')
-          .update({
-            nome: formData.nome,
-            descricao: formData.descricao || null,
-            setor_id: formData.setor_id,
-            tipo: formData.tipo,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', editingFunil.id);
+        await api.put<any>(`/funil/funis/${editingFunil.id}`, {
+          nome: formData.nome,
+          descricao: formData.descricao || null,
+          setor_id: formData.setor_id,
+          tipo: formData.tipo,
+        });
 
-        if (error) throw error;
         toast({ title: 'Sucesso', description: 'Funil atualizado com sucesso!' });
       } else {
         const ordem = getFunisPorSetor(formData.setor_id).length;
-        const { error } = await (supabase as any)
-          .from('funis')
-          .insert({
-            empresa_id: empresaId,
-            setor_id: formData.setor_id,
-            nome: formData.nome,
-            descricao: formData.descricao || null,
-            tipo: formData.tipo,
-            ordem
-          });
+        await api.post<any>('/funil/funis', {
+          setor_id: formData.setor_id,
+          nome: formData.nome,
+          descricao: formData.descricao || null,
+          tipo: formData.tipo,
+          ordem
+        });
 
-        if (error) throw error;
         toast({ title: 'Sucesso', description: 'Funil criado com sucesso!' });
       }
 
@@ -607,13 +577,8 @@ export function FunisFluxoTrabalho() {
     if (!funilToDelete) return;
 
     try {
-      const { error } = await (supabase as any)
-        .from('funis')
-        .delete()
-        .eq('id', funilToDelete.id);
+      await api.del<any>(`/funil/funis/${funilToDelete.id}`);
 
-      if (error) throw error;
-      
       toast({ title: 'Sucesso', description: 'Funil excluído com sucesso!' });
       if (expandedFunilId === funilToDelete.id) {
         setExpandedFunilId(null);
@@ -676,30 +641,22 @@ export function FunisFluxoTrabalho() {
 
     try {
       if (editingEtapa) {
-        const { error } = await (supabase as any)
-          .from('funil_etapas')
-          .update({
-            nome: etapaFormData.nome,
-            descricao: etapaFormData.descricao || null,
-            cor: etapaFormData.cor,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', editingEtapa.id);
+        await api.put<any>(`/funil/etapas/${editingEtapa.id}`, {
+          nome: etapaFormData.nome,
+          descricao: etapaFormData.descricao || null,
+          cor: etapaFormData.cor,
+        });
 
-        if (error) throw error;
         toast({ title: 'Sucesso', description: 'Etapa atualizada com sucesso!' });
       } else {
-        const { error } = await (supabase as any)
-          .from('funil_etapas')
-          .insert({
-            funil_id: currentFunilId,
-            nome: etapaFormData.nome,
-            descricao: etapaFormData.descricao || null,
-            cor: etapaFormData.cor,
-            ordem: etapasDoFunil.length
-          });
+        await api.post<any>('/funil/etapas', {
+          funil_id: currentFunilId,
+          nome: etapaFormData.nome,
+          descricao: etapaFormData.descricao || null,
+          cor: etapaFormData.cor,
+          ordem: etapasDoFunil.length
+        });
 
-        if (error) throw error;
         toast({ title: 'Sucesso', description: 'Etapa criada com sucesso!' });
       }
 
@@ -725,13 +682,8 @@ export function FunisFluxoTrabalho() {
     if (!etapaToDelete) return;
 
     try {
-      const { error } = await (supabase as any)
-        .from('funil_etapas')
-        .delete()
-        .eq('id', etapaToDelete.etapa.id);
+      await api.del<any>(`/funil/etapas/${etapaToDelete.etapa.id}`);
 
-      if (error) throw error;
-      
       toast({ title: 'Sucesso', description: 'Etapa excluída com sucesso!' });
       loadEtapasForFunil(etapaToDelete.funilId);
     } catch (error) {
@@ -747,16 +699,22 @@ export function FunisFluxoTrabalho() {
     }
   };
 
-  const filteredFunis = selectedSetor === 'todos' 
-    ? funis 
-    : funis.filter(f => f.setor_id === selectedSetor);
+  // Enriquecer funis com referência ao setor (o endpoint /funil/funis não emite join)
+  const funisComSetor: Funil[] = funis.map(f => ({
+    ...f,
+    setor: setores.find(s => s.id === f.setor_id),
+  }));
+
+  const filteredFunis = selectedSetor === 'todos'
+    ? funisComSetor
+    : funisComSetor.filter(f => f.setor_id === selectedSetor);
 
   return (
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-semibold mb-2">Funis / Fluxo de Trabalho</h3>
         <p className="text-muted-foreground text-sm mb-4">
-          Configure os funis e fluxos de trabalho dos setores da empresa. 
+          Configure os funis e fluxos de trabalho dos setores da empresa.
           Cada setor pode ter até {LIMITE_FUNIS_POR_SETOR} funis, e cada funil até {LIMITE_ETAPAS_POR_FUNIL} etapas.
         </p>
       </div>
@@ -782,24 +740,24 @@ export function FunisFluxoTrabalho() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={() => setConfigNegocioOpen(true)}
             className="border-amber-500 text-amber-600 hover:bg-amber-50"
           >
             <Settings className="h-4 w-4 mr-2" />
             Configuração Funil Negócios
           </Button>
-          
-          <Button 
-            variant="outline" 
+
+          <Button
+            variant="outline"
             onClick={() => setConfigFluxoOpen(true)}
             className="border-blue-500 text-blue-600 hover:bg-blue-50"
           >
             <Settings className="h-4 w-4 mr-2" />
             Configuração Fluxo de Trabalho
           </Button>
-          
+
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button onClick={() => handleOpenDialog()}>
@@ -811,8 +769,8 @@ export function FunisFluxoTrabalho() {
             <DialogHeader>
               <DialogTitle>{editingFunil ? 'Editar Funil' : 'Novo Funil'}</DialogTitle>
               <DialogDescription>
-                {editingFunil 
-                  ? 'Edite as informações do funil.' 
+                {editingFunil
+                  ? 'Edite as informações do funil.'
                   : 'Crie um novo funil para organizar seu fluxo de trabalho.'}
               </DialogDescription>
             </DialogHeader>
@@ -820,8 +778,8 @@ export function FunisFluxoTrabalho() {
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="setor">Setor *</Label>
-                <Select 
-                  value={formData.setor_id} 
+                <Select
+                  value={formData.setor_id}
                   onValueChange={(value) => setFormData({ ...formData, setor_id: value })}
                 >
                   <SelectTrigger>
@@ -829,8 +787,8 @@ export function FunisFluxoTrabalho() {
                   </SelectTrigger>
                   <SelectContent>
                     {setores.map(setor => (
-                      <SelectItem 
-                        key={setor.id} 
+                      <SelectItem
+                        key={setor.id}
                         value={setor.id}
                         disabled={!editingFunil && !podeAdicionarFunil(setor.id)}
                       >
@@ -920,7 +878,7 @@ export function FunisFluxoTrabalho() {
       {/* Lista de Funis com Etapas em Cascata */}
       <div className="space-y-4">
         <h4 className="font-medium text-sm text-muted-foreground">Funis Cadastrados</h4>
-        
+
         {loading ? (
           <Card>
             <CardContent className="p-6 text-center text-muted-foreground">
@@ -930,7 +888,7 @@ export function FunisFluxoTrabalho() {
         ) : filteredFunis.length === 0 ? (
           <Card>
             <CardContent className="p-6 text-center text-muted-foreground">
-              {setores.length === 0 
+              {setores.length === 0
                 ? 'Cadastre setores em Configurações > Setores antes de criar funis.'
                 : 'Nenhum funil cadastrado. Clique em "Novo Funil" para começar.'}
             </CardContent>
@@ -940,16 +898,16 @@ export function FunisFluxoTrabalho() {
             {filteredFunis.map(funil => {
               const isExpanded = expandedFunilId === funil.id;
               const etapasDoFunil = getEtapasDoFunil(funil.id);
-              
+
               return (
-                <Card 
+                <Card
                   key={funil.id}
                   className={`transition-all ${isExpanded ? 'ring-2 ring-primary' : 'hover:shadow-md'}`}
                 >
                   <CardContent className="p-4">
                     {/* Header do Funil */}
                     <div className="flex items-start justify-between">
-                      <div 
+                      <div
                         className="flex-1 cursor-pointer"
                         onClick={() => toggleFunilExpanded(funil.id)}
                       >
@@ -977,8 +935,8 @@ export function FunisFluxoTrabalho() {
                         </p>
                       </div>
                       <div className="flex items-center gap-1">
-                        <Button 
-                          variant="ghost" 
+                        <Button
+                          variant="ghost"
                           size="icon"
                           onClick={(e) => {
                             e.stopPropagation();
@@ -987,8 +945,8 @@ export function FunisFluxoTrabalho() {
                         >
                           <Edit2 className="h-4 w-4" />
                         </Button>
-                        <Button 
-                          variant="ghost" 
+                        <Button
+                          variant="ghost"
                           size="icon"
                           onClick={(e) => {
                             e.stopPropagation();
@@ -997,8 +955,8 @@ export function FunisFluxoTrabalho() {
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
-                        <Button 
-                          variant="ghost" 
+                        <Button
+                          variant="ghost"
                           size="icon"
                           onClick={() => toggleFunilExpanded(funil.id)}
                         >
@@ -1019,8 +977,8 @@ export function FunisFluxoTrabalho() {
                             Etapas do Funil ({etapasDoFunil.length}/{LIMITE_ETAPAS_POR_FUNIL})
                           </h5>
                           {podeAdicionarEtapa(funil.id) && (
-                            <Button 
-                              size="sm" 
+                            <Button
+                              size="sm"
                               variant="outline"
                               onClick={() => handleOpenEtapaDialog(funil.id)}
                             >
@@ -1074,8 +1032,8 @@ export function FunisFluxoTrabalho() {
           <DialogHeader>
             <DialogTitle>{editingEtapa ? 'Editar Etapa' : 'Nova Etapa'}</DialogTitle>
             <DialogDescription>
-              {editingEtapa 
-                ? 'Edite as informações da etapa.' 
+              {editingEtapa
+                ? 'Edite as informações da etapa.'
                 : 'Adicione uma nova etapa ao funil.'}
             </DialogDescription>
           </DialogHeader>
@@ -1111,8 +1069,8 @@ export function FunisFluxoTrabalho() {
                     type="button"
                     onClick={() => setEtapaFormData({ ...etapaFormData, cor })}
                     className={`w-8 h-8 rounded-full transition-all ${
-                      etapaFormData.cor === cor 
-                        ? 'ring-2 ring-offset-2 ring-primary' 
+                      etapaFormData.cor === cor
+                        ? 'ring-2 ring-offset-2 ring-primary'
                         : 'hover:scale-110'
                     }`}
                     style={{ backgroundColor: cor }}
@@ -1153,7 +1111,7 @@ export function FunisFluxoTrabalho() {
               <p className="text-xs text-muted-foreground">
                 Ative ou desative os campos que serão exibidos nos cards de funis do tipo Negócio.
               </p>
-              
+
               <div className="space-y-2">
                 {Object.entries(configNegocio.campos).map(([campo, config]) => {
                   const labels: Record<string, string> = {
@@ -1199,7 +1157,7 @@ export function FunisFluxoTrabalho() {
               <p className="text-xs text-muted-foreground">
                 Ative ou desative os status disponíveis para classificar os negócios.
               </p>
-              
+
               <div className="space-y-2">
                 {configNegocio.status.map((status, index) => (
                   <div key={status.id} className="flex items-center justify-between p-3 border rounded-lg">
@@ -1209,7 +1167,7 @@ export function FunisFluxoTrabalho() {
                         onCheckedChange={(checked) => {
                           setConfigNegocio(prev => ({
                             ...prev,
-                            status: prev.status.map((s, i) => 
+                            status: prev.status.map((s, i) =>
                               i === index ? { ...s, ativo: checked } : s
                             )
                           }));
@@ -1233,7 +1191,7 @@ export function FunisFluxoTrabalho() {
               <p className="text-xs text-muted-foreground">
                 Ative ou desative as ações rápidas disponíveis por padrão nos cards de negócio.
               </p>
-              
+
               <div className="space-y-2">
                 {Object.entries(configNegocio.acoes).map(([acao, ativo]) => {
                   const labels: Record<string, string> = {
@@ -1242,7 +1200,7 @@ export function FunisFluxoTrabalho() {
                     elaborar_orcamento: 'Elaborar Orçamento',
                     enviar_email: 'Enviar E-mail',
                   };
-                  
+
                   // Renderização especial para "Elaborar Orçamento" com sub-opções
                   if (acao === 'elaborar_orcamento') {
                     return (
@@ -1271,12 +1229,12 @@ export function FunisFluxoTrabalho() {
                             <EyeOff className="h-4 w-4 text-muted-foreground" />
                           )}
                         </div>
-                        
+
 {/* Sub-opções de calculadoras removidas conforme solicitação */}
                       </div>
                     );
                   }
-                  
+
                   return (
                     <div key={acao} className="flex items-center justify-between p-3 border rounded-lg">
                       <div className="flex items-center gap-3">
@@ -1339,7 +1297,7 @@ export function FunisFluxoTrabalho() {
               <p className="text-xs text-muted-foreground">
                 Ative ou desative os campos que serão exibidos nos cards de fluxo de trabalho.
               </p>
-              
+
               <div className="space-y-2">
                 {Object.entries(configFluxo.campos).map(([campo, config]) => {
                   const labels: Record<string, string> = {
@@ -1385,7 +1343,7 @@ export function FunisFluxoTrabalho() {
               <p className="text-xs text-muted-foreground">
                 Ative ou desative os níveis de prioridade disponíveis para os cards.
               </p>
-              
+
               <div className="space-y-2">
                 {configFluxo.prioridades.map((prioridade, index) => (
                   <div key={prioridade.id} className="flex items-center justify-between p-3 border rounded-lg">
@@ -1395,7 +1353,7 @@ export function FunisFluxoTrabalho() {
                         onCheckedChange={(checked) => {
                           setConfigFluxo(prev => ({
                             ...prev,
-                            prioridades: prev.prioridades.map((p, i) => 
+                            prioridades: prev.prioridades.map((p, i) =>
                               i === index ? { ...p, ativo: checked } : p
                             )
                           }));
@@ -1419,7 +1377,7 @@ export function FunisFluxoTrabalho() {
               <p className="text-xs text-muted-foreground">
                 Ative ou desative as ações rápidas disponíveis por padrão nos cards de fluxo de trabalho.
               </p>
-              
+
               <div className="space-y-2">
                 {Object.entries(configFluxo.acoes).map(([acao, ativo]) => {
                   const labels: Record<string, string> = {

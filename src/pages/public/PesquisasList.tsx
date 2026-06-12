@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -67,28 +67,31 @@ export default function PesquisasList() {
   const fetchPesquisas = async () => {
     setLoading(true);
     try {
-      let query = (supabase as any)
-        .from('pesquisas_opiniao')
-        .select(`
-          id, titulo, slug, descricao, total_votos, created_at,
-          categoria:blog_categorias(nome, cor),
-          autor:blog_autores(nome, sobrenome)
-        `)
-        .eq('status', 'aberta')
-        .order('created_at', { ascending: false });
+      // GET /pesquisas — retorna todas as pesquisas; filtros aplicados no cliente
+      // NOTA: categoria e autor não são incluídos no response_model do backend (PesquisaOut)
+      // Os campos categoria e autor degradam para null graciosamente
+      const all = await api.get<any[]>('/pesquisas').catch(() => [] as any[]);
+
+      let filtered = (all || []).filter((p: any) => p.status === 'aberta');
 
       if (search) {
-        query = query.or(`titulo.ilike.%${search}%,descricao.ilike.%${search}%`);
+        const s = search.toLowerCase();
+        filtered = filtered.filter((p: any) =>
+          (p.titulo || '').toLowerCase().includes(s) ||
+          (p.descricao || '').toLowerCase().includes(s)
+        );
       }
 
       if (categoriaFilter) {
-        query = query.eq('categoria_id', categoriaFilter);
+        filtered = filtered.filter((p: any) => p.categoria_id === categoriaFilter);
       }
 
-      const { data, error } = await query;
+      // Ordenar por created_at decrescente (equivale a .order('created_at', { ascending: false }))
+      filtered.sort((a: any, b: any) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
 
-      if (error) throw error;
-      setPesquisas(data || []);
+      setPesquisas(filtered);
     } catch (error) {
       console.error('Erro ao buscar pesquisas:', error);
     } finally {
@@ -97,11 +100,12 @@ export default function PesquisasList() {
   };
 
   const fetchCategorias = async () => {
-    const { data } = await (supabase as any)
-      .from('blog_categorias')
-      .select('id, nome, cor')
-      .order('nome');
-    setCategorias(data || []);
+    // GET /blog/categorias — categorias públicas do blog (usadas também nas pesquisas)
+    const data = await api.get<any[]>('/blog/categorias').catch(() => [] as any[]);
+    const sorted = (data || []).slice().sort((a: any, b: any) =>
+      (a.nome || '').localeCompare(b.nome || '')
+    );
+    setCategorias(sorted);
   };
 
   return (

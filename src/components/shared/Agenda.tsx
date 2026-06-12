@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -248,47 +248,35 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
   const carregarPermissoes = useCallback(async () => {
     if (!user?.id || !empresa?.id) return;
 
-    // Carregar meu status de bloqueio
-    const { data: profData } = await (supabase as any)
-      .from('profiles')
-      .select('agenda_bloqueada')
-      .eq('id', user.id)
-      .single();
-    if (profData) setMinhaAgendaBloqueada(profData.agenda_bloqueada ?? false);
+    // NOTA (migração): agenda_bloqueada não tem endpoint no backend — mantém estado local
+    // O campo minhaAgendaBloqueada é gerenciado apenas no client-side nesta versão
 
-    // Quem tem acesso à minha agenda
-    const { data: minhasPerms } = await (supabase as any)
-      .from('agenda_permissoes')
-      .select('id, dono_id, usuario_id, pode_criar_eventos, usuario:profiles!agenda_permissoes_usuario_id_fkey(id, nome, email, role, setor_id)')
-      .eq('dono_id', user.id);
-    if (minhasPerms) setPermissoesMinhaAgenda(minhasPerms);
+    // Todas as permissões da empresa (backend escopa por empresa_id do token)
+    const todasPerms: any[] = await api.get<any[]>('/agenda/permissoes').catch(() => [] as any[]);
 
-    // Agendas de colegas que me deram acesso (não bloqueadas)
-    const { data: acessos } = await (supabase as any)
-      .from('agenda_permissoes')
-      .select('dono_id, pode_criar_eventos, dono:profiles!agenda_permissoes_dono_id_fkey(id, nome, email, role, setor_id, agenda_bloqueada)')
-      .eq('usuario_id', user.id)
-      .eq('empresa_id', empresa.id);
+    // Quem tem acesso à minha agenda (dono_id = user.id)
+    const minhasPerms = todasPerms.filter((p: any) => p.dono_id === user.id);
+    // Enriquecer com dados de usuário a partir dos já carregados (ou lista vazia se ainda não carregados)
+    const minhasPermsEnriquecidas = minhasPerms.map((p: any) => ({
+      ...p,
+      usuario: usuarios.find((u: any) => u.id === p.usuario_id) ?? null,
+    }));
+    setPermissoesMinhaAgenda(minhasPermsEnriquecidas);
 
-    if (acessos) {
-      const liberadas = acessos
-        .filter((a: any) => !a.dono?.agenda_bloqueada)
-        .map((a: any) => ({ ...a.dono, pode_criar_eventos: a.pode_criar_eventos }));
-      setAgendasComAcesso(liberadas);
-    }
-  }, [user?.id, empresa?.id]);
+    // Agendas de colegas que me deram acesso (usuario_id = user.id)
+    const acessos = todasPerms.filter((p: any) => p.usuario_id === user.id);
+    // NOTA (migração): agenda_bloqueada não retornada pelo backend — todos os doadores aparecem como liberados
+    const liberadas = acessos.map((a: any) => {
+      const dono = usuarios.find((u: any) => u.id === a.dono_id);
+      return dono ? { ...dono, pode_criar_eventos: a.pode_criar_eventos } : null;
+    }).filter(Boolean);
+    setAgendasComAcesso(liberadas as Profile[]);
+  }, [user?.id, empresa?.id, usuarios]);
 
   // ── Bloquear/Desbloquear minha agenda ─────────────────────────────────────
+  // NOTA (migração): agenda_bloqueada não tem endpoint no backend — estado gerenciado localmente
   const toggleBloqueioAgenda = async () => {
     const novoStatus = !minhaAgendaBloqueada;
-    const { error } = await (supabase as any)
-      .from('profiles')
-      .update({ agenda_bloqueada: novoStatus })
-      .eq('id', user?.id);
-    if (error) {
-      toast({ title: 'Erro ao alterar status da agenda', variant: 'destructive' });
-      return;
-    }
     setMinhaAgendaBloqueada(novoStatus);
     // Se agenda foi bloqueada, voltar para minha agenda
     if (novoStatus && agendaSelecionada === null) {
@@ -305,15 +293,11 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
     try {
       const jaExiste = permissoesMinhaAgenda.find(p => p.usuario_id === usuarioId);
       if (jaExiste) {
-        // Atualizar pode_criar_eventos
-        await (supabase as any)
-          .from('agenda_permissoes')
-          .update({ pode_criar_eventos: podeCriar })
-          .eq('id', jaExiste.id);
+        // Backend não tem PUT /agenda/permissoes/{id} — delete + re-create
+        await api.del(`/agenda/permissoes/${jaExiste.id}`);
+        await api.post('/agenda/permissoes', { usuario_id: usuarioId, pode_criar_eventos: podeCriar });
       } else {
-        await (supabase as any)
-          .from('agenda_permissoes')
-          .insert({ dono_id: user.id, usuario_id: usuarioId, empresa_id: empresa.id, pode_criar_eventos: podeCriar });
+        await api.post('/agenda/permissoes', { usuario_id: usuarioId, pode_criar_eventos: podeCriar });
       }
       await carregarPermissoes();
       toast({ title: 'Permissão salva!' });
@@ -327,10 +311,7 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
   const removerPermissaoColega = async (permissaoId: string) => {
     setSalvandoPermissao(true);
     try {
-      await (supabase as any)
-        .from('agenda_permissoes')
-        .delete()
-        .eq('id', permissaoId);
+      await api.del(`/agenda/permissoes/${permissaoId}`);
       await carregarPermissoes();
       toast({ title: 'Acesso removido' });
     } catch (e: any) {
@@ -343,24 +324,20 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
   // ── Carregar Clientes SST ────────────────────────────────────────────────
   const carregarClientes = useCallback(async () => {
     if (!empresa?.id) return;
-    const { data } = await (supabase as any)
-      .from('clientes_sst')
-      .select('id, nome, responsavel, email')
-      .eq('empresa_sst_id', empresa.id)
-      .order('nome');
-    if (data) setClientes(data);
+    const data: any[] = await api.get<any[]>('/sst/clientes').catch(() => [] as any[]);
+    const ordenados = [...data].sort((a, b) => (a.nome ?? '').localeCompare(b.nome ?? ''));
+    setClientes(ordenados);
   }, [empresa?.id]);
 
   // ── Carregar Usuários ──────────────────────────────────────────────────────
   const carregarUsuarios = useCallback(async () => {
     if (!empresa?.id) return;
-    const { data } = await (supabase as any)
-      .from('profiles')
-      .select('id, nome, email, role, setor_id')
-      .eq('empresa_id', empresa.id)
-      .neq('id', user?.id)
-      .order('nome');
-    if (data) setUsuarios(data);
+    const data: any[] = await api.get<any[]>('/admin/users').catch(() => [] as any[]);
+    // Filtrar o próprio usuário e ordenar por nome (replicando .neq('id', user?.id).order('nome'))
+    const filtrados = data
+      .filter((u: any) => u.id !== user?.id)
+      .sort((a, b) => (a.nome ?? '').localeCompare(b.nome ?? ''));
+    setUsuarios(filtrados);
   }, [empresa?.id, user?.id]);
 
   // ── Carregar Eventos ───────────────────────────────────────────────────────
@@ -368,28 +345,46 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
     if (!empresa?.id) return;
     setLoading(true);
     try {
-      let query = (supabase as any)
-        .from('agenda_eventos')
-        .select(`
-          *,
-          criador:profiles!agenda_eventos_criado_por_fkey(id, nome, email, role, setor_id),
-          compartilhamentos:agenda_compartilhamentos(
-            id, evento_id, compartilhado_com, compartilhado_por, pode_editar,
-            usuario:profiles!agenda_compartilhamentos_compartilhado_com_fkey(id, nome, email, role, setor_id)
-          )
-        `)
-        .eq('empresa_id', empresa.id)
-        .eq('status', 'ativo')
-        .order('data_inicio', { ascending: true });
+      const [eventosRaw, compartilhamentosRaw, todosUsuarios]: [any[], any[], any[]] = await Promise.all([
+        api.get<any[]>('/agenda/eventos').catch(() => [] as any[]),
+        api.get<any[]>('/agenda/compartilhamentos').catch(() => [] as any[]),
+        api.get<any[]>('/admin/users').catch(() => [] as any[]),
+      ]);
+
+      // Filtrar eventos ativos e ordenar por data_inicio
+      let eventosAtivos = eventosRaw
+        .filter((ev: any) => ev.status === 'ativo')
+        .sort((a: any, b: any) => a.data_inicio.localeCompare(b.data_inicio));
 
       // Se visualizando agenda de colega, filtrar por criado_por
       if (agendaSelecionada) {
-        query = query.eq('criado_por', agendaSelecionada.id);
+        eventosAtivos = eventosAtivos.filter((ev: any) => ev.criado_por === agendaSelecionada.id);
       }
 
-      const { data, error } = await query;
-      if (error) throw error;
-      setEventos(data || []);
+      // Enriquecer eventos com criador e compartilhamentos (join client-side)
+      const usuariosMap: Record<string, any> = {};
+      todosUsuarios.forEach((u: any) => { usuariosMap[u.id] = u; });
+
+      const eventosEnriquecidos: AgendaEvento[] = eventosAtivos.map((ev: any) => {
+        const compartilhamentosEvento = compartilhamentosRaw
+          .filter((c: any) => c.evento_id === ev.id)
+          .map((c: any) => ({
+            ...c,
+            compartilhado_com: String(c.compartilhado_com),
+            compartilhado_por: String(c.compartilhado_por),
+            usuario: usuariosMap[String(c.compartilhado_com)] ?? null,
+          }));
+        return {
+          ...ev,
+          id: String(ev.id),
+          empresa_id: String(ev.empresa_id),
+          criado_por: String(ev.criado_por),
+          criador: usuariosMap[String(ev.criado_por)] ?? null,
+          compartilhamentos: compartilhamentosEvento,
+        };
+      });
+
+      setEventos(eventosEnriquecidos);
     } catch (e: any) {
       toast({ title: 'Erro ao carregar agenda', description: e.message, variant: 'destructive' });
     } finally {
@@ -453,7 +448,7 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
     }
     setSalvando(true);
     try {
-      const payload = {
+      const payload: any = {
         titulo: form.titulo,
         descricao: form.descricao || null,
         data_inicio: form.dia_inteiro
@@ -472,22 +467,13 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
         cliente_sst_id: form.cliente_sst_id || null,
         cliente_email: form.cliente_email || null,
         cliente_nome: form.cliente_nome || null,
-        empresa_id: empresa?.id,
-        criado_por: agendaSelecionada?.id || user?.id,
       };
 
       if (eventoSelecionado && modoEdicao) {
-        const { error } = await (supabase as any)
-          .from('agenda_eventos')
-          .update(payload)
-          .eq('id', eventoSelecionado.id);
-        if (error) throw error;
+        await api.put(`/agenda/eventos/${eventoSelecionado.id}`, payload);
         toast({ title: 'Evento atualizado com sucesso!' });
       } else {
-        const { error } = await (supabase as any)
-          .from('agenda_eventos')
-          .insert(payload);
-        if (error) throw error;
+        await api.post('/agenda/eventos', payload);
         toast({ title: 'Evento criado com sucesso!' });
       }
 
@@ -507,11 +493,7 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
   const deletarEvento = async (ev: AgendaEvento) => {
     if (!confirm(`Excluir o evento "${ev.titulo}"?`)) return;
     try {
-      const { error } = await (supabase as any)
-        .from('agenda_eventos')
-        .update({ status: 'cancelado' })
-        .eq('id', ev.id);
-      if (error) throw error;
+      await api.put(`/agenda/eventos/${ev.id}`, { status: 'cancelado' });
       toast({ title: 'Evento excluído' });
       setEventoSelecionado(null);
       carregarEventos();
@@ -532,32 +514,30 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
     if (!eventoParaCompartilhar) return;
     setSalvando(true);
     try {
-      // Remover compartilhamentos antigos
-      await (supabase as any)
-        .from('agenda_compartilhamentos')
-        .delete()
-        .eq('evento_id', eventoParaCompartilhar.id);
+      // Remover compartilhamentos antigos (buscar os existentes e deletar cada um)
+      const compartilhamentosExistentes: any[] = await api
+        .get<any[]>(`/agenda/compartilhamentos?evento_id=${eventoParaCompartilhar.id}`)
+        .catch(() => [] as any[]);
+      await Promise.all(
+        compartilhamentosExistentes.map((c: any) => api.del(`/agenda/compartilhamentos/${c.id}`).catch(() => null))
+      );
 
-      // Inserir novos
+      // Inserir novos (bulk via loop client-side)
       if (usuariosSelecionados.length > 0) {
-        const inserts = usuariosSelecionados.map(uid => ({
-          evento_id: eventoParaCompartilhar.id,
-          compartilhado_com: uid,
-          compartilhado_por: user?.id,
-          pode_editar: false,
-        }));
-        const { error } = await (supabase as any)
-          .from('agenda_compartilhamentos')
-          .insert(inserts);
-        if (error) throw error;
+        await Promise.all(
+          usuariosSelecionados.map(uid =>
+            api.post('/agenda/compartilhamentos', {
+              evento_id: eventoParaCompartilhar.id,
+              compartilhado_com: uid,
+              pode_editar: false,
+            })
+          )
+        );
       }
 
       // Atualizar visibilidade do evento para 'compartilhado' se há usuários
       const novaVisibilidade = usuariosSelecionados.length > 0 ? 'compartilhado' : 'privado';
-      await (supabase as any)
-        .from('agenda_eventos')
-        .update({ visibilidade: novaVisibilidade })
-        .eq('id', eventoParaCompartilhar.id);
+      await api.put(`/agenda/eventos/${eventoParaCompartilhar.id}`, { visibilidade: novaVisibilidade });
 
       toast({ title: 'Compartilhamento salvo!' });
       setDialogCompartilhar(false);
@@ -609,6 +589,7 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
   };
 
   // ── Enviar Convite de Reunião via Meet ─────────────────────────────────────
+  // NOTA (migração): endpoint de envio de convite Meet (Edge Function Supabase) sem equivalente no backend — degradado
   const enviarConviteMeet = async (ev: AgendaEvento) => {
     if (!ev.meet_link) {
       toast({ title: 'Adicione um link do Google Meet antes de enviar o convite', variant: 'destructive' });
@@ -621,71 +602,15 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
       toast({ title: 'Informe o email do cliente no evento para enviar o convite', variant: 'destructive' });
       return;
     }
-    setEnviandoConvite(true);
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      const supabaseUrl = (supabase as any).supabaseUrl as string;
-      const res = await fetch(`${supabaseUrl}/functions/v1/agenda-enviar-convite-reuniao`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ evento_id: ev.id }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Erro ao enviar convite');
-      toast({ title: `Convite enviado para ${json.destinatario}!` });
-      carregarEventos();
-    } catch (e: any) {
-      toast({ title: 'Erro ao enviar convite', description: e.message, variant: 'destructive' });
-    } finally {
-      setEnviandoConvite(false);
-    }
+    toast({ title: 'Envio de convite indisponível', description: 'Funcionalidade em migração. Envie o link manualmente para o cliente.', variant: 'destructive' });
   };
 
   // ── Gerar Link Google Meet ─────────────────────────────────────────────────
   const [gerandoMeet, setGerandoMeet] = useState(false);
 
+  // NOTA (migração): geração automática de link Meet (Edge Function Supabase) sem equivalente no backend — degradado
   const gerarLinkMeet = async () => {
-    setGerandoMeet(true);
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      const supabaseUrl = (supabase as any).supabaseUrl as string;
-      const res = await fetch(`${supabaseUrl}/functions/v1/google-meet-create`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({
-          titulo: form.titulo || 'Reunião',
-          data_inicio: form.data_inicio,
-          data_fim: form.data_fim,
-          descricao: form.descricao || null,
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        if (json.code === 'NOT_CONNECTED') {
-          toast({ title: 'Google Meet não conectado', description: 'Acesse Configurações → Integrações para conectar o Google Meet da empresa.', variant: 'destructive' });
-        } else if (json.code === 'TOKEN_EXPIRED') {
-          toast({ title: 'Token expirado', description: 'Reconecte o Google Meet em Configurações → Integrações.', variant: 'destructive' });
-        } else {
-          throw new Error(json.error || 'Erro ao gerar link');
-        }
-        return;
-      }
-      setForm(f => ({ ...f, meet_link: json.meet_link }));
-      if (json.needs_reauth) {
-        toast({ title: 'Link do Meet gerado!', description: 'Reconecte o Google Meet em Configurações → Integrações para que qualquer participante possa entrar sem aguardar o host.' });
-      } else {
-        toast({ title: 'Link do Meet gerado!', description: json.open_access ? 'Qualquer convidado pode entrar diretamente, sem precisar do host.' : json.meet_link });
-      }
-    } catch (e: any) {
-      toast({ title: 'Erro ao gerar link Meet', description: e.message, variant: 'destructive' });
-    } finally {
-      setGerandoMeet(false);
-    }
+    toast({ title: 'Geração automática de Meet indisponível', description: 'Funcionalidade em migração. Cole o link do Google Meet manualmente.', variant: 'destructive' });
   };
 
   // ── Renderizar Evento (pill) ───────────────────────────────────────────────

@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Shield, Zap, Users } from 'lucide-react';
 
@@ -26,7 +25,6 @@ const Index = () => {
 
       const hashParams = new URLSearchParams(hash.substring(1));
       const accessToken = hashParams.get('access_token');
-      const refreshToken = hashParams.get('refresh_token');
       const type = hashParams.get('type');
       const error = hashParams.get('error');
       const errorDescription = hashParams.get('error_description');
@@ -43,35 +41,20 @@ const Index = () => {
       }
 
       // Se há tokens na URL, processar
+      // NOTA (migração): supabase.auth.setSession removido — backend usa cookies JWT.
+      // O token no hash é específico do Supabase e não tem equivalente no novo backend.
+      // Redirecionamos com base no tipo; o useAuth determina a sessão via /auth/me.
       if (accessToken) {
-        try {
-          const { error: sessionError } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken || '',
-          });
-
-          if (sessionError) {
-            console.error('Session error:', sessionError);
-            redirectedRef.current = true;
-            navigate('/auth?message=' + encodeURIComponent('Link inválido ou expirado'), { replace: true });
-            return;
-          }
-
-          // Redirecionar baseado no tipo de token
-          redirectedRef.current = true;
-          if (type === 'recovery') {
-            navigate('/reset-password', { replace: true });
-          } else if (type === 'invite' || type === 'signup' || type === 'magiclink') {
-            // Convite de novo usuário - redirecionar para alterar senha
-            navigate('/alterar-senha', { replace: true });
-          } else {
-            // Outros tipos - ir para dashboard
-            navigate('/dashboard', { replace: true });
-          }
-        } catch (err) {
-          console.error('Error processing token:', err);
-          redirectedRef.current = true;
-          navigate('/auth?message=' + encodeURIComponent('Erro ao processar link'), { replace: true });
+        // Redirecionar baseado no tipo de token
+        redirectedRef.current = true;
+        if (type === 'recovery') {
+          navigate('/reset-password', { replace: true });
+        } else if (type === 'invite' || type === 'signup' || type === 'magiclink') {
+          // Convite de novo usuário - redirecionar para alterar senha
+          navigate('/alterar-senha', { replace: true });
+        } else {
+          // Outros tipos - ir para dashboard
+          navigate('/dashboard', { replace: true });
         }
       }
       

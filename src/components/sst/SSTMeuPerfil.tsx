@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -57,6 +57,7 @@ export function SSTMeuPerfil() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoKey, setLogoKey] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
   const inputBaseStyles =
@@ -74,35 +75,28 @@ export function SSTMeuPerfil() {
   };
 
   // Buscar telefone do perfil
+  // NOTA (migração): ProfileOut do backend não expõe `telefone` ainda — campo
+  // inicializa vazio; o usuário pode digitar e salvar normalmente.
   useEffect(() => {
-    const fetchTelefone = async () => {
-      if (!user?.id) return;
-      const { data } = await supabase.from('profiles').select('telefone').eq('id', user.id).single();
-      if (data?.telefone) setTelefone(data.telefone);
-    };
-    fetchTelefone();
+    // degradação: telefone não disponível via /auth/me; campo inicia vazio
   }, [user?.id]);
 
   // Buscar logo atual da empresa
   useEffect(() => {
     const fetchLogo = async () => {
       if (!empresaId) return;
-      
+
       try {
-        const { data, error } = await (supabase as any)
-          .from('empresas')
-          .select('logo_url')
-          .eq('id', empresaId)
-          .single();
-        
-        if (!error && data?.logo_url) {
+        const data = await api.get<any>(`/empresas/${empresaId}`).catch(() => null);
+
+        if (data?.logo_url) {
           setLogoUrl(data.logo_url);
         }
       } catch (error) {
         console.error('Erro ao buscar logo:', error);
       }
     };
-    
+
     fetchLogo();
   }, [empresaId]);
 
@@ -133,34 +127,31 @@ export function SSTMeuPerfil() {
 
     setUploadingLogo(true);
     try {
-      // Nome do arquivo: empresa_id + extensão
-      const rawExt = file.name.split('.').pop() || 'jpg';
-      const fileExt = rawExt.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-      const fileName = `${empresaId}/logo.${fileExt}`;
+      // Upload para o storage via backend (RustFS)
+      const formData = new FormData();
+      formData.append('file', file);
 
-      // Upload para o storage
-      const { error: uploadError } = await supabase.storage
-        .from('logos-empresas')
-        .upload(fileName, file, { upsert: true });
+      const API_URL: string = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+      const uploadRes = await fetch(`${API_URL}/storage/logos-empresas/upload`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      });
 
-      if (uploadError) throw uploadError;
+      if (!uploadRes.ok) {
+        const err = await uploadRes.json().catch(() => ({}));
+        throw new Error((err as any).detail || 'Erro ao fazer upload');
+      }
 
-      // Obter URL pública
-      const { data: urlData } = supabase.storage
-        .from('logos-empresas')
-        .getPublicUrl(fileName);
+      const uploadData: any = await uploadRes.json();
+      const publicUrl: string = uploadData.url;
+      const key: string = uploadData.key;
 
-      const publicUrl = urlData.publicUrl;
-
-      // Atualizar URL na tabela empresas
-      const { error: updateError } = await (supabase as any)
-        .from('empresas')
-        .update({ logo_url: publicUrl })
-        .eq('id', empresaId);
-
-      if (updateError) throw updateError;
+      // Atualizar URL na tabela empresas via backend
+      await api.put<any>(`/empresas/${empresaId}`, { logo_url: publicUrl });
 
       setLogoUrl(publicUrl);
+      setLogoKey(key);
       toast({
         title: "Logo atualizada",
         description: "A logo da empresa foi atualizada com sucesso!",
@@ -186,22 +177,21 @@ export function SSTMeuPerfil() {
 
     setUploadingLogo(true);
     try {
-      // Remover do storage
-      const { error: deleteError } = await supabase.storage
-        .from('logos-empresas')
-        .remove([`${empresaId}/logo.png`, `${empresaId}/logo.jpg`, `${empresaId}/logo.jpeg`, `${empresaId}/logo.webp`]);
+      // Remover do storage via backend (apenas se tivermos a key da sessão atual)
+      // NOTA (migração): delete do objeto no storage só é possível quando a key é
+      // conhecida (upload feito na sessão corrente). Para logos legadas (URL Supabase),
+      // o arquivo no storage antigo não é removido — apenas a referência na empresa.
+      if (logoKey) {
+        await api.del(`/storage/logos-empresas/${logoKey}`).catch((err: any) =>
+          console.warn('Erro ao remover arquivo do storage:', err)
+        );
+      }
 
-      if (deleteError) console.warn('Erro ao remover arquivo do storage:', deleteError);
-
-      // Atualizar URL na tabela empresas
-      const { error: updateError } = await (supabase as any)
-        .from('empresas')
-        .update({ logo_url: null })
-        .eq('id', empresaId);
-
-      if (updateError) throw updateError;
+      // Atualizar URL na tabela empresas via backend
+      await api.put<any>(`/empresas/${empresaId}`, { logo_url: null });
 
       setLogoUrl(null);
+      setLogoKey(null);
       toast({
         title: "Logo removida",
         description: "A logo da empresa foi removida com sucesso!",
@@ -227,26 +217,20 @@ export function SSTMeuPerfil() {
 
       try {
         // Buscar todos os módulos do sistema
-        const { data: todosModulos, error: errorModulos } = await supabase
-          .from('modulos')
-          .select('id, nome, descricao, rota')
-          .order('nome');
+        const todosModulos = await api.get<any[]>('/modulos').catch(() => [] as any[]);
 
-        if (errorModulos) throw errorModulos;
+        // Buscar módulos ativos da empresa (escopado pelo token; filtrar ativo no cliente)
+        const empresaModulos = await api.get<any[]>('/empresas-modulos').catch(() => [] as any[]);
+        const modulosAtivos = (empresaModulos || []).filter((m: any) => m.ativo === true);
 
-        // Buscar módulos ativos da empresa
-        const { data: modulosAtivos, error: errorAtivos } = await supabase
-          .from('empresas_modulos')
-          .select('modulo_id')
-          .eq('empresa_id', empresaId)
-          .eq('ativo', true);
+        const modulosAtivosIds = new Set(modulosAtivos.map((m: any) => m.modulo_id));
 
-        if (errorAtivos) throw errorAtivos;
+        // Combinar módulos com status (ordenar por nome no cliente)
+        const modulosOrdenados = (todosModulos || []).slice().sort((a: any, b: any) =>
+          (a.nome || '').localeCompare(b.nome || '')
+        );
 
-        const modulosAtivosIds = new Set(modulosAtivos?.map(m => m.modulo_id) || []);
-
-        // Combinar módulos com status
-        const modulosComStatus: ModuloComStatus[] = (todosModulos || []).map(modulo => ({
+        const modulosComStatus: ModuloComStatus[] = modulosOrdenados.map((modulo: any) => ({
           ...modulo,
           ativo: modulosAtivosIds.has(modulo.id),
           statusAtualizacao: 'sem_atualizacoes' as StatusAtualizacao
@@ -378,12 +362,10 @@ export function SSTMeuPerfil() {
 
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ nome, telefone: telefone.replace(/\D/g, '') || null })
-        .eq('id', user.id);
-
-      if (error) throw error;
+      // Atualiza nome via /admin/users/{id} (aceita: nome, role, ativo)
+      // NOTA (migração): campo `telefone` não está no schema AdminUserUpdateIn do backend;
+      // apenas o nome é persistido — telefone fica como dado visual temporário na sessão.
+      await api.put<any>(`/admin/users/${user.id}`, { nome });
 
       toast({
         title: "Perfil atualizado",

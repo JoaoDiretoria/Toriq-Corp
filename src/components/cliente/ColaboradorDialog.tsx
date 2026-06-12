@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -142,14 +142,10 @@ export function ColaboradorDialog({
     queryKey: ['setores', profile?.empresa_id],
     queryFn: async () => {
       if (!profile?.empresa_id) return [];
-      const { data, error } = await supabase
-        .from('setores')
-        .select('id, nome')
-        .eq('empresa_id', profile.empresa_id)
-        .eq('ativo', true)
-        .order('nome');
-      if (error) throw error;
-      return data || [];
+      const data = await api.get<any[]>('/sst/setores').catch(() => [] as any[]);
+      return (data || [])
+        .filter((s: any) => s.ativo !== false)
+        .sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || ''));
     },
     enabled: !!profile?.empresa_id,
   });
@@ -158,35 +154,21 @@ export function ColaboradorDialog({
     queryKey: ['cargos', profile?.empresa_id],
     queryFn: async () => {
       if (!profile?.empresa_id) return [];
-      const { data, error } = await supabase
-        .from('cargos')
-        .select('id, nome')
-        .eq('empresa_id', profile.empresa_id)
-        .eq('ativo', true)
-        .order('nome');
-      if (error) throw error;
-      return data || [];
+      const data = await api.get<any[]>('/sst/cargos').catch(() => [] as any[]);
+      return (data || [])
+        .filter((c: any) => c.ativo !== false)
+        .sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || ''));
     },
     enabled: !!profile?.empresa_id,
   });
 
   // Buscar empresa SST relacionada ao cliente
-  const { data: clienteSst } = useQuery({
-    queryKey: ['cliente-sst', profile?.empresa_id],
-    queryFn: async () => {
-      if (!profile?.empresa_id) return null;
-      const { data, error } = await supabase
-        .from('clientes_sst')
-        .select('empresa_sst_id')
-        .eq('cliente_empresa_id', profile.empresa_id)
-        .single();
-      if (error) return null;
-      return data;
-    },
-    enabled: !!profile?.empresa_id,
-  });
+  // NOTA (migração): /sst/clientes usa empresa_sst_id como tenant (não cliente_empresa_id);
+  // não há endpoint para filtrar por cliente_empresa_id. Retorna null graciosamente.
+  // O valor empresaSstId não é usado no JSX atual (gruposHomogeneos/treinamentos são []).
+  const clienteSst = null;
 
-  const empresaSstId = clienteSst?.empresa_sst_id;
+  const empresaSstId = (clienteSst as any)?.empresa_sst_id;
 
   const gruposHomogeneos: any[] = [];
   const treinamentos: any[] = [];
@@ -271,24 +253,23 @@ export function ColaboradorDialog({
     try {
       // Comprimir imagem
       const compressedBlob = await compressImage(file, 400, 0.8);
-      
-      // Gerar nome único para o arquivo
-      const fileName = `${profile.empresa_id}/${colaborador?.id || 'temp'}_${Date.now()}.jpg`;
-      
-      // Upload para o storage
-      const { error: uploadError } = await supabase.storage
-        .from('colaborador-fotos')
-        .upload(fileName, compressedBlob, { upsert: true, contentType: 'image/jpeg' });
+      const compressedFile = new File([compressedBlob], 'foto.jpg', { type: 'image/jpeg' });
 
-      if (uploadError) throw uploadError;
+      // Upload para o storage via backend
+      const API_URL: string = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:8000';
+      const formData = new FormData();
+      formData.append('file', compressedFile);
+      const res = await fetch(`${API_URL}/storage/colaborador-fotos/upload`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      });
 
-      // Obter URL pública
-      const { data: urlData } = supabase.storage
-        .from('colaborador-fotos')
-        .getPublicUrl(fileName);
+      if (!res.ok) throw new Error(await res.text());
 
-      setFotoUrl(urlData.publicUrl);
-      
+      const { url } = await res.json();
+      setFotoUrl(url);
+
       // Gerar código facial se não existir
       if (!codigoFacial) {
         const novoCodigo = generateCodigoFacial();
@@ -387,24 +368,23 @@ export function ColaboradorDialog({
       // Converter base64 para blob
       const response = await fetch(capturedPreview);
       const blob = await response.blob();
+      const capturedFile = new File([blob], 'foto.jpg', { type: 'image/jpeg' });
 
-      // Gerar nome único para o arquivo
-      const fileName = `${profile.empresa_id}/${colaborador?.id || 'temp'}_${Date.now()}.jpg`;
-      
-      // Upload para o storage
-      const { error: uploadError } = await supabase.storage
-        .from('colaborador-fotos')
-        .upload(fileName, blob, { upsert: true, contentType: 'image/jpeg' });
+      // Upload para o storage via backend
+      const API_URL: string = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:8000';
+      const formData = new FormData();
+      formData.append('file', capturedFile);
+      const uploadRes = await fetch(`${API_URL}/storage/colaborador-fotos/upload`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      });
 
-      if (uploadError) throw uploadError;
+      if (!uploadRes.ok) throw new Error(await uploadRes.text());
 
-      // Obter URL pública
-      const { data: urlData } = supabase.storage
-        .from('colaborador-fotos')
-        .getPublicUrl(fileName);
+      const { url } = await uploadRes.json();
+      setFotoUrl(url);
 
-      setFotoUrl(urlData.publicUrl);
-      
       // Gerar código facial se não existir
       if (!codigoFacial) {
         const novoCodigo = generateCodigoFacial();
@@ -447,7 +427,6 @@ export function ColaboradorDialog({
         setor: data.setor || null,
         grupo_homogeneo_id: data.grupo_homogeneo_id || null,
         ativo: data.ativo,
-        empresa_id: profile.empresa_id,
         foto_url: fotoUrl,
         codigo_facial: codigoFacial,
       };
@@ -455,38 +434,34 @@ export function ColaboradorDialog({
       let colaboradorId: string;
 
       if (colaborador) {
-        const { error } = await supabase
-          .from('colaboradores')
-          .update(payload)
-          .eq('id', colaborador.id);
-        if (error) throw error;
+        await api.put<any>(`/sst/colaboradores/${colaborador.id}`, payload);
         colaboradorId = colaborador.id;
 
-        // Remover treinamentos antigos
-        await supabase
-          .from('colaboradores_treinamentos')
-          .delete()
-          .eq('colaborador_id', colaboradorId);
+        // Remover treinamentos antigos: buscar vínculos existentes e deletar via Promise.all
+        const existingLinks = await api
+          .get<any[]>(`/treinamentos/colaboradores/${colaboradorId}/treinamentos`)
+          .catch(() => [] as any[]);
+        await Promise.all(
+          existingLinks.map((link: any) =>
+            api.del(`/treinamentos/colaboradores/${colaboradorId}/treinamentos/${link.id}`).catch(() => null)
+          )
+        );
       } else {
-        const { data: newColaborador, error } = await supabase
-          .from('colaboradores')
-          .insert(payload)
-          .select('id')
-          .single();
-        if (error) throw error;
+        const newColaborador = await api.post<any>('/sst/colaboradores', payload);
         colaboradorId = newColaborador.id;
       }
 
       // Inserir novos treinamentos
       if (data.treinamentos && data.treinamentos.length > 0) {
-        const treinamentosToInsert = data.treinamentos.map(treinamentoId => ({
-          colaborador_id: colaboradorId,
-          treinamento_id: treinamentoId,
-        }));
-        const { error: treinamentosError } = await supabase
-          .from('colaboradores_treinamentos')
-          .insert(treinamentosToInsert);
-        if (treinamentosError) throw treinamentosError;
+        await Promise.all(
+          data.treinamentos.map((treinamentoId) =>
+            api
+              .post<any>(`/treinamentos/colaboradores/${colaboradorId}/treinamentos`, {
+                treinamento_id: treinamentoId,
+              })
+              .catch(() => null)
+          )
+        );
       }
     },
     onSuccess: () => {

@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { 
   Zap, 
   MessageSquare, 
@@ -212,15 +212,12 @@ export function Automacoes() {
 
   const loadFunis = async () => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('funis')
-        .select('*, setor:setores(nome)')
-        .eq('empresa_id', empresaId)
-        .eq('ativo', true)
-        .order('nome');
-
-      if (error) throw error;
-      setFunis(data || []);
+      const data = await api.get<any[]>('/funil/funis').catch(() => [] as any[]);
+      // Filtro client-side: ativo=true; ordenar por nome
+      const filtered = (data || [])
+        .filter((f: any) => f.ativo !== false)
+        .sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || ''));
+      setFunis(filtered);
     } catch (error) {
       console.error('Erro ao carregar funis:', error);
     }
@@ -228,15 +225,12 @@ export function Automacoes() {
 
   const loadEtapas = async (funilId: string) => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('funil_etapas')
-        .select('*')
-        .eq('funil_id', funilId)
-        .eq('ativo', true)
-        .order('ordem');
-
-      if (error) throw error;
-      setEtapas(data || []);
+      const data = await api.get<any[]>(`/funil/etapas?funil_id=${funilId}`).catch(() => [] as any[]);
+      // Filtro client-side: ativo=true; ordenar por ordem
+      const filtered = (data || [])
+        .filter((e: any) => e.ativo !== false)
+        .sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
+      setEtapas(filtered);
     } catch (error) {
       console.error('Erro ao carregar etapas:', error);
     }
@@ -244,15 +238,12 @@ export function Automacoes() {
 
   const loadEtapasDestino = async (funilId: string) => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('funil_etapas')
-        .select('*')
-        .eq('funil_id', funilId)
-        .eq('ativo', true)
-        .order('ordem');
-
-      if (error) throw error;
-      setEtapasDestino(data || []);
+      const data = await api.get<any[]>(`/funil/etapas?funil_id=${funilId}`).catch(() => [] as any[]);
+      // Filtro client-side: ativo=true; ordenar por ordem
+      const filtered = (data || [])
+        .filter((e: any) => e.ativo !== false)
+        .sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
+      setEtapasDestino(filtered);
     } catch (error) {
       console.error('Erro ao carregar etapas destino:', error);
     }
@@ -261,14 +252,26 @@ export function Automacoes() {
   const loadAutomacoes = async () => {
     try {
       setLoading(true);
-      const { data, error } = await (supabase as any)
-        .from('automacoes')
-        .select('*, funil:funis(id, nome, tipo), etapa:funil_etapas(id, nome, cor)')
-        .eq('empresa_id', empresaId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setAutomacoes(data || []);
+      const [rawAutomacoes, allFunis, allEtapas] = await Promise.all([
+        api.get<any[]>('/funil-comercial/automacoes').catch(() => [] as any[]),
+        api.get<any[]>('/funil/funis').catch(() => [] as any[]),
+        api.get<any[]>('/funil/etapas').catch(() => [] as any[]),
+      ]);
+      // Enriquecer com objetos funil e etapa (o backend retorna apenas IDs)
+      const funisMap: Record<string, any> = {};
+      (allFunis || []).forEach((f: any) => { funisMap[f.id] = f; });
+      const etapasMap: Record<string, any> = {};
+      (allEtapas || []).forEach((e: any) => { etapasMap[e.id] = e; });
+      const enriched = (rawAutomacoes || [])
+        .map((a: any) => ({
+          ...a,
+          funil: a.funil_id ? funisMap[a.funil_id] ?? null : null,
+          etapa: a.etapa_id ? etapasMap[a.etapa_id] ?? null : null,
+        }))
+        .sort((a: any, b: any) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+      setAutomacoes(enriched);
     } catch (error) {
       console.error('Erro ao carregar automações:', error);
     } finally {
@@ -435,21 +438,16 @@ export function Automacoes() {
         acaoConfig.agendamento_hora = formData.agendamento_hora;
       }
 
-      const { error } = await (supabase as any)
-        .from('automacoes')
-        .insert({
-          empresa_id: empresaId,
-          nome,
-          tipo: selectedTemplate.acao,
-          gatilho: selectedTemplate.gatilho,
-          funil_id: formData.funil_id,
-          etapa_id: formData.etapa_id,
-          dias_parado: selectedTemplate.gatilho === 'negocio_parado_etapa' ? formData.dias_parado : null,
-          acao_config: acaoConfig,
-          ativo: true
-        });
-
-      if (error) throw error;
+      await api.post('/funil-comercial/automacoes', {
+        nome,
+        tipo: selectedTemplate.acao,
+        gatilho: selectedTemplate.gatilho,
+        funil_id: formData.funil_id,
+        etapa_id: formData.etapa_id,
+        dias_parado: selectedTemplate.gatilho === 'negocio_parado_etapa' ? formData.dias_parado : null,
+        acao_config: acaoConfig,
+        ativo: true
+      });
 
       toast({ title: 'Sucesso', description: 'Automação criada com sucesso!' });
       setDialogOpen(false);
@@ -468,12 +466,7 @@ export function Automacoes() {
 
   const handleToggleAtivo = async (automacao: Automacao) => {
     try {
-      const { error } = await (supabase as any)
-        .from('automacoes')
-        .update({ ativo: !automacao.ativo })
-        .eq('id', automacao.id);
-
-      if (error) throw error;
+      await api.put(`/funil-comercial/automacoes/${automacao.id}`, { ativo: !automacao.ativo });
 
       toast({ 
         title: 'Sucesso', 
@@ -494,12 +487,7 @@ export function Automacoes() {
     if (!confirm('Deseja realmente excluir esta automação?')) return;
 
     try {
-      const { error } = await (supabase as any)
-        .from('automacoes')
-        .delete()
-        .eq('id', automacao.id);
-
-      if (error) throw error;
+      await api.del(`/funil-comercial/automacoes/${automacao.id}`);
 
       toast({ title: 'Sucesso', description: 'Automação excluída com sucesso!' });
       loadAutomacoes();

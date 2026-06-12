@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAccessLog } from '@/hooks/useAccessLog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -664,12 +664,12 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
     if (!empresaId) return;
     setLoadingGoogleMeet(true);
     try {
-      const { data } = await (supabase as any)
-        .from('google_oauth_tokens')
-        .select('google_email, atualizado_em')
-        .eq('empresa_id', empresaId)
-        .maybeSingle();
-      setGoogleMeetToken(data || null);
+      const data = await api.get<any>('/sistema/google-oauth/status').catch(() => null);
+      if (data && data.conectado) {
+        setGoogleMeetToken({ google_email: data.google_email, atualizado_em: data.atualizado_em });
+      } else {
+        setGoogleMeetToken(null);
+      }
     } catch (_) {
     } finally {
       setLoadingGoogleMeet(false);
@@ -677,25 +677,14 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
   }, [empresaId]);
 
   const conectarGoogleMeet = async () => {
-    setConectandoGoogleMeet(true);
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      const supabaseUrl = (supabase as any).supabaseUrl as string;
-      const res = await fetch(`${supabaseUrl}/functions/v1/google-meet-oauth`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({}),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Erro ao iniciar autenticação');
-      window.open(json.auth_url, '_blank', 'width=600,height=700,scrollbars=yes');
-      toast({ title: 'Janela de autorização aberta', description: 'Após autorizar no Google, clique em "Recarregar status" abaixo.' });
-    } catch (e: any) {
-      toast({ title: 'Erro ao conectar Google Meet', description: e.message, variant: 'destructive' });
-    } finally {
-      setConectandoGoogleMeet(false);
-    }
+    // NOTA (migração): fluxo OAuth do Google Meet usa Supabase Edge Function diretamente
+    // (google-meet-oauth). Sem endpoint equivalente no backend Python. Degradado: exibe
+    // instruções manuais e não abre janela de autorização automática.
+    toast({
+      title: 'Configuração necessária',
+      description: 'O fluxo de autenticação do Google Meet requer configuração via painel administrativo.',
+      variant: 'destructive',
+    });
   };
 
   const desconectarGoogleMeet = async () => {
@@ -703,10 +692,7 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
     if (!confirm('Desconectar o Google Meet desta empresa? Os colaboradores não poderão mais gerar links automaticamente.')) return;
     setDesconectandoGoogleMeet(true);
     try {
-      await (supabase as any)
-        .from('google_oauth_tokens')
-        .delete()
-        .eq('empresa_id', empresaId);
+      await api.del('/sistema/google-oauth/tokens');
       setGoogleMeetToken(null);
       toast({ title: 'Google Meet desconectado' });
     } catch (e: any) {
@@ -716,19 +702,14 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
     }
   };
 
-  // Carregar configurações da empresa do Supabase
+  // Carregar configurações da empresa
   const loadConfiguracoes = async () => {
     if (!empresaId) return;
     setLoadingConfig(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('empresa_configuracoes')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .maybeSingle();
-      
-      if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows returned
-      
+      const list = await api.get<any[]>('/empresa-configuracoes').catch(() => [] as any[]);
+      const data = (list && list.length > 0) ? list[0] : null;
+
       if (data) {
         // Configurações Gerais
         setNomeFantasia(data.nome_fantasia || '');
@@ -736,23 +717,23 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
         setFusoHorario(data.fuso_horario || 'America/Sao_Paulo');
         setFormatoData(data.formato_data || 'dd/MM/yyyy');
         setFormatoMoeda(data.formato_moeda || 'BRL');
-        
+
         // Notificações
         setNotifEmail(data.notif_email ?? true);
         setNotifSistema(data.notif_sistema ?? true);
         setNotifTreinamentos(data.notif_treinamentos ?? true);
         setNotifVencimentos(data.notif_vencimentos ?? true);
         setNotifDocumentos(data.notif_documentos ?? true);
-        
+
         // Segurança
         setAutenticacao2FA(data.autenticacao_2fa ?? false);
         setSessaoTimeout(String(data.sessao_timeout || 30));
         setLogAcessos(data.log_acessos ?? true);
-        
+
         // Aparência
         setTema(data.tema || 'system');
         setCorPrimaria(data.cor_primaria || '#8b5cf6');
-        
+
         // Documentos
         setModeloCertificado(data.modelo_certificado || 'padrao');
         setAssinaturaDigital(data.assinatura_digital ?? false);
@@ -765,13 +746,12 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
     }
   };
 
-  // Salvar configurações da empresa no Supabase
+  // Salvar configurações da empresa
   const saveConfiguracoes = async () => {
     if (!empresaId) return;
     setSavingConfig(true);
     try {
       const configData = {
-        empresa_id: empresaId,
         nome_fantasia: nomeFantasia || null,
         idioma,
         fuso_horario: fusoHorario,
@@ -790,27 +770,16 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
         modelo_certificado: modeloCertificado,
         assinatura_digital: assinaturaDigital,
         rodape_padrao: rodapePadrao || null,
-        updated_at: new Date().toISOString()
       };
 
-      // Tentar atualizar primeiro, se não existir, inserir
-      const { data: existing } = await (supabase as any)
-        .from('empresa_configuracoes')
-        .select('id')
-        .eq('empresa_id', empresaId)
-        .maybeSingle();
+      // GET para saber se já existe registro (pegar o id)
+      const list = await api.get<any[]>('/empresa-configuracoes').catch(() => [] as any[]);
+      const existing = list && list.length > 0 ? list[0] : null;
 
       if (existing) {
-        const { error } = await (supabase as any)
-          .from('empresa_configuracoes')
-          .update(configData)
-          .eq('empresa_id', empresaId);
-        if (error) throw error;
+        await api.put(`/empresa-configuracoes/${existing.id}`, configData);
       } else {
-        const { error } = await (supabase as any)
-          .from('empresa_configuracoes')
-          .insert(configData);
-        if (error) throw error;
+        await api.post('/empresa-configuracoes', configData);
       }
 
       // Registrar log de atualização
@@ -1163,43 +1132,42 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
     if (!empresaId) return;
     setLoadingLogs(true);
     try {
-      let query = (supabase as any)
-        .from('access_logs')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('created_at', { ascending: false })
-        .limit(100);
+      // Backend retorna os 100 logs mais recentes da empresa (escopado pelo token)
+      // Filtros adicionais (acao, usuario, modulo, data) são reaplicados no cliente
+      const allData = await api.get<any[]>('/sistema/access-logs').catch(() => [] as any[]);
+      let filtered = allData || [];
 
-      // Aplicar filtros
+      // Reaplicar filtros no cliente (o endpoint não suporta query params de filtro)
       if (logsFilter.acao) {
-        query = query.eq('acao', logsFilter.acao);
+        filtered = filtered.filter((l: AccessLog) => l.acao === logsFilter.acao);
       }
       if (logsFilter.usuario) {
-        query = query.or(`user_nome.ilike.%${logsFilter.usuario}%,user_email.ilike.%${logsFilter.usuario}%`);
+        const term = logsFilter.usuario.toLowerCase();
+        filtered = filtered.filter((l: AccessLog) =>
+          (l.user_nome && l.user_nome.toLowerCase().includes(term)) ||
+          (l.user_email && l.user_email.toLowerCase().includes(term))
+        );
       }
       if (logsFilter.modulo) {
-        query = query.eq('modulo', logsFilter.modulo);
+        filtered = filtered.filter((l: AccessLog) => l.modulo === logsFilter.modulo);
       }
       if (logsFilter.dataInicio) {
-        query = query.gte('created_at', logsFilter.dataInicio);
+        filtered = filtered.filter((l: AccessLog) => l.created_at >= logsFilter.dataInicio);
       }
       if (logsFilter.dataFim) {
-        query = query.lte('created_at', logsFilter.dataFim + 'T23:59:59');
+        filtered = filtered.filter((l: AccessLog) => l.created_at <= logsFilter.dataFim + 'T23:59:59');
       }
 
-      const { data, error } = await query;
-      if (error) throw error;
-      setAccessLogs(data || []);
+      setAccessLogs(filtered);
 
       // Calcular estatísticas
-      const allLogs = data || [];
-      const logins = allLogs.filter((l: AccessLog) => l.acao === 'login').length;
-      const usuarios = new Set(allLogs.map((l: AccessLog) => l.user_id).filter(Boolean)).size;
-      const dispositivos = new Set(allLogs.map((l: AccessLog) => l.device_type).filter(Boolean)).size;
-      
+      const logins = filtered.filter((l: AccessLog) => l.acao === 'login').length;
+      const usuarios = new Set(filtered.map((l: AccessLog) => l.user_id).filter(Boolean)).size;
+      const dispositivos = new Set(filtered.map((l: AccessLog) => l.device_type).filter(Boolean)).size;
+
       setLogsStats({
         totalLogins: logins,
-        totalAcoes: allLogs.length,
+        totalAcoes: filtered.length,
         usuariosAtivos: usuarios,
         dispositivosUnicos: dispositivos
       });
@@ -1256,13 +1224,10 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
     if (!empresaId) return;
     setLoadingSetores(true);
     try {
-      const { data, error } = await supabase
-        .from('setores')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('nome');
-      if (error) throw error;
-      setSetores(data || []);
+      const data = await api.get<any[]>('/sst/setores').catch(() => [] as any[]);
+      // Ordenar por nome no cliente (o endpoint não garante ordenação)
+      const sorted = (data || []).slice().sort((a: any, b: any) => a.nome.localeCompare(b.nome));
+      setSetores(sorted);
     } catch (e) {
       console.error('Erro ao carregar setores:', e);
       toast({ title: 'Erro ao carregar setores', variant: 'destructive' });
@@ -1276,13 +1241,9 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
     if (!empresaId) return;
     setLoadingCategorias(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('categorias_clientes_empresa')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('nome');
-      if (error) throw error;
-      setCategorias(data || []);
+      const data = await api.get<any[]>('/cadastros/categorias-clientes-empresa').catch(() => [] as any[]);
+      const sorted = (data || []).slice().sort((a: any, b: any) => a.nome.localeCompare(b.nome));
+      setCategorias(sorted);
     } catch (e) {
       console.error('Erro ao carregar categorias:', e);
       toast({ title: 'Erro ao carregar categorias', variant: 'destructive' });
@@ -1312,30 +1273,21 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
     setSavingCategoria(true);
     try {
       if (editingCategoria) {
-        const { error } = await (supabase as any)
-          .from('categorias_clientes_empresa')
-          .update({
-            nome: categoriaForm.nome.trim(),
-            descricao: categoriaForm.descricao.trim() || null,
-            cor: categoriaForm.cor,
-            ativo: categoriaForm.ativo,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', editingCategoria.id);
-        if (error) throw error;
+        await api.put(`/cadastros/categorias-clientes-empresa/${editingCategoria.id}`, {
+          nome: categoriaForm.nome.trim(),
+          descricao: categoriaForm.descricao.trim() || null,
+          cor: categoriaForm.cor,
+          ativo: categoriaForm.ativo,
+        });
         logUpdate('Configurações', 'Categorias', `Categoria "${categoriaForm.nome}" atualizada`);
         toast({ title: 'Categoria atualizada com sucesso!' });
       } else {
-        const { error } = await (supabase as any)
-          .from('categorias_clientes_empresa')
-          .insert({
-            empresa_id: empresaId,
-            nome: categoriaForm.nome.trim(),
-            descricao: categoriaForm.descricao.trim() || null,
-            cor: categoriaForm.cor,
-            ativo: categoriaForm.ativo
-          });
-        if (error) throw error;
+        await api.post('/cadastros/categorias-clientes-empresa', {
+          nome: categoriaForm.nome.trim(),
+          descricao: categoriaForm.descricao.trim() || null,
+          cor: categoriaForm.cor,
+          ativo: categoriaForm.ativo,
+        });
         logCreate('Configurações', 'Categorias', `Categoria "${categoriaForm.nome}" criada`);
         toast({ title: 'Categoria criada com sucesso!' });
       }
@@ -1352,11 +1304,7 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
   const handleDeleteCategoria = async () => {
     if (!categoriaToDelete) return;
     try {
-      const { error } = await (supabase as any)
-        .from('categorias_clientes_empresa')
-        .delete()
-        .eq('id', categoriaToDelete.id);
-      if (error) throw error;
+      await api.del(`/cadastros/categorias-clientes-empresa/${categoriaToDelete.id}`);
       logDelete('Configurações', 'Categorias', `Categoria "${categoriaToDelete.nome}" excluída`);
       toast({ title: 'Categoria excluída com sucesso!' });
       setDeleteCategoriaDialogOpen(false);
@@ -1385,13 +1333,9 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
     if (!empresaId) return;
     setLoadingOrigensContato(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('origens_contato')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('nome');
-      if (error) throw error;
-      setOrigensContato(data || []);
+      const data = await api.get<any[]>('/cadastros/origens-contato').catch(() => [] as any[]);
+      const sorted = (data || []).slice().sort((a: any, b: any) => a.nome.localeCompare(b.nome));
+      setOrigensContato(sorted);
     } catch (e) {
       console.error('Erro ao carregar origens de contato:', e);
       toast({ title: 'Erro ao carregar origens de contato', variant: 'destructive' });
@@ -1419,30 +1363,21 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
     setSavingOrigemContato(true);
     try {
       if (editingOrigemContato) {
-        const { error } = await (supabase as any)
-          .from('origens_contato')
-          .update({
-            nome: origemContatoForm.nome.trim(),
-            descricao: origemContatoForm.descricao.trim() || null,
-            cor: origemContatoForm.cor,
-            ativo: origemContatoForm.ativo,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', editingOrigemContato.id);
-        if (error) throw error;
+        await api.put(`/cadastros/origens-contato/${editingOrigemContato.id}`, {
+          nome: origemContatoForm.nome.trim(),
+          descricao: origemContatoForm.descricao.trim() || null,
+          cor: origemContatoForm.cor,
+          ativo: origemContatoForm.ativo,
+        });
         logUpdate('Configurações', 'Origens de Contato', `Origem "${origemContatoForm.nome}" atualizada`);
         toast({ title: 'Origem de contato atualizada com sucesso!' });
       } else {
-        const { error } = await (supabase as any)
-          .from('origens_contato')
-          .insert({
-            empresa_id: empresaId,
-            nome: origemContatoForm.nome.trim(),
-            descricao: origemContatoForm.descricao.trim() || null,
-            cor: origemContatoForm.cor,
-            ativo: origemContatoForm.ativo
-          });
-        if (error) throw error;
+        await api.post('/cadastros/origens-contato', {
+          nome: origemContatoForm.nome.trim(),
+          descricao: origemContatoForm.descricao.trim() || null,
+          cor: origemContatoForm.cor,
+          ativo: origemContatoForm.ativo,
+        });
         logCreate('Configurações', 'Origens de Contato', `Origem "${origemContatoForm.nome}" criada`);
         toast({ title: 'Origem de contato criada com sucesso!' });
       }
@@ -1459,11 +1394,7 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
   const handleDeleteOrigemContato = async () => {
     if (!origemContatoToDelete) return;
     try {
-      const { error } = await (supabase as any)
-        .from('origens_contato')
-        .delete()
-        .eq('id', origemContatoToDelete.id);
-      if (error) throw error;
+      await api.del(`/cadastros/origens-contato/${origemContatoToDelete.id}`);
       logDelete('Configurações', 'Origens de Contato', `Origem "${origemContatoToDelete.nome}" excluída`);
       toast({ title: 'Origem de contato excluída com sucesso!' });
       setDeleteOrigemContatoDialogOpen(false);
@@ -1484,18 +1415,15 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
   const loadSetoresAcessos = async () => {
     if (!empresaId) return;
     try {
-      const { data, error } = await supabase
-        .from('setores')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .eq('ativo', true)
-        .order('nome');
-      if (error) throw error;
-      setSetoresAcessos(data || []);
+      const all = await api.get<any[]>('/sst/setores').catch(() => [] as any[]);
+      // Filtrar apenas ativos (o endpoint retorna todos)
+      const data = (all || []).filter((s: any) => s.ativo !== false);
+      const sorted = data.slice().sort((a: any, b: any) => a.nome.localeCompare(b.nome));
+      setSetoresAcessos(sorted);
       // Atualizar módulos com setores dinâmicos
-      setModulosSistema(gerarModulosComSetores(data || []));
+      setModulosSistema(gerarModulosComSetores(sorted));
       // Carregar permissões salvas de todos os setores
-      loadTodasPermissoesSalvas(data || []);
+      loadTodasPermissoesSalvas(sorted);
     } catch (e) {
       console.error('Erro ao carregar setores para acessos:', e);
     }
@@ -1531,21 +1459,21 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
     if (setoresList.length === 0) return;
     setLoadingPermissoesSalvas(true);
     try {
-      const setorIds = setoresList.map(s => s.id);
-      const { data, error } = await (supabase as any)
-        .from('setor_permissoes')
-        .select('*')
-        .in('setor_id', setorIds);
-      
-      if (error) throw error;
-      
+      // O endpoint só lista permissões por setor; buscar em paralelo para todos os setores
+      const resultados = await Promise.all(
+        setoresList.map(s =>
+          api.get<any[]>(`/sst/setores/${s.id}/permissoes`).catch(() => [] as any[])
+        )
+      );
+      const data: any[] = resultados.flat();
+
       // Agrupar permissões por setor + grupo de acesso
       const gruposAcesso = ['administrador', 'gestor', 'colaborador'];
       const permissoesPorSetorGrupo: {setor: Setor; grupo_acesso: string; permissoes: PermissaoSetor[]}[] = [];
-      
+
       setoresList.forEach(setor => {
         gruposAcesso.forEach(grupo => {
-          const permsDoGrupo = (data || []).filter(
+          const permsDoGrupo = data.filter(
             (p: any) => p.setor_id === setor.id && (p.grupo_acesso || 'colaborador') === grupo
           );
           if (permsDoGrupo.length > 0) {
@@ -1557,7 +1485,7 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
           }
         });
       });
-      
+
       setPermissoesSalvas(permissoesPorSetorGrupo);
     } catch (e) {
       console.error('Erro ao carregar permissões salvas:', e);
@@ -1571,11 +1499,7 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
     if (!empresaId || !setorId) return;
     setLoadingPermissoes(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('setor_permissoes')
-        .select('*')
-        .eq('setor_id', setorId);
-      if (error) throw error;
+      const data = await api.get<any[]>(`/sst/setores/${setorId}/permissoes`).catch(() => [] as any[]);
       setPermissoes(data || []);
     } catch (e) {
       console.error('Erro ao carregar permissões:', e);
@@ -1589,13 +1513,10 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
     if (!empresaId || !setorId) return;
     setLoadingPermissoes(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('setor_permissoes')
-        .select('*')
-        .eq('setor_id', setorId)
-        .eq('grupo_acesso', grupoAcesso);
-      if (error) throw error;
-      setPermissoes(data || []);
+      const data = await api.get<any[]>(`/sst/setores/${setorId}/permissoes`).catch(() => [] as any[]);
+      // Filtrar por grupo_acesso no cliente (endpoint retorna todas as permissões do setor)
+      const filtered = (data || []).filter((p: any) => (p.grupo_acesso || 'colaborador') === grupoAcesso);
+      setPermissoes(filtered);
     } catch (e) {
       console.error('Erro ao carregar permissões:', e);
       setPermissoes([]);
@@ -1761,48 +1682,47 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
     
     setSavingPermissoes(true);
     try {
-      // Deletar permissões existentes do setor + grupo de acesso
-      await (supabase as any)
-        .from('setor_permissoes')
-        .delete()
-        .eq('setor_id', selectedSetorAcesso)
-        .eq('grupo_acesso', grupoAcessoSelecionado);
+      // Buscar permissões existentes do setor para este grupo de acesso e excluir uma a uma
+      const existentes = await api.get<any[]>(`/sst/setores/${selectedSetorAcesso}/permissoes`).catch(() => [] as any[]);
+      const doGrupo = (existentes || []).filter((p: any) => (p.grupo_acesso || 'colaborador') === grupoAcessoSelecionado);
+      if (doGrupo.length > 0) {
+        await Promise.all(
+          doGrupo.map((p: any) => api.del(`/sst/setores/${selectedSetorAcesso}/permissoes/${p.id}`).catch(() => null))
+        );
+      }
 
       // Verificar se alguma permissão de setor dinâmico foi marcada (setor_uuid)
       const temPermissaoSetorDinamico = permissoesAtivas.some(p => p.pagina_id.startsWith('setor_'));
-      
+
       // Preparar permissões para inserir
       const permissoesParaInserir = permissoesAtivas.map(p => ({
-        setor_id: selectedSetorAcesso,
         modulo_id: p.modulo_id,
         pagina_id: p.pagina_id,
         visualizar: p.visualizar,
         editar: p.editar,
         criar: p.criar,
-        grupo_acesso: grupoAcessoSelecionado || 'colaborador'
+        grupo_acesso: grupoAcessoSelecionado || 'colaborador',
       }));
-      
+
       // Se tem permissão para algum setor dinâmico, adicionar permissão para a tela wrapper toriq-corp-setores
       if (temPermissaoSetorDinamico) {
         const jaTemPermissaoWrapper = permissoesParaInserir.some(p => p.pagina_id === 'toriq_corp_setores');
         if (!jaTemPermissaoWrapper) {
           permissoesParaInserir.push({
-            setor_id: selectedSetorAcesso,
             modulo_id: 'toriq_corp',
             pagina_id: 'toriq_corp_setores',
             visualizar: true,
             editar: false,
             criar: false,
-            grupo_acesso: grupoAcessoSelecionado || 'colaborador'
+            grupo_acesso: grupoAcessoSelecionado || 'colaborador',
           });
         }
       }
 
-      // Inserir novas permissões com grupo de acesso
-      const { error } = await (supabase as any)
-        .from('setor_permissoes')
-        .insert(permissoesParaInserir);
-      if (error) throw error;
+      // Inserir novas permissões uma a uma (endpoint não tem bulk insert)
+      await Promise.all(
+        permissoesParaInserir.map(p => api.post(`/sst/setores/${selectedSetorAcesso}/permissoes`, p))
+      );
       toast({ title: 'Permissões salvas com sucesso!' });
       // Recarregar permissões salvas e limpar formulário
       await loadTodasPermissoesSalvas(setoresAcessos);
@@ -1976,28 +1896,19 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
     setSavingSetor(true);
     try {
       if (editingSetor) {
-        const { error } = await supabase
-          .from('setores')
-          .update({
-            nome: setorForm.nome.trim(),
-            descricao: setorForm.descricao.trim() || null,
-            ativo: setorForm.ativo,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', editingSetor.id);
-        if (error) throw error;
+        await api.put(`/sst/setores/${editingSetor.id}`, {
+          nome: setorForm.nome.trim(),
+          descricao: setorForm.descricao.trim() || null,
+          ativo: setorForm.ativo,
+        });
         logUpdate('Configurações', 'Setores', `Setor "${setorForm.nome}" atualizado`);
         toast({ title: 'Setor atualizado com sucesso!' });
       } else {
-        const { error } = await supabase
-          .from('setores')
-          .insert({
-            empresa_id: empresaId,
-            nome: setorForm.nome.trim(),
-            descricao: setorForm.descricao.trim() || null,
-            ativo: setorForm.ativo
-          });
-        if (error) throw error;
+        await api.post('/sst/setores', {
+          nome: setorForm.nome.trim(),
+          descricao: setorForm.descricao.trim() || null,
+          ativo: setorForm.ativo,
+        });
         logCreate('Configurações', 'Setores', `Setor "${setorForm.nome}" criado`);
         toast({ title: 'Setor criado com sucesso!' });
       }
@@ -2053,100 +1964,51 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
 
     try {
       setDeletingSetor(true);
-      
-      // 1. Buscar funis do setor
-      const { data: funisDoSetor } = await (supabase as any)
-        .from('funis')
-        .select('id')
-        .eq('setor_id', setorToDelete.id);
 
-      if (funisDoSetor && funisDoSetor.length > 0) {
-        const funilIds = funisDoSetor.map((f: any) => f.id);
+      // NOTA (migração): a exclusão em cascata (funis, cards, atividades, etapas, etiquetas,
+      // automacoes, funis_configuracoes, funil_card_comparacoes, funil_card_movimentacoes)
+      // era feita client-side via Supabase. Com o backend REST, o DELETE /sst/setores/{id}
+      // delega a limpeza ao banco (ON DELETE CASCADE nas FK). Tabelas sem endpoint REST
+      // (automacoes, funis_configuracoes, funil_card_comparacoes, funil_card_movimentacoes)
+      // devem ser limpas pela cascade do DB. Se a cascade não estiver configurada no banco,
+      // o backend retornará erro 409/500 — revisar constraints no schema.
 
-        // 2. Buscar cards dos funis
-        const { data: cardsDosFunis } = await (supabase as any)
-          .from('funil_cards')
-          .select('id')
-          .in('funil_id', funilIds);
+      // 1. Buscar funis do setor via API para deletá-los (funil_etiquetas e cards via cascade)
+      const funisDoSetor = await api.get<any[]>('/funil/funis').catch(() => [] as any[]);
+      const funisDoSetorFiltrados = (funisDoSetor || []).filter((f: any) => f.setor_id === setorToDelete.id);
 
-        if (cardsDosFunis && cardsDosFunis.length > 0) {
-          const cardIds = cardsDosFunis.map((c: any) => c.id);
-
-          // 3. Excluir atividades dos cards
-          await (supabase as any)
-            .from('funil_card_atividades')
-            .delete()
-            .in('card_id', cardIds);
-
-          // 4. Excluir movimentações dos cards
-          await (supabase as any)
-            .from('funil_card_movimentacoes')
-            .delete()
-            .in('card_id', cardIds);
-
-          // 5. Excluir orçamentos dos cards
-          await (supabase as any)
-            .from('funil_card_orcamentos')
-            .delete()
-            .in('card_id', cardIds);
-
-          // 6. Excluir comparações dos cards
-          await (supabase as any)
-            .from('funil_card_comparacoes')
-            .delete()
-            .in('card_id', cardIds);
-
-          // 7. Excluir cards
-          await (supabase as any)
-            .from('funil_cards')
-            .delete()
-            .in('funil_id', funilIds);
+      if (funisDoSetorFiltrados.length > 0) {
+        // Buscar e deletar cards de cada funil (atividades, orçamentos via cascade do DB)
+        for (const funil of funisDoSetorFiltrados) {
+          const cards = await api.get<any[]>(`/funil/cards?funil_id=${funil.id}`).catch(() => [] as any[]);
+          await Promise.all(
+            (cards || []).map((c: any) => api.del(`/funil/cards/${c.id}`).catch(() => null))
+          );
+          // Deletar etapas do funil
+          const etapas = await api.get<any[]>('/funil/etapas').catch(() => [] as any[]);
+          const etapasDoFunil = (etapas || []).filter((e: any) => e.funil_id === funil.id);
+          await Promise.all(
+            etapasDoFunil.map((e: any) => api.del(`/funil/etapas/${e.id}`).catch(() => null))
+          );
+          // Deletar etiquetas do funil
+          const etiquetas = await api.get<any[]>('/funil/etiquetas').catch(() => [] as any[]);
+          const etiquetasDoFunil = (etiquetas || []).filter((et: any) => et.funil_id === funil.id);
+          await Promise.all(
+            etiquetasDoFunil.map((et: any) => api.del(`/funil/etiquetas/${et.id}`).catch(() => null))
+          );
+          // Deletar funil
+          await api.del(`/funil/funis/${funil.id}`).catch(() => null);
         }
-
-        // 8. Excluir etapas dos funis
-        await (supabase as any)
-          .from('funil_etapas')
-          .delete()
-          .in('funil_id', funilIds);
-
-        // 9. Excluir automações dos funis
-        await (supabase as any)
-          .from('automacoes')
-          .delete()
-          .in('funil_id', funilIds);
-
-        // 10. Excluir configurações dos funis
-        await (supabase as any)
-          .from('funis_configuracoes')
-          .delete()
-          .in('funil_id', funilIds);
-
-        // 11. Excluir etiquetas dos funis
-        await (supabase as any)
-          .from('funil_etiquetas')
-          .delete()
-          .in('funil_id', funilIds);
-
-        // 12. Excluir funis
-        await (supabase as any)
-          .from('funis')
-          .delete()
-          .eq('setor_id', setorToDelete.id);
       }
 
-      // 13. Excluir setor
-      const { error } = await supabase
-        .from('setores')
-        .delete()
-        .eq('id', setorToDelete.id);
-      
-      if (error) throw error;
+      // 2. Excluir setor
+      await api.del(`/sst/setores/${setorToDelete.id}`);
 
       logDelete('Configurações', 'Setores', `Setor "${setorToDelete.nome}" excluído com todos os funis e cards`);
       toast({ title: 'Setor excluído com sucesso!', description: 'Todos os funis e cards foram removidos.' });
       resetDeleteSetorDialog();
       loadSetores();
-      
+
       // Disparar evento para atualizar sidebar
       window.dispatchEvent(new Event('setores-updated'));
     } catch (e) {

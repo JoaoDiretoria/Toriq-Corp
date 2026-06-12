@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaEfetiva } from '@/hooks/useEmpresaMode';
@@ -160,17 +160,14 @@ export function SSTFluxoCaixa() {
 
   const loadData = async () => {
     if (!empresaId) return;
-    
+
     setLoading(true);
     try {
       // Carregar colunas de contas a receber para identificar "Recebidos"
       try {
-        const { data: colunasReceberData } = await (supabase as any)
-          .from('contas_receber_colunas')
-          .select('id, nome')
-          .eq('empresa_id', empresaId);
-        
-        const colunaRecebidosFound = colunasReceberData?.find((c: any) => 
+        const colunasReceberData = await api.get<any[]>('/financeiro/contas-receber/colunas').catch(() => [] as any[]);
+
+        const colunaRecebidosFound = colunasReceberData?.find((c: any) =>
           c.nome.toLowerCase().includes('recebido')
         );
         setColunaRecebidos(colunaRecebidosFound?.id || null);
@@ -180,12 +177,9 @@ export function SSTFluxoCaixa() {
 
       // Carregar colunas de contas a pagar para identificar "Pagos"
       try {
-        const { data: colunasPagarData } = await (supabase as any)
-          .from('contas_pagar_colunas')
-          .select('id, nome')
-          .eq('empresa_id', empresaId);
-        
-        const colunaPagosFound = colunasPagarData?.find((c: any) => 
+        const colunasPagarData = await api.get<any[]>('/financeiro/contas-pagar/colunas').catch(() => [] as any[]);
+
+        const colunaPagosFound = colunasPagarData?.find((c: any) =>
           c.nome.toLowerCase().includes('pago')
         );
         setColunaPagos(colunaPagosFound?.id || null);
@@ -193,57 +187,36 @@ export function SSTFluxoCaixa() {
         setColunaPagos(null);
       }
 
-      const { data: contasPagarData } = await (supabase as any)
-        .from('contas_pagar')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .eq('arquivado', false);
-      
-      setContasPagar(contasPagarData || []);
+      // Filtro arquivado=false replicado no cliente (backend retorna todos os registros do tenant)
+      const contasPagarData = await api.get<any[]>('/financeiro/contas-pagar').catch(() => [] as any[]);
+      setContasPagar((contasPagarData || []).filter((c: any) => !c.arquivado));
 
       try {
-        const { data: contasReceberData } = await (supabase as any)
-          .from('contas_receber')
-          .select('*')
-          .eq('empresa_id', empresaId)
-          .eq('arquivado', false);
-        
-        setContasReceber(contasReceberData || []);
+        const contasReceberData = await api.get<any[]>('/financeiro/contas-receber').catch(() => [] as any[]);
+        setContasReceber((contasReceberData || []).filter((c: any) => !c.arquivado));
       } catch (e) {
         setContasReceber([]);
       }
 
       try {
-        const { data: planoDespesasData } = await (supabase as any)
-          .from('plano_despesas')
-          .select('*')
-          .eq('empresa_id', empresaId);
-        
+        const planoDespesasData = await api.get<any[]>('/financeiro/cadastros/plano-despesas').catch(() => [] as any[]);
         setPlanoDespesas(planoDespesasData || []);
       } catch (e) {
         setPlanoDespesas([]);
       }
 
       try {
-        const { data: planoReceitasData } = await (supabase as any)
-          .from('plano_receitas')
-          .select('*')
-          .eq('empresa_id', empresaId)
-          .eq('ativo', true);
-        
-        setPlanoReceitas(planoReceitasData || []);
+        // Filtro ativo=true replicado no cliente (backend retorna todos os registros do tenant)
+        const planoReceitasData = await api.get<any[]>('/financeiro/cadastros/plano-receitas').catch(() => [] as any[]);
+        setPlanoReceitas((planoReceitasData || []).filter((p: any) => p.ativo !== false));
       } catch (e) {
         setPlanoReceitas([]);
       }
 
       try {
-        const { data: contasBancariasData } = await (supabase as any)
-          .from('contas_bancarias')
-          .select('*')
-          .eq('empresa_id', empresaId)
-          .eq('ativo', true);
-        
-        setContasBancarias(contasBancariasData || []);
+        // Filtro ativo=true replicado no cliente (backend retorna todos os registros do tenant)
+        const contasBancariasData = await api.get<any[]>('/financeiro/cadastros/contas-bancarias').catch(() => [] as any[]);
+        setContasBancarias((contasBancariasData || []).filter((c: any) => c.ativo !== false));
       } catch (e) {
         setContasBancarias([]);
       }

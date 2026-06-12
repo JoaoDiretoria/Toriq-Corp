@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { 
   Plus, 
   Search, 
@@ -79,18 +79,12 @@ export function ToriqCorpContratos() {
   const loadContratos = async () => {
     try {
       setLoading(true);
-      const { data, error } = await (supabase as any)
-        .from('contratos')
-        .select(`
-          *,
-          cliente:clientes_sst(nome),
-          parceiro:empresas_parceiras(nome)
-        `)
-        .eq('empresa_id', empresaId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setContratos(data || []);
+      const data = await api.get<any[]>('/contratos').catch(() => [] as any[]);
+      // Ordena por created_at desc (o backend não garante ordenação)
+      const sorted = (data || []).sort(
+        (a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+      setContratos(sorted);
     } catch (error) {
       console.error('Erro ao carregar contratos:', error);
     } finally {
@@ -100,15 +94,12 @@ export function ToriqCorpContratos() {
 
   const loadModelos = async () => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('modelos_contrato')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .eq('ativo', true)
-        .order('nome');
-
-      if (error) throw error;
-      setModelos(data || []);
+      const data = await api.get<any[]>('/modelos').catch(() => [] as any[]);
+      // Filtra apenas modelos ativos e ordena por nome (backend devolve tudo)
+      const filtered = (data || [])
+        .filter((m: any) => m.ativo !== false)
+        .sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || ''));
+      setModelos(filtered);
     } catch (error) {
       console.error('Erro ao carregar modelos:', error);
     }
@@ -133,83 +124,52 @@ export function ToriqCorpContratos() {
 
   const handleDuplicarContrato = async (contrato: Contrato) => {
     try {
-      // Gerar novo número
-      const ano = new Date().getFullYear();
-      const { data: lastContrato } = await (supabase as any)
-        .from('contratos')
-        .select('numero')
-        .eq('empresa_id', empresaId)
-        .like('numero', `TQ-${ano}-%`)
-        .order('numero', { ascending: false })
-        .limit(1)
-        .single();
-
-      let novoNumero = 1;
-      if (lastContrato?.numero) {
-        const parts = lastContrato.numero.split('-');
-        novoNumero = parseInt(parts[2]) + 1;
-      }
-      const numero = `TQ-${ano}-${String(novoNumero).padStart(4, '0')}`;
-
-      // Criar cópia do contrato
-      const { id, created_at, updated_at, ...contratoData } = contrato as any;
-      const { data: novoContrato, error } = await (supabase as any)
-        .from('contratos')
-        .insert({
-          ...contratoData,
-          numero,
-          status: 'rascunho',
-          assinado: false,
-          data_assinatura: null,
-          assinante_nome: null,
-          assinante_cpf: null
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
+      // Criar cópia do contrato — o backend gera o número automaticamente
+      const { id, created_at, updated_at, cliente, parceiro, ...contratoData } = contrato as any;
+      const novoContrato = await api.post<any>('/contratos', {
+        ...contratoData,
+        status: 'rascunho',
+        assinado: false,
+        data_assinatura: null,
+        assinante_nome: null,
+        assinante_cpf: null
+      });
 
       // Copiar cláusulas
-      const { data: clausulas } = await (supabase as any)
-        .from('contrato_clausulas')
-        .select('*')
-        .eq('contrato_id', contrato.id);
-
+      const clausulas = await api.get<any[]>(`/contratos/${contrato.id}/clausulas`).catch(() => [] as any[]);
       if (clausulas?.length) {
-        await (supabase as any)
-          .from('contrato_clausulas')
-          .insert(clausulas.map((c: any) => ({
-            contrato_id: novoContrato.id,
-            numero: c.numero,
-            titulo: c.titulo,
-            conteudo: c.conteudo,
-            ordem: c.ordem
-          })));
+        await Promise.all(
+          clausulas.map((c: any) =>
+            api.post(`/contratos/${novoContrato.id}/clausulas`, {
+              numero: c.numero,
+              titulo: c.titulo,
+              conteudo: c.conteudo,
+              ordem: c.ordem
+            }).catch(() => null)
+          )
+        );
       }
 
       // Copiar módulos
-      const { data: modulosContrato } = await (supabase as any)
-        .from('contrato_modulos')
-        .select('*')
-        .eq('contrato_id', contrato.id);
-
+      const modulosContrato = await api.get<any[]>(`/contratos/${contrato.id}/modulos`).catch(() => [] as any[]);
       if (modulosContrato?.length) {
-        await (supabase as any)
-          .from('contrato_modulos')
-          .insert(modulosContrato.map((m: any) => ({
-            contrato_id: novoContrato.id,
-            nome: m.nome,
-            versao: m.versao,
-            tipo_cliente: m.tipo_cliente,
-            descricao: m.descricao,
-            itens: m.itens,
-            ordem: m.ordem
-          })));
+        await Promise.all(
+          modulosContrato.map((m: any) =>
+            api.post(`/contratos/${novoContrato.id}/modulos`, {
+              nome: m.nome,
+              versao: m.versao,
+              tipo_cliente: m.tipo_cliente,
+              descricao: m.descricao,
+              itens: m.itens,
+              ordem: m.ordem
+            }).catch(() => null)
+          )
+        );
       }
 
       toast({
         title: 'Contrato duplicado',
-        description: `Novo contrato ${numero} criado com sucesso.`
+        description: `Novo contrato ${novoContrato.numero} criado com sucesso.`
       });
 
       loadContratos();
@@ -227,12 +187,7 @@ export function ToriqCorpContratos() {
     if (!confirm('Tem certeza que deseja excluir este contrato?')) return;
 
     try {
-      const { error } = await (supabase as any)
-        .from('contratos')
-        .delete()
-        .eq('id', contrato.id);
-
-      if (error) throw error;
+      await api.del(`/contratos/${contrato.id}`);
 
       toast({
         title: 'Contrato excluído',
@@ -602,14 +557,10 @@ function ModelosContrato({
   const loadModelos = async () => {
     try {
       setLoading(true);
-      const { data, error } = await (supabase as any)
-        .from('modelos_contrato')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('nome');
-
-      if (error) throw error;
-      setModelos(data || []);
+      const data = await api.get<any[]>('/modelos').catch(() => [] as any[]);
+      // Ordena por nome (backend não garante ordenação)
+      const sorted = (data || []).sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || ''));
+      setModelos(sorted);
     } catch (error) {
       console.error('Erro ao carregar modelos:', error);
     } finally {
@@ -620,22 +571,10 @@ function ModelosContrato({
   const handleSave = async () => {
     try {
       if (editingModelo) {
-        const { error } = await (supabase as any)
-          .from('modelos_contrato')
-          .update(formData)
-          .eq('id', editingModelo.id);
-
-        if (error) throw error;
+        await api.put(`/modelos/${editingModelo.id}`, formData);
         toast({ title: 'Modelo atualizado com sucesso' });
       } else {
-        const { error } = await (supabase as any)
-          .from('modelos_contrato')
-          .insert({
-            ...formData,
-            empresa_id: empresaId
-          });
-
-        if (error) throw error;
+        await api.post('/modelos', formData);
         toast({ title: 'Modelo criado com sucesso' });
       }
 
@@ -657,12 +596,7 @@ function ModelosContrato({
     if (!confirm('Tem certeza que deseja excluir este modelo?')) return;
 
     try {
-      const { error } = await (supabase as any)
-        .from('modelos_contrato')
-        .delete()
-        .eq('id', modelo.id);
-
-      if (error) throw error;
+      await api.del(`/modelos/${modelo.id}`);
       toast({ title: 'Modelo excluído com sucesso' });
       loadModelos();
     } catch (error) {

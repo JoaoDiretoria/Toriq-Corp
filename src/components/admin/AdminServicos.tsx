@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -59,8 +59,7 @@ import {
   Tag,
 } from 'lucide-react';
 
-// ID fixo da empresa Toriq
-const TORIQ_EMPRESA_ID = '11111111-1111-1111-1111-111111111111';
+// empresa_id injetado pelo token no backend — não é necessário no front
 
 interface Servico {
   id: string;
@@ -132,8 +131,6 @@ export function AdminServicos() {
     destaque: false,
   });
 
-  const empresaId = TORIQ_EMPRESA_ID;
-
   useEffect(() => {
     fetchServicos();
   }, []);
@@ -141,15 +138,13 @@ export function AdminServicos() {
   const fetchServicos = async () => {
     setLoading(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('servicos')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('ordem', { ascending: true })
-        .order('nome');
-      
-      if (error) throw error;
-      setServicos((data || []) as Servico[]);
+      const data = await api.get<any[]>('/produtos/servicos').catch(() => [] as any[]);
+      // reaplica ordenação cliente (backend não garante ordem)
+      const sorted = (data || []).slice().sort((a: any, b: any) => {
+        if (a.ordem !== b.ordem) return (a.ordem ?? 0) - (b.ordem ?? 0);
+        return (a.nome ?? '').localeCompare(b.nome ?? '');
+      });
+      setServicos(sorted as Servico[]);
     } catch (error) {
       console.error('Erro ao buscar serviços:', error);
       toast({
@@ -205,7 +200,6 @@ export function AdminServicos() {
 
     try {
       const payload = {
-        empresa_id: empresaId,
         nome: formData.nome.trim(),
         descricao: formData.descricao.trim() || null,
         categoria: formData.categoria || null,
@@ -218,22 +212,13 @@ export function AdminServicos() {
       };
 
       if (editingServico) {
-        const { error } = await (supabase as any)
-          .from('servicos')
-          .update(payload)
-          .eq('id', editingServico.id);
-        
-        if (error) throw error;
+        await api.put(`/produtos/servicos/${editingServico.id}`, payload);
         toast({
           title: 'Sucesso',
           description: 'Serviço atualizado com sucesso.',
         });
       } else {
-        const { error } = await (supabase as any)
-          .from('servicos')
-          .insert(payload);
-        
-        if (error) throw error;
+        await api.post('/produtos/servicos', payload);
         toast({
           title: 'Sucesso',
           description: 'Serviço cadastrado com sucesso.',
@@ -256,13 +241,8 @@ export function AdminServicos() {
     if (!servicoToDelete) return;
 
     try {
-      const { error } = await (supabase as any)
-        .from('servicos')
-        .delete()
-        .eq('id', servicoToDelete.id);
-      
-      if (error) throw error;
-      
+      await api.del(`/produtos/servicos/${servicoToDelete.id}`);
+
       toast({
         title: 'Sucesso',
         description: 'Serviço excluído com sucesso.',

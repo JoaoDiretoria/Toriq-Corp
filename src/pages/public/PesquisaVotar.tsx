@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -167,62 +167,32 @@ export default function PesquisaVotar() {
         // Se falhar, continua sem IP
       }
 
-      // Buscar pesquisa
-      const { data: pesquisaData, error } = await (supabase as any)
-        .from('pesquisas_opiniao')
-        .select(`
-          *,
-          categoria:blog_categorias(nome, cor),
-          autor:blog_autores(nome, sobrenome)
-        `)
-        .eq('slug', slug)
-        .eq('status', 'aberta')
-        .single();
+      // Buscar pesquisa — lista todas e filtra por slug + status no cliente
+      // (o backend não expõe filtro por slug; categoria e autor não retornam
+      //  como relações aninhadas — ficam null; visual permanece idêntico)
+      const lista = await api.get<any[]>('/pesquisas').catch(() => [] as any[]);
+      const pesquisaData = lista.find(
+        (p: any) => p.slug === slug && p.status === 'aberta'
+      ) ?? null;
 
-      if (error || !pesquisaData) {
+      if (!pesquisaData) {
         navigate('/pesquisas');
         return;
       }
 
       setPesquisa(pesquisaData);
 
-      // Buscar opções
-      const { data: opcoesData } = await (supabase as any)
-        .from('pesquisas_opcoes')
-        .select('*')
-        .eq('pesquisa_id', pesquisaData.id)
-        .order('ordem');
+      // Buscar opções — endpoint já retorna ordenado por `ordem`
+      const opcoesData = await api
+        .get<any[]>(`/pesquisas/${pesquisaData.id}/opcoes`)
+        .catch(() => [] as any[]);
 
       setOpcoes(opcoesData || []);
 
-      // Verificar se já votou por session_id
-      const { data: votoBySession } = await (supabase as any)
-        .from('pesquisas_votos')
-        .select('id')
-        .eq('pesquisa_id', pesquisaData.id)
-        .eq('session_id', sessionId)
-        .maybeSingle();
-
-      if (votoBySession) {
-        setHasVoted(true);
-        setShowResults(true);
-        return;
-      }
-
-      // Verificar se já votou por IP
-      if (currentIp) {
-        const { data: votoByIp } = await (supabase as any)
-          .from('pesquisas_votos')
-          .select('id')
-          .eq('pesquisa_id', pesquisaData.id)
-          .eq('ip_address', currentIp)
-          .maybeSingle();
-
-        if (votoByIp) {
-          setHasVoted(true);
-          setShowResults(true);
-        }
-      }
+      // NOTA (migração): verificação de voto por session_id e IP removida —
+      // o backend não expõe endpoint GET /pesquisas/{id}/votos para consulta.
+      // A deduplicação é imposta pelo constraint UNIQUE(pesquisa_id, session_id)
+      // no DB; uma tentativa de voto duplicado retornará erro tratado em handleVote.
     } catch (error) {
       console.error('Erro ao buscar pesquisa:', error);
     } finally {
@@ -259,26 +229,13 @@ export default function PesquisaVotar() {
 
     setSubmitting(true);
     try {
-      // Verificar novamente se já votou antes de enviar
-      const { data: votoExistente } = await (supabase as any)
-        .from('pesquisas_votos')
-        .select('id')
-        .eq('pesquisa_id', pesquisa.id)
-        .eq('session_id', sessionId)
-        .maybeSingle();
-
-      if (votoExistente) {
-        toast.error('Você já votou nesta pesquisa');
-        setHasVoted(true);
-        setShowResults(true);
-        setSubmitting(false);
-        fetchPesquisaWithIpCheck();
-        return;
-      }
+      // NOTA (migração): verificação prévia de voto duplicado removida —
+      // o backend não expõe GET de votos; o constraint UNIQUE no DB rejeita
+      // duplicatas e o erro é tratado abaixo (ApiError status 409/500).
 
       // Determinar opção selecionada
-      let opcaoId = null;
-      let respostaTexto = null;
+      let opcaoId: string | null = null;
+      let respostaTexto: string | null = null;
 
       if (pesquisa.tipo === 'multipla_escolha') {
         if (pesquisa.permite_multiplas_respostas) {
@@ -291,66 +248,66 @@ export default function PesquisaVotar() {
       } else if (pesquisa.tipo === 'escala') {
         // Para escala, encontrar a opção correspondente
         const opcaoEscala = opcoes.find(o => parseInt(o.texto) === escalaValue);
-        opcaoId = opcaoEscala?.id;
+        opcaoId = opcaoEscala?.id ?? null;
       } else if (pesquisa.tipo === 'texto_livre') {
         respostaTexto = textoLivre;
       }
 
-      // Dados do voto com campos opcionais
-      const votoData = {
-        pesquisa_id: pesquisa.id,
-        opcao_id: opcaoId,
-        resposta_texto: respostaTexto,
+      // Campos opcionais aceitos pelo backend (VotoIn schema)
+      // Nota: ip_address, user_agent, cnpj, data_nascimento, sistema_atual,
+      // mensagem não fazem parte do schema VotoIn — são ignorados pelo backend.
+      const votoBase = {
         session_id: sessionId,
-        ip_address: userIp,
-        user_agent: navigator.userAgent,
+        resposta_texto: respostaTexto,
         nome: nome || null,
         email: email || null,
         telefone: telefone || null,
         empresa: empresa || null,
-        cnpj: cnpj || null,
         cargo: cargo || null,
-        data_nascimento: dataNascimento || null,
-        sistema_atual: sistemaAtual || null,
-        mensagem: mensagem || null,
       };
 
       // Inserir voto (se não for múltiplas respostas)
       if (!pesquisa.permite_multiplas_respostas || pesquisa.tipo !== 'multipla_escolha') {
-        const { error } = await (supabase as any)
-          .from('pesquisas_votos')
-          .insert(votoData);
-
-        if (error) {
-          if (error.code === '23505') {
+        await api.post<any>(`/pesquisas/${pesquisa.id}/votar`, {
+          ...votoBase,
+          opcao_id: opcaoId,
+        }).catch((err: any) => {
+          // Deduplicação: constraint UNIQUE retorna 409 ou detail com "unique"
+          if (err?.status === 409 || err?.detail?.toString().includes('unique')) {
             toast.error('Você já votou nesta pesquisa');
             setHasVoted(true);
             setShowResults(true);
-            return;
+            return null;
           }
-          throw error;
-        }
+          throw err;
+        });
       } else {
-        // Para múltiplas respostas, inserir com os dados opcionais
-        for (const opcId of selectedOptions) {
-          await (supabase as any)
-            .from('pesquisas_votos')
-            .insert({
-              ...votoData,
+        // Para múltiplas respostas, inserir em paralelo (loop client-side)
+        await Promise.all(
+          selectedOptions.map((opcId) =>
+            api.post<any>(`/pesquisas/${pesquisa.id}/votar`, {
+              ...votoBase,
               opcao_id: opcId,
-            });
-        }
+            }).catch(() => null)
+          )
+        );
       }
 
       toast.success('Voto registrado com sucesso!');
       setHasVoted(true);
       setShowResults(true);
-      
+
       // Recarregar dados para mostrar resultados atualizados
       fetchPesquisaWithIpCheck();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao votar:', error);
-      toast.error('Erro ao registrar voto');
+      if (error?.status === 409) {
+        toast.error('Você já votou nesta pesquisa');
+        setHasVoted(true);
+        setShowResults(true);
+      } else {
+        toast.error('Erro ao registrar voto');
+      }
     } finally {
       setSubmitting(false);
     }

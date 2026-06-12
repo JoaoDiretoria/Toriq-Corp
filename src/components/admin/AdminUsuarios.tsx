@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -93,20 +93,21 @@ export function AdminUsuarios() {
   }, []);
 
   const fetchData = async () => {
-    const [profilesRes, empresasRes] = await Promise.all([
-      supabase.from('profiles').select('*').order('nome'),
-      supabase.from('empresas').select('id, nome').order('nome'),
+    const [profilesData, empresasData] = await Promise.all([
+      api.get<Profile[]>('/admin/users').catch(() => [] as Profile[]),
+      api.get<Empresa[]>('/empresas').catch(() => [] as Empresa[]),
     ]);
 
-    if (profilesRes.error) {
+    if (!profilesData) {
       toast.error('Erro ao carregar usuários');
-      console.error(profilesRes.error);
     } else {
-      setProfiles(profilesRes.data || []);
+      const sorted = [...profilesData].sort((a, b) => a.nome.localeCompare(b.nome));
+      setProfiles(sorted);
     }
 
-    if (!empresasRes.error) {
-      setEmpresas(empresasRes.data || []);
+    if (empresasData) {
+      const sortedEmpresas = [...empresasData].sort((a, b) => a.nome.localeCompare(b.nome));
+      setEmpresas(sortedEmpresas);
     }
 
     setLoading(false);
@@ -157,43 +158,29 @@ export function AdminUsuarios() {
     }
     
     setSaving(true);
-    
+
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      const response = await supabase.functions.invoke('admin-create-user', {
-        body: {
-          email: createFormData.email,
-          password: createFormData.password,
-          nome: createFormData.nome,
-          role: createFormData.role,
-          empresa_id: createFormData.empresa_id || null,
-          send_invite: true,
-        },
+      const result = await api.post<any>('/admin/users', {
+        email: createFormData.email,
+        password: createFormData.password || undefined,
+        nome: createFormData.nome,
+        role: createFormData.role,
+        empresa_id: createFormData.empresa_id || null,
       });
 
-      if (response.error) {
-        throw new Error(response.error.message);
-      }
-
-      if (response.data?.error) {
-        toast.error(response.data.error);
-      } else if (response.data?.warning) {
-        toast.warning(response.data.warning);
-        setCreateDialogOpen(false);
-        resetForm();
-        fetchData();
+      if (result?.temp_password) {
+        toast.success(`Usuário criado com sucesso! Senha temporária: ${result.temp_password}`);
       } else {
         toast.success('Usuário criado com sucesso!');
-        setCreateDialogOpen(false);
-        resetForm();
-        fetchData();
       }
+      setCreateDialogOpen(false);
+      resetForm();
+      fetchData();
     } catch (error: any) {
       console.error('Error creating user:', error);
-      toast.error('Erro ao criar usuário: ' + error.message);
+      toast.error('Erro ao criar usuário: ' + (error?.detail || error.message));
     }
-    
+
     setSaving(false);
   };
 
@@ -224,69 +211,25 @@ export function AdminUsuarios() {
     }
     
     setSaving(true);
-    
-    // Check for duplicate email if changed
-    if (formData.email !== selectedProfile.email) {
-      const { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', formData.email)
-        .neq('id', selectedProfile.id)
-        .maybeSingle();
-      
-      if (existingProfile) {
-        toast.error('Este email já está em uso por outro usuário');
-        setSaving(false);
-        return;
-      }
-    }
 
-    // Update profile in database
-    const { error } = await supabase
-      .from('profiles')
-      .update({
+    try {
+      // NOTE (migração): AdminUserUpdateIn só aceita nome, role e ativo.
+      // Alteração de email e empresa_id não têm endpoint equivalente no backend novo;
+      // esses campos são ignorados na atualização (degrade gracioso).
+      await api.put<any>(`/admin/users/${selectedProfile.id}`, {
         nome: formData.nome,
-        email: formData.email,
-        role: formData.role as 'admin_vertical' | 'cliente_torq' | 'cliente_final',
-        empresa_id: formData.empresa_id || null,
-      })
-      .eq('id', selectedProfile.id);
+        role: formData.role,
+      });
 
-    if (error) {
-      toast.error('Erro ao atualizar usuário: ' + error.message);
+      if (formData.email !== selectedProfile.email) {
+        toast.warning('Perfil atualizado. Alteração de email não disponível nesta versão.');
+      } else {
+        toast.success('Usuário atualizado com sucesso!');
+      }
+    } catch (error: any) {
+      toast.error('Erro ao atualizar usuário: ' + (error?.detail || error.message));
       setSaving(false);
       return;
-    }
-
-    // If email changed, update in auth.users via Edge Function
-    if (formData.email !== selectedProfile.email) {
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        
-        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-update-user`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${sessionData.session?.access_token}`,
-          },
-          body: JSON.stringify({
-            userId: selectedProfile.id,
-            email: formData.email,
-          }),
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-          toast.warning(`Perfil atualizado, mas erro ao atualizar credenciais: ${result.error || 'Erro desconhecido'}`);
-        } else {
-          toast.success('Usuário atualizado com sucesso! O usuário precisará fazer login novamente.');
-        }
-      } catch (error) {
-        toast.warning('Perfil atualizado, mas erro ao atualizar credenciais de login');
-      }
-    } else {
-      toast.success('Usuário atualizado com sucesso!');
     }
 
     setEditDialogOpen(false);
@@ -317,33 +260,15 @@ export function AdminUsuarios() {
     setDeleting(true);
 
     try {
-      // Get session for authorization
-      const { data: sessionData } = await supabase.auth.getSession();
-      
-      // Call Edge Function to delete user from both profiles and auth.users
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-delete-user`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${sessionData.session?.access_token}`,
-        },
-        body: JSON.stringify({
-          userId: profileToDelete.id,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        toast.error('Erro ao excluir usuário: ' + (result.error || 'Erro desconhecido'));
-      } else {
-        toast.success('Usuário excluído com sucesso!');
-        fetchData();
-      }
-    } catch (error) {
-      toast.error('Erro ao excluir usuário');
+      // NOTE (migração): DELETE /admin/users/{id} desativa o usuário (ativo=false)
+      // em vez de remover fisicamente do banco — comportamento equivalente ao legado.
+      await api.del<any>(`/admin/users/${profileToDelete.id}`);
+      toast.success('Usuário excluído com sucesso!');
+      fetchData();
+    } catch (error: any) {
+      toast.error('Erro ao excluir usuário: ' + (error?.detail || error.message || 'Erro desconhecido'));
     }
-    
+
     setDeleting(false);
     setDeleteDialogOpen(false);
     setProfileToDelete(null);
@@ -359,39 +284,19 @@ export function AdminUsuarios() {
     setSendingResetPassword(profile.id);
 
     try {
-      // Usar Edge Function admin-reset-password que não requer CAPTCHA
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
+      // NOTE (migração): o backend novo gera uma senha temporária aleatória e a
+      // devolve em temp_password. Não há envio de email nesta versão — a senha
+      // temporária é exibida no toast para o admin repassar ao usuário.
+      const result = await api.post<any>(`/admin/users/${profile.id}/reset-password`, {});
 
-      if (!accessToken) {
-        throw new Error('Sessão não encontrada');
+      if (result?.temp_password) {
+        toast.success(`Senha temporária gerada para ${profile.email}: ${result.temp_password}`);
+      } else {
+        toast.success(`Senha redefinida para ${profile.email}`);
       }
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-reset-password`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({
-            email: profile.email,
-            redirectTo: `${window.location.origin}/reset-password`,
-          }),
-        }
-      );
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Erro ao enviar email');
-      }
-
-      toast.success(`Email de redefinição de senha enviado para ${profile.email}`);
     } catch (error: any) {
-      console.error('Erro ao enviar email de reset:', error);
-      toast.error('Erro ao enviar email de redefinição de senha: ' + (error.message || 'Erro desconhecido'));
+      console.error('Erro ao redefinir senha:', error);
+      toast.error('Erro ao redefinir senha: ' + (error?.detail || error.message || 'Erro desconhecido'));
     } finally {
       setSendingResetPassword(null);
     }

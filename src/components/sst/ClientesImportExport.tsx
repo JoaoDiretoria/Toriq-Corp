@@ -20,7 +20,7 @@ import { Label } from '@/components/ui/label';
 import { Download, Upload, FileSpreadsheet, FileText, Loader2, AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, X, Trash2, Pencil } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -535,21 +535,20 @@ export function ClientesImportExport({ clientes, empresaId, usuarios, categorias
 
   // Exportar clientes
   const handleExport = async () => {
-    // Buscar contatos de todos os clientes
+    // Buscar contatos de todos os clientes via GET /sst/clientes/{id}/contatos (um por vez)
     const clienteIds = clientes.map(c => c.id);
-    const { data: todosContatos } = await (supabase as any)
-      .from('cliente_contatos')
-      .select('*')
-      .in('cliente_id', clienteIds)
-      .order('principal', { ascending: false });
+    const contatosResultados = await Promise.all(
+      clienteIds.map(id =>
+        api.get<any[]>(`/sst/clientes/${id}/contatos`).catch(() => [] as any[])
+      )
+    );
 
     // Agrupar contatos por cliente
     const contatosPorCliente: Record<string, ClienteContato[]> = {};
-    (todosContatos || []).forEach((contato: any) => {
-      if (!contatosPorCliente[contato.cliente_id]) {
-        contatosPorCliente[contato.cliente_id] = [];
-      }
-      contatosPorCliente[contato.cliente_id].push(contato);
+    clienteIds.forEach((id, index) => {
+      const lista = (contatosResultados[index] || []) as any[];
+      // Ordenar: principal primeiro (equivalente ao .order('principal', { ascending: false }))
+      contatosPorCliente[id] = lista.sort((a: any, b: any) => (b.principal ? 1 : 0) - (a.principal ? 1 : 0));
     });
 
     const data = clientes.map(cliente => {
@@ -741,13 +740,14 @@ export function ClientesImportExport({ clientes, empresaId, usuarios, categorias
 
       // Buscar CNPJs existentes APENAS dos clientes da mesma empresa SST
       // Uma empresa pode ser cliente de múltiplas empresas SST, então só validamos duplicados dentro da mesma empresa SST
-      const { data: clientesExistentes } = await supabase
-        .from('clientes_sst')
-        .select('cnpj')
-        .eq('empresa_sst_id', empresaId)
-        .not('cnpj', 'is', null);
-      
-      const cnpjsExistentes = new Set(clientesExistentes?.map(c => c.cnpj?.replace(/\D/g, '')) || []);
+      // O backend escopa por empresa_sst_id do token via GET /sst/clientes
+      const clientesExistentes = await api.get<any[]>('/sst/clientes').catch(() => [] as any[]);
+
+      const cnpjsExistentes = new Set(
+        (clientesExistentes || [])
+          .filter((c: any) => c.cnpj != null)
+          .map((c: any) => c.cnpj?.replace(/\D/g, ''))
+      );
 
       // Validar cada linha enriquecida
       const validated: ValidatedRow[] = enrichedData.map((row, index) => {
@@ -913,126 +913,77 @@ export function ClientesImportExport({ clientes, empresaId, usuarios, categorias
     setImportProgress(0);
 
     const results = { success: 0, errors: [] as { row: number; error: string }[] };
-    const createdEmpresas: string[] = []; // Para rollback em caso de erro
+    const createdClienteIds: string[] = []; // Para rollback em caso de erro
 
     try {
       for (let i = 0; i < validatedData.length; i++) {
-        const { rowNumber, data: row, responsavelId, responsavelNome, categoriaId, origemContatoId, siglaGerada } = validatedData[i];
-        
+        const { rowNumber, data: row, responsavelNome, siglaGerada } = validatedData[i];
+
         setImportProgress(Math.round(((i + 1) / validatedData.length) * 100));
 
         const razaoSocial = row['Razão Social']?.toString().trim();
-        const nomeFantasia = row['Nome Fantasia']?.toString().trim() || null;
-
-        // Criar empresa
-        const empresaData = {
-          nome: razaoSocial,
-          razao_social: razaoSocial,
-          nome_fantasia: nomeFantasia,
-          tipo: 'cliente_final' as const,
-          cnpj: row['CNPJ']?.toString().trim() || null,
-          email: row['E-mail']?.toString().trim() || null,
-          telefone: row['Telefone']?.toString().trim() || null,
-          cep: row['CEP']?.toString().trim() || null,
-          endereco: row['Endereço']?.toString().trim() || null,
-          numero: row['Número']?.toString().trim() || null,
-          complemento: row['Complemento']?.toString().trim() || null,
-          bairro: row['Bairro']?.toString().trim() || null,
-          cidade: row['Cidade']?.toString().trim() || null,
-          estado: row['Estado (UF)']?.toString().trim() || null,
-        };
-
-        const { data: empresaCriada, error: empresaError } = await supabase
-          .from('empresas')
-          .insert(empresaData)
-          .select()
-          .single();
-
-        if (empresaError) {
-          // Rollback: deletar todas as empresas criadas
-          for (const empId of createdEmpresas) {
-            await supabase.from('clientes_sst').delete().eq('cliente_empresa_id', empId);
-            await supabase.from('empresas').delete().eq('id', empId);
-          }
-          throw new Error(`Linha ${rowNumber}: Erro ao criar empresa - ${empresaError.message}`);
-        }
-
-        createdEmpresas.push(empresaCriada.id);
-
-        // Criar registro em clientes_sst
         const cnpjValue = row['CNPJ']?.toString().trim() || null;
-        const tipoInscricao = row['Tipo Inscrição (1=CNPJ, 2=CPF, 3=CAEPF, 4=CNO, 5=CGC, 6=CEI)']?.toString().trim() || '1';
-        // Se não tiver número de inscrição eSocial mas tiver CNPJ e tipo for CNPJ (1), usar o CNPJ como número
-        const numeroInscricaoEsocial = row['Número Inscrição eSocial']?.toString().trim() || (tipoInscricao === '1' && cnpjValue ? cnpjValue : null);
-        
+
+        // NOTA (migração): criação de empresa separada não tem endpoint POST /empresas.
+        // O backend cria o cliente diretamente em clientes_sst (empresa_sst_id vem do token).
+        // Campos de endereço/nome_fantasia/tipo_inscricao/numero_inscricao_esocial/cnae_atividade/
+        // responsavel_id/categoria_id/origem_contato_id não estão no ClienteIn do backend;
+        // enviamos apenas os campos suportados pelo schema atual.
         const clienteData = {
-          empresa_sst_id: empresaId,
-          cliente_empresa_id: empresaCriada.id,
           nome: razaoSocial,
           sigla: siglaGerada || null,
           cnpj: cnpjValue,
           email: row['E-mail']?.toString().trim() || null,
           telefone: row['Telefone']?.toString().trim() || null,
-          tipo_inscricao: tipoInscricao,
-          numero_inscricao_esocial: numeroInscricaoEsocial,
           cnae: row['CNAE']?.toString().trim() || null,
-          cnae_atividade: row['Atividade CNAE']?.toString().trim() || null,
           grau_risco: row['Grau de Risco (1, 2, 3 ou 4)']?.toString().trim() || null,
           porte_empresa: row['Porte (MEI, ME, EPP, MEDIO, GRANDE)']?.toString().trim() || null,
-          responsavel_id: responsavelId,
           responsavel: responsavelNome,
-          categoria_id: categoriaId,
-          origem_contato_id: origemContatoId,
         };
 
-        const { data: clienteCriado, error: clienteError } = await supabase
-          .from('clientes_sst')
-          .insert(clienteData)
-          .select()
-          .single();
-
-        if (clienteError) {
-          // Rollback: deletar todas as empresas criadas
-          for (const empId of createdEmpresas) {
-            await supabase.from('clientes_sst').delete().eq('cliente_empresa_id', empId);
-            await supabase.from('empresas').delete().eq('id', empId);
-          }
-          throw new Error(`Linha ${rowNumber}: Erro ao criar cliente - ${clienteError.message}`);
+        let clienteCriado: any;
+        try {
+          clienteCriado = await api.post<any>('/sst/clientes', clienteData);
+        } catch (e: any) {
+          // Rollback: deletar todos os clientes criados
+          await Promise.all(
+            createdClienteIds.map(id =>
+              api.del(`/sst/clientes/${id}`).catch(() => undefined)
+            )
+          );
+          throw new Error(`Linha ${rowNumber}: Erro ao criar cliente - ${e?.detail || e?.message || e}`);
         }
 
-        // Criar contato principal se informado
+        createdClienteIds.push(clienteCriado.id);
+
+        // Criar contato principal se informado via POST /sst/clientes/{id}/contatos
         const contatoNome = row['Contato - Nome']?.toString().trim();
         if (contatoNome) {
-          await (supabase as any)
-            .from('cliente_contatos')
-            .insert({
-              cliente_id: clienteCriado.id,
-              nome: contatoNome,
-              cargo: row['Contato - Cargo']?.toString().trim() || null,
-              email: row['Contato - E-mail']?.toString().trim() || null,
-              telefone: row['Contato - Telefone']?.toString().trim() || null,
-              linkedin: row['Contato - LinkedIn']?.toString().trim() || null,
-              principal: true,
-            });
+          await api.post<any>(`/sst/clientes/${clienteCriado.id}/contatos`, {
+            nome: contatoNome,
+            cargo: row['Contato - Cargo']?.toString().trim() || null,
+            email: row['Contato - E-mail']?.toString().trim() || null,
+            telefone: row['Contato - Telefone']?.toString().trim() || null,
+            linkedin: row['Contato - LinkedIn']?.toString().trim() || null,
+            principal: true,
+          }).catch((e: any) => {
+            console.warn(`Aviso: Erro ao criar contato para ${razaoSocial}:`, e?.detail || e?.message || e);
+          });
         }
 
-        // Criar usuário admin se informado (não faz rollback se falhar)
+        // Criar usuário admin se informado via POST /admin/users (não faz rollback se falhar)
         const adminNome = row['Nome do Administrador']?.toString().trim();
         const adminEmail = row['E-mail do Administrador']?.toString().trim();
-        
+
         if (adminNome && adminEmail) {
           try {
-            await supabase.functions.invoke('admin-create-user', {
-              body: {
-                email: adminEmail,
-                nome: adminNome,
-                role: 'cliente_final',
-                empresa_id: empresaCriada.id,
-                send_invite: true,
-              },
+            await api.post<any>('/admin/users', {
+              email: adminEmail,
+              nome: adminNome,
+              role: 'cliente_torq',
             });
           } catch (e: any) {
-            console.warn(`Aviso: Erro ao criar admin para ${razaoSocial}:`, e?.message || e);
+            console.warn(`Aviso: Erro ao criar admin para ${razaoSocial}:`, e?.detail || e?.message || e);
           }
         }
 

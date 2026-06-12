@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchGitHubReleases, ParsedRelease } from '@/services/githubReleasesService';
 
@@ -47,15 +47,15 @@ export function useSystemUpdates() {
       // Registrar cada release no banco (se não existir)
       for (const release of releases) {
         try {
-          await (supabase as any).rpc('register_app_update', {
-            p_version: release.version,
-            p_title: release.title,
-            p_description: release.description || null,
-            p_changelog: release.changelog,
-            p_release_date: release.releaseDate,
+          await api.post<any>('/sistema/system-updates', {
+            version: release.version,
+            title: release.title,
+            description: release.description || null,
+            changelog: release.changelog,
+            release_date: release.releaseDate,
           });
         } catch (e) {
-          // Ignora erro de versão duplicada
+          // Ignora erro de versão duplicada ou sem permissão (admin_vertical required)
         }
       }
       
@@ -75,17 +75,7 @@ export function useSystemUpdates() {
       // Sincronizar releases do GitHub primeiro
       await syncGitHubReleases();
 
-      const { data: updates, error: updatesError } = await (supabase as any)
-        .from('system_updates')
-        .select('*')
-        .eq('is_active', true)
-        .order('release_date', { ascending: false });
-
-      if (updatesError) {
-        console.error('Erro ao buscar atualizações:', updatesError);
-        setLoading(false);
-        return;
-      }
+      const updates: SystemUpdate[] = await api.get<SystemUpdate[]>('/sistema/system-updates?apenas_ativos=true').catch(() => [] as SystemUpdate[]);
 
       if (!updates || updates.length === 0) {
         setPendingUpdates([]);
@@ -93,23 +83,14 @@ export function useSystemUpdates() {
         return;
       }
 
-      const { data: viewedData, error: viewedError } = await (supabase as any)
-        .from('user_update_views')
-        .select('update_id')
-        .eq('user_id', user.id);
-
-      if (viewedError) {
-        console.error('Erro ao verificar visualizações:', viewedError);
-        setLoading(false);
-        return;
-      }
+      const viewedData: { update_id: string }[] = await api.get<{ update_id: string }[]>('/sistema/system-updates/views/me').catch(() => [] as { update_id: string }[]);
 
       const viewedIds = new Set((viewedData || []).map((v: { update_id: string }) => v.update_id));
-      
+
       // Filtrar notificações: não vistas E lançadas após a criação do usuário
       const userCreatedAt = profile?.created_at ? new Date(profile.created_at) : null;
-      
-      const unseenUpdates = (updates as SystemUpdate[]).filter(u => {
+
+      const unseenUpdates = updates.filter(u => {
         // Já foi vista? Ignorar
         if (viewedIds.has(u.id)) return false;
         
@@ -155,20 +136,9 @@ export function useSystemUpdates() {
     console.log('[markAsViewed] Marcando como vista:', updateId, 'para user:', user.id);
 
     try {
-      const { data, error } = await (supabase as any)
-        .from('user_update_views')
-        .insert({
-          user_id: user.id,
-          update_id: updateId
-        })
-        .select();
+      const data = await api.post<any>(`/sistema/system-updates/${updateId}/visto`).catch(() => null);
 
-      console.log('[markAsViewed] Resultado:', { data, error });
-
-      if (error && error.code !== '23505') {
-        console.error('Erro ao marcar atualização como vista:', error);
-        // Mesmo com erro, remover da lista para não travar o usuário
-      }
+      console.log('[markAsViewed] Resultado:', { data });
 
       // Avança para a próxima atualização ou limpa se era a última
       setPendingUpdates(prev => {

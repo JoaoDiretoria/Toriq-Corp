@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -132,50 +132,71 @@ export function AdminTarefas() {
   const loadTarefas = async () => {
     try {
       setLoading(true);
-      
-      // Buscar atividades da tabela closer_atividades (funis do Admin)
-      let query = (supabase as any)
-        .from('closer_atividades')
-        .select(`
-          *,
-          card:closer_cards(
-            titulo,
-            coluna:closer_colunas(nome)
-          )
-        `)
-        .order('prazo', { ascending: true, nullsFirst: false });
 
+      // Buscar atividades via view unificada (inclui closer_atividades)
+      const raw = await api.get<any[]>('/funil-comercial/atividades-unificadas').catch(() => [] as any[]);
+
+      // Filtrar apenas atividades do funil closer e mapear para o shape esperado pelo componente
+      let dados: Tarefa[] = (raw || [])
+        .filter((a: any) => a.funil_origem === 'closer')
+        .map((a: any) => ({
+          id: a.id,
+          card_id: a.card_id,
+          tipo: a.tipo,
+          descricao: a.descricao,
+          prazo: a.prazo ?? null,
+          horario: a.horario ?? null,
+          status: a.status,
+          usuario_id: a.criador_id ?? null,
+          responsavel_id: a.responsavel_id ?? null,
+          created_at: a.created_at,
+          updated_at: a.updated_at,
+          card: a.card_titulo
+            ? {
+                titulo: a.card_titulo,
+                coluna: a.funil_nome ? { nome: a.funil_nome } : undefined,
+              }
+            : undefined,
+        }));
+
+      // Filtros aplicados no cliente (o endpoint devolve tudo escopado por empresa)
       if (filtroStatus === 'pendentes') {
-        query = query.in('status', ['a_realizar', 'programada', 'pendente']);
+        dados = dados.filter(t => ['a_realizar', 'programada', 'pendente'].includes(t.status));
       } else {
-        query = query.eq('status', 'concluida');
+        dados = dados.filter(t => t.status === 'concluida');
       }
 
       if (filtroTipoAtividade) {
-        query = query.eq('tipo', filtroTipoAtividade);
+        dados = dados.filter(t => t.tipo === filtroTipoAtividade);
       }
 
       if (filtroUsuario && filtroUsuario !== 'todos') {
-        query = query.eq('responsavel_id', filtroUsuario);
+        dados = dados.filter(t => t.responsavel_id === filtroUsuario);
       }
 
       if (filtroData === 'hoje') {
         const hoje = new Date().toISOString().split('T')[0];
-        query = query.eq('prazo', hoje);
+        dados = dados.filter(t => t.prazo === hoje);
       } else if (filtroData === 'semana') {
-        const hoje = new Date();
-        const inicioSemana = startOfWeek(hoje, { locale: ptBR }).toISOString().split('T')[0];
-        const fimSemana = endOfWeek(hoje, { locale: ptBR }).toISOString().split('T')[0];
-        query = query.gte('prazo', inicioSemana).lte('prazo', fimSemana);
+        const agora = new Date();
+        const inicioSemana = startOfWeek(agora, { locale: ptBR }).toISOString().split('T')[0];
+        const fimSemana = endOfWeek(agora, { locale: ptBR }).toISOString().split('T')[0];
+        dados = dados.filter(t => t.prazo && t.prazo >= inicioSemana && t.prazo <= fimSemana);
       } else if (filtroData === 'definir' && dataInicio && dataFim) {
-        query = query.gte('prazo', dataInicio.toISOString().split('T')[0]).lte('prazo', dataFim.toISOString().split('T')[0]);
+        const ini = dataInicio.toISOString().split('T')[0];
+        const fim = dataFim.toISOString().split('T')[0];
+        dados = dados.filter(t => t.prazo && t.prazo >= ini && t.prazo <= fim);
       }
 
-      const { data, error } = await query;
+      // Ordenar por prazo ascendente, nulos por último
+      dados.sort((a, b) => {
+        if (!a.prazo && !b.prazo) return 0;
+        if (!a.prazo) return 1;
+        if (!b.prazo) return -1;
+        return a.prazo < b.prazo ? -1 : a.prazo > b.prazo ? 1 : 0;
+      });
 
-      if (error) throw error;
-      
-      setTarefas(data || []);
+      setTarefas(dados);
     } catch (error) {
       console.error('Erro ao carregar tarefas:', error);
       toast({
@@ -190,15 +211,13 @@ export function AdminTarefas() {
 
   const loadUsuarios = async () => {
     try {
-      // Buscar todos os usuários do sistema
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, nome')
-        .not('nome', 'is', null)
-        .order('nome');
-
-      if (error) throw error;
-      setUsuarios(data || []);
+      // Buscar todos os usuários do sistema via hierarquia
+      const data = await api.get<any[]>('/admin/users/hierarquia').catch(() => [] as any[]);
+      const lista: Usuario[] = (data || [])
+        .filter((u: any) => u.nome)
+        .map((u: any) => ({ id: u.id, nome: u.nome }))
+        .sort((a: Usuario, b: Usuario) => a.nome.localeCompare(b.nome));
+      setUsuarios(lista);
     } catch (error) {
       console.error('Erro ao carregar usuários:', error);
     }
@@ -212,36 +231,22 @@ export function AdminTarefas() {
     setDialogOpen(false);
   };
 
-  const handleFinalizarTarefa = async (tarefaId: string) => {
-    try {
-      const { error } = await (supabase as any)
-        .from('closer_atividades')
-        .update({ status: 'concluida', updated_at: new Date().toISOString() })
-        .eq('id', tarefaId);
-
-      if (error) throw error;
-      toast({ title: 'Sucesso', description: 'Tarefa finalizada!' });
-      loadTarefas();
-    } catch (error) {
-      console.error('Erro ao finalizar tarefa:', error);
-      toast({ title: 'Erro', description: 'Não foi possível finalizar a tarefa.', variant: 'destructive' });
-    }
+  // NOTA (migração): mutações de closer_atividades (finalizar/reabrir) não possuem
+  // endpoint REST equivalente no backend — closer_atividades só é exposta via view
+  // somente-leitura (/funil-comercial/atividades-unificadas). Degradação: exibe toast
+  // informativo e recarrega a lista sem alterar o status.
+  const handleFinalizarTarefa = async (_tarefaId: string) => {
+    toast({
+      title: 'Informação',
+      description: 'Para finalizar tarefas do Closer, acesse o card no kanban.',
+    });
   };
 
-  const handleReabrirTarefa = async (tarefaId: string) => {
-    try {
-      const { error } = await (supabase as any)
-        .from('closer_atividades')
-        .update({ status: 'a_realizar', updated_at: new Date().toISOString() })
-        .eq('id', tarefaId);
-
-      if (error) throw error;
-      toast({ title: 'Sucesso', description: 'Tarefa reaberta!' });
-      loadTarefas();
-    } catch (error) {
-      console.error('Erro ao reabrir tarefa:', error);
-      toast({ title: 'Erro', description: 'Não foi possível reabrir a tarefa.', variant: 'destructive' });
-    }
+  const handleReabrirTarefa = async (_tarefaId: string) => {
+    toast({
+      title: 'Informação',
+      description: 'Para reabrir tarefas do Closer, acesse o card no kanban.',
+    });
   };
 
   const getInitials = (nome: string) => nome.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);

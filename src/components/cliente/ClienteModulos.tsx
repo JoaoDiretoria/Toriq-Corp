@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,33 +31,27 @@ export function ClienteModulos() {
         return;
       }
 
-      const { data, error } = await supabase
-        .from('empresas_modulos')
-        .select(`
-          modulo_id,
-          ativo,
-          modulos (
-            id,
-            nome,
-            descricao,
-            icone,
-            rota
-          )
-        `)
-        .eq('empresa_id', empresa.id)
-        .eq('ativo', true);
+      try {
+        const [empresaModulos, catalogoModulos] = await Promise.all([
+          api.get<any[]>('/white-label/empresa-modulos').catch(() => [] as any[]),
+          api.get<any[]>('/white-label/modulos').catch(() => [] as any[]),
+        ]);
 
-      if (error) {
+        const ativos = empresaModulos.filter((item: any) => item.ativo === true);
+        const modulosById = Object.fromEntries(
+          catalogoModulos.map((mod: any) => [mod.id, mod])
+        );
+        const modulosAtivos: Modulo[] = ativos
+          .map((item: any) => modulosById[item.modulo_id])
+          .filter(Boolean) as Modulo[];
+
+        setModulos(modulosAtivos);
+      } catch {
         toast({
           title: "Erro ao carregar módulos",
-          description: error.message,
+          description: "Não foi possível carregar os módulos da empresa.",
           variant: "destructive",
         });
-      } else {
-        const modulosAtivos = data
-          ?.filter(item => item.modulos)
-          .map(item => item.modulos as Modulo) || [];
-        setModulos(modulosAtivos);
       }
       setLoading(false);
     };

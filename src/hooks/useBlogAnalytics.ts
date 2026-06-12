@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 
 const SESSION_KEY = 'blog_session_id';
 const PREFERENCES_KEY = 'blog_user_preferences';
@@ -53,19 +53,16 @@ export function useBlogAnalytics() {
   const trackView = useCallback(async (blogId: string) => {
     try {
       const deviceInfo = getDeviceInfo();
-      
+
       // Registrar visualização
-      await (supabase as any)
-        .from('blog_visualizacoes')
-        .insert({
-          blog_id: blogId,
-          session_id: sessionId,
-          user_agent: deviceInfo.userAgent,
-          device_type: deviceInfo.deviceType,
-          browser: deviceInfo.browser,
-          os: deviceInfo.os,
-          referer: document.referrer || null,
-        });
+      await api.post<any>(`/blog/${blogId}/visualizacoes`, {
+        session_id: sessionId,
+        user_agent: deviceInfo.userAgent,
+        device_type: deviceInfo.deviceType,
+        browser: deviceInfo.browser,
+        os: deviceInfo.os,
+        referer: document.referrer || null,
+      }).catch(() => null);
 
       // Atualizar preferências do usuário
       await updateUserPreferences(blogId, sessionId);
@@ -78,22 +75,17 @@ export function useBlogAnalytics() {
 }
 
 async function updateUserPreferences(blogId: string, sessionId: string) {
+  // NOTA (migração): blog_user_preferences não tem endpoint no backend — lógica
+  // de preferências persiste localmente via localStorage para manter comportamento.
   try {
     // Buscar dados do blog para pegar categoria e tags
-    const { data: blog } = await (supabase as any)
-      .from('blogs')
-      .select('categoria_id, tags')
-      .eq('id', blogId)
-      .single();
+    const blog = await api.get<any>(`/blog/${blogId}`).catch(() => null);
 
     if (!blog) return;
 
-    // Buscar preferências existentes
-    const { data: existingPrefs } = await (supabase as any)
-      .from('blog_user_preferences')
-      .select('*')
-      .eq('session_id', sessionId)
-      .single();
+    // Buscar preferências existentes do localStorage
+    const prefsRaw = localStorage.getItem(PREFERENCES_KEY);
+    const existingPrefs = prefsRaw ? JSON.parse(prefsRaw) : null;
 
     if (existingPrefs) {
       // Atualizar preferências existentes
@@ -123,25 +115,27 @@ async function updateUserPreferences(blogId: string, sessionId: string) {
       // Manter apenas os últimos 50 blogs visualizados
       const recentBlogs = blogsVisualizados.slice(-50);
 
-      await (supabase as any)
-        .from('blog_user_preferences')
-        .update({
+      localStorage.setItem(
+        PREFERENCES_KEY,
+        JSON.stringify({
+          ...existingPrefs,
           categoria_ids: categoriaIds.slice(-10), // Manter últimas 10 categorias
           tags_interesse: tagsInteresse.slice(-30), // Manter últimas 30 tags
           blogs_visualizados: recentBlogs,
           ultimo_acesso: new Date().toISOString(),
         })
-        .eq('session_id', sessionId);
+      );
     } else {
       // Criar novas preferências
-      await (supabase as any)
-        .from('blog_user_preferences')
-        .insert({
+      localStorage.setItem(
+        PREFERENCES_KEY,
+        JSON.stringify({
           session_id: sessionId,
           categoria_ids: blog.categoria_id ? [blog.categoria_id] : [],
           tags_interesse: blog.tags || [],
           blogs_visualizados: [blogId],
-        });
+        })
+      );
     }
   } catch (error) {
     console.error('Erro ao atualizar preferências:', error);
@@ -160,56 +154,57 @@ export function useRecommendedBlogs(currentBlogId?: string) {
   const fetchRecommendations = async () => {
     setLoading(true);
     try {
-      // Buscar preferências do usuário
-      const { data: prefs } = await (supabase as any)
-        .from('blog_user_preferences')
-        .select('*')
-        .eq('session_id', sessionId)
-        .single();
+      // NOTA (migração): blog_user_preferences não tem endpoint no backend —
+      // preferências são lidas do localStorage (persistidas por updateUserPreferences).
+      const prefsRaw = localStorage.getItem(PREFERENCES_KEY);
+      const prefs = prefsRaw ? JSON.parse(prefsRaw) : null;
 
-      let query = (supabase as any)
-        .from('blogs')
-        .select(`
-          id, titulo, slug, descricao, imagem_capa_url, publicado_em, tempo_leitura,
-          categoria:blog_categorias(nome, slug, cor)
-        `)
-        .eq('status', 'publicado')
-        .order('publicado_em', { ascending: false })
-        .limit(6);
+      // Buscar posts publicados (backend já filtra status='publicado')
+      let posts: any[] = await api.get<any[]>('/blog').catch(() => [] as any[]);
 
       // Excluir blog atual
       if (currentBlogId) {
-        query = query.neq('id', currentBlogId);
+        posts = posts.filter((p: any) => p.id !== currentBlogId);
       }
 
       // Excluir blogs já visualizados
       if (prefs?.blogs_visualizados?.length > 0) {
-        query = query.not('id', 'in', `(${prefs.blogs_visualizados.join(',')})`);
+        posts = posts.filter((p: any) => !prefs.blogs_visualizados.includes(p.id));
       }
 
       // Priorizar categorias de interesse
+      let prioritized = posts;
       if (prefs?.categoria_ids?.length > 0) {
-        query = query.in('categoria_id', prefs.categoria_ids);
+        const preferred = posts.filter((p: any) =>
+          prefs.categoria_ids.includes(p.categoria_id)
+        );
+        prioritized = preferred.length > 0 ? preferred : posts;
       }
 
-      const { data } = await query;
+      // Ordenar por publicado_em desc e limitar
+      prioritized = prioritized
+        .sort((a: any, b: any) => {
+          const da = a.publicado_em ? new Date(a.publicado_em).getTime() : 0;
+          const db_ = b.publicado_em ? new Date(b.publicado_em).getTime() : 0;
+          return db_ - da;
+        })
+        .slice(0, 6);
 
-      // Se não houver resultados suficientes, buscar mais
-      if (!data || data.length < 3) {
-        const { data: fallback } = await (supabase as any)
-          .from('blogs')
-          .select(`
-            id, titulo, slug, descricao, imagem_capa_url, publicado_em, tempo_leitura,
-            categoria:blog_categorias(nome, slug, cor)
-          `)
-          .eq('status', 'publicado')
-          .neq('id', currentBlogId || '')
-          .order('publicado_em', { ascending: false })
-          .limit(6);
+      // Se não houver resultados suficientes, buscar mais sem filtros
+      if (prioritized.length < 3) {
+        const fallback = await api.get<any[]>('/blog').catch(() => [] as any[]);
+        const filtered = fallback
+          .filter((p: any) => p.id !== (currentBlogId || ''))
+          .sort((a: any, b: any) => {
+            const da = a.publicado_em ? new Date(a.publicado_em).getTime() : 0;
+            const db_ = b.publicado_em ? new Date(b.publicado_em).getTime() : 0;
+            return db_ - da;
+          })
+          .slice(0, 6);
 
-        setRecommendations(fallback || []);
+        setRecommendations(filtered);
       } else {
-        setRecommendations(data);
+        setRecommendations(prioritized);
       }
     } catch (error) {
       console.error('Erro ao buscar recomendações:', error);
@@ -233,49 +228,38 @@ export function useTrendingBlogs(period: '24h' | '7d' | '30d' = '7d') {
     setLoading(true);
     try {
       // Buscar blogs com contagem de visualizações
-      const intervalMap = {
-        '24h': '1 day',
-        '7d': '7 days',
-        '30d': '30 days',
+      const periodDaysMap = {
+        '24h': 1,
+        '7d': 7,
+        '30d': 30,
       };
 
-      const { data } = await (supabase as any).rpc('get_trending_blogs', {
-        period_interval: intervalMap[period],
-        limit_count: 10,
-      });
+      const data = await api
+        .get<any[]>(`/blog/trending?period_days=${periodDaysMap[period]}&limit=10`)
+        .catch(() => null);
 
-      if (data) {
+      if (data && data.length > 0) {
         setTrending(data);
       } else {
-        // Fallback: buscar blogs mais recentes se a função não existir
-        const { data: fallback } = await (supabase as any)
-          .from('blogs')
-          .select(`
-            id, titulo, slug, descricao, imagem_capa_url, publicado_em, tempo_leitura, visualizacoes,
-            categoria:blog_categorias(nome, slug, cor),
-            autor:blog_autores(nome, sobrenome)
-          `)
-          .eq('status', 'publicado')
-          .order('visualizacoes', { ascending: false })
-          .limit(10);
+        // Fallback: buscar blogs mais recentes se o endpoint não retornar dados
+        const fallback = await api.get<any[]>('/blog').catch(() => [] as any[]);
+        const sorted = fallback
+          .filter((p: any) => p.status === 'publicado')
+          .sort((a: any, b: any) => (b.visualizacoes || 0) - (a.visualizacoes || 0))
+          .slice(0, 10);
 
-        setTrending(fallback || []);
+        setTrending(sorted);
       }
     } catch (error) {
       console.error('Erro ao buscar trending:', error);
       // Fallback
-      const { data: fallback } = await (supabase as any)
-        .from('blogs')
-        .select(`
-          id, titulo, slug, descricao, imagem_capa_url, publicado_em, tempo_leitura, visualizacoes,
-          categoria:blog_categorias(nome, slug, cor),
-          autor:blog_autores(nome, sobrenome)
-        `)
-        .eq('status', 'publicado')
-        .order('visualizacoes', { ascending: false })
-        .limit(10);
+      const fallback = await api.get<any[]>('/blog').catch(() => [] as any[]);
+      const sorted = fallback
+        .filter((p: any) => p.status === 'publicado')
+        .sort((a: any, b: any) => (b.visualizacoes || 0) - (a.visualizacoes || 0))
+        .slice(0, 10);
 
-      setTrending(fallback || []);
+      setTrending(sorted);
     } finally {
       setLoading(false);
     }

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -266,18 +266,21 @@ export function ProdutosServicos() {
 
   const fetchProdutos = async () => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('produtos_servicos')
-        .select(`
-          *,
-          categoria:categorias_produtos(id, nome, cor),
-          forma_cobranca_obj:formas_cobranca(id, nome, periodicidade)
-        `)
-        .eq('empresa_id', empresa?.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setProdutos(data || []);
+      const rawProdutos = await api.get<any[]>('/produtos/catalogo').catch(() => [] as any[]);
+      const cats = await api.get<any[]>('/produtos/categorias').catch(() => [] as any[]);
+      const fcs = await api.get<any[]>('/financeiro/cadastros/formas-cobranca').catch(() => [] as any[]);
+      const catMap: Record<string, any> = {};
+      cats.forEach((c: any) => { catMap[c.id] = c; });
+      const fcMap: Record<string, any> = {};
+      fcs.forEach((f: any) => { fcMap[f.id] = f; });
+      const enriched = (rawProdutos || []).map((p: any) => ({
+        ...p,
+        categoria: p.categoria_id ? catMap[p.categoria_id] || null : null,
+        forma_cobranca_obj: p.forma_cobranca_id ? fcMap[p.forma_cobranca_id] || null : null,
+      }));
+      // Reaplica ordenação por created_at desc (backend não garante)
+      enriched.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      setProdutos(enriched);
     } catch (error: any) {
       console.error('Erro ao buscar produtos:', error);
     }
@@ -285,14 +288,9 @@ export function ProdutosServicos() {
 
   const fetchCategorias = async () => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('categorias_produtos')
-        .select('*')
-        .eq('empresa_id', empresa?.id)
-        .order('nome');
-
-      if (error) throw error;
-      setCategorias(data || []);
+      const data = await api.get<any[]>('/produtos/categorias').catch(() => [] as any[]);
+      const sorted = (data || []).slice().sort((a: any, b: any) => a.nome.localeCompare(b.nome));
+      setCategorias(sorted);
     } catch (error: any) {
       console.error('Erro ao buscar categorias:', error);
     }
@@ -300,22 +298,16 @@ export function ProdutosServicos() {
 
   const fetchPacotes = async () => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('pacotes_produtos')
-        .select(`
-          *,
-          itens:pacotes_produtos_itens(
-            id,
-            produto_id,
-            quantidade,
-            produto:produtos_servicos(id, nome, preco)
-          )
-        `)
-        .eq('empresa_id', empresa?.id)
-        .order('nome');
-
-      if (error) throw error;
-      setPacotes(data || []);
+      const rawPacotes = await api.get<any[]>('/produtos/pacotes').catch(() => [] as any[]);
+      const sorted = (rawPacotes || []).slice().sort((a: any, b: any) => a.nome.localeCompare(b.nome));
+      // Enriquecer com itens de cada pacote
+      const pacotesComItens = await Promise.all(
+        sorted.map(async (pacote: any) => {
+          const itens = await api.get<any[]>(`/produtos/pacotes/${pacote.id}/itens`).catch(() => [] as any[]);
+          return { ...pacote, itens: itens || [] };
+        })
+      );
+      setPacotes(pacotesComItens);
     } catch (error: any) {
       console.error('Erro ao buscar pacotes:', error);
     }
@@ -323,15 +315,11 @@ export function ProdutosServicos() {
 
   const fetchFormasCobranca = async () => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('formas_cobranca')
-        .select('*')
-        .eq('empresa_id', empresa?.id)
-        .eq('ativo', true)
-        .order('nome');
-
-      if (error) throw error;
-      setFormasCobranca(data || []);
+      const data = await api.get<any[]>('/financeiro/cadastros/formas-cobranca').catch(() => [] as any[]);
+      // Reaplica filtro ativo=true e ordenação por nome (cliente-side)
+      const filtered = (data || []).filter((f: any) => f.ativo !== false);
+      filtered.sort((a: any, b: any) => a.nome.localeCompare(b.nome));
+      setFormasCobranca(filtered);
     } catch (error: any) {
       console.error('Erro ao buscar formas de cobrança:', error);
     }
@@ -339,14 +327,9 @@ export function ProdutosServicos() {
 
   const fetchTipos = async () => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('tipos_produtos')
-        .select('*')
-        .eq('empresa_id', empresa?.id)
-        .order('nome');
-
-      if (error) throw error;
-      setTipos(data || []);
+      const data = await api.get<any[]>('/produtos/tipos').catch(() => [] as any[]);
+      const sorted = (data || []).slice().sort((a: any, b: any) => a.nome.localeCompare(b.nome));
+      setTipos(sorted);
     } catch (error: any) {
       console.error('Erro ao buscar tipos:', error);
     }
@@ -354,14 +337,9 @@ export function ProdutosServicos() {
 
   const fetchNaturezas = async () => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('naturezas_produtos')
-        .select('*')
-        .eq('empresa_id', empresa?.id)
-        .order('nome');
-
-      if (error) throw error;
-      setNaturezas(data || []);
+      const data = await api.get<any[]>('/produtos/naturezas').catch(() => [] as any[]);
+      const sorted = (data || []).slice().sort((a: any, b: any) => a.nome.localeCompare(b.nome));
+      setNaturezas(sorted);
     } catch (error: any) {
       console.error('Erro ao buscar naturezas:', error);
     }
@@ -369,14 +347,9 @@ export function ProdutosServicos() {
 
   const fetchClassificacoes = async () => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('classificacoes_produtos')
-        .select('*')
-        .eq('empresa_id', empresa?.id)
-        .order('nome');
-
-      if (error) throw error;
-      setClassificacoes(data || []);
+      const data = await api.get<any[]>('/produtos/classificacoes').catch(() => [] as any[]);
+      const sorted = (data || []).slice().sort((a: any, b: any) => a.nome.localeCompare(b.nome));
+      setClassificacoes(sorted);
     } catch (error: any) {
       console.error('Erro ao buscar classificações:', error);
     }
@@ -384,33 +357,30 @@ export function ProdutosServicos() {
 
   const fetchTreinamentosCatalogo = async () => {
     if (!empresa?.id) return;
-    
+
     try {
       // Verificar se a empresa tem o módulo Toriq Train
-      const { data: modulosData, error: modulosError } = await (supabase as any)
-        .from('empresas_modulos')
-        .select('modulo_id, modulos(nome)')
-        .eq('empresa_id', empresa.id)
-        .eq('ativo', true);
-      
-      if (modulosError) throw modulosError;
-      
-      const temToriqTrain = modulosData?.some((m: any) => 
-        m.modulos?.nome?.toLowerCase().includes('toriq train') || 
-        m.modulos?.nome?.toLowerCase().includes('gestão de treinamentos')
-      );
+      // GET /white-label/empresa-modulos → lista módulos ativos da empresa (sem nested join)
+      // GET /white-label/modulos → catálogo global com nome de cada módulo
+      const [empresaModulosData, todosModulos] = await Promise.all([
+        api.get<any[]>('/white-label/empresa-modulos').catch(() => [] as any[]),
+        api.get<any[]>('/white-label/modulos').catch(() => [] as any[]),
+      ]);
+      // Reaplica filtro ativo=true (cliente-side)
+      const modulosAtivos = (empresaModulosData || []).filter((m: any) => m.ativo !== false);
+      const modulosMap: Record<string, any> = {};
+      (todosModulos || []).forEach((m: any) => { modulosMap[m.id] = m; });
+      const temToriqTrain = modulosAtivos.some((m: any) => {
+        const modNome = modulosMap[m.modulo_id]?.nome?.toLowerCase() || '';
+        return modNome.includes('toriq train') || modNome.includes('gestão de treinamentos');
+      });
       setTemModuloToriqTrain(temToriqTrain || false);
-      
+
       // Se tem o módulo, carregar os treinamentos do catálogo
       if (temToriqTrain) {
-        const { data, error } = await (supabase as any)
-          .from('catalogo_treinamentos')
-          .select('id, nome, norma, ch_formacao, ch_reciclagem')
-          .eq('empresa_id', empresa.id)
-          .order('nome');
-
-        if (error) throw error;
-        setTreinamentosCatalogo(data || []);
+        const data = await api.get<any[]>('/treinamentos/catalogo').catch(() => [] as any[]);
+        const sorted = (data || []).slice().sort((a: any, b: any) => a.nome.localeCompare(b.nome));
+        setTreinamentosCatalogo(sorted);
       }
     } catch (error: any) {
       console.error('Erro ao buscar treinamentos do catálogo:', error);
@@ -514,26 +484,16 @@ export function ProdutosServicos() {
 
     try {
       const tipoData = {
-        empresa_id: empresa?.id,
         nome: tipoForm.nome,
         descricao: tipoForm.descricao || null,
         ativo: true,
       };
 
       if (editingTipo) {
-        const { error } = await (supabase as any)
-          .from('tipos_produtos')
-          .update(tipoData)
-          .eq('id', editingTipo.id);
-
-        if (error) throw error;
+        await api.put(`/produtos/tipos/${editingTipo.id}`, tipoData);
         toast({ title: "Tipo atualizado com sucesso!" });
       } else {
-        const { error } = await (supabase as any)
-          .from('tipos_produtos')
-          .insert(tipoData);
-
-        if (error) throw error;
+        await api.post('/produtos/tipos', tipoData);
         toast({ title: "Tipo cadastrado com sucesso!" });
       }
 
@@ -570,26 +530,16 @@ export function ProdutosServicos() {
 
     try {
       const naturezaData = {
-        empresa_id: empresa?.id,
         nome: naturezaForm.nome,
         descricao: naturezaForm.descricao || null,
         ativo: true,
       };
 
       if (editingNatureza) {
-        const { error } = await (supabase as any)
-          .from('naturezas_produtos')
-          .update(naturezaData)
-          .eq('id', editingNatureza.id);
-
-        if (error) throw error;
+        await api.put(`/produtos/naturezas/${editingNatureza.id}`, naturezaData);
         toast({ title: "Natureza atualizada com sucesso!" });
       } else {
-        const { error } = await (supabase as any)
-          .from('naturezas_produtos')
-          .insert(naturezaData);
-
-        if (error) throw error;
+        await api.post('/produtos/naturezas', naturezaData);
         toast({ title: "Natureza cadastrada com sucesso!" });
       }
 
@@ -626,26 +576,16 @@ export function ProdutosServicos() {
 
     try {
       const classificacaoData = {
-        empresa_id: empresa?.id,
         nome: classificacaoForm.nome,
         descricao: classificacaoForm.descricao || null,
         ativo: true,
       };
 
       if (editingClassificacao) {
-        const { error } = await (supabase as any)
-          .from('classificacoes_produtos')
-          .update(classificacaoData)
-          .eq('id', editingClassificacao.id);
-
-        if (error) throw error;
+        await api.put(`/produtos/classificacoes/${editingClassificacao.id}`, classificacaoData);
         toast({ title: "Classificação atualizada com sucesso!" });
       } else {
-        const { error } = await (supabase as any)
-          .from('classificacoes_produtos')
-          .insert(classificacaoData);
-
-        if (error) throw error;
+        await api.post('/produtos/classificacoes', classificacaoData);
         toast({ title: "Classificação cadastrada com sucesso!" });
       }
 
@@ -682,7 +622,6 @@ export function ProdutosServicos() {
 
     try {
       const produtoData = {
-        empresa_id: empresa?.id,
         nome: produtoForm.nome,
         codigo: produtoForm.codigo || null,
         preco: produtoForm.preco ? parseFloat(produtoForm.preco) : null,
@@ -702,19 +641,10 @@ export function ProdutosServicos() {
       };
 
       if (editingProduto) {
-        const { error } = await (supabase as any)
-          .from('produtos_servicos')
-          .update(produtoData)
-          .eq('id', editingProduto.id);
-
-        if (error) throw error;
+        await api.put(`/produtos/catalogo/${editingProduto.id}`, produtoData);
         toast({ title: "Produto atualizado com sucesso!" });
       } else {
-        const { error } = await (supabase as any)
-          .from('produtos_servicos')
-          .insert(produtoData);
-
-        if (error) throw error;
+        await api.post('/produtos/catalogo', produtoData);
         toast({ title: "Produto cadastrado com sucesso!" });
       }
 
@@ -744,25 +674,15 @@ export function ProdutosServicos() {
 
     try {
       const formaCobrancaData = {
-        empresa_id: empresa?.id,
         nome: formaCobrancaForm.nome,
         periodicidade: formaCobrancaForm.periodicidade,
       };
 
       if (editingFormaCobranca) {
-        const { error } = await (supabase as any)
-          .from('formas_cobranca')
-          .update(formaCobrancaData)
-          .eq('id', editingFormaCobranca.id);
-
-        if (error) throw error;
+        await api.put(`/financeiro/cadastros/formas-cobranca/${editingFormaCobranca.id}`, formaCobrancaData);
         toast({ title: "Forma de cobrança atualizada com sucesso!" });
       } else {
-        const { error } = await (supabase as any)
-          .from('formas_cobranca')
-          .insert(formaCobrancaData);
-
-        if (error) throw error;
+        await api.post('/financeiro/cadastros/formas-cobranca', formaCobrancaData);
         toast({ title: "Forma de cobrança cadastrada com sucesso!" });
       }
 
@@ -799,26 +719,16 @@ export function ProdutosServicos() {
 
     try {
       const categoriaData = {
-        empresa_id: empresa?.id,
         nome: categoriaForm.nome,
         descricao: categoriaForm.descricao || null,
         cor: categoriaForm.cor,
       };
 
       if (editingCategoria) {
-        const { error } = await (supabase as any)
-          .from('categorias_produtos')
-          .update(categoriaData)
-          .eq('id', editingCategoria.id);
-
-        if (error) throw error;
+        await api.put(`/produtos/categorias/${editingCategoria.id}`, categoriaData);
         toast({ title: "Categoria atualizada com sucesso!" });
       } else {
-        const { error } = await (supabase as any)
-          .from('categorias_produtos')
-          .insert(categoriaData);
-
-        if (error) throw error;
+        await api.post('/produtos/categorias', categoriaData);
         toast({ title: "Categoria cadastrada com sucesso!" });
       }
 
@@ -870,7 +780,6 @@ export function ProdutosServicos() {
 
       const precoFixo = pacoteForm.preco_fixo ? parseFloat(pacoteForm.preco_fixo) : null;
       const pacoteData = {
-        empresa_id: empresa?.id,
         nome: pacoteForm.nome,
         descricao: pacoteForm.descricao || null,
         preco_total: precoFixo || precoTotal,
@@ -880,51 +789,37 @@ export function ProdutosServicos() {
       };
 
       if (editingPacote) {
-        const { error: pacoteError } = await (supabase as any)
-          .from('pacotes_produtos')
-          .update(pacoteData)
-          .eq('id', editingPacote.id);
+        await api.put(`/produtos/pacotes/${editingPacote.id}`, pacoteData);
 
-        if (pacoteError) throw pacoteError;
-
-        // Remover itens antigos e adicionar novos
-        await (supabase as any)
-          .from('pacotes_produtos_itens')
-          .delete()
-          .eq('pacote_id', editingPacote.id);
-
-        const { error: itensError } = await (supabase as any)
-          .from('pacotes_produtos_itens')
-          .insert(
-            pacoteForm.produtosSelecionados.map(item => ({
-              pacote_id: editingPacote.id,
+        // Remover itens antigos individualmente e adicionar novos
+        const itensAtuais = await api.get<any[]>(`/produtos/pacotes/${editingPacote.id}/itens`).catch(() => [] as any[]);
+        await Promise.all(
+          (itensAtuais || []).map((item: any) =>
+            api.del(`/produtos/pacotes/${editingPacote.id}/itens/${item.id}`).catch(() => null)
+          )
+        );
+        await Promise.all(
+          pacoteForm.produtosSelecionados.map(item =>
+            api.post(`/produtos/pacotes/${editingPacote.id}/itens`, {
               produto_id: item.produto_id,
               quantidade: item.quantidade,
-            }))
-          );
+            })
+          )
+        );
 
-        if (itensError) throw itensError;
         toast({ title: "Pacote atualizado com sucesso!" });
       } else {
-        const { data: novoPacote, error: pacoteError } = await (supabase as any)
-          .from('pacotes_produtos')
-          .insert(pacoteData)
-          .select()
-          .single();
+        const novoPacote = await api.post<any>('/produtos/pacotes', pacoteData);
 
-        if (pacoteError) throw pacoteError;
-
-        const { error: itensError } = await (supabase as any)
-          .from('pacotes_produtos_itens')
-          .insert(
-            pacoteForm.produtosSelecionados.map(item => ({
-              pacote_id: novoPacote.id,
+        await Promise.all(
+          pacoteForm.produtosSelecionados.map(item =>
+            api.post(`/produtos/pacotes/${novoPacote.id}/itens`, {
               produto_id: item.produto_id,
               quantidade: item.quantidade,
-            }))
-          );
+            })
+          )
+        );
 
-        if (itensError) throw itensError;
         toast({ title: "Pacote criado com sucesso!" });
       }
 
@@ -944,23 +839,18 @@ export function ProdutosServicos() {
     if (!deletingItem) return;
 
     try {
-      const tableNames: Record<string, string> = {
-        produto: 'produtos_servicos',
-        categoria: 'categorias_produtos',
-        forma_cobranca: 'formas_cobranca',
-        pacote: 'pacotes_produtos',
-        tipo: 'tipos_produtos',
-        natureza: 'naturezas_produtos',
-        classificacao: 'classificacoes_produtos'
+      const endpointPaths: Record<string, string> = {
+        produto: '/produtos/catalogo',
+        categoria: '/produtos/categorias',
+        forma_cobranca: '/financeiro/cadastros/formas-cobranca',
+        pacote: '/produtos/pacotes',
+        tipo: '/produtos/tipos',
+        natureza: '/produtos/naturezas',
+        classificacao: '/produtos/classificacoes',
       };
-      const tableName = tableNames[deletingItem.type];
+      const basePath = endpointPaths[deletingItem.type];
 
-      const { error } = await (supabase as any)
-        .from(tableName)
-        .delete()
-        .eq('id', deletingItem.item.id);
-
-      if (error) throw error;
+      await api.del(`${basePath}/${deletingItem.item.id}`);
 
       const typeLabels: Record<string, string> = {
         produto: 'Produto',

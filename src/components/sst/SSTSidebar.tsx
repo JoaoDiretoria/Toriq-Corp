@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { usePermissoes } from '@/hooks/usePermissoes';
 import { useModulosAtivos } from '@/hooks/useModulosAtivos';
 import { useEmpresaWhiteLabel } from '@/hooks/useWhiteLabel';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import LogoPretaHorizontal from '/logo/logo-preta.png';
 import {
   Sidebar,
@@ -130,23 +130,22 @@ export function SSTSidebar({ activeSection, onSectionChange, modulosAtivos, load
 
   const loadFunisESetores = async () => {
     try {
-      const [funisRes, setoresRes] = await Promise.all([
-        (supabase as any)
-          .from('funis')
-          .select('id, nome, setor_id, tipo')
-          .eq('empresa_id', empresaId)
-          .eq('ativo', true)
-          .order('ordem'),
-        (supabase as any)
-          .from('setores')
-          .select('id, nome')
-          .eq('empresa_id', empresaId)
-          .eq('ativo', true)
-          .order('nome')
+      const [funisData, setoresData] = await Promise.all([
+        api.get<any[]>('/funil/funis').catch(() => [] as any[]),
+        api.get<any[]>('/sst/setores').catch(() => [] as any[]),
       ]);
 
-      if (funisRes.data) setFunis(funisRes.data);
-      if (setoresRes.data) setSetores(setoresRes.data);
+      // Filtros e ordenação aplicados no cliente (o backend devolve todos os registros da empresa)
+      const funisFiltrados = (funisData ?? [])
+        .filter((f: any) => f.ativo === true)
+        .sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
+
+      const setoresFiltrados = (setoresData ?? [])
+        .filter((s: any) => s.ativo === true)
+        .sort((a: any, b: any) => (a.nome ?? '').localeCompare(b.nome ?? ''));
+
+      setFunis(funisFiltrados);
+      setSetores(setoresFiltrados);
     } catch (error) {
       console.error('Erro ao carregar funis e setores:', error);
     }

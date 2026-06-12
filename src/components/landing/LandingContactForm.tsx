@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Send, MessageCircle, Calendar, CheckCircle, Building2, Loader2 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { toast } from 'sonner';
 
 const LandingContactForm = () => {
@@ -36,19 +36,15 @@ const LandingContactForm = () => {
     setLoading(true);
 
     try {
-      const { error } = await (supabase as any)
-        .from('leads_landing')
-        .insert({
-          nome: formData.name,
-          empresa: formData.company,
-          email: formData.email,
-          telefone: formData.phone,
-          segmento: formData.segment || null,
-          mensagem: formData.message || null,
-          cnpj: formData.cnpj || null
-        });
-
-      if (error) throw error;
+      await api.post('/leads-landing', {
+        nome: formData.name,
+        empresa: formData.company,
+        email: formData.email,
+        telefone: formData.phone,
+        segmento: formData.segment || null,
+        mensagem: formData.message || null,
+        cnpj: formData.cnpj || null
+      });
 
       setSubmitted(true);
     } catch (error) {

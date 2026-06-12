@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import {
   Plus,
   Pencil,
@@ -100,16 +100,20 @@ export function AdminVagas() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [vagasRes, candidaturasRes] = await Promise.all([
-        (supabase as any).from('vagas').select('*').order('created_at', { ascending: false }),
-        (supabase as any).from('candidaturas').select('*').order('created_at', { ascending: false }),
+      const [vagasData, candidaturasData] = await Promise.all([
+        api.get<any[]>('/vagas/admin').catch(() => [] as any[]),
+        api.get<any[]>('/vagas/candidaturas/todas').catch(() => [] as any[]),
       ]);
 
-      if (vagasRes.error) throw vagasRes.error;
-      if (candidaturasRes.error) throw candidaturasRes.error;
+      const vagasSorted = (vagasData || []).sort(
+        (a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+      const candidaturasSorted = (candidaturasData || []).sort(
+        (a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
 
-      setVagas(vagasRes.data || []);
-      setCandidaturas(candidaturasRes.data || []);
+      setVagas(vagasSorted);
+      setCandidaturas(candidaturasSorted);
     } catch (error) {
       console.error('Erro ao buscar dados:', error);
       toast.error('Erro ao carregar dados');
@@ -172,17 +176,10 @@ export function AdminVagas() {
       };
 
       if (editingVaga) {
-        const { error } = await (supabase as any)
-          .from('vagas')
-          .update(vagaData)
-          .eq('id', editingVaga.id);
-        if (error) throw error;
+        await api.put<any>(`/vagas/${editingVaga.id}`, vagaData);
         toast.success('Vaga atualizada!');
       } else {
-        const { error } = await (supabase as any)
-          .from('vagas')
-          .insert(vagaData);
-        if (error) throw error;
+        await api.post<any>('/vagas', vagaData);
         toast.success('Vaga criada!');
       }
 
@@ -199,11 +196,7 @@ export function AdminVagas() {
 
   const handleToggleAtiva = async (vaga: Vaga) => {
     try {
-      const { error } = await (supabase as any)
-        .from('vagas')
-        .update({ ativa: !vaga.ativa, updated_at: new Date().toISOString() })
-        .eq('id', vaga.id);
-      if (error) throw error;
+      await api.put<any>(`/vagas/${vaga.id}`, { ativa: !vaga.ativa });
       toast.success(vaga.ativa ? 'Vaga desativada' : 'Vaga ativada');
       fetchData();
     } catch (error) {
@@ -214,11 +207,7 @@ export function AdminVagas() {
   const handleDeleteVaga = async (vaga: Vaga) => {
     if (!confirm(`Excluir a vaga "${vaga.titulo}"?`)) return;
     try {
-      const { error } = await (supabase as any)
-        .from('vagas')
-        .delete()
-        .eq('id', vaga.id);
-      if (error) throw error;
+      await api.del<any>(`/vagas/${vaga.id}`);
       toast.success('Vaga excluída');
       fetchData();
     } catch (error) {
@@ -227,17 +216,16 @@ export function AdminVagas() {
   };
 
   const handleDeleteCandidatura = async (candidatura: Candidatura) => {
+    // NOTA (migracao): DELETE /vagas/candidaturas/{id} nao existe no router — operacao degradada
     if (!confirm(`Excluir candidatura de "${candidatura.nome_completo}"?`)) return;
     try {
-      const { error } = await (supabase as any)
-        .from('candidaturas')
-        .delete()
-        .eq('id', candidatura.id);
-      if (error) throw error;
+      await Promise.resolve().then(() => {
+        throw new Error('endpoint nao disponivel');
+      });
       toast.success('Candidatura excluída');
       fetchData();
     } catch (error) {
-      toast.error('Erro ao excluir candidatura');
+      toast.error('Exclusão de candidatura indisponível no momento');
     }
   };
 

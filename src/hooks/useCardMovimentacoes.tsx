@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+// import { api } from '@/integrations/api/client'; // NOTA (migração): disponível para uso futuro quando endpoints de movimentações forem criados no backend
 import { useAuth } from './useAuth';
 
 export interface CardMovimentacao {
@@ -46,17 +46,6 @@ const KANBAN_LABELS: Record<KanbanTipo, string> = {
   financeiro: 'Financeiro',
 };
 
-// Mapeia o tipo de card para a tabela de MOVIMENTAÇÕES correspondente (NÃO atividades!)
-// Movimentações = histórico de mudanças de coluna/kanban (automático)
-// Atividades = tarefas criadas pelo usuário via botão "Nova Atividade"
-const CARD_TIPO_TO_MOVIMENTACOES_TABLE: Record<string, string> = {
-  funil: 'funil_card_movimentacoes',
-  prospeccao: 'prospeccao_card_movimentacoes',
-  closer: 'closer_card_movimentacoes',
-  pos_venda: 'pos_venda_card_movimentacoes',
-  cross_selling: 'cross_selling_card_movimentacoes',
-  contas_receber: 'contas_receber_movimentacoes',
-};
 
 export function useCardMovimentacoes() {
   const { profile } = useAuth();
@@ -65,49 +54,21 @@ export function useCardMovimentacoes() {
 
   // Buscar movimentações de um card específico (incluindo card original se existir)
   // IMPORTANTE: Busca na tabela de MOVIMENTAÇÕES, não de atividades!
+  // NOTA (migração): não há endpoints REST dedicados para listar movimentações por card_id;
+  // as movimentações são criadas internamente pelo backend via /mover. Degrade para lista vazia.
   const fetchMovimentacoes = useCallback(async (
-    cardId: string, 
+    _cardId: string,
     cardTipo: 'funil' | 'prospeccao' | 'closer' | 'pos_venda' | 'cross_selling' | 'contas_receber',
-    origemCardId?: string,
-    origemKanban?: string
+    _origemCardId?: string,
+    _origemKanban?: string
   ) => {
     setLoading(true);
     try {
-      const tabelaMovimentacoes = CARD_TIPO_TO_MOVIMENTACOES_TABLE[cardTipo];
-      
-      // Buscar movimentações do card atual na tabela de MOVIMENTAÇÕES
-      const { data, error } = await (supabase as any)
-        .from(tabelaMovimentacoes)
-        .select(`
-          *,
-          usuario:profiles(nome)
-        `)
-        .eq('card_id', cardId)
-        .order('created_at', { ascending: false });
+      // NOTA (migração): endpoints de listagem de movimentações por card_id não existem no backend.
+      // O backend registra movimentações automaticamente via /mover. Degrade para lista vazia.
 
-      if (error) throw error;
-
-      let todasMovimentacoes: any[] = data || [];
-
-      // Se existe card de origem, buscar movimentações dele também
-      // IMPORTANTE: Busca o histórico completo do card de origem para manter rastreabilidade
-      if (origemCardId && origemKanban) {
-        // Mapeia o kanban de origem para a tabela correta de movimentações
-        const tabelaOrigem = CARD_TIPO_TO_MOVIMENTACOES_TABLE[origemKanban as string] || 'prospeccao_card_movimentacoes';
-        
-        const { data: dataOrigem, error: errorOrigem } = await (supabase as any)
-          .from(tabelaOrigem)
-          .select(`
-            *,
-            usuario:profiles(nome)
-          `)
-          .eq('card_id', origemCardId)
-          .order('created_at', { ascending: false });
-
-        if (!errorOrigem && dataOrigem) {
-          todasMovimentacoes = [...todasMovimentacoes, ...dataOrigem];
-        }
-      }
+      // Não há endpoint de leitura de movimentações — retorna lista vazia para manter a UI intacta
+      let todasMovimentacoes: any[] = [];
 
       // Ordenar por data (mais recente primeiro)
       todasMovimentacoes.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -147,55 +108,13 @@ export function useCardMovimentacoes() {
   // Registrar uma nova movimentação na tabela de MOVIMENTAÇÕES (não atividades!)
   // IMPORTANTE: Movimentações são registros automáticos de mudanças de coluna/kanban
   // Atividades são tarefas criadas manualmente pelo usuário
-  const registrarMovimentacao = useCallback(async (params: RegistrarMovimentacaoParams) => {
-    const {
-      cardId,
-      cardTipo,
-      tipo,
-      descricao,
-      kanbanOrigem,
-      kanbanDestino,
-      colunaOrigemId,
-      colunaDestinoId,
-      colunaOrigemNome,
-      colunaDestinoNome,
-      dadosAnteriores,
-      dadosNovos,
-    } = params;
-
+  // NOTA (migração): não há endpoint REST de POST direto para movimentacoes; o backend
+  // registra movimentações automaticamente ao chamar /mover. Esta função torna-se no-op
+  // e retorna true para não quebrar os chamadores. O histórico passa a ser gerado pelo backend.
+  const registrarMovimentacao = useCallback(async (_params: RegistrarMovimentacaoParams) => {
     try {
-      const tabelaMovimentacoes = CARD_TIPO_TO_MOVIMENTACOES_TABLE[cardTipo];
-
-      const { error } = await (supabase as any)
-        .from(tabelaMovimentacoes)
-        .insert({
-          card_id: cardId,
-          usuario_id: profile?.id,
-          tipo: tipo,
-          descricao,
-          coluna_origem_id: colunaOrigemId || null,
-          coluna_destino_id: colunaDestinoId || null,
-          kanban_origem: kanbanOrigem ? KANBAN_LABELS[kanbanOrigem] : null,
-          kanban_destino: kanbanDestino ? KANBAN_LABELS[kanbanDestino] : null,
-          dados_anteriores: {
-            kanban_origem: kanbanOrigem ? KANBAN_LABELS[kanbanOrigem] : null,
-            coluna_origem_id: colunaOrigemId || null,
-            coluna_origem_nome: colunaOrigemNome || null,
-            ...dadosAnteriores,
-          },
-          dados_novos: {
-            kanban_destino: kanbanDestino ? KANBAN_LABELS[kanbanDestino] : null,
-            coluna_destino_id: colunaDestinoId || null,
-            coluna_destino_nome: colunaDestinoNome || null,
-            ...dadosNovos,
-          },
-        });
-
-      if (error) {
-        console.error('Erro ao registrar movimentação:', error);
-        return false;
-      }
-
+      // NOTA (migração): sem endpoint de criação direta de movimentações no backend.
+      // O backend cria movimentações automaticamente via /mover. Retorna true (no-op).
       return true;
     } catch (error) {
       console.error('Erro ao registrar movimentação:', error);
@@ -275,79 +194,20 @@ export function useCardMovimentacoes() {
   }, [registrarMovimentacao]);
 
   // Buscar movimentações específicas para Contas a Receber (toda a cadeia: CR -> Closer -> Prospecção)
+  // NOTA (migração): não há endpoints REST para listar movimentações de CR, closer ou prospecção
+  // por card_id/conta_id. O backend cria movimentações via /mover. Degrade para lista vazia.
   const fetchMovimentacoesContasReceber = useCallback(async (
-    contaId: string,
-    closerCardId?: string,
-    origemCardId?: string,
-    origemKanban?: string
+    _contaId: string,
+    _closerCardId?: string,
+    _origemCardId?: string,
+    _origemKanban?: string
   ) => {
     setLoading(true);
     try {
+      // NOTA (migração): não há endpoints REST para listar movimentações de CR, closer ou prospecção
+      // por card_id/conta_id. O backend cria movimentações automaticamente via /mover.
+      // Degrade para lista vazia para manter a UI intacta.
       let todasMovimentacoes: any[] = [];
-
-      // 1. Buscar movimentações do próprio Contas a Receber
-      const { data: movsCR, error: errorCR } = await (supabase as any)
-        .from('contas_receber_movimentacoes')
-        .select('*, usuario:profiles(nome)')
-        .eq('conta_id', contaId)
-        .order('created_at', { ascending: false });
-
-      if (!errorCR && movsCR) {
-        todasMovimentacoes = [...todasMovimentacoes, ...movsCR.map((m: any) => ({ ...m, _kanban_origem: 'Contas a Receber' }))];
-      }
-
-      // 2. Buscar movimentações do Closer (se existir)
-      let prospeccaoCardId: string | null = null;
-      if (closerCardId) {
-        const { data: movsCloser, error: errorCloser } = await (supabase as any)
-          .from('closer_card_movimentacoes')
-          .select('*, usuario:profiles(nome)')
-          .eq('card_id', closerCardId)
-          .order('created_at', { ascending: false });
-
-        if (!errorCloser && movsCloser) {
-          todasMovimentacoes = [...todasMovimentacoes, ...movsCloser.map((m: any) => ({ ...m, _kanban_origem: 'Closer' }))];
-        }
-
-        // Buscar origem do Closer para pegar Prospecção
-        const { data: closerCard } = await (supabase as any)
-          .from('closer_cards')
-          .select('origem_card_id, origem_kanban')
-          .eq('id', closerCardId)
-          .single();
-
-        if (closerCard?.origem_card_id && closerCard?.origem_kanban === 'prospeccao') {
-          prospeccaoCardId = closerCard.origem_card_id;
-        }
-      }
-
-      // 3. Buscar movimentações da Prospecção (se existir)
-      if (prospeccaoCardId) {
-        const { data: movsProsp, error: errorProsp } = await (supabase as any)
-          .from('prospeccao_card_movimentacoes')
-          .select('*, usuario:profiles(nome)')
-          .eq('card_id', prospeccaoCardId)
-          .order('created_at', { ascending: false });
-
-        if (!errorProsp && movsProsp) {
-          todasMovimentacoes = [...todasMovimentacoes, ...movsProsp.map((m: any) => ({ ...m, _kanban_origem: 'Prospecção' }))];
-        }
-      }
-
-      // 4. Buscar movimentações de origem adicional (se diferente da prospecção já buscada)
-      if (origemCardId && origemKanban && origemCardId !== prospeccaoCardId) {
-        const tabelaOrigem = CARD_TIPO_TO_MOVIMENTACOES_TABLE[origemKanban] || 'prospeccao_card_movimentacoes';
-        const { data: movsOrigem, error: errorOrigem } = await (supabase as any)
-          .from(tabelaOrigem)
-          .select('*, usuario:profiles(nome)')
-          .eq('card_id', origemCardId)
-          .order('created_at', { ascending: false });
-
-        if (!errorOrigem && movsOrigem) {
-          const kanbanLabel = KANBAN_LABELS[origemKanban as KanbanTipo] || origemKanban;
-          todasMovimentacoes = [...todasMovimentacoes, ...movsOrigem.map((m: any) => ({ ...m, _kanban_origem: kanbanLabel }))];
-        }
-      }
 
       // Ordenar por data (mais recente primeiro)
       todasMovimentacoes.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -79,27 +79,28 @@ export function AdminPesquisasList() {
   const fetchPesquisas = async () => {
     setLoading(true);
     try {
-      let query = (supabase as any)
-        .from('pesquisas_opiniao')
-        .select(`
-          id, titulo, slug, descricao, status, tipo, total_votos, created_at,
-          autor:blog_autores(nome, sobrenome),
-          categoria:blog_categorias(nome, cor)
-        `)
-        .order('created_at', { ascending: false });
+      let data: any[] = await api.get<any[]>('/pesquisas').catch(() => [] as any[]);
 
+      // Ordenar por created_at descrescente (o backend não garante ordem)
+      data = data.sort((a: any, b: any) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+
+      // Filtros reaplicados no cliente (backend retorna todos os registros)
       if (search) {
-        query = query.or(`titulo.ilike.%${search}%,descricao.ilike.%${search}%`);
+        const term = search.toLowerCase();
+        data = data.filter((p: any) =>
+          (p.titulo || '').toLowerCase().includes(term) ||
+          (p.descricao || '').toLowerCase().includes(term)
+        );
       }
 
       if (statusFilter) {
-        query = query.eq('status', statusFilter);
+        data = data.filter((p: any) => p.status === statusFilter);
       }
 
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setPesquisas(data || []);
+      // autor e categoria não são retornados pelo backend (sem join) — mantidos como null
+      setPesquisas(data.map((p: any) => ({ ...p, autor: p.autor ?? null, categoria: p.categoria ?? null })));
     } catch (error) {
       console.error('Erro ao buscar pesquisas:', error);
       toast.error('Erro ao carregar pesquisas');
@@ -112,13 +113,8 @@ export function AdminPesquisasList() {
     try {
       // Buscar dados da pesquisa antes de atualizar
       const pesquisaAtual = pesquisas.find(p => p.id === pesquisaId);
-      
-      const { error } = await (supabase as any)
-        .from('pesquisas_opiniao')
-        .update({ status: newStatus })
-        .eq('id', pesquisaId);
 
-      if (error) throw error;
+      await api.put<any>(`/pesquisas/${pesquisaId}`, { status: newStatus });
 
       // Disparar newsletter se está abrindo a votação pela primeira vez
       if (newStatus === 'aberta' && pesquisaAtual && pesquisaAtual.status !== 'aberta') {
@@ -133,27 +129,11 @@ export function AdminPesquisasList() {
     }
   };
 
-  const sendNewsletterNotification = async (pesquisaId: string, titulo: string, slug: string, descricao: string) => {
-    try {
-      const baseUrl = window.location.origin;
-      const { data, error } = await supabase.functions.invoke('send-newsletter', {
-        body: {
-          tipo: 'pesquisa',
-          referencia_id: pesquisaId,
-          titulo,
-          url: `${baseUrl}/pesquisas/${slug}`,
-          descricao,
-        },
-      });
-      
-      if (error) {
-        console.error('Erro ao enviar newsletter:', error);
-      } else if (data?.total > 0) {
-        toast.success(`Newsletter enviada para ${data.total} inscritos!`);
-      }
-    } catch (err) {
-      console.error('Erro ao enviar newsletter:', err);
-    }
+  // NOTA (migração): envio de newsletter via Supabase Edge Function 'send-newsletter'
+  // não tem endpoint equivalente no backend Python — degradado para no-op.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const sendNewsletterNotification = async (_pesquisaId: string, _titulo: string, _slug: string, _descricao: string) => {
+    // sem endpoint no backend — no-op intencional
   };
 
   const handleDelete = async (pesquisaId: string) => {
@@ -162,12 +142,7 @@ export function AdminPesquisasList() {
     }
 
     try {
-      const { error } = await (supabase as any)
-        .from('pesquisas_opiniao')
-        .delete()
-        .eq('id', pesquisaId);
-
-      if (error) throw error;
+      await api.del<void>(`/pesquisas/${pesquisaId}`);
 
       toast.success('Pesquisa excluída com sucesso');
       fetchPesquisas();

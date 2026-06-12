@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import {
   Dialog,
   DialogContent,
@@ -82,33 +82,24 @@ export function AdminAutorDialog({ open, onOpenChange, autores, onRefresh }: Adm
     setLoading(true);
     try {
       if (editingId) {
-        const { error } = await (supabase as any)
-          .from('blog_autores')
-          .update({
-            nome: formData.nome,
-            sobrenome: formData.sobrenome || null,
-            cargo: formData.cargo || null,
-            bio: formData.bio || null,
-            email: formData.email || null,
-            linkedin_url: formData.linkedin_url || null,
-          })
-          .eq('id', editingId);
-
-        if (error) throw error;
+        await api.put<any>(`/blog/autores/${editingId}`, {
+          nome: formData.nome,
+          sobrenome: formData.sobrenome || null,
+          cargo: formData.cargo || null,
+          bio: formData.bio || null,
+          email: formData.email || null,
+          linkedin_url: formData.linkedin_url || null,
+        });
         toast.success('Autor atualizado com sucesso');
       } else {
-        const { error } = await (supabase as any)
-          .from('blog_autores')
-          .insert({
-            nome: formData.nome,
-            sobrenome: formData.sobrenome || null,
-            cargo: formData.cargo || null,
-            bio: formData.bio || null,
-            email: formData.email || null,
-            linkedin_url: formData.linkedin_url || null,
-          });
-
-        if (error) throw error;
+        await api.post<any>('/blog/autores', {
+          nome: formData.nome,
+          sobrenome: formData.sobrenome || null,
+          cargo: formData.cargo || null,
+          bio: formData.bio || null,
+          email: formData.email || null,
+          linkedin_url: formData.linkedin_url || null,
+        });
         toast.success('Autor criado com sucesso');
       }
 
@@ -126,12 +117,7 @@ export function AdminAutorDialog({ open, onOpenChange, autores, onRefresh }: Adm
     if (!confirm('Tem certeza que deseja excluir este autor?')) return;
 
     try {
-      const { error } = await (supabase as any)
-        .from('blog_autores')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await api.del<any>(`/blog/autores/${id}`);
       toast.success('Autor excluído com sucesso');
       onRefresh();
     } catch (error) {

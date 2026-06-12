@@ -5,14 +5,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useToast } from '@/hooks/use-toast';
-import { useEmpresaEfetiva } from '@/hooks/useEmpresaMode';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, isWithinInterval, parseISO, startOfYear, endOfYear, eachMonthOfInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DollarSign, TrendingUp, TrendingDown, Wallet, Calendar, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
-
-const TORIQ_EMPRESA_ID = '11111111-1111-1111-1111-111111111111';
 
 interface ContaPagar {
   id: string;
@@ -178,82 +175,28 @@ export function AdminFluxoCaixa() {
     setLoading(true);
     try {
       // Carregar contas a pagar
-      const { data: contasPagarData, error: contasPagarError } = await (supabase as any)
-        .from('contas_pagar')
-        .select('*')
-        .eq('empresa_id', TORIQ_EMPRESA_ID)
-        .eq('arquivado', false);
-      
-      if (contasPagarError) {
-        console.error('Erro ao carregar contas a pagar:', contasPagarError);
-      } else {
-        setContasPagar(contasPagarData || []);
-      }
+      const contasPagarData = await api.get<any[]>('/financeiro/contas-pagar').catch(() => [] as any[]);
+      // filtro arquivado === false aplicado no cliente (backend retorna todos)
+      setContasPagar((contasPagarData || []).filter((c: any) => c.arquivado === false || c.arquivado === null));
 
       // Carregar contas a receber (pode não existir ainda)
-      try {
-        const { data: contasReceberData, error: contasReceberError } = await (supabase as any)
-          .from('contas_receber')
-          .select('*')
-          .eq('empresa_id', TORIQ_EMPRESA_ID)
-          .eq('arquivado', false);
-        
-        if (!contasReceberError) {
-          setContasReceber(contasReceberData || []);
-        } else {
-          console.error('Erro ao carregar contas a receber:', contasReceberError);
-        }
-      } catch (e) {
-        console.log('Tabela contas_receber não disponível:', e);
-        setContasReceber([]);
-      }
+      const contasReceberData = await api.get<any[]>('/financeiro/contas-receber').catch(() => [] as any[]);
+      // filtro arquivado === false aplicado no cliente (backend retorna todos)
+      setContasReceber((contasReceberData || []).filter((c: any) => c.arquivado === false || c.arquivado === null));
 
       // Carregar plano de despesas
-      try {
-        const { data: planoDespesasData, error: planoDespesasError } = await (supabase as any)
-          .from('plano_despesas')
-          .select('*')
-          .eq('empresa_id', TORIQ_EMPRESA_ID);
-        
-        if (!planoDespesasError) {
-          setPlanoDespesas(planoDespesasData || []);
-        }
-      } catch (e) {
-        console.log('Tabela plano_despesas não disponível');
-        setPlanoDespesas([]);
-      }
+      const planoDespesasData = await api.get<any[]>('/financeiro/cadastros/plano-despesas').catch(() => [] as any[]);
+      setPlanoDespesas(planoDespesasData || []);
 
       // Carregar plano de receitas
-      try {
-        const { data: planoReceitasData, error: planoReceitasError } = await (supabase as any)
-          .from('plano_receitas')
-          .select('*')
-          .eq('empresa_id', TORIQ_EMPRESA_ID)
-          .eq('ativo', true);
-        
-        if (!planoReceitasError) {
-          setPlanoReceitas(planoReceitasData || []);
-        }
-      } catch (e) {
-        console.log('Tabela plano_receitas não disponível');
-        setPlanoReceitas([]);
-      }
+      const planoReceitasData = await api.get<any[]>('/financeiro/cadastros/plano-receitas').catch(() => [] as any[]);
+      // filtro ativo === true aplicado no cliente (backend retorna todos)
+      setPlanoReceitas((planoReceitasData || []).filter((r: any) => r.ativo === true));
 
       // Carregar contas bancárias
-      try {
-        const { data: contasBancariasData, error: contasBancariasError } = await (supabase as any)
-          .from('contas_bancarias')
-          .select('*')
-          .eq('empresa_id', TORIQ_EMPRESA_ID)
-          .eq('ativo', true);
-        
-        if (!contasBancariasError) {
-          setContasBancarias(contasBancariasData || []);
-        }
-      } catch (e) {
-        console.log('Tabela contas_bancarias não disponível');
-        setContasBancarias([]);
-      }
+      const contasBancariasData = await api.get<any[]>('/financeiro/cadastros/contas-bancarias').catch(() => [] as any[]);
+      // filtro ativo === true aplicado no cliente (backend retorna todos)
+      setContasBancarias((contasBancariasData || []).filter((c: any) => c.ativo === true));
 
     } catch (error) {
       console.error('Erro ao carregar dados:', error);

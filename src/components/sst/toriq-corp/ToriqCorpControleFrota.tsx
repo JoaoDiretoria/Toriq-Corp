@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
 import { useWhiteLabel } from '@/hooks/useWhiteLabel';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -382,22 +382,10 @@ export function ToriqCorpControleFrota() {
       };
 
       if (editingVeiculo) {
-        const { error } = await (supabase as any)
-          .from('frota_veiculos')
-          .update(dataToSave)
-          .eq('id', editingVeiculo.id);
-
-        if (error) throw error;
+        await api.put<any>(`/frota/veiculos/${editingVeiculo.id}`, dataToSave);
         toast({ title: 'Sucesso', description: 'Veículo atualizado com sucesso' });
       } else {
-        const { error } = await (supabase as any)
-          .from('frota_veiculos')
-          .insert({
-            ...dataToSave,
-            empresa_id: empresaId
-          });
-
-        if (error) throw error;
+        await api.post<any>('/frota/veiculos', dataToSave);
         toast({ title: 'Sucesso', description: 'Veículo cadastrado com sucesso' });
       }
 
@@ -432,62 +420,50 @@ export function ToriqCorpControleFrota() {
         
         // Carregar utilizações
         try {
-          const { data } = await (supabase as any)
-            .from('frota_utilizacoes')
-            .select('*')
-            .eq('veiculo_id', veiculoId)
-            .order('created_at', { ascending: false });
-          setUtilizacoes(data || []);
+          const data = await api.get<any[]>('/frota/utilizacoes').catch(() => [] as any[]);
+          const filtered = (data || []).filter((r: any) => r.veiculo_id === veiculoId)
+            .sort((a: any, b: any) => (b.created_at || '').localeCompare(a.created_at || ''));
+          setUtilizacoes(filtered);
         } catch (e) { console.error('Erro utilizações:', e); }
 
         // Carregar manutenções
         try {
-          const { data } = await (supabase as any)
-            .from('frota_manutencoes')
-            .select('*')
-            .eq('veiculo_id', veiculoId)
-            .order('data', { ascending: false });
-          setManutencoes(data || []);
+          const data = await api.get<any[]>('/frota/manutencoes').catch(() => [] as any[]);
+          const filtered = (data || []).filter((r: any) => r.veiculo_id === veiculoId)
+            .sort((a: any, b: any) => (b.data || '').localeCompare(a.data || ''));
+          setManutencoes(filtered);
         } catch (e) { console.error('Erro manutenções:', e); }
 
         // Carregar checklists
         try {
-          const { data } = await (supabase as any)
-            .from('frota_checklists')
-            .select('*')
-            .eq('veiculo_id', veiculoId)
-            .order('data', { ascending: false });
-          setChecklists(data || []);
+          const data = await api.get<any[]>('/frota/checklists').catch(() => [] as any[]);
+          const filtered = (data || []).filter((r: any) => r.veiculo_id === veiculoId)
+            .sort((a: any, b: any) => (b.data || '').localeCompare(a.data || ''));
+          setChecklists(filtered);
         } catch (e) { console.error('Erro checklists:', e); }
 
         // Carregar custos
         try {
-          const { data } = await (supabase as any)
-            .from('frota_custos')
-            .select('*')
-            .eq('veiculo_id', veiculoId)
-            .order('data', { ascending: false });
-          setCustos(data || []);
+          const data = await api.get<any[]>('/frota/custos').catch(() => [] as any[]);
+          const filtered = (data || []).filter((r: any) => r.veiculo_id === veiculoId)
+            .sort((a: any, b: any) => (b.data || '').localeCompare(a.data || ''));
+          setCustos(filtered);
         } catch (e) { console.error('Erro custos:', e); }
 
         // Carregar documentos
         try {
-          const { data } = await (supabase as any)
-            .from('frota_documentos')
-            .select('*')
-            .eq('veiculo_id', veiculoId)
-            .order('vencimento', { ascending: true });
-          setDocumentos(data || []);
+          const data = await api.get<any[]>('/frota/documentos').catch(() => [] as any[]);
+          const filtered = (data || []).filter((r: any) => r.veiculo_id === veiculoId)
+            .sort((a: any, b: any) => (a.vencimento || '').localeCompare(b.vencimento || ''));
+          setDocumentos(filtered);
         } catch (e) { console.error('Erro documentos:', e); }
 
         // Carregar ocorrências
         try {
-          const { data } = await (supabase as any)
-            .from('frota_ocorrencias')
-            .select('*')
-            .eq('veiculo_id', veiculoId)
-            .order('data', { ascending: false });
-          setOcorrencias(data || []);
+          const data = await api.get<any[]>('/frota/ocorrencias').catch(() => [] as any[]);
+          const filtered = (data || []).filter((r: any) => r.veiculo_id === veiculoId)
+            .sort((a: any, b: any) => (b.data || '').localeCompare(a.data || ''));
+          setOcorrencias(filtered);
         } catch (e) { console.error('Erro ocorrências:', e); }
       };
 
@@ -589,21 +565,24 @@ export function ToriqCorpControleFrota() {
     
     try {
       // Carregar todas as utilizações em uso
-      const { data: utilizacoesData } = await (supabase as any)
-        .from('frota_utilizacoes')
-        .select('*, frota_veiculos(placa, marca, modelo)')
-        .eq('empresa_id', empresaId)
-        .eq('status', 'Em uso');
+      const utilizacoesAll = await api.get<any[]>('/frota/utilizacoes').catch(() => [] as any[]);
+      const utilizacoesData = (utilizacoesAll || []).filter((u: any) => u.status === 'Em uso');
 
       // Carregar todas as manutenções agendadas ou em andamento
-      const { data: manutencoesData } = await (supabase as any)
-        .from('frota_manutencoes')
-        .select('*, frota_veiculos(placa, marca, modelo)')
-        .eq('empresa_id', empresaId)
-        .in('status', ['Agendada', 'Em andamento']);
+      const manutencoesAll = await api.get<any[]>('/frota/manutencoes').catch(() => [] as any[]);
+      const manutencoesData = (manutencoesAll || []).filter((m: any) =>
+        m.status === 'Agendada' || m.status === 'Em andamento'
+      );
 
-      setTodasUtilizacoesCalendario(utilizacoesData || []);
-      setTodasManutencoesCalendario(manutencoesData || []);
+      // Enriquecer com dados do veículo para exibição no calendário (substitui o join do Supabase)
+      const veiculosMap: Record<string, any> = {};
+      veiculos.forEach((v: any) => { veiculosMap[v.id] = v; });
+      const enrich = (r: any) => ({
+        ...r,
+        frota_veiculos: veiculosMap[r.veiculo_id] || null
+      });
+      setTodasUtilizacoesCalendario(utilizacoesData.map(enrich));
+      setTodasManutencoesCalendario(manutencoesData.map(enrich));
     } catch (error) {
       console.error('Erro ao carregar dados do calendário:', error);
     }
@@ -612,16 +591,11 @@ export function ToriqCorpControleFrota() {
   const loadVeiculos = async () => {
     try {
       setLoading(true);
-      const { data, error } = await (supabase as any)
-        .from('frota_veiculos')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('placa');
-
-      if (error) throw error;
-      setVeiculos(data || []);
-      if (data && data.length > 0 && !veiculoSelecionado) {
-        setVeiculoSelecionado(data[0]);
+      const data = await api.get<any[]>('/frota/veiculos').catch(() => [] as any[]);
+      const sorted = (data || []).sort((a: any, b: any) => (a.placa || '').localeCompare(b.placa || ''));
+      setVeiculos(sorted);
+      if (sorted.length > 0 && !veiculoSelecionado) {
+        setVeiculoSelecionado(sorted[0]);
       }
     } catch (error) {
       console.error('Erro ao carregar veículos:', error);
@@ -634,15 +608,11 @@ export function ToriqCorpControleFrota() {
   const loadMotoristas = async () => {
     try {
       setLoadingMotoristas(true);
-      const { data, error } = await (supabase as any)
-        .from('frota_motoristas')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .eq('ativo', true)
-        .order('nome');
-
-      if (error) throw error;
-      setMotoristas(data || []);
+      const data = await api.get<any[]>('/frota/motoristas').catch(() => [] as any[]);
+      const sorted = (data || [])
+        .filter((m: any) => m.ativo !== false)
+        .sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || ''));
+      setMotoristas(sorted);
     } catch (error) {
       console.error('Erro ao carregar motoristas:', error);
     } finally {
@@ -800,15 +770,16 @@ export function ToriqCorpControleFrota() {
 
   const uploadMotoristaAnexo = async (file: File, tipo: string): Promise<string | null> => {
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${empresaId}/motoristas/${Date.now()}_${tipo}.${fileExt}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('documentos')
-        .upload(fileName, file, { upsert: true });
-
-      if (uploadError) {
-        console.error(`Erro ao fazer upload do ${tipo}:`, uploadError);
+      const API_URL: string = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:8000';
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${API_URL}/storage/documentos/upload`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      });
+      if (!res.ok) {
+        console.error(`Erro ao fazer upload do ${tipo}:`, res.statusText);
         toast({
           title: 'Erro no upload',
           description: `Não foi possível enviar o arquivo ${tipo}. O motorista será salvo sem este anexo.`,
@@ -816,12 +787,8 @@ export function ToriqCorpControleFrota() {
         });
         return null;
       }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('documentos')
-        .getPublicUrl(fileName);
-
-      return publicUrl;
+      const result = await res.json();
+      return result.url ?? null;
     } catch (error) {
       console.error(`Erro ao fazer upload do ${tipo}:`, error);
       return null;
@@ -884,19 +851,10 @@ export function ToriqCorpControleFrota() {
       };
 
       if (editingMotorista) {
-        const { error } = await (supabase as any)
-          .from('frota_motoristas')
-          .update(motoristaData)
-          .eq('id', editingMotorista.id);
-
-        if (error) throw error;
+        await api.put<any>(`/frota/motoristas/${editingMotorista.id}`, motoristaData);
         toast({ title: 'Sucesso', description: 'Motorista atualizado com sucesso' });
       } else {
-        const { error } = await (supabase as any)
-          .from('frota_motoristas')
-          .insert(motoristaData);
-
-        if (error) throw error;
+        await api.post<any>('/frota/motoristas', motoristaData);
         toast({ title: 'Sucesso', description: 'Motorista cadastrado com sucesso' });
       }
 
@@ -919,20 +877,15 @@ export function ToriqCorpControleFrota() {
     if (!confirm('Deseja realmente excluir este motorista?')) return;
     
     try {
-      const { error } = await (supabase as any)
-        .from('frota_motoristas')
-        .update({ ativo: false })
-        .eq('id', id);
-
-      if (error) throw error;
+      await api.put<any>(`/frota/motoristas/${id}`, { ativo: false });
       toast({ title: 'Sucesso', description: 'Motorista excluído com sucesso' });
       loadMotoristas();
     } catch (error: any) {
       console.error('Erro ao excluir motorista:', error);
-      toast({ 
-        title: 'Erro', 
-        description: error.message || 'Erro ao excluir motorista', 
-        variant: 'destructive' 
+      toast({
+        title: 'Erro',
+        description: error.message || 'Erro ao excluir motorista',
+        variant: 'destructive'
       });
     }
   };
@@ -947,15 +900,11 @@ export function ToriqCorpControleFrota() {
   const loadUtilizacoes = async (veiculoId: string) => {
     try {
       setLoadingUtilizacoes(true);
-      const { data, error } = await (supabase as any)
-        .from('frota_utilizacoes')
-        .select('*')
-        .eq('veiculo_id', veiculoId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      console.log('Utilizações carregadas:', data);
-      setUtilizacoes(data || []);
+      const data = await api.get<any[]>('/frota/utilizacoes').catch(() => [] as any[]);
+      const filtered = (data || []).filter((r: any) => r.veiculo_id === veiculoId)
+        .sort((a: any, b: any) => (b.created_at || '').localeCompare(a.created_at || ''));
+      console.log('Utilizações carregadas:', filtered);
+      setUtilizacoes(filtered);
     } catch (error) {
       console.error('Erro ao carregar utilizações:', error);
     } finally {
@@ -1150,26 +1099,21 @@ export function ToriqCorpControleFrota() {
 
     try {
       setSavingUtilizacao(true);
-      
-      const { error } = await (supabase as any)
-        .from('frota_utilizacoes')
-        .insert({
-          veiculo_id: veiculoSelecionado.id,
-          empresa_id: empresaId,
-          data: utilizacaoForm.data_saida,
-          data_saida: utilizacaoForm.data_saida,
-          hora_saida: utilizacaoForm.hora_saida || null,
-          previsao_retorno: utilizacaoForm.previsao_retorno || null,
-          local_utilizacao: utilizacaoForm.local_utilizacao || null,
-          motorista: utilizacaoForm.motorista || null,
-          km_inicio: Number(utilizacaoForm.km_inicio) || 0,
-          km_fim: 0,
-          finalidade: utilizacaoForm.finalidade || null,
-          observacoes: utilizacaoForm.observacoes || null,
-          status: 'Em uso'
-        });
 
-      if (error) throw error;
+      await api.post<any>('/frota/utilizacoes', {
+        veiculo_id: veiculoSelecionado.id,
+        data: utilizacaoForm.data_saida,
+        data_saida: utilizacaoForm.data_saida,
+        hora_saida: utilizacaoForm.hora_saida || null,
+        previsao_retorno: utilizacaoForm.previsao_retorno || null,
+        local_utilizacao: utilizacaoForm.local_utilizacao || null,
+        motorista: utilizacaoForm.motorista || null,
+        km_inicio: Number(utilizacaoForm.km_inicio) || 0,
+        km_fim: 0,
+        finalidade: utilizacaoForm.finalidade || null,
+        observacoes: utilizacaoForm.observacoes || null,
+        status: 'Em uso'
+      });
 
       toast({ title: 'Sucesso', description: 'Saída registrada com sucesso' });
       resetUtilizacaoForm();
@@ -1221,23 +1165,18 @@ export function ToriqCorpControleFrota() {
 
     try {
       setSavingUtilizacao(true);
-      
-      const { error } = await (supabase as any)
-        .from('frota_utilizacoes')
-        .update({
-          data: utilizacaoForm.data_saida,
-          data_saida: utilizacaoForm.data_saida,
-          hora_saida: utilizacaoForm.hora_saida || null,
-          previsao_retorno: utilizacaoForm.previsao_retorno || null,
-          local_utilizacao: utilizacaoForm.local_utilizacao,
-          motorista: utilizacaoForm.motorista,
-          km_inicio: utilizacaoForm.km_inicio,
-          finalidade: utilizacaoForm.finalidade,
-          observacoes: utilizacaoForm.observacoes
-        })
-        .eq('id', editandoUtilizacao.id);
 
-      if (error) throw error;
+      await api.put<any>(`/frota/utilizacoes/${editandoUtilizacao.id}`, {
+        data: utilizacaoForm.data_saida,
+        data_saida: utilizacaoForm.data_saida,
+        hora_saida: utilizacaoForm.hora_saida || null,
+        previsao_retorno: utilizacaoForm.previsao_retorno || null,
+        local_utilizacao: utilizacaoForm.local_utilizacao,
+        motorista: utilizacaoForm.motorista,
+        km_inicio: utilizacaoForm.km_inicio,
+        finalidade: utilizacaoForm.finalidade,
+        observacoes: utilizacaoForm.observacoes
+      });
 
       toast({ title: 'Sucesso', description: 'Utilização atualizada com sucesso' });
       setEditandoUtilizacao(null);
@@ -1284,30 +1223,22 @@ export function ToriqCorpControleFrota() {
 
     try {
       setSavingUtilizacao(true);
-      
+
       // Calcular novo KM total (km atual + km rodados)
       const kmAtual = veiculoSelecionado.km_atual || fechandoUtilizacao.km_inicio || 0;
       const novoKmTotal = kmAtual + Number(fechamentoForm.km_rodados);
-      
-      const { error } = await (supabase as any)
-        .from('frota_utilizacoes')
-        .update({
-          data_retorno: fechamentoForm.data_retorno,
-          hora_retorno: fechamentoForm.hora_retorno,
-          km_fim: novoKmTotal,
-          km_rodados: fechamentoForm.km_rodados,
-          observacoes: (fechandoUtilizacao.observacoes || '') + (fechamentoForm.observacoes_retorno ? `\n[Retorno] ${fechamentoForm.observacoes_retorno}` : ''),
-          status: 'Concluído'
-        })
-        .eq('id', fechandoUtilizacao.id);
 
-      if (error) throw error;
+      await api.put<any>(`/frota/utilizacoes/${fechandoUtilizacao.id}`, {
+        data_retorno: fechamentoForm.data_retorno,
+        hora_retorno: fechamentoForm.hora_retorno,
+        km_fim: novoKmTotal,
+        km_rodados: fechamentoForm.km_rodados,
+        observacoes: (fechandoUtilizacao.observacoes || '') + (fechamentoForm.observacoes_retorno ? `\n[Retorno] ${fechamentoForm.observacoes_retorno}` : ''),
+        status: 'Concluído'
+      });
 
       // Atualizar KM atual do veículo
-      await (supabase as any)
-        .from('frota_veiculos')
-        .update({ km_atual: novoKmTotal })
-        .eq('id', veiculoSelecionado.id);
+      await api.put<any>(`/frota/veiculos/${veiculoSelecionado.id}`, { km_atual: novoKmTotal });
       
       setVeiculoSelecionado({ ...veiculoSelecionado, km_atual: novoKmTotal });
       loadVeiculos();
@@ -1342,20 +1273,15 @@ export function ToriqCorpControleFrota() {
     if (!confirm('Deseja realmente excluir este registro?')) return;
     
     try {
-      const { error } = await (supabase as any)
-        .from('frota_utilizacoes')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await api.del(`/frota/utilizacoes/${id}`);
       toast({ title: 'Sucesso', description: 'Registro excluído com sucesso' });
       loadUtilizacoes(veiculoSelecionado.id);
     } catch (error: any) {
       console.error('Erro ao excluir utilização:', error);
-      toast({ 
-        title: 'Erro', 
-        description: error.message || 'Erro ao excluir utilização', 
-        variant: 'destructive' 
+      toast({
+        title: 'Erro',
+        description: error.message || 'Erro ao excluir utilização',
+        variant: 'destructive'
       });
     }
   };
@@ -1364,14 +1290,10 @@ export function ToriqCorpControleFrota() {
   const loadManutencoes = async (veiculoId: string) => {
     try {
       setLoadingManutencoes(true);
-      const { data, error } = await (supabase as any)
-        .from('frota_manutencoes')
-        .select('*')
-        .eq('veiculo_id', veiculoId)
-        .order('data', { ascending: false });
-
-      if (error) throw error;
-      setManutencoes(data || []);
+      const data = await api.get<any[]>('/frota/manutencoes').catch(() => [] as any[]);
+      const filtered = (data || []).filter((r: any) => r.veiculo_id === veiculoId)
+        .sort((a: any, b: any) => (b.data || '').localeCompare(a.data || ''));
+      setManutencoes(filtered);
     } catch (error) {
       console.error('Erro ao carregar manutenções:', error);
     } finally {
@@ -1463,39 +1385,31 @@ export function ToriqCorpControleFrota() {
 
     try {
       setSavingManutencao(true);
-      
-      const { error } = await (supabase as any)
-        .from('frota_manutencoes')
-        .insert({
-          veiculo_id: veiculoSelecionado.id,
-          empresa_id: empresaId,
-          tipo: manutencaoForm.tipo,
-          data: manutencaoForm.data,
-          km: manutencaoForm.km,
-          servico: manutencaoForm.servico,
-          status: manutencaoForm.status,
-          custo: manutencaoForm.custo,
-          proxima_km: manutencaoForm.proxima_km || null,
-          proxima_data: manutencaoForm.proxima_data || null,
-          observacoes: manutencaoForm.observacoes
-        });
 
-      if (error) throw error;
+      await api.post<any>('/frota/manutencoes', {
+        veiculo_id: veiculoSelecionado.id,
+        tipo: manutencaoForm.tipo,
+        data: manutencaoForm.data,
+        km: manutencaoForm.km,
+        servico: manutencaoForm.servico,
+        status: manutencaoForm.status,
+        custo: manutencaoForm.custo,
+        proxima_km: manutencaoForm.proxima_km || null,
+        proxima_data: manutencaoForm.proxima_data || null,
+        observacoes: manutencaoForm.observacoes
+      });
 
       // Se houver custo, criar lançamento automático na aba de custos
       if (manutencaoForm.custo && manutencaoForm.custo > 0) {
-        await (supabase as any)
-          .from('frota_custos')
-          .insert({
-            veiculo_id: veiculoSelecionado.id,
-            empresa_id: empresaId,
-            categoria: 'Manutenção',
-            data: manutencaoForm.data,
-            valor: manutencaoForm.custo,
-            fornecedor: null,
-            observacoes: `${manutencaoForm.tipo} - ${manutencaoForm.servico}`
-          });
-        
+        await api.post<any>('/frota/custos', {
+          veiculo_id: veiculoSelecionado.id,
+          categoria: 'Manutenção',
+          data: manutencaoForm.data,
+          valor: manutencaoForm.custo,
+          fornecedor: null,
+          observacoes: `${manutencaoForm.tipo} - ${manutencaoForm.servico}`
+        }).catch(() => null);
+
         // Recarregar custos para atualizar a lista
         loadCustos(veiculoSelecionado.id);
       }
@@ -1520,21 +1434,16 @@ export function ToriqCorpControleFrota() {
     if (!confirm('Deseja realmente excluir esta manutenção?')) return;
     
     try {
-      const { error } = await (supabase as any)
-        .from('frota_manutencoes')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await api.del(`/frota/manutencoes/${id}`);
       toast({ title: 'Sucesso', description: 'Manutenção excluída com sucesso' });
       loadManutencoes(veiculoSelecionado.id);
       loadDadosCalendario();
     } catch (error: any) {
       console.error('Erro ao excluir manutenção:', error);
-      toast({ 
-        title: 'Erro', 
-        description: error.message || 'Erro ao excluir manutenção', 
-        variant: 'destructive' 
+      toast({
+        title: 'Erro',
+        description: error.message || 'Erro ao excluir manutenção',
+        variant: 'destructive'
       });
     }
   };
@@ -1570,41 +1479,33 @@ export function ToriqCorpControleFrota() {
 
     try {
       setSavingManutencao(true);
-      
-      const { error } = await (supabase as any)
-        .from('frota_manutencoes')
-        .update({
-          tipo: manutencaoForm.tipo,
-          data: manutencaoForm.data,
-          km: manutencaoForm.km,
-          servico: manutencaoForm.servico,
-          status: manutencaoForm.status,
-          custo: manutencaoForm.custo,
-          proxima_km: manutencaoForm.proxima_km || null,
-          proxima_data: manutencaoForm.proxima_data || null,
-          observacoes: manutencaoForm.observacoes
-        })
-        .eq('id', editandoManutencao.id);
 
-      if (error) throw error;
+      await api.put<any>(`/frota/manutencoes/${editandoManutencao.id}`, {
+        tipo: manutencaoForm.tipo,
+        data: manutencaoForm.data,
+        km: manutencaoForm.km,
+        servico: manutencaoForm.servico,
+        status: manutencaoForm.status,
+        custo: manutencaoForm.custo,
+        proxima_km: manutencaoForm.proxima_km || null,
+        proxima_data: manutencaoForm.proxima_data || null,
+        observacoes: manutencaoForm.observacoes
+      });
 
       // Se o custo mudou e é maior que zero, criar/atualizar lançamento de custo
       const custoAnterior = editandoManutencao.custo || 0;
       const custoNovo = manutencaoForm.custo || 0;
-      
+
       if (custoNovo > 0 && custoNovo !== custoAnterior) {
-        await (supabase as any)
-          .from('frota_custos')
-          .insert({
-            veiculo_id: veiculoSelecionado.id,
-            empresa_id: empresaId,
-            categoria: 'Manutenção',
-            data: manutencaoForm.data,
-            valor: custoNovo,
-            fornecedor: null,
-            observacoes: `${manutencaoForm.tipo} - ${manutencaoForm.servico}`
-          });
-        
+        await api.post<any>('/frota/custos', {
+          veiculo_id: veiculoSelecionado.id,
+          categoria: 'Manutenção',
+          data: manutencaoForm.data,
+          valor: custoNovo,
+          fornecedor: null,
+          observacoes: `${manutencaoForm.tipo} - ${manutencaoForm.servico}`
+        }).catch(() => null);
+
         loadCustos(veiculoSelecionado.id);
       }
 
@@ -1630,14 +1531,10 @@ export function ToriqCorpControleFrota() {
   const loadChecklists = async (veiculoId: string) => {
     try {
       setLoadingChecklists(true);
-      const { data, error } = await (supabase as any)
-        .from('frota_checklists')
-        .select('*')
-        .eq('veiculo_id', veiculoId)
-        .order('data', { ascending: false });
-
-      if (error) throw error;
-      setChecklists(data || []);
+      const data = await api.get<any[]>('/frota/checklists').catch(() => [] as any[]);
+      const filtered = (data || []).filter((r: any) => r.veiculo_id === veiculoId)
+        .sort((a: any, b: any) => (b.data || '').localeCompare(a.data || ''));
+      setChecklists(filtered);
     } catch (error) {
       console.error('Erro ao carregar checklists:', error);
     } finally {
@@ -1709,22 +1606,17 @@ export function ToriqCorpControleFrota() {
         responsavel: checklistForm.responsavel
       });
 
-      const { error } = await (supabase as any)
-        .from('frota_checklists')
-        .insert({
-          veiculo_id: veiculoSelecionado.id,
-          empresa_id: empresaId,
-          data: checklistForm.data,
-          tipo: checklistForm.tipo,
-          km: checklistForm.km || null,
-          responsavel: checklistForm.responsavel || null,
-          local_inspecao: checklistForm.local || null,
-          status_geral: checklistForm.status_geral,
-          itens_verificados: itensArray,
-          observacoes: checklistForm.observacoes || null
-        });
-
-      if (error) throw error;
+      await api.post<any>('/frota/checklists', {
+        veiculo_id: veiculoSelecionado.id,
+        data: checklistForm.data,
+        tipo: checklistForm.tipo,
+        km: checklistForm.km || null,
+        responsavel: checklistForm.responsavel || null,
+        local_inspecao: checklistForm.local || null,
+        status_geral: checklistForm.status_geral,
+        itens_verificados: itensArray,
+        observacoes: checklistForm.observacoes || null
+      });
 
       toast({ title: 'Sucesso', description: 'Checklist registrado com sucesso' });
       resetChecklistForm();
@@ -1748,20 +1640,15 @@ export function ToriqCorpControleFrota() {
     if (!confirm('Deseja realmente excluir este checklist?')) return;
     
     try {
-      const { error } = await (supabase as any)
-        .from('frota_checklists')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await api.del(`/frota/checklists/${id}`);
       toast({ title: 'Sucesso', description: 'Checklist excluído com sucesso' });
       loadChecklists(veiculoSelecionado.id);
     } catch (error: any) {
       console.error('Erro ao excluir checklist:', error);
-      toast({ 
-        title: 'Erro', 
-        description: error.message || 'Erro ao excluir checklist', 
-        variant: 'destructive' 
+      toast({
+        title: 'Erro',
+        description: error.message || 'Erro ao excluir checklist',
+        variant: 'destructive'
       });
     }
   };
@@ -1795,14 +1682,10 @@ export function ToriqCorpControleFrota() {
   const loadCustos = async (veiculoId: string) => {
     try {
       setLoadingCustos(true);
-      const { data, error } = await (supabase as any)
-        .from('frota_custos')
-        .select('*')
-        .eq('veiculo_id', veiculoId)
-        .order('data', { ascending: false });
-
-      if (error) throw error;
-      setCustos(data || []);
+      const data = await api.get<any[]>('/frota/custos').catch(() => [] as any[]);
+      const filtered = (data || []).filter((r: any) => r.veiculo_id === veiculoId)
+        .sort((a: any, b: any) => (b.data || '').localeCompare(a.data || ''));
+      setCustos(filtered);
     } catch (error) {
       console.error('Erro ao carregar custos:', error);
     } finally {
@@ -1826,19 +1709,14 @@ export function ToriqCorpControleFrota() {
     try {
       setSavingCusto(true);
 
-      const { error } = await (supabase as any)
-        .from('frota_custos')
-        .insert({
-          veiculo_id: veiculoSelecionado.id,
-          empresa_id: empresaId,
-          categoria: custoForm.categoria,
-          data: custoForm.data,
-          valor: custoForm.valor,
-          fornecedor: custoForm.fornecedor,
-          observacoes: custoForm.observacao
-        });
-
-      if (error) throw error;
+      await api.post<any>('/frota/custos', {
+        veiculo_id: veiculoSelecionado.id,
+        categoria: custoForm.categoria,
+        data: custoForm.data,
+        valor: custoForm.valor,
+        fornecedor: custoForm.fornecedor,
+        observacoes: custoForm.observacao
+      });
 
       toast({ title: 'Sucesso', description: 'Custo registrado com sucesso' });
       resetCustoForm();
@@ -1859,20 +1737,15 @@ export function ToriqCorpControleFrota() {
     if (!confirm('Deseja realmente excluir este custo?')) return;
     
     try {
-      const { error } = await (supabase as any)
-        .from('frota_custos')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await api.del(`/frota/custos/${id}`);
       toast({ title: 'Sucesso', description: 'Custo excluído com sucesso' });
       loadCustos(veiculoSelecionado.id);
     } catch (error: any) {
       console.error('Erro ao excluir custo:', error);
-      toast({ 
-        title: 'Erro', 
-        description: error.message || 'Erro ao excluir custo', 
-        variant: 'destructive' 
+      toast({
+        title: 'Erro',
+        description: error.message || 'Erro ao excluir custo',
+        variant: 'destructive'
       });
     }
   };
@@ -1901,14 +1774,10 @@ export function ToriqCorpControleFrota() {
   const loadDocumentos = async (veiculoId: string) => {
     try {
       setLoadingDocumentos(true);
-      const { data, error } = await (supabase as any)
-        .from('frota_documentos')
-        .select('*')
-        .eq('veiculo_id', veiculoId)
-        .order('vencimento', { ascending: true });
-
-      if (error) throw error;
-      setDocumentos(data || []);
+      const data = await api.get<any[]>('/frota/documentos').catch(() => [] as any[]);
+      const filtered = (data || []).filter((r: any) => r.veiculo_id === veiculoId)
+        .sort((a: any, b: any) => (a.vencimento || '').localeCompare(b.vencimento || ''));
+      setDocumentos(filtered);
     } catch (error) {
       console.error('Erro ao carregar documentos:', error);
     } finally {
@@ -1936,42 +1805,34 @@ export function ToriqCorpControleFrota() {
 
       // Upload do arquivo se existir
       if (documentoArquivo) {
-        const fileExt = documentoArquivo.name.split('.').pop();
-        const fileName = `${empresaId}/${veiculoSelecionado.id}/${Date.now()}.${fileExt}`;
-        
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('frota-documentos')
-          .upload(fileName, documentoArquivo);
-
-        if (uploadError) {
-          console.error('Erro no upload:', uploadError);
-          // Se o bucket não existir, continua sem o arquivo
-          if (!uploadError.message.includes('Bucket not found')) {
-            throw uploadError;
+        try {
+          const API_URL: string = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:8000';
+          const formData = new FormData();
+          formData.append('file', documentoArquivo);
+          const uploadRes = await fetch(`${API_URL}/storage/frota-documentos/upload`, {
+            method: 'POST',
+            credentials: 'include',
+            body: formData,
+          });
+          if (uploadRes.ok) {
+            const uploadResult = await uploadRes.json();
+            arquivoUrl = uploadResult.url ?? null;
+          } else {
+            console.error('Erro no upload:', uploadRes.statusText);
           }
-        } else {
-          // Obter URL pública do arquivo
-          const { data: urlData } = supabase.storage
-            .from('frota-documentos')
-            .getPublicUrl(fileName);
-          
-          arquivoUrl = urlData?.publicUrl || null;
+        } catch (uploadErr) {
+          console.error('Erro no upload:', uploadErr);
         }
       }
 
-      const { error } = await (supabase as any)
-        .from('frota_documentos')
-        .insert({
-          veiculo_id: veiculoSelecionado.id,
-          empresa_id: empresaId,
-          tipo: documentoForm.tipo,
-          numero: documentoForm.numero,
-          vencimento: documentoForm.vencimento,
-          observacoes: documentoForm.observacoes,
-          arquivo_url: arquivoUrl
-        });
-
-      if (error) throw error;
+      await api.post<any>('/frota/documentos', {
+        veiculo_id: veiculoSelecionado.id,
+        tipo: documentoForm.tipo,
+        numero: documentoForm.numero,
+        vencimento: documentoForm.vencimento,
+        observacoes: documentoForm.observacoes,
+        arquivo_url: arquivoUrl
+      });
 
       toast({ title: 'Sucesso', description: 'Documento registrado com sucesso' });
       resetDocumentoForm();
@@ -1992,20 +1853,15 @@ export function ToriqCorpControleFrota() {
     if (!confirm('Deseja realmente excluir este documento?')) return;
     
     try {
-      const { error } = await (supabase as any)
-        .from('frota_documentos')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await api.del(`/frota/documentos/${id}`);
       toast({ title: 'Sucesso', description: 'Documento excluído com sucesso' });
       loadDocumentos(veiculoSelecionado.id);
     } catch (error: any) {
       console.error('Erro ao excluir documento:', error);
-      toast({ 
-        title: 'Erro', 
-        description: error.message || 'Erro ao excluir documento', 
-        variant: 'destructive' 
+      toast({
+        title: 'Erro',
+        description: error.message || 'Erro ao excluir documento',
+        variant: 'destructive'
       });
     }
   };
@@ -2043,14 +1899,10 @@ export function ToriqCorpControleFrota() {
   const loadOcorrencias = async (veiculoId: string) => {
     try {
       setLoadingOcorrencias(true);
-      const { data, error } = await (supabase as any)
-        .from('frota_ocorrencias')
-        .select('*')
-        .eq('veiculo_id', veiculoId)
-        .order('data', { ascending: false });
-
-      if (error) throw error;
-      setOcorrencias(data || []);
+      const data = await api.get<any[]>('/frota/ocorrencias').catch(() => [] as any[]);
+      const filtered = (data || []).filter((r: any) => r.veiculo_id === veiculoId)
+        .sort((a: any, b: any) => (b.data || '').localeCompare(a.data || ''));
+      setOcorrencias(filtered);
     } catch (error) {
       console.error('Erro ao carregar ocorrências:', error);
     } finally {
@@ -2077,22 +1929,17 @@ export function ToriqCorpControleFrota() {
     try {
       setSavingOcorrencia(true);
 
-      const { error } = await (supabase as any)
-        .from('frota_ocorrencias')
-        .insert({
-          veiculo_id: veiculoSelecionado.id,
-          empresa_id: empresaId,
-          tipo: ocorrenciaForm.tipo,
-          data: ocorrenciaForm.data,
-          status: ocorrenciaForm.status,
-          local_ocorrencia: ocorrenciaForm.local,
-          descricao: ocorrenciaForm.descricao,
-          custo_estimado: ocorrenciaForm.custo_estimado || null,
-          responsavel: ocorrenciaForm.responsavel,
-          prazo: ocorrenciaForm.prazo || null
-        });
-
-      if (error) throw error;
+      await api.post<any>('/frota/ocorrencias', {
+        veiculo_id: veiculoSelecionado.id,
+        tipo: ocorrenciaForm.tipo,
+        data: ocorrenciaForm.data,
+        status: ocorrenciaForm.status,
+        local_ocorrencia: ocorrenciaForm.local,
+        descricao: ocorrenciaForm.descricao,
+        custo_estimado: ocorrenciaForm.custo_estimado || null,
+        responsavel: ocorrenciaForm.responsavel,
+        prazo: ocorrenciaForm.prazo || null
+      });
 
       toast({ title: 'Sucesso', description: 'Ocorrência registrada com sucesso' });
       resetOcorrenciaForm();
@@ -2113,20 +1960,15 @@ export function ToriqCorpControleFrota() {
     if (!confirm('Deseja realmente excluir esta ocorrência?')) return;
     
     try {
-      const { error } = await (supabase as any)
-        .from('frota_ocorrencias')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await api.del(`/frota/ocorrencias/${id}`);
       toast({ title: 'Sucesso', description: 'Ocorrência excluída com sucesso' });
       loadOcorrencias(veiculoSelecionado.id);
     } catch (error: any) {
       console.error('Erro ao excluir ocorrência:', error);
-      toast({ 
-        title: 'Erro', 
-        description: error.message || 'Erro ao excluir ocorrência', 
-        variant: 'destructive' 
+      toast({
+        title: 'Erro',
+        description: error.message || 'Erro ao excluir ocorrência',
+        variant: 'destructive'
       });
     }
   };
@@ -2136,22 +1978,17 @@ export function ToriqCorpControleFrota() {
 
     try {
       setSavingOcorrencia(true);
-      
-      const { error } = await (supabase as any)
-        .from('frota_ocorrencias')
-        .update({
-          tipo: ocorrenciaForm.tipo,
-          data: ocorrenciaForm.data,
-          status: ocorrenciaForm.status,
-          local_ocorrencia: ocorrenciaForm.local,
-          descricao: ocorrenciaForm.descricao,
-          custo_estimado: ocorrenciaForm.custo_estimado || null,
-          responsavel: ocorrenciaForm.responsavel,
-          prazo: ocorrenciaForm.prazo || null
-        })
-        .eq('id', editandoOcorrencia.id);
 
-      if (error) throw error;
+      await api.put<any>(`/frota/ocorrencias/${editandoOcorrencia.id}`, {
+        tipo: ocorrenciaForm.tipo,
+        data: ocorrenciaForm.data,
+        status: ocorrenciaForm.status,
+        local_ocorrencia: ocorrenciaForm.local,
+        descricao: ocorrenciaForm.descricao,
+        custo_estimado: ocorrenciaForm.custo_estimado || null,
+        responsavel: ocorrenciaForm.responsavel,
+        prazo: ocorrenciaForm.prazo || null
+      });
 
       toast({ title: 'Sucesso', description: 'Ocorrência atualizada com sucesso' });
       setEditandoOcorrencia(null);
@@ -4505,22 +4342,11 @@ export function ToriqCorpControleFrota() {
                                     onClick={async () => {
                                       // Buscar dados do card vinculado
                                       try {
-                                        const { data: cardData, error } = await (supabase as any)
-                                          .from('funil_cards')
-                                          .select(`
-                                            *,
-                                            funil:funil_id(nome, setor_id),
-                                            etapa:etapa_id(nome, cor)
-                                          `)
-                                          .eq('id', util.funil_card_id)
-                                          .single();
-                                        
-                                        if (error) throw error;
-                                        
+                                        const cardData = await api.get<any>(`/funil/cards/${util.funil_card_id}`).catch(() => null);
                                         if (cardData) {
                                           toast({
                                             title: `Card: ${cardData.titulo}`,
-                                            description: `Funil: ${cardData.funil?.nome || 'N/A'} • Etapa: ${cardData.etapa?.nome || 'N/A'}`,
+                                            description: `Funil: ${cardData.funil_id || 'N/A'} • Etapa: ${cardData.etapa_id || 'N/A'}`,
                                           });
                                         }
                                       } catch (err) {

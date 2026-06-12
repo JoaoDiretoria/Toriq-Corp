@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -68,26 +68,19 @@ export function AdminSetorDialog({ open, onOpenChange, empresaId, onDataChange }
   const { data: setores, isLoading } = useQuery({
     queryKey: ['admin-setores', empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('setores')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('nome');
-      if (error) throw error;
-      return data as Setor[];
+      const data = await api.get<any[]>('/sst/setores').catch(() => [] as any[]);
+      return (data as Setor[]).sort((a, b) => a.nome.localeCompare(b.nome));
     },
     enabled: open && !!empresaId,
   });
 
   const createMutation = useMutation({
     mutationFn: async (data: { nome: string; descricao: string; ativo: boolean }) => {
-      const { error } = await supabase.from('setores').insert({
-        empresa_id: empresaId,
+      await api.post('/sst/setores', {
         nome: data.nome,
         descricao: data.descricao || null,
         ativo: data.ativo,
       });
-      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-setores'] });
@@ -106,15 +99,11 @@ export function AdminSetorDialog({ open, onOpenChange, empresaId, onDataChange }
 
   const updateMutation = useMutation({
     mutationFn: async (data: { id: string; nome: string; descricao: string; ativo: boolean }) => {
-      const { error } = await supabase
-        .from('setores')
-        .update({
-          nome: data.nome,
-          descricao: data.descricao || null,
-          ativo: data.ativo,
-        })
-        .eq('id', data.id);
-      if (error) throw error;
+      await api.put(`/sst/setores/${data.id}`, {
+        nome: data.nome,
+        descricao: data.descricao || null,
+        ativo: data.ativo,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-setores'] });
@@ -133,8 +122,7 @@ export function AdminSetorDialog({ open, onOpenChange, empresaId, onDataChange }
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('setores').delete().eq('id', id);
-      if (error) throw error;
+      await api.del(`/sst/setores/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-setores'] });

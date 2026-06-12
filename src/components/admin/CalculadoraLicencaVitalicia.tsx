@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,8 +14,6 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { RotateCcw, Calculator, Info, Plus, Trash2, Package, Save, Edit, Loader2 } from 'lucide-react';
 
-// ID fixo da empresa Toriq
-const TORIQ_EMPRESA_ID = '11111111-1111-1111-1111-111111111111';
 
 interface Servico {
   id: string;
@@ -143,15 +141,12 @@ export function CalculadoraLicencaVitalicia({ onClose, onSave, dadosSalvos }: Ca
     const fetchServicos = async () => {
       setLoadingServicos(true);
       try {
-        const { data, error } = await (supabase as any)
-          .from('servicos')
-          .select('id, nome, preco, categoria')
-          .eq('empresa_id', TORIQ_EMPRESA_ID)
-          .eq('ativo', true)
-          .order('nome');
-        
-        if (error) throw error;
-        setServicos((data || []) as Servico[]);
+        const raw = await api.get<any[]>('/produtos/servicos').catch(() => [] as any[]);
+        // Reaplica filtros client-side: ativo=true e ordenação por nome
+        const data = (raw || [])
+          .filter((s: any) => s.ativo !== false)
+          .sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
+        setServicos(data as Servico[]);
         
         // Se há dados salvos, carregar eles; senão criar módulo inicial
         if (dadosSalvos) {

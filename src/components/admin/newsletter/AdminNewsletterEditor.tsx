@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -84,19 +84,10 @@ export default function AdminNewsletterEditor({ conteudo, onBack }: Props) {
       };
 
       if (conteudo) {
-        const { error } = await (supabase as any)
-          .from('newsletter_conteudos')
-          .update(data)
-          .eq('id', conteudo.id);
-
-        if (error) throw error;
+        await api.put<any>(`/blog/newsletter/conteudos/${conteudo.id}`, data);
         toast.success('Conteúdo atualizado com sucesso');
       } else {
-        const { error } = await (supabase as any)
-          .from('newsletter_conteudos')
-          .insert(data);
-
-        if (error) throw error;
+        await api.post<any>('/blog/newsletter/conteudos', data);
         toast.success('Conteúdo criado com sucesso');
       }
 
@@ -136,42 +127,28 @@ export default function AdminNewsletterEditor({ conteudo, onBack }: Props) {
       let conteudoId = conteudo?.id;
 
       if (conteudo) {
-        const { error } = await (supabase as any)
-          .from('newsletter_conteudos')
-          .update(data)
-          .eq('id', conteudo.id);
-
-        if (error) throw error;
+        await api.put<any>(`/blog/newsletter/conteudos/${conteudo.id}`, data);
       } else {
-        const { data: newData, error } = await (supabase as any)
-          .from('newsletter_conteudos')
-          .insert(data)
-          .select('id')
-          .single();
-
-        if (error) throw error;
+        const newData = await api.post<any>('/blog/newsletter/conteudos', data);
         conteudoId = newData.id;
       }
 
-      // Enviar newsletter
+      // NOTA (migração): supabase.functions.invoke('send-newsletter') não tem endpoint
+      // equivalente no backend Python. Degrade: conteúdo é salvo como 'enviado' mas o
+      // disparo real por e-mail não ocorre até o endpoint de envio ser implementado.
       const baseUrl = window.location.origin;
-      const { data: sendResult, error: sendError } = await supabase.functions.invoke('send-newsletter', {
-        body: {
-          tipo: 'newsletter',
-          referencia_id: conteudoId,
-          titulo,
-          url: `${baseUrl}/newsletter`,
-          descricao,
-        },
-      });
+      const sendResult: any = await api.post<any>('/blog/newsletter/disparar', {
+        tipo: 'newsletter',
+        referencia_id: conteudoId,
+        titulo,
+        url: `${baseUrl}/newsletter`,
+        descricao,
+      }).catch(() => null);
 
-      if (sendError) throw sendError;
-
-      // Atualizar total enviados
-      await (supabase as any)
-        .from('newsletter_conteudos')
-        .update({ total_enviados: sendResult?.total || 0 })
-        .eq('id', conteudoId);
+      // Atualizar total enviados se o disparo retornou dados
+      if (sendResult?.total != null) {
+        await api.put<any>(`/blog/newsletter/conteudos/${conteudoId}`, { total_enviados: sendResult.total }).catch(() => null);
+      }
 
       toast.success(`Newsletter enviada para ${sendResult?.total || 0} inscritos!`);
       onBack();

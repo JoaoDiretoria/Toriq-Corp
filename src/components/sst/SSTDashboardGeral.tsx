@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
 import { usePermissoes } from '@/hooks/usePermissoes';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { 
@@ -49,18 +49,9 @@ export function SSTDashboardGeral({ onNavigate, modulosAtivos }: SSTDashboardGer
   const loadDashboardData = async () => {
     setLoading(true);
     try {
-      // Buscar clientes da empresa SST (tabela clientes_sst)
-      const { count, error } = await supabase
-        .from('clientes_sst')
-        .select('id', { count: 'exact', head: true })
-        .eq('empresa_sst_id', empresaId);
-
-      if (error) {
-        console.error('Erro ao buscar clientes:', error);
-        setTotalClientes(0);
-      } else {
-        setTotalClientes(count || 0);
-      }
+      // Buscar clientes da empresa SST
+      const clientes = await api.get<any[]>('/sst/clientes').catch(() => [] as any[]);
+      setTotalClientes(clientes.length);
 
     } catch (error) {
       console.error('Erro ao carregar dashboard:', error);

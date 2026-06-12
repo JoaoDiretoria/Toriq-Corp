@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -79,23 +79,15 @@ export function ClienteColaboradores() {
     queryKey: ['colaboradores', profile?.empresa_id],
     queryFn: async () => {
       if (!profile?.empresa_id) return [];
-      const { data, error } = await supabase
-        .from('colaboradores')
-        .select(`
-          *
-        `)
-        .eq('empresa_id', profile.empresa_id)
-        .order('nome');
-      if (error) throw error;
-      return data as unknown as Colaborador[];
+      const data = await api.get<any[]>('/sst/colaboradores').catch(() => [] as any[]);
+      return (data as Colaborador[]).sort((a, b) => a.nome.localeCompare(b.nome));
     },
     enabled: !!profile?.empresa_id,
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('colaboradores').delete().eq('id', id);
-      if (error) throw error;
+      await api.del(`/sst/colaboradores/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['colaboradores'] });
@@ -109,11 +101,7 @@ export function ClienteColaboradores() {
 
   const toggleAtivoMutation = useMutation({
     mutationFn: async ({ id, ativo }: { id: string; ativo: boolean }) => {
-      const { error } = await supabase
-        .from('colaboradores')
-        .update({ ativo })
-        .eq('id', id);
-      if (error) throw error;
+      await api.put(`/sst/colaboradores/${id}`, { ativo });
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['colaboradores'] });

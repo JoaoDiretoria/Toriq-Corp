@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useAccessLog } from '@/hooks/useAccessLog';
 import { useToast } from '@/hooks/use-toast';
@@ -105,20 +105,18 @@ const SaudeOcupacional = () => {
       return;
     }
 
-    const { data, error } = await supabase
-      .from('saude_ocupacional')
-      .select('*')
-      .eq('empresa_id', empresa.id)
-      .order('data_exame', { ascending: false });
-
-    if (error) {
+    try {
+      const data = await api.get<any[]>('/sst/saude/exames');
+      const sorted = (data || []).sort(
+        (a: any, b: any) => new Date(b.data_exame).getTime() - new Date(a.data_exame).getTime()
+      );
+      setExames(sorted);
+    } catch (err: any) {
       toast({
         title: "Erro ao carregar exames",
-        description: error.message,
+        description: err?.message ?? 'Erro desconhecido',
         variant: "destructive",
       });
-    } else {
-      setExames(data || []);
     }
     setLoadingData(false);
   };
@@ -149,29 +147,41 @@ const SaudeOcupacional = () => {
     if (!selectedFile || !empresa?.id) return null;
 
     setUploading(true);
-    const fileExt = selectedFile.name.split('.').pop();
-    const fileName = `${empresa.id}/${Date.now()}.${fileExt}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from('aso-files')
-      .upload(fileName, selectedFile);
+    try {
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      const apiUrl = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:8000';
+      const res = await fetch(`${apiUrl}/storage/aso-files/upload`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      });
 
-    setUploading(false);
+      setUploading(false);
 
-    if (uploadError) {
+      if (!res.ok) {
+        let detail: any = null;
+        try { detail = await res.json(); } catch { /* vazio */ }
+        toast({
+          title: "Erro no upload",
+          description: detail?.detail ?? 'Falha ao enviar arquivo',
+          variant: "destructive",
+        });
+        return null;
+      }
+
+      const result = await res.json();
+      return result.url as string;
+    } catch (err: any) {
+      setUploading(false);
       toast({
         title: "Erro no upload",
-        description: uploadError.message,
+        description: err?.message ?? 'Falha ao enviar arquivo',
         variant: "destructive",
       });
       return null;
     }
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('aso-files')
-      .getPublicUrl(fileName);
-
-    return publicUrl;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -183,10 +193,8 @@ const SaudeOcupacional = () => {
       asoUrl = await uploadFile();
     }
 
-    const { error } = await supabase
-      .from('saude_ocupacional')
-      .insert({
-        empresa_id: empresa.id,
+    try {
+      await api.post<any>('/sst/saude/exames', {
         colaborador_nome: formData.colaborador_nome,
         tipo_exame: formData.tipo_exame,
         data_exame: formData.data_exame,
@@ -194,32 +202,32 @@ const SaudeOcupacional = () => {
         aso_arquivo_url: asoUrl,
         observacoes: formData.observacoes || null,
       });
-
-    if (error) {
+    } catch (err: any) {
       toast({
         title: "Erro ao cadastrar exame",
-        description: error.message,
+        description: err?.message ?? 'Erro desconhecido',
         variant: "destructive",
       });
-    } else {
-      toast({
-        title: "Exame cadastrado",
-        description: "O exame foi registrado com sucesso.",
-      });
-      setDialogOpen(false);
-      setFormData({
-        colaborador_nome: '',
-        tipo_exame: '',
-        data_exame: '',
-        validade_dias: '365',
-        observacoes: '',
-      });
-      setSelectedFile(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-      fetchExames();
+      return;
     }
+
+    toast({
+      title: "Exame cadastrado",
+      description: "O exame foi registrado com sucesso.",
+    });
+    setDialogOpen(false);
+    setFormData({
+      colaborador_nome: '',
+      tipo_exame: '',
+      data_exame: '',
+      validade_dias: '365',
+      observacoes: '',
+    });
+    setSelectedFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    fetchExames();
   };
 
   const calcularValidade = (dataExame: string, validadeDias: number) => {

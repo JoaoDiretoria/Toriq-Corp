@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { 
   Search, 
   Building2, 
@@ -53,69 +53,34 @@ export function ReconhecimentoFacialConfig({ onBack }: ReconhecimentoFacialConfi
   const [activatingAll, setActivatingAll] = useState(false);
   const [deactivatingAll, setDeactivatingAll] = useState(false);
 
-  // Fetch ALL clientes_sst (bypass Supabase 1000-row default limit)
+  // Fetch ALL clientes_sst via REST backend
   const loadEmpresasClientes = useCallback(async () => {
     if (!empresaId) return;
     setLoading(true);
     try {
-      const db = supabase as any;
-      
-      // Fetch in batches of 1000 to bypass default limit
-      let allData: any[] = [];
-      let from = 0;
-      const batchSize = 1000;
-      while (true) {
-        const { data: batch, error } = await db
-          .from('clientes_sst')
-          .select(`
-            cliente_empresa_id,
-            empresas!clientes_sst_cliente_empresa_id_fkey (
-              id,
-              nome,
-              razao_social,
-              cnpj
-            )
-          `)
-          .eq('empresa_sst_id', empresaId)
-          .range(from, from + batchSize - 1);
-        
-        if (error) throw error;
-        if (!batch || batch.length === 0) break;
-        allData = allData.concat(batch);
-        if (batch.length < batchSize) break;
-        from += batchSize;
-      }
-      
-      // Mapear dados
-      let mapped: EmpresaCliente[] = allData
-        .filter((d: any) => d.empresas)
-        .map((d: any) => ({
-          id: d.empresas.id,
-          nome_fantasia: d.empresas.nome || '',
-          razao_social: d.empresas.razao_social || '',
-          cnpj: d.empresas.cnpj || '',
-          reconhecimento_facial_ativo: false
-        }));
-      
-      // Buscar configurações de reconhecimento facial (em batches de 200)
-      const allIds = mapped.map(e => e.id);
+      // Buscar clientes SST e configurações de reconhecimento facial em paralelo
+      const [clientes, configs] = await Promise.all([
+        api.get<any[]>('/sst/clientes').catch(() => [] as any[]),
+        api.get<any[]>('/treinamentos/reconhecimento-facial-config').catch(() => [] as any[]),
+      ]);
+
+      // Montar mapa de config por cliente_empresa_id (= clientes_sst.id no novo modelo)
       const configMap: Record<string, boolean> = {};
-      for (let i = 0; i < allIds.length; i += 200) {
-        const chunk = allIds.slice(i, i + 200);
-        const { data: configs } = await db
-          .from('reconhecimento_facial_config')
-          .select('cliente_empresa_id, ativo')
-          .eq('empresa_sst_id', empresaId)
-          .in('cliente_empresa_id', chunk);
-        (configs || []).forEach((c: any) => {
-          configMap[c.cliente_empresa_id] = c.ativo;
-        });
-      }
-      mapped = mapped.map(e => ({
-        ...e,
-        reconhecimento_facial_ativo: configMap[e.id] || false
+      (configs || []).forEach((c: any) => {
+        // cliente_empresa_id referencia o id do registro clientes_sst no novo backend
+        configMap[c.cliente_empresa_id] = c.ativo;
+      });
+
+      // Mapear dados — ClienteOut: { id, nome, cnpj, ... }
+      // nome_fantasia e razao_social colapsam em 'nome' no novo modelo
+      const mapped: EmpresaCliente[] = (clientes || []).map((d: any) => ({
+        id: d.id,
+        nome_fantasia: d.nome || '',
+        razao_social: '',
+        cnpj: d.cnpj || '',
+        reconhecimento_facial_ativo: configMap[d.id] || false,
       }));
-      
+
       setAllEmpresas(mapped);
     } catch (e) {
       console.error('Erro ao carregar empresas clientes:', e);
@@ -156,45 +121,31 @@ export function ReconhecimentoFacialConfig({ onBack }: ReconhecimentoFacialConfi
     if (!empresaId) return;
     setSaving(clienteEmpresaId);
     try {
-      const db = supabase as any;
-      
-      // Verificar se já existe configuração
-      const { data: existing } = await db
-        .from('reconhecimento_facial_config')
-        .select('id')
-        .eq('empresa_sst_id', empresaId)
-        .eq('cliente_empresa_id', clienteEmpresaId)
-        .maybeSingle();
-      
+      // Buscar configuração existente para determinar se é create ou update
+      const configs = await api.get<any[]>('/treinamentos/reconhecimento-facial-config').catch(() => [] as any[]);
+      const existing = (configs || []).find((c: any) => c.cliente_empresa_id === clienteEmpresaId);
+
       if (existing) {
-        // Atualizar
-        const { error } = await db
-          .from('reconhecimento_facial_config')
-          .update({ ativo, updated_at: new Date().toISOString() })
-          .eq('id', existing.id);
-        if (error) throw error;
+        // Atualizar configuração existente
+        await api.put(`/treinamentos/reconhecimento-facial-config/${existing.id}`, { ativo });
       } else {
-        // Inserir
-        const { error } = await db
-          .from('reconhecimento_facial_config')
-          .insert({
-            empresa_sst_id: empresaId,
-            cliente_empresa_id: clienteEmpresaId,
-            ativo
-          });
-        if (error) throw error;
+        // Criar nova configuração
+        await api.post('/treinamentos/reconhecimento-facial-config', {
+          cliente_empresa_id: clienteEmpresaId,
+          ativo,
+        });
       }
-      
+
       // Atualizar estado local (allEmpresas drives everything)
-      setAllEmpresas(prev => 
-        prev.map(e => 
-          e.id === clienteEmpresaId 
+      setAllEmpresas(prev =>
+        prev.map(e =>
+          e.id === clienteEmpresaId
             ? { ...e, reconhecimento_facial_ativo: ativo }
             : e
         )
       );
-      
-      toast({ 
+
+      toast({
         title: ativo ? 'Reconhecimento facial ativado' : 'Reconhecimento facial desativado',
         description: `Configuração atualizada com sucesso.`
       });
@@ -210,44 +161,33 @@ export function ReconhecimentoFacialConfig({ onBack }: ReconhecimentoFacialConfi
     if (!empresaId) return;
     setActivatingAll(true);
     try {
-      const db = supabase as any;
-      
-      // Buscar todos os clientes
-      const { data: clientes } = await db
-        .from('clientes_sst')
-        .select('cliente_empresa_id')
-        .eq('empresa_sst_id', empresaId);
-      
+      // Buscar clientes e configs atuais em paralelo
+      const [clientes, configs] = await Promise.all([
+        api.get<any[]>('/sst/clientes').catch(() => [] as any[]),
+        api.get<any[]>('/treinamentos/reconhecimento-facial-config').catch(() => [] as any[]),
+      ]);
+
       if (!clientes || clientes.length === 0) {
         toast({ title: 'Nenhuma empresa cliente encontrada', variant: 'destructive' });
         return;
       }
-      
-      // Para cada cliente, criar ou atualizar configuração
-      for (const cliente of clientes) {
-        const { data: existing } = await db
-          .from('reconhecimento_facial_config')
-          .select('id')
-          .eq('empresa_sst_id', empresaId)
-          .eq('cliente_empresa_id', cliente.cliente_empresa_id)
-          .maybeSingle();
-        
+
+      // Para cada cliente, criar ou atualizar configuração (loop client-side com Promise.all)
+      const configMap: Record<string, any> = {};
+      (configs || []).forEach((c: any) => { configMap[c.cliente_empresa_id] = c; });
+
+      await Promise.all(clientes.map((cliente: any) => {
+        const existing = configMap[cliente.id];
         if (existing) {
-          await db
-            .from('reconhecimento_facial_config')
-            .update({ ativo: true, updated_at: new Date().toISOString() })
-            .eq('id', existing.id);
+          return api.put(`/treinamentos/reconhecimento-facial-config/${existing.id}`, { ativo: true });
         } else {
-          await db
-            .from('reconhecimento_facial_config')
-            .insert({
-              empresa_sst_id: empresaId,
-              cliente_empresa_id: cliente.cliente_empresa_id,
-              ativo: true
-            });
+          return api.post('/treinamentos/reconhecimento-facial-config', {
+            cliente_empresa_id: cliente.id,
+            ativo: true,
+          });
         }
-      }
-      
+      }));
+
       toast({ title: 'Reconhecimento facial ativado para todas as empresas' });
       loadEmpresasClientes();
     } catch (e) {
@@ -262,16 +202,14 @@ export function ReconhecimentoFacialConfig({ onBack }: ReconhecimentoFacialConfi
     if (!empresaId) return;
     setDeactivatingAll(true);
     try {
-      const db = supabase as any;
-      
-      // Desativar todas as configurações da empresa SST
-      const { error } = await db
-        .from('reconhecimento_facial_config')
-        .update({ ativo: false, updated_at: new Date().toISOString() })
-        .eq('empresa_sst_id', empresaId);
-      
-      if (error) throw error;
-      
+      // Buscar configs ativas e desativar cada uma (loop client-side com Promise.all)
+      const configs = await api.get<any[]>('/treinamentos/reconhecimento-facial-config').catch(() => [] as any[]);
+      const ativas = (configs || []).filter((c: any) => c.ativo);
+
+      await Promise.all(ativas.map((c: any) =>
+        api.put(`/treinamentos/reconhecimento-facial-config/${c.id}`, { ativo: false })
+      ));
+
       toast({ title: 'Reconhecimento facial desativado para todas as empresas' });
       loadEmpresasClientes();
     } catch (e) {

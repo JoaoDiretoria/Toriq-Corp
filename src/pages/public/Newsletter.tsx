@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Mail, ArrowLeft, CheckCircle, XCircle, AlertTriangle, Sparkles, Send, BookOpen, BarChart3, Gift, Lightbulb, Bell, Zap } from 'lucide-react';
 import LandingHeader from '@/components/landing/LandingHeader';
 import LandingFooter from '@/components/landing/LandingFooter';
@@ -75,7 +75,7 @@ export default function Newsletter() {
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!nome.trim()) {
       toast.error('Por favor, informe seu nome');
       return;
@@ -91,65 +91,27 @@ export default function Newsletter() {
 
     setLoading(true);
     try {
-      const { data: existing } = await (supabase as any)
-        .from('newsletter_inscricoes')
-        .select('id, ativo')
-        .eq('email', email.toLowerCase())
-        .maybeSingle();
+      // POST /blog/newsletter/inscricoes — endpoint público, sem autenticação.
+      // Retorna 409 se o e-mail já existir (ativo ou inativo).
+      // NOTA (migração): reativação de cadastro inativo não tem endpoint público;
+      // degradado para exibir mensagem "já cadastrado" nos dois casos.
+      await api.post<any>('/blog/newsletter/inscricoes', {
+        nome,
+        email: email.toLowerCase(),
+        telefone,
+        empresa: empresa || null,
+        cargo: cargo || null,
+      });
 
-      if (existing) {
-        if (existing.ativo) {
-          toast.info('Este e-mail já está cadastrado na newsletter!');
-          setLoading(false);
-          return;
-        } else {
-          await (supabase as any)
-            .from('newsletter_inscricoes')
-            .update({
-              ativo: true,
-              nome,
-              telefone,
-              data_nascimento: dataNascimento || null,
-              empresa: empresa || null,
-              cargo: cargo || null,
-              ip_address: userIp,
-              updated_at: new Date().toISOString(),
-              unsubscribed_at: null,
-            })
-            .eq('id', existing.id);
-          
-          toast.success('Bem-vindo de volta! Seu cadastro foi reativado.');
-          setSuccess(true);
-          setLoading(false);
-          return;
-        }
-      }
-
-      const { error } = await (supabase as any)
-        .from('newsletter_inscricoes')
-        .insert({
-          nome,
-          email: email.toLowerCase(),
-          telefone,
-          data_nascimento: dataNascimento || null,
-          empresa: empresa || null,
-          cargo: cargo || null,
-          ip_address: userIp,
-        });
-
-      if (error) {
-        if (error.code === '23505') {
-          toast.info('Este e-mail já está cadastrado na newsletter!');
-        } else {
-          throw error;
-        }
+      toast.success('Cadastro realizado com sucesso!');
+      setSuccess(true);
+    } catch (error: any) {
+      if (error?.status === 409) {
+        toast.info('Este e-mail já está cadastrado na newsletter!');
       } else {
-        toast.success('Cadastro realizado com sucesso!');
-        setSuccess(true);
+        console.error('Erro ao cadastrar:', error);
+        toast.error('Erro ao realizar cadastro. Tente novamente.');
       }
-    } catch (error) {
-      console.error('Erro ao cadastrar:', error);
-      toast.error('Erro ao realizar cadastro. Tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -164,36 +126,10 @@ export default function Newsletter() {
     setLoading(true);
     setNotFoundError(false);
     try {
-      const { data: existing } = await (supabase as any)
-        .from('newsletter_inscricoes')
-        .select('id, ativo')
-        .eq('email', unsubscribeEmail.toLowerCase())
-        .maybeSingle();
-
-      if (!existing) {
-        setNotFoundError(true);
-        setLoading(false);
-        return;
-      }
-
-      if (!existing.ativo) {
-        toast.info('Este e-mail já foi descadastrado anteriormente.');
-        setSuccess(true);
-        setLoading(false);
-        return;
-      }
-
-      await (supabase as any)
-        .from('newsletter_inscricoes')
-        .update({
-          ativo: false,
-          unsubscribed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existing.id);
-
-      toast.success('Você foi descadastrado da newsletter.');
-      setSuccess(true);
+      // NOTA (migração): não existe endpoint público para descadastro por e-mail.
+      // PUT /blog/newsletter/inscricoes/{id} requer admin_vertical.
+      // Degradado: solicita ao usuário que entre em contato para cancelar a inscrição.
+      toast.error('Funcionalidade temporariamente indisponível. Entre em contato pelo site para cancelar sua inscrição.');
     } catch (error) {
       console.error('Erro ao descadastrar:', error);
       toast.error('Erro ao realizar descadastro. Tente novamente.');

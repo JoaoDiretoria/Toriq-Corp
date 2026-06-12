@@ -15,7 +15,7 @@ import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaEfetiva } from '@/hooks/useEmpresaMode';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Plus, Search, DollarSign, Calendar as CalendarIcon, MoreVertical, Trash2, Eye, GripVertical, Edit, Target, Info, RefreshCw, Building2, Mail, Phone, MessageSquare, Video, MapPin, FileText, Clock, ArrowRight, CheckCircle2, CalendarClock, ExternalLink, ArrowRightLeft, ListChecks, Loader2, X, Paperclip, Upload, BookTemplate, Save } from 'lucide-react';
@@ -476,14 +476,9 @@ export function SSTContasPagar() {
     if (modelosDialogOpen && empresaId) {
       const fetchModelos = async () => {
         try {
-          const { data, error } = await (supabase as any)
-            .from('modelos_atividade')
-            .select('*')
-            .eq('empresa_id', empresaId)
-            .order('nome');
-          
-          if (error) throw error;
-          setModelos(data || []);
+          const data = await api.get<any[]>('/financeiro/modelos-atividade').catch(() => [] as any[]);
+          const sorted = (data || []).slice().sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || ''));
+          setModelos(sorted);
         } catch (error) {
           console.error('Erro ao carregar modelos:', error);
         }
@@ -496,77 +491,53 @@ export function SSTContasPagar() {
     setLoading(true);
     try {
       // Carregar colunas
-      const { data: colunasData, error: colunasError } = await (supabase as any)
-        .from('contas_pagar_colunas')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('ordem');
-
-      if (colunasError) throw colunasError;
+      let colunasData: any[] = await api.get<any[]>('/financeiro/contas-pagar/colunas').catch(() => [] as any[]);
 
       if (colunasData && colunasData.length > 0) {
-        setColunas(colunasData);
+        const sorted = colunasData.slice().sort((a: any, b: any) => a.ordem - b.ordem);
+        setColunas(sorted);
       } else {
-        // Criar colunas iniciais - remover id para deixar o banco gerar
-        const colunasParaCriar = colunasIniciais.map(({ id, ...rest }) => ({
-          ...rest,
-          empresa_id: empresaId,
-        }));
-        
-        const { data: novasColunas, error: createError } = await (supabase as any)
-          .from('contas_pagar_colunas')
-          .insert(colunasParaCriar)
-          .select();
-
-        if (createError) throw createError;
-        setColunas(novasColunas || []);
+        // Bootstrap das colunas padrão no backend
+        await api.post('/financeiro/contas-pagar/bootstrap-colunas').catch(() => null);
+        colunasData = await api.get<any[]>('/financeiro/contas-pagar/colunas').catch(() => [] as any[]);
+        const sorted = (colunasData || []).slice().sort((a: any, b: any) => a.ordem - b.ordem);
+        setColunas(sorted);
       }
 
       // Carregar contas a pagar
-      const { data: contasData, error: contasError } = await (supabase as any)
-        .from('contas_pagar')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('created_at', { ascending: false });
+      const contasData: any[] = await api.get<any[]>('/financeiro/contas-pagar').catch(() => [] as any[]);
+      const contasSorted = (contasData || []).slice().sort((a: any, b: any) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+      setContas(contasSorted);
 
-      if (contasError) throw contasError;
-      setContas(contasData || []);
+      // Carregar fornecedores (filtro ativo client-side)
+      const fornecedoresData: any[] = await api.get<any[]>('/financeiro/cadastros/fornecedores').catch(() => [] as any[]);
+      const fornecedoresAtivos = (fornecedoresData || [])
+        .filter((f: any) => f.ativo !== false)
+        .sort((a: any, b: any) => (a.nome_fantasia || '').localeCompare(b.nome_fantasia || ''));
+      setFornecedores(fornecedoresAtivos);
 
-      // Carregar fornecedores
-      const { data: fornecedoresData } = await (supabase as any)
-        .from('fornecedores')
-        .select('id, nome_fantasia, razao_social, cnpj_cpf, classificacao_despesa_padrao, descricao_despesa_padrao')
-        .eq('empresa_id', empresaId)
-        .eq('ativo', true)
-        .order('nome_fantasia');
-      setFornecedores(fornecedoresData || []);
+      // Carregar formas de pagamento (filtro ativo client-side)
+      const formasData: any[] = await api.get<any[]>('/financeiro/cadastros/formas-pagamento').catch(() => [] as any[]);
+      const formasAtivas = (formasData || [])
+        .filter((f: any) => f.ativo !== false)
+        .sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || ''));
+      setFormasPagamento(formasAtivas);
 
-      // Carregar formas de pagamento
-      const { data: formasData } = await (supabase as any)
-        .from('formas_pagamento')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .eq('ativo', true)
-        .order('nome');
-      setFormasPagamento(formasData || []);
+      // Carregar contas bancárias (filtro ativo client-side)
+      const contasBancariasList: any[] = await api.get<any[]>('/financeiro/cadastros/contas-bancarias').catch(() => [] as any[]);
+      const contasBancariasAtivas = (contasBancariasList || [])
+        .filter((c: any) => c.ativo !== false)
+        .sort((a: any, b: any) => (a.banco || '').localeCompare(b.banco || ''));
+      setContasBancarias(contasBancariasAtivas);
 
-      // Carregar contas bancárias
-      const { data: contasData2 } = await (supabase as any)
-        .from('contas_bancarias')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .eq('ativo', true)
-        .order('banco');
-      setContasBancarias(contasData2 || []);
-
-      // Carregar planos de despesa
-      const { data: planosData } = await (supabase as any)
-        .from('plano_despesas')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .eq('ativo', true)
-        .order('nome');
-      setPlanosDespesa(planosData || []);
+      // Carregar planos de despesa (filtro ativo client-side)
+      const planosData: any[] = await api.get<any[]>('/financeiro/cadastros/plano-despesas').catch(() => [] as any[]);
+      const planosAtivos = (planosData || [])
+        .filter((p: any) => p.ativo !== false)
+        .sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || ''));
+      setPlanosDespesa(planosAtivos);
 
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
@@ -590,67 +561,57 @@ export function SSTContasPagar() {
 
     try {
       const colunaInicial = colunas.find(c => c.nome === 'Nova conta a pagar') || colunas[0];
-      
-      if (editingCard) {
-        const { error } = await (supabase as any)
-          .from('contas_pagar')
-          .update({
-            fornecedor_id: cardForm.fornecedor_id || null,
-            fornecedor_nome: cardForm.fornecedor_nome,
-            fornecedor_cnpj: cardForm.fornecedor_cnpj,
-            descricao: cardForm.descricao,
-            valor: cardForm.valor,
-            valor_pago: cardForm.valor_pago,
-            data_competencia: cardForm.data_competencia || null,
-            data_vencimento: cardForm.data_vencimento,
-            forma_pagamento_id: cardForm.forma_pagamento_id || null,
-            forma_pagamento: cardForm.forma_pagamento,
-            centro_custo_id: cardForm.descricao_id || null,
-            categoria: cardForm.categoria,
-            conta_financeira_id: cardForm.conta_financeira_id || null,
-            conta_financeira: cardForm.conta_financeira,
-            frequencia_cobranca: cardForm.frequencia_cobranca,
-            tipo_valor_recorrente: cardForm.tipo_valor_recorrente || null,
-            observacoes: cardForm.observacoes,
-          })
-          .eq('id', editingCard.id);
 
-        if (error) throw error;
+      if (editingCard) {
+        await api.put(`/financeiro/contas-pagar/${editingCard.id}`, {
+          fornecedor_id: cardForm.fornecedor_id || null,
+          fornecedor_nome: cardForm.fornecedor_nome,
+          fornecedor_cnpj: cardForm.fornecedor_cnpj,
+          descricao: cardForm.descricao,
+          valor: cardForm.valor,
+          valor_pago: cardForm.valor_pago,
+          data_competencia: cardForm.data_competencia || null,
+          data_vencimento: cardForm.data_vencimento,
+          forma_pagamento_id: cardForm.forma_pagamento_id || null,
+          forma_pagamento: cardForm.forma_pagamento,
+          centro_custo_id: cardForm.descricao_id || null,
+          categoria: cardForm.categoria,
+          conta_financeira_id: cardForm.conta_financeira_id || null,
+          conta_financeira: cardForm.conta_financeira,
+          frequencia_cobranca: cardForm.frequencia_cobranca,
+          tipo_valor_recorrente: cardForm.tipo_valor_recorrente || null,
+          observacoes: cardForm.observacoes,
+        });
         toast({ title: 'Sucesso', description: 'Conta atualizada com sucesso' });
       } else {
-        const { error } = await (supabase as any)
-          .from('contas_pagar')
-          .insert({
-            empresa_id: empresaId,
-            numero: gerarNumero(),
-            fornecedor_id: cardForm.fornecedor_id || null,
-            fornecedor_nome: cardForm.fornecedor_nome,
-            fornecedor_cnpj: cardForm.fornecedor_cnpj,
-            descricao: cardForm.descricao,
-            valor: cardForm.valor,
-            valor_pago: 0,
-            data_competencia: cardForm.data_competencia || null,
-            data_vencimento: cardForm.data_vencimento,
-            forma_pagamento_id: cardForm.forma_pagamento_id || null,
-            forma_pagamento: cardForm.forma_pagamento,
-            centro_custo_id: cardForm.descricao_id || null,
-            categoria: cardForm.categoria,
-            conta_financeira_id: cardForm.conta_financeira_id || null,
-            conta_financeira: cardForm.conta_financeira,
-            frequencia_cobranca: cardForm.frequencia_cobranca,
-            tipo_valor_recorrente: cardForm.tipo_valor_recorrente || null,
-            observacoes: cardForm.observacoes,
-            coluna_id: selectedColunaId || colunaInicial?.id,
-            status_pagamento: 'previsto',
-            ordem: 0,
-          });
+        await api.post('/financeiro/contas-pagar', {
+          numero: gerarNumero(),
+          fornecedor_id: cardForm.fornecedor_id || null,
+          fornecedor_nome: cardForm.fornecedor_nome,
+          fornecedor_cnpj: cardForm.fornecedor_cnpj,
+          descricao: cardForm.descricao,
+          valor: cardForm.valor,
+          valor_pago: 0,
+          data_competencia: cardForm.data_competencia || null,
+          data_vencimento: cardForm.data_vencimento,
+          forma_pagamento_id: cardForm.forma_pagamento_id || null,
+          forma_pagamento: cardForm.forma_pagamento,
+          centro_custo_id: cardForm.descricao_id || null,
+          categoria: cardForm.categoria,
+          conta_financeira_id: cardForm.conta_financeira_id || null,
+          conta_financeira: cardForm.conta_financeira,
+          frequencia_cobranca: cardForm.frequencia_cobranca,
+          tipo_valor_recorrente: cardForm.tipo_valor_recorrente || null,
+          observacoes: cardForm.observacoes,
+          coluna_id: selectedColunaId || colunaInicial?.id,
+          status_pagamento: 'previsto',
+          ordem: 0,
+        });
 
-        if (error) throw error;
-        
         // Mensagem especial para pagamentos recorrentes
         if (cardForm.frequencia_cobranca === 'recorrente') {
-          toast({ 
-            title: 'Conta Recorrente Criada', 
+          toast({
+            title: 'Conta Recorrente Criada',
             description: 'Todo dia 1 de cada mês, o card correspondente à cobrança do mês será exibido na coluna Pagamentos Recorrentes.',
             duration: 6000,
           });
@@ -676,24 +637,17 @@ export function SSTContasPagar() {
 
     try {
       if (editingColuna) {
-        const { error } = await (supabase as any)
-          .from('contas_pagar_colunas')
-          .update({ nome: colunaForm.nome, cor: colunaForm.cor })
-          .eq('id', editingColuna.id);
-
-        if (error) throw error;
+        await api.put(`/financeiro/contas-pagar/colunas/${editingColuna.id}`, {
+          nome: colunaForm.nome,
+          cor: colunaForm.cor,
+        });
         toast({ title: 'Sucesso', description: 'Coluna atualizada' });
       } else {
-        const { error } = await (supabase as any)
-          .from('contas_pagar_colunas')
-          .insert({
-            empresa_id: empresaId,
-            nome: colunaForm.nome,
-            cor: colunaForm.cor,
-            ordem: colunas.length,
-          });
-
-        if (error) throw error;
+        await api.post('/financeiro/contas-pagar/colunas', {
+          nome: colunaForm.nome,
+          cor: colunaForm.cor,
+          ordem: colunas.length,
+        });
         toast({ title: 'Sucesso', description: 'Coluna criada' });
       }
 
@@ -712,18 +666,10 @@ export function SSTContasPagar() {
 
     try {
       if (deleteType === 'card') {
-        const { error } = await (supabase as any)
-          .from('contas_pagar')
-          .delete()
-          .eq('id', deleteId);
-        if (error) throw error;
+        await api.del(`/financeiro/contas-pagar/${deleteId}`);
         toast({ title: 'Sucesso', description: 'Conta excluída' });
       } else {
-        const { error } = await (supabase as any)
-          .from('contas_pagar_colunas')
-          .delete()
-          .eq('id', deleteId);
-        if (error) throw error;
+        await api.del(`/financeiro/contas-pagar/colunas/${deleteId}`);
         toast({ title: 'Sucesso', description: 'Coluna excluída' });
       }
 
@@ -740,7 +686,7 @@ export function SSTContasPagar() {
   const handleStatusChange = async (cardId: string, status: 'previsto' | 'realizado' | 'vencido') => {
     try {
       const updates: any = { status_pagamento: status };
-      
+
       if (status === 'realizado') {
         const conta = contas.find(c => c.id === cardId);
         if (conta) {
@@ -751,12 +697,7 @@ export function SSTContasPagar() {
         }
       }
 
-      const { error } = await (supabase as any)
-        .from('contas_pagar')
-        .update(updates)
-        .eq('id', cardId);
-
-      if (error) throw error;
+      await api.patch(`/financeiro/contas-pagar/${cardId}`, updates);
       loadData();
     } catch (error) {
       console.error('Erro ao atualizar status:', error);
@@ -769,20 +710,15 @@ export function SSTContasPagar() {
     
     setSalvandoProgramacao(true);
     try {
-      const { error } = await (supabase as any)
-        .from('contas_pagar')
-        .update({ 
-          data_pagamento_programado: format(dataProgramada, 'yyyy-MM-dd')
-        })
-        .eq('id', viewingCard.id);
-
-      if (error) throw error;
-      
-      toast({ 
-        title: 'Pagamento programado', 
-        description: `Pagamento programado para ${format(dataProgramada, 'dd/MM/yyyy', { locale: ptBR })}` 
+      await api.patch(`/financeiro/contas-pagar/${viewingCard.id}`, {
+        data_pagamento_programado: format(dataProgramada, 'yyyy-MM-dd'),
       });
-      
+
+      toast({
+        title: 'Pagamento programado',
+        description: `Pagamento programado para ${format(dataProgramada, 'dd/MM/yyyy', { locale: ptBR })}`,
+      });
+
       setProgramarPagamentoDialogOpen(false);
       setDataProgramada(undefined);
       loadData();
@@ -824,64 +760,34 @@ export function SSTContasPagar() {
   const fetchAtividades = async (contaId: string) => {
     setLoadingAtividades(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('contas_pagar_atividades')
-        .select('*')
-        .eq('conta_id', contaId)
-        .order('created_at', { ascending: false });
+      const data: any[] = await api.get<any[]>(`/financeiro/contas-pagar/${contaId}/atividades`).catch(() => [] as any[]);
 
-      if (error) {
-        console.log('Erro ao buscar atividades:', error.message);
-        setAtividades([]);
-        return;
-      }
-
-      // Buscar nomes dos usuários
-      const usuarioIds = [...new Set((data || []).map((a: any) => a.usuario_id).filter(Boolean))] as string[];
-      let usuariosMap: Record<string, { nome: string }> = {};
-      
-      if (usuarioIds.length > 0) {
-        const { data: usuarios } = await supabase
-          .from('profiles')
-          .select('id, nome')
-          .in('id', usuarioIds);
-        
-        if (usuarios) {
-          usuariosMap = usuarios.reduce((acc: any, u: any) => {
-            acc[u.id] = { nome: u.nome };
-            return acc;
-          }, {});
-        }
-      }
-
-      // Buscar anexos de todas as atividades
+      // Buscar anexos para cada atividade via endpoint REST
       const atividadeIds = (data || []).map((a: any) => a.id);
       let anexosMap: Record<string, any[]> = {};
-      
+
       if (atividadeIds.length > 0) {
-        const { data: anexos } = await (supabase as any)
-          .from('contas_pagar_atividades_anexos')
-          .select('*')
-          .in('atividade_id', atividadeIds);
-        
-        if (anexos) {
-          anexosMap = anexos.reduce((acc: any, anexo: any) => {
-            if (!acc[anexo.atividade_id]) {
-              acc[anexo.atividade_id] = [];
-            }
-            acc[anexo.atividade_id].push(anexo);
-            return acc;
-          }, {});
-        }
+        const anexosResults = await Promise.all(
+          atividadeIds.map((atividadeId: string) =>
+            api.get<any[]>(`/financeiro/contas-pagar/atividades/${atividadeId}/anexos`).catch(() => [] as any[])
+          )
+        );
+        atividadeIds.forEach((atividadeId: string, idx: number) => {
+          anexosMap[atividadeId] = anexosResults[idx] || [];
+        });
       }
 
-      const atividadesComUsuario = (data || []).map((atividade: any) => ({
-        ...atividade,
-        usuario: atividade.usuario_id ? usuariosMap[atividade.usuario_id] || null : null,
-        anexos: anexosMap[atividade.id] || [],
-      }));
+      // NOTA (migração): busca de nomes de usuário via profiles removida —
+      // não há endpoint REST de lookup por IDs. O campo usuario ficará null.
+      const atividadesComAnexos = (data || [])
+        .map((atividade: any) => ({
+          ...atividade,
+          usuario: null,
+          anexos: anexosMap[atividade.id] || [],
+        }))
+        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-      setAtividades(atividadesComUsuario);
+      setAtividades(atividadesComAnexos);
     } catch (error) {
       console.error('Erro ao buscar atividades:', error);
       setAtividades([]);
@@ -893,42 +799,15 @@ export function SSTContasPagar() {
   const fetchMovimentacoes = async (contaId: string) => {
     setLoadingMovimentacoes(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('contas_pagar_movimentacoes')
-        .select('*')
-        .eq('conta_id', contaId)
-        .order('created_at', { ascending: false });
+      const data: any[] = await api.get<any[]>(`/financeiro/contas-pagar/${contaId}/movimentacoes`).catch(() => [] as any[]);
 
-      if (error) {
-        console.log('Erro ao buscar movimentações:', error.message);
-        setMovimentacoes([]);
-        return;
-      }
+      // NOTA (migração): busca de nomes de usuário via profiles removida —
+      // não há endpoint REST de lookup por IDs. O campo usuario ficará null.
+      const movimentacoesOrdenadas = (data || [])
+        .map((mov: any) => ({ ...mov, usuario: null }))
+        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-      // Buscar nomes dos usuários
-      const usuarioIds = [...new Set((data || []).map((m: any) => m.usuario_id).filter(Boolean))] as string[];
-      let usuariosMap: Record<string, { nome: string }> = {};
-      
-      if (usuarioIds.length > 0) {
-        const { data: usuarios } = await supabase
-          .from('profiles')
-          .select('id, nome')
-          .in('id', usuarioIds);
-        
-        if (usuarios) {
-          usuariosMap = usuarios.reduce((acc: any, u: any) => {
-            acc[u.id] = { nome: u.nome };
-            return acc;
-          }, {});
-        }
-      }
-
-      const movimentacoesComUsuario = (data || []).map((mov: any) => ({
-        ...mov,
-        usuario: mov.usuario_id ? usuariosMap[mov.usuario_id] || null : null,
-      }));
-
-      setMovimentacoes(movimentacoesComUsuario);
+      setMovimentacoes(movimentacoesOrdenadas);
     } catch (error) {
       console.error('Erro ao buscar movimentações:', error);
       setMovimentacoes([]);
@@ -960,7 +839,7 @@ export function SSTContasPagar() {
 
     try {
       let descricaoFinal = novaAtividade.descricao;
-      
+
       // Se for checklist, salvar os itens como JSON
       if (novaAtividade.tipo === 'checklist' && checklistItems.length > 0) {
         descricaoFinal = JSON.stringify({
@@ -969,19 +848,14 @@ export function SSTContasPagar() {
         });
       }
 
-      const { error } = await (supabase as any)
-        .from('contas_pagar_atividades')
-        .insert({
-          conta_id: viewingCard.id,
-          tipo: novaAtividade.tipo,
-          descricao: descricaoFinal,
-          prazo: novaAtividade.prazo || null,
-          horario: novaAtividade.horario || null,
-          status: novaAtividade.prazo ? 'programada' : 'a_realizar',
-          usuario_id: profile?.id,
-        });
-
-      if (error) throw error;
+      await api.post(`/financeiro/contas-pagar/${viewingCard.id}/atividades`, {
+        tipo: novaAtividade.tipo,
+        descricao: descricaoFinal,
+        prazo: novaAtividade.prazo || null,
+        horario: novaAtividade.horario || null,
+        status: novaAtividade.prazo ? 'programada' : 'a_realizar',
+        usuario_id: profile?.id || null,
+      });
 
       toast({ title: 'Sucesso', description: 'Atividade registrada com sucesso' });
       setNovaAtividade({ tipo: 'tarefa', descricao: '', prazo: '', horario: '' });
@@ -1000,18 +874,15 @@ export function SSTContasPagar() {
     if (!viewingCard) return;
 
     try {
-      const { error } = await (supabase as any)
-        .from('contas_pagar_atividades')
-        .update({ status: novoStatus })
-        .eq('id', atividadeId);
+      await api.put(`/financeiro/contas-pagar/${viewingCard.id}/atividades/${atividadeId}`, {
+        status: novoStatus,
+      });
 
-      if (error) throw error;
-
-      setAtividades(prev => prev.map(a => 
+      setAtividades(prev => prev.map(a =>
         a.id === atividadeId ? { ...a, status: novoStatus } : a
       ));
 
-      toast({ 
+      toast({
         title: novoStatus === 'concluida' ? 'Atividade concluída!' : 'Status atualizado',
         description: novoStatus === 'concluida' ? 'Atividade marcada como concluída.' : 'Status da atividade atualizado.'
       });
@@ -1034,20 +905,17 @@ export function SSTContasPagar() {
 
   const handleToggleChecklistItem = async (atividadeId: string, itemIndex: number) => {
     const atividade = atividades.find(a => a.id === atividadeId);
-    if (!atividade || atividade.tipo !== 'checklist') return;
+    if (!atividade || atividade.tipo !== 'checklist' || !viewingCard) return;
 
     try {
       const checklistData = JSON.parse(atividade.descricao);
       checklistData.itens[itemIndex].concluido = !checklistData.itens[itemIndex].concluido;
 
-      const { error } = await (supabase as any)
-        .from('contas_pagar_atividades')
-        .update({ descricao: JSON.stringify(checklistData) })
-        .eq('id', atividadeId);
+      await api.put(`/financeiro/contas-pagar/${viewingCard.id}/atividades/${atividadeId}`, {
+        descricao: JSON.stringify(checklistData),
+      });
 
-      if (error) throw error;
-
-      setAtividades(prev => prev.map(a => 
+      setAtividades(prev => prev.map(a =>
         a.id === atividadeId ? { ...a, descricao: JSON.stringify(checklistData) } : a
       ));
     } catch (error) {
@@ -1076,19 +944,18 @@ export function SSTContasPagar() {
       if (active.id !== over.id) {
         const oldIndex = colunas.findIndex(c => c.id === active.id);
         const newIndex = colunas.findIndex(c => c.id === over.id);
-        
+
         if (oldIndex !== -1 && newIndex !== -1) {
           const newColunas = arrayMove(colunas, oldIndex, newIndex);
           setColunas(newColunas);
-          
-          // Salvar nova ordem no banco
+
+          // Salvar nova ordem no backend (loop client-side, sem endpoint de bulk)
           try {
-            for (let i = 0; i < newColunas.length; i++) {
-              await (supabase as any)
-                .from('contas_pagar_colunas')
-                .update({ ordem: i })
-                .eq('id', newColunas[i].id);
-            }
+            await Promise.all(
+              newColunas.map((col, i) =>
+                api.put(`/financeiro/contas-pagar/colunas/${col.id}`, { ordem: i }).catch(() => null)
+              )
+            );
           } catch (error) {
             console.error('Erro ao salvar ordem das colunas:', error);
           }
@@ -1110,32 +977,14 @@ export function SSTContasPagar() {
       if (targetColunaId && activeData.conta.coluna_id !== targetColunaId) {
         const colunaOrigem = colunas.find(c => c.id === activeData.conta.coluna_id);
         const colunaDestino = colunas.find(c => c.id === targetColunaId);
-        
-        try {
-          // Atualizar coluna do card
-          const { error } = await (supabase as any)
-            .from('contas_pagar')
-            .update({ coluna_id: targetColunaId })
-            .eq('id', activeData.conta.id);
 
-          if (error) throw error;
-          
-          // Registrar movimentação
-          const { error: movError } = await (supabase as any)
-            .from('contas_pagar_movimentacoes')
-            .insert({
-              conta_id: activeData.conta.id,
-              tipo: 'mudanca_etapa',
-              descricao: `Card movido de "${colunaOrigem?.nome || 'Desconhecida'}" para "${colunaDestino?.nome || 'Desconhecida'}"`,
-              coluna_origem_id: activeData.conta.coluna_id,
-              coluna_destino_id: targetColunaId,
-              usuario_id: profile?.id
-            });
-          
-          if (movError) {
-            console.error('Erro ao registrar movimentação:', movError);
-          }
-          
+        try {
+          // Usar endpoint /mover que atualiza a coluna e registra movimentação automaticamente
+          await api.post(`/financeiro/contas-pagar/${activeData.conta.id}/mover`, {
+            coluna_destino_id: targetColunaId,
+            justificativa: `Card movido de "${colunaOrigem?.nome || 'Desconhecida'}" para "${colunaDestino?.nome || 'Desconhecida'}"`,
+          });
+
           loadData();
         } catch (error) {
           console.error('Erro ao mover card:', error);
@@ -1730,10 +1579,9 @@ export function SSTContasPagar() {
                       onClick={async () => {
                         if (viewingCard.coluna_id !== col.id) {
                           try {
-                            await (supabase as any)
-                              .from('contas_pagar')
-                              .update({ coluna_id: col.id })
-                              .eq('id', viewingCard.id);
+                            await api.post(`/financeiro/contas-pagar/${viewingCard.id}/mover`, {
+                              coluna_destino_id: col.id,
+                            });
                             loadData();
                             setViewingCard({ ...viewingCard, coluna_id: col.id });
                           } catch (error) {
@@ -2383,69 +2231,59 @@ export function SSTContasPagar() {
                 }
 
                 try {
-                  // Inserir atividade
-                  const { data: atividadeData, error } = await (supabase as any)
-                    .from('contas_pagar_atividades')
-                    .insert({
-                      conta_id: viewingCard.id,
-                      tipo: atividadeForm.tipo,
-                      descricao: atividadeForm.descricao,
-                      prazo: atividadeForm.data || null,
-                      horario: atividadeForm.horario || null,
-                      status: atividadeForm.data ? 'programada' : 'a_realizar',
-                      usuario_id: profile?.id,
-                    })
-                    .select()
-                    .single();
+                  // Inserir atividade via REST
+                  const atividadeData: any = await api.post(`/financeiro/contas-pagar/${viewingCard.id}/atividades`, {
+                    tipo: atividadeForm.tipo,
+                    descricao: atividadeForm.descricao,
+                    prazo: atividadeForm.data || null,
+                    horario: atividadeForm.horario || null,
+                    status: atividadeForm.data ? 'programada' : 'a_realizar',
+                    usuario_id: profile?.id || null,
+                  });
 
-                  if (error) throw error;
-
-                  // Upload dos anexos se houver
+                  // Upload dos anexos se houver via /storage/{bucket}/upload
                   if (atividadeAnexos.length > 0 && atividadeData) {
                     for (const file of atividadeAnexos) {
-                      const fileExt = file.name.split('.').pop();
-                      const fileName = `${atividadeData.id}/${Date.now()}_${file.name}`;
-                      
-                      const { error: uploadError } = await supabase.storage
-                        .from('atividades-anexos')
-                        .upload(fileName, file);
+                      try {
+                        const formData = new FormData();
+                        formData.append('file', file);
+                        const uploadRes = await fetch(
+                          `${(import.meta as any).env.VITE_API_URL ?? 'http://localhost:8000'}/storage/atividades-anexos/upload`,
+                          { method: 'POST', credentials: 'include', body: formData }
+                        );
+                        if (!uploadRes.ok) {
+                          console.error('Erro ao fazer upload:', await uploadRes.text());
+                          continue;
+                        }
+                        const uploadData: any = await uploadRes.json();
 
-                      if (uploadError) {
-                        console.error('Erro ao fazer upload:', uploadError);
-                        continue;
-                      }
-
-                      const { data: urlData } = supabase.storage
-                        .from('atividades-anexos')
-                        .getPublicUrl(fileName);
-
-                      // Salvar referência do anexo no banco
-                      await (supabase as any)
-                        .from('contas_pagar_atividades_anexos')
-                        .insert({
-                          atividade_id: atividadeData.id,
+                        // Salvar referência do anexo via REST
+                        await api.post(`/financeiro/contas-pagar/atividades/${atividadeData.id}/anexos`, {
                           nome_arquivo: file.name,
                           tipo_arquivo: file.type,
                           tamanho: file.size,
-                          url: urlData.publicUrl,
-                          storage_path: fileName,
+                          url: uploadData.url,
+                          storage_path: uploadData.key,
                         });
+                      } catch (uploadErr) {
+                        console.error('Erro ao fazer upload:', uploadErr);
+                      }
                     }
                   }
 
-                  toast({ 
-                    title: 'Atividade registrada', 
-                    description: `${TIPOS_ATIVIDADE.find(t => t.id === atividadeForm.tipo)?.label || 'Atividade'} salva com sucesso.` 
+                  toast({
+                    title: 'Atividade registrada',
+                    description: `${TIPOS_ATIVIDADE.find(t => t.id === atividadeForm.tipo)?.label || 'Atividade'} salva com sucesso.`
                   });
-                  
+
                   setAtividadeForm({ tipo: 'tarefa', descricao: '', data: '', horario: '' });
                   setAtividadeAnexos([]);
                   setAtividadeDialogOpen(false);
                   await fetchAtividades(viewingCard.id);
                 } catch (error) {
                   console.error('Erro ao salvar atividade:', error);
-                  toast({ 
-                    title: 'Erro', 
+                  toast({
+                    title: 'Erro',
                     description: 'Erro ao salvar atividade',
                     variant: 'destructive'
                   });
@@ -2552,17 +2390,10 @@ export function SSTContasPagar() {
                     }
 
                     try {
-                      const { data, error } = await (supabase as any)
-                        .from('modelos_atividade')
-                        .insert({
-                          empresa_id: empresaId,
-                          nome: novoModelo.nome,
-                          descricao: novoModelo.descricao,
-                        })
-                        .select()
-                        .single();
-
-                      if (error) throw error;
+                      const data: any = await api.post('/financeiro/modelos-atividade', {
+                        nome: novoModelo.nome,
+                        descricao: novoModelo.descricao,
+                      });
 
                       setModelos(prev => [...prev, data]);
                       setNovoModelo({ nome: '', descricao: '' });

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -85,29 +85,31 @@ const Dashboard = () => {
         return;
       }
 
-      const { data, error } = await supabase
-        .from('empresas_modulos')
-        .select(`
-          modulo_id,
-          modulos (
-            id,
-            nome,
-            descricao,
-            icone,
-            rota
-          )
-        `)
-        .eq('empresa_id', profile.empresa_id)
-        .eq('ativo', true);
+      try {
+        const [empresaModulos, catalogo] = await Promise.all([
+          api.get<any[]>('/white-label/empresa-modulos').catch(() => [] as any[]),
+          api.get<any[]>('/white-label/modulos').catch(() => [] as any[]),
+        ]);
 
-      if (error) {
-        console.error('Erro ao buscar módulos:', error);
-        toast.error('Erro ao carregar módulos');
-      } else if (data) {
-        const modulosData = data
-          .map((item: any) => item.modulos)
-          .filter(Boolean) as Modulo[];
+        // Filter only active links (backend returns all; apply ativo filter client-side)
+        const ativosIds = new Set(
+          empresaModulos.filter((em: any) => em.ativo).map((em: any) => em.modulo_id)
+        );
+
+        const modulosData = catalogo
+          .filter((mod: any) => ativosIds.has(mod.id))
+          .map((mod: any) => ({
+            id: mod.id,
+            nome: mod.nome,
+            descricao: mod.descricao ?? null,
+            icone: mod.icone ?? '',
+            rota: mod.rota,
+          })) as Modulo[];
+
         setModulos(modulosData);
+      } catch (err) {
+        console.error('Erro ao buscar módulos:', err);
+        toast.error('Erro ao carregar módulos');
       }
 
       setLoadingModulos(false);

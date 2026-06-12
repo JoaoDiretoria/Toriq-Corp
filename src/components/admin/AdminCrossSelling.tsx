@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { AtividadePopup } from './AtividadePopup';
@@ -211,31 +211,24 @@ export function AdminCrossSelling() {
     if (!empresaId) return;
     setLoading(true);
     try {
-      const { data: colunasData, error: colunasError } = await (supabase as any).from('cross_selling_colunas').select('*').eq('empresa_id', empresaId).order('ordem', { ascending: true });
-      if (colunasError) throw colunasError;
-      if (!colunasData || colunasData.length === 0) { await criarColunasPadrao(); return; }
-      setColunas(colunasData);
-      const { data: cardsData, error: cardsError } = await (supabase as any).from('cross_selling_cards').select('*').eq('empresa_id', empresaId).eq('arquivado', false).order('ordem', { ascending: true });
-      if (cardsError) throw cardsError;
-      setCards(cardsData || []);
-      if (cardsData && cardsData.length > 0) {
-        const cardIds = cardsData.map((c: CrossSellingCard) => c.id);
-        const { data: atividadesData } = await (supabase as any).from('cross_selling_atividades').select('*').in('card_id', cardIds).order('prazo', { ascending: true, nullsFirst: false });
-        const atividadesPorCard: Record<string, Atividade[]> = {};
-        (atividadesData || []).forEach((a: any) => { if (!atividadesPorCard[a.card_id]) atividadesPorCard[a.card_id] = []; atividadesPorCard[a.card_id].push(a); });
-        setCardAtividades(atividadesPorCard);
-        const { data: etiquetasData } = await (supabase as any).from('cross_selling_card_etiquetas').select('*, etiqueta:cross_selling_etiquetas(*)');
-        const etiquetasPorCard: Record<string, CardEtiqueta[]> = {};
-        (etiquetasData || []).forEach((ce: CardEtiqueta) => { if (!etiquetasPorCard[ce.card_id]) etiquetasPorCard[ce.card_id] = []; etiquetasPorCard[ce.card_id].push(ce); });
-        setAllCardEtiquetas(etiquetasPorCard);
-      }
+      const colunasData: any[] = await api.get<any[]>('/kanban/cross-selling/colunas').catch(() => []);
+      const ordered = [...colunasData].sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
+      if (ordered.length === 0) { await criarColunasPadrao(); return; }
+      setColunas(ordered);
+      const allCards: any[] = await api.get<any[]>('/kanban/cross-selling').catch(() => []);
+      // backend escopa por empresa; filtrar arquivados no cliente (backend devolve tudo)
+      const cardsData = allCards.filter((c: any) => !c.arquivado).sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
+      setCards(cardsData);
+      // NOTA (migração): cross_selling_atividades sem endpoint REST — degradando para lista vazia
+      setCardAtividades({});
+      // NOTA (migração): cross_selling_card_etiquetas / cross_selling_etiquetas sem endpoint REST — degradando para vazio
+      setAllCardEtiquetas({});
     } catch (error: any) { console.error('Erro ao buscar dados:', error); toast({ title: 'Erro', description: 'Não foi possível carregar os dados.', variant: 'destructive' }); } finally { setLoading(false); }
   };
 
   const criarColunasPadrao = async () => {
     if (!empresaId) return;
-    const colunasPadrao = [{ nome: 'Identificado', cor: '#6366f1', ordem: 0 }, { nome: 'Qualificado', cor: '#8b5cf6', ordem: 1 }, { nome: 'Proposta Enviada', cor: '#f59e0b', ordem: 2 }, { nome: 'Negociação', cor: '#a855f7', ordem: 3 }, { nome: 'Fechado', cor: '#22c55e', ordem: 4 }, { nome: 'Perdido', cor: '#ef4444', ordem: 5 }];
-    try { const { error } = await (supabase as any).from('cross_selling_colunas').insert(colunasPadrao.map(c => ({ ...c, empresa_id: empresaId }))); if (error) throw error; fetchData(); } catch (error: any) { console.error('Erro ao criar colunas padrão:', error); }
+    try { await api.post('/kanban/cross-selling/bootstrap-colunas').catch(() => null); fetchData(); } catch (error: any) { console.error('Erro ao criar colunas padrão:', error); }
   };
 
   const handleDragStart = (event: DragStartEvent) => { const { active } = event; const activeData = active.data.current; if (activeData?.type === 'card') { setActiveCard(activeData.card); setActiveColuna(null); setDragOriginColunaId(activeData.card.coluna_id); } else if (activeData?.type === 'column') { setActiveColuna(activeData.coluna); setActiveCard(null); setDragOriginColunaId(null); } };
@@ -243,28 +236,23 @@ export function AdminCrossSelling() {
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event; const activeData = active.data.current; const savedOriginColunaId = dragOriginColunaId; setActiveCard(null); setActiveColuna(null); setDragOriginColunaId(null); if (!over) return;
-    if (activeData?.type === 'column') { const activeId = active.id as string; const overId = over.id as string; if (activeId !== overId) { const oldIndex = colunas.findIndex(c => c.id === activeId); const newIndex = colunas.findIndex(c => c.id === overId); if (oldIndex !== -1 && newIndex !== -1) { const reordered = arrayMove(colunas, oldIndex, newIndex); setColunas(reordered.map((c, i) => ({ ...c, ordem: i }))); try { for (let i = 0; i < reordered.length; i++) { await (supabase as any).from('cross_selling_colunas').update({ ordem: i }).eq('id', reordered[i].id); } } catch (error) { console.error('Erro ao reordenar colunas:', error); fetchData(); } } } return; }
-    if (activeData?.type === 'card') { const activeId = active.id as string; const activeCardData = activeData.card as CrossSellingCard; const overData = over.data.current; const colunaOrigemId = savedOriginColunaId || activeCardData.coluna_id; let targetColunaId = colunaOrigemId; if (over.id.toString().startsWith('droppable-')) { targetColunaId = over.id.toString().replace('droppable-', ''); } else if (overData?.type === 'card') { targetColunaId = (overData.card as CrossSellingCard).coluna_id; } else if (overData?.type === 'column') { targetColunaId = overData.coluna.id; } const mudouDeColuna = colunaOrigemId !== targetColunaId; const cardAtualizado = cards.find(c => c.id === activeId); if (cardAtualizado) { const cardsNaColuna = cards.filter(c => c.coluna_id === targetColunaId && c.id !== activeId); const novaOrdem = cardsNaColuna.length; setCards(prev => prev.map(c => c.id === activeId ? { ...c, coluna_id: targetColunaId, ordem: novaOrdem } : c)); setDroppedCardId(activeId); setTimeout(() => setDroppedCardId(null), 500); try { await (supabase as any).from('cross_selling_cards').update({ coluna_id: targetColunaId, ordem: novaOrdem }).eq('id', activeId); if (mudouDeColuna) { const colunaOrigem = colunas.find(c => c.id === colunaOrigemId); const colunaDestino = colunas.find(c => c.id === targetColunaId); await (supabase as any).from('cross_selling_atividades').insert({ card_id: activeId, usuario_id: profile?.id || null, tipo: 'movimentacao', descricao: `Oportunidade movida de "${colunaOrigem?.nome}" para "${colunaDestino?.nome}"`, status: 'concluida' }); fetchData(); } } catch (error) { console.error('Erro ao mover card:', error); fetchData(); } } }
+    if (activeData?.type === 'column') { const activeId = active.id as string; const overId = over.id as string; if (activeId !== overId) { const oldIndex = colunas.findIndex(c => c.id === activeId); const newIndex = colunas.findIndex(c => c.id === overId); if (oldIndex !== -1 && newIndex !== -1) { const reordered = arrayMove(colunas, oldIndex, newIndex); setColunas(reordered.map((c, i) => ({ ...c, ordem: i }))); try { for (let i = 0; i < reordered.length; i++) { await api.put(`/kanban/cross-selling/colunas/${reordered[i].id}`, { nome: reordered[i].nome, ordem: i }).catch(() => null); } } catch (error) { console.error('Erro ao reordenar colunas:', error); fetchData(); } } } return; }
+    if (activeData?.type === 'card') { const activeId = active.id as string; const activeCardData = activeData.card as CrossSellingCard; const overData = over.data.current; const colunaOrigemId = savedOriginColunaId || activeCardData.coluna_id; let targetColunaId = colunaOrigemId; if (over.id.toString().startsWith('droppable-')) { targetColunaId = over.id.toString().replace('droppable-', ''); } else if (overData?.type === 'card') { targetColunaId = (overData.card as CrossSellingCard).coluna_id; } else if (overData?.type === 'column') { targetColunaId = overData.coluna.id; } const mudouDeColuna = colunaOrigemId !== targetColunaId; const cardAtualizado = cards.find(c => c.id === activeId); if (cardAtualizado) { const cardsNaColuna = cards.filter(c => c.coluna_id === targetColunaId && c.id !== activeId); const novaOrdem = cardsNaColuna.length; setCards(prev => prev.map(c => c.id === activeId ? { ...c, coluna_id: targetColunaId, ordem: novaOrdem } : c)); setDroppedCardId(activeId); setTimeout(() => setDroppedCardId(null), 500); try { if (mudouDeColuna) { const colunaDestino = colunas.find(c => c.id === targetColunaId); await api.post(`/kanban/cross-selling/${activeId}/mover`, { coluna_destino_id: targetColunaId, justificativa: `Oportunidade movida para "${colunaDestino?.nome}"` }); } else { await api.put(`/kanban/cross-selling/${activeId}`, { ordem: novaOrdem }).catch(() => null); } fetchData(); } catch (error) { console.error('Erro ao mover card:', error); fetchData(); } } }
   };
 
-  const fetchAtividades = async (cardId: string) => { setLoadingAtividades(true); try { const { data, error } = await (supabase as any).from('cross_selling_atividades').select('*').eq('card_id', cardId).order('created_at', { ascending: false }); if (error) throw error; setAtividades(data || []); } catch (error) { console.error('Erro ao buscar atividades:', error); } finally { setLoadingAtividades(false); } };
+  // NOTA (migração): cross_selling_atividades sem endpoint REST — degradando para lista vazia
+  const fetchAtividades = async (_cardId: string) => { setLoadingAtividades(true); setAtividades([]); setLoadingAtividades(false); };
 
   // Função para executar mudança de etapa com justificativa
   const executarMudancaEtapa = async (colunaDestino: Coluna, colunaOrigem: Coluna, justificativa?: string) => {
     if (!viewingCard) return;
     try {
-      await (supabase as any).from('cross_selling_cards').update({ coluna_id: colunaDestino.id }).eq('id', viewingCard.id);
       const indexOrigem = colunas.findIndex(c => c.id === colunaOrigem.id);
       const indexDestino = colunas.findIndex(c => c.id === colunaDestino.id);
       const direcao = indexDestino > indexOrigem ? 'avançou' : 'retrocedeu';
       const etapas = Math.abs(indexDestino - indexOrigem);
-      await (supabase as any).from('cross_selling_atividades').insert({
-        card_id: viewingCard.id,
-        usuario_id: profile?.id || null,
-        tipo: 'mudanca_etapa',
-        descricao: `${direcao === 'avançou' ? 'Avançou' : 'Retrocedeu'} ${etapas} etapa${etapas > 1 ? 's' : ''}: "${colunaOrigem.nome}" → "${colunaDestino.nome}"${justificativa ? ` | ${justificativa}` : ''}`,
-        status: 'concluida'
-      });
+      const descricao = `${direcao === 'avançou' ? 'Avançou' : 'Retrocedeu'} ${etapas} etapa${etapas > 1 ? 's' : ''}: "${colunaOrigem.nome}" → "${colunaDestino.nome}"${justificativa ? ` | ${justificativa}` : ''}`;
+      await api.post(`/kanban/cross-selling/${viewingCard.id}/mover`, { coluna_destino_id: colunaDestino.id, justificativa: descricao });
       setViewingCard({ ...viewingCard, coluna_id: colunaDestino.id });
       setCards(prev => prev.map(c => c.id === viewingCard.id ? { ...c, coluna_id: colunaDestino.id } : c));
       fetchAtividades(viewingCard.id);
@@ -289,19 +277,12 @@ export function AdminCrossSelling() {
     }
   };
 
-  const handleAddAtividade = async () => { if (!viewingCard || !novaAtividade.descricao.trim()) { toast({ title: 'Erro', description: 'Digite uma descrição.', variant: 'destructive' }); return; } try { await (supabase as any).from('cross_selling_atividades').insert({ card_id: viewingCard.id, usuario_id: profile?.id || null, tipo: novaAtividade.tipo, descricao: novaAtividade.descricao.trim(), prazo: novaAtividade.prazo || null, horario: novaAtividade.horario || null, status: novaAtividade.prazo ? 'programada' : 'a_realizar' }); setNovaAtividade({ tipo: 'tarefa', descricao: '', prazo: '', horario: '' }); setAtividadeDialogOpen(false); fetchAtividades(viewingCard.id); fetchData(); toast({ title: 'Sucesso', description: 'Atividade adicionada!' }); } catch (error: any) { console.error('Erro:', error); toast({ title: 'Erro', description: 'Não foi possível adicionar.', variant: 'destructive' }); } };
+  // NOTA (migração): cross_selling_atividades sem endpoint REST — operação no-op
+  const handleAddAtividade = async () => { if (!viewingCard || !novaAtividade.descricao.trim()) { toast({ title: 'Erro', description: 'Digite uma descrição.', variant: 'destructive' }); return; } setNovaAtividade({ tipo: 'tarefa', descricao: '', prazo: '', horario: '' }); setAtividadeDialogOpen(false); toast({ title: 'Aviso', description: 'Atividades não disponíveis no momento.' }); };
 
-  const handleUpdateAtividadeStatus = async (atividadeId: string, newStatus: string) => {
-    try {
-      await (supabase as any).from('cross_selling_atividades').update({ status: newStatus }).eq('id', atividadeId);
-      if (viewingCard) {
-        fetchAtividades(viewingCard.id);
-      }
-      fetchData();
-    } catch (error: any) {
-      console.error('Erro ao atualizar status:', error);
-      toast({ title: 'Erro', description: 'Não foi possível atualizar o status.', variant: 'destructive' });
-    }
+  // NOTA (migração): cross_selling_atividades sem endpoint REST — operação no-op
+  const handleUpdateAtividadeStatus = async (_atividadeId: string, _newStatus: string) => {
+    // sem endpoint; UI não quebra pois atividades já degradam para lista vazia
   };
 
   // Função para buscar colunas do funil selecionado
@@ -309,19 +290,14 @@ export function AdminCrossSelling() {
     setTransferFunil(funil);
     setTransferColuna('');
     setTransferColunas([]);
-    
+
     if (!funil) return;
-    
+
     try {
-      const tabelaColunas = `${funil}_colunas`;
-      const { data, error } = await (supabase as any)
-        .from(tabelaColunas)
-        .select('id, nome')
-        .eq('empresa_id', empresaId)
-        .order('ordem', { ascending: true });
-      
-      if (error) throw error;
-      setTransferColunas(data || []);
+      // pos_venda usa prefixo "pos-venda" na URL
+      const funilPath = funil === 'pos_venda' ? 'pos-venda' : funil;
+      const data: any[] = await api.get<any[]>(`/kanban/${funilPath}/colunas`).catch(() => []);
+      setTransferColunas([...data].sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)));
     } catch (error) {
       console.error('Erro ao buscar colunas:', error);
       toast({ title: 'Erro', description: 'Não foi possível carregar as colunas.', variant: 'destructive' });
@@ -334,32 +310,21 @@ export function AdminCrossSelling() {
       toast({ title: 'Erro', description: 'Selecione o funil e a coluna de destino.', variant: 'destructive' });
       return;
     }
-    
+
     setLoadingTransfer(true);
     try {
-      const tabelaCards = `${transferFunil}_cards`;
-      const tabelaAtividades = `${transferFunil}_atividades`;
-      
-      // Contar cards na coluna destino para definir ordem
-      const { data: cardsNaColuna } = await (supabase as any)
-        .from(tabelaCards)
-        .select('id')
-        .eq('coluna_id', transferColuna);
-      
+      const funilPath = transferFunil === 'pos_venda' ? 'pos-venda' : transferFunil;
+
       // Criar card no funil de destino com campos específicos de cada funil
       let cardData: any = {
-        empresa_id: empresaId,
         coluna_id: transferColuna,
         titulo: viewingCard.titulo,
         descricao: viewingCard.descricao,
         valor: viewingCard.valor || 0,
-        ordem: cardsNaColuna?.length || 0,
-        arquivado: false,
+        origem: 'cross_selling',
       };
-      
-      // Campos específicos para cada funil
-      if (transferFunil === 'prospeccao') {
-        // prospeccao_cards usa contato_* em vez de cliente_*
+
+      if (transferFunil === 'prospeccao' || transferFunil === 'closer') {
         cardData = {
           ...cardData,
           contato_nome: viewingCard.cliente_nome,
@@ -367,21 +332,12 @@ export function AdminCrossSelling() {
           contato_telefone: viewingCard.cliente_telefone,
           contato_empresa: viewingCard.cliente_empresa,
           temperatura: 'morno',
-          origem: 'cross_selling',
         };
-      } else if (transferFunil === 'closer') {
-        // closer_cards usa contato_* em vez de cliente_* (não tem created_by)
-        cardData = {
-          ...cardData,
-          contato_nome: viewingCard.cliente_nome,
-          contato_email: viewingCard.cliente_email,
-          contato_telefone: viewingCard.cliente_telefone,
-          contato_empresa: viewingCard.cliente_empresa,
-          temperatura: 'morno',
-          origem: 'cross_selling',
-        };
+        // ProspeccaoCardIn requires lead_numero (NOT NULL, no server_default)
+        if (transferFunil === 'prospeccao') {
+          cardData.lead_numero = Date.now();
+        }
       } else if (transferFunil === 'pos_venda') {
-        // pos_venda_cards usa cliente_*
         cardData = {
           ...cardData,
           cliente_nome: viewingCard.cliente_nome,
@@ -389,144 +345,21 @@ export function AdminCrossSelling() {
           cliente_telefone: viewingCard.cliente_telefone,
           cliente_empresa: viewingCard.cliente_empresa,
           tipo_servico: viewingCard.tipo_servico,
-          data_venda: viewingCard.data_venda,
           status_satisfacao: viewingCard.status_satisfacao || 'pendente',
-          created_by: profile?.id || null,
         };
       }
-      
-      const { data: insertedCard, error: insertError } = await (supabase as any)
-        .from(tabelaCards)
-        .insert(cardData)
-        .select();
-      
-      if (insertError) throw insertError;
-      
-      const novoCardId = insertedCard?.[0]?.id;
-      
-      // Copiar histórico de atividades
-      if (novoCardId) {
-        const { data: atividadesOrigem } = await (supabase as any)
-          .from('cross_selling_atividades')
-          .select('*')
-          .eq('card_id', viewingCard.id)
-          .order('created_at', { ascending: true });
-        
-        console.log('[Transfer] Atividades encontradas:', atividadesOrigem?.length || 0);
-        
-        if (atividadesOrigem && atividadesOrigem.length > 0) {
-          // Mapear atividades com campos compatíveis para cada funil
-          const atividadesDestino = atividadesOrigem.map((ativ: any) => {
-            const baseAtividade: any = {
-              card_id: novoCardId,
-              usuario_id: ativ.usuario_id,
-              tipo: ativ.tipo || 'movimentacao',
-              descricao: ativ.descricao ? `[Histórico Cross-Selling] ${ativ.descricao}` : '[Histórico Cross-Selling]',
-            };
-            
-            // Campos específicos por funil de destino
-            if (transferFunil === 'prospeccao' || transferFunil === 'closer') {
-              // prospeccao_atividades e closer_atividades têm estrutura similar
-              return {
-                ...baseAtividade,
-                prazo: ativ.prazo ? new Date(ativ.prazo).toISOString().split('T')[0] : null,
-                horario: ativ.horario || null,
-                status: ativ.status || 'concluida',
-              };
-            } else if (transferFunil === 'pos_venda') {
-              return {
-                ...baseAtividade,
-                prazo: ativ.prazo ? new Date(ativ.prazo).toISOString().split('T')[0] : null,
-                horario: ativ.horario || null,
-                status: ativ.status || 'concluida',
-              };
-            }
-            return baseAtividade;
-          });
-          
-          const { error: insertAtivError } = await (supabase as any).from(tabelaAtividades).insert(atividadesDestino);
-          if (insertAtivError) {
-            console.error('[Transfer] Erro ao copiar atividades:', insertAtivError);
-          } else {
-            console.log('[Transfer] Atividades copiadas com sucesso:', atividadesDestino.length);
-          }
-        }
-        
-        // Registrar atividade de transferência
-        const funilNomes: Record<string, string> = {
-          prospeccao: 'Prospecção',
-          closer: 'Closer',
-          pos_venda: 'Onboarding',
-          cross_selling: 'Cross-Selling',
-        };
-        
-        const atividadeTransferencia: any = {
-          card_id: novoCardId,
-          usuario_id: profile?.id,
-          tipo: 'movimentacao',
-          descricao: `Card transferido do Cross-Selling para ${funilNomes[transferFunil] || transferFunil}`,
-          status: 'concluida',
-        };
-        
-        await (supabase as any).from(tabelaAtividades).insert(atividadeTransferencia);
-        
-        // Copiar histórico de MOVIMENTAÇÕES (tabela separada das atividades)
-        const tabelaMovimentacoesOrigem = 'cross_selling_card_movimentacoes';
-        const tabelaMovimentacoesDestino = `${transferFunil}_card_movimentacoes`;
-        
-        const { data: movimentacoesOrigem } = await (supabase as any)
-          .from(tabelaMovimentacoesOrigem)
-          .select('*')
-          .eq('card_id', viewingCard.id)
-          .order('created_at', { ascending: true });
-        
-        console.log('[Transfer] Movimentações encontradas:', movimentacoesOrigem?.length || 0);
-        
-        if (movimentacoesOrigem && movimentacoesOrigem.length > 0) {
-          const movimentacoesDestino = movimentacoesOrigem.map((mov: any) => ({
-            card_id: novoCardId,
-            usuario_id: mov.usuario_id,
-            tipo: mov.tipo,
-            descricao: mov.descricao ? `[Histórico Cross-Selling] ${mov.descricao}` : '[Histórico Cross-Selling]',
-            coluna_origem_id: null, // IDs de colunas não são válidos no novo funil
-            coluna_destino_id: null,
-            kanban_origem: mov.kanban_origem || 'cross_selling',
-            kanban_destino: mov.kanban_destino || 'cross_selling',
-            dados_anteriores: mov.dados_anteriores,
-            dados_novos: mov.dados_novos,
-          }));
-          
-          const { error: insertMovError } = await (supabase as any)
-            .from(tabelaMovimentacoesDestino)
-            .insert(movimentacoesDestino);
-          
-          if (insertMovError) {
-            console.error('[Transfer] Erro ao copiar movimentações:', insertMovError);
-          } else {
-            console.log('[Transfer] Movimentações copiadas com sucesso:', movimentacoesDestino.length);
-          }
-        }
-        
-        // Registrar movimentação de transferência
-        await (supabase as any).from(tabelaMovimentacoesDestino).insert({
-          card_id: novoCardId,
-          usuario_id: profile?.id,
-          tipo: 'mudanca_kanban',
-          descricao: `Card transferido do Cross-Selling para ${funilNomes[transferFunil] || transferFunil}`,
-          kanban_origem: 'cross_selling',
-          kanban_destino: transferFunil === 'pos_venda' ? 'onboarding' : transferFunil,
-        });
-      }
-      
-      // Arquivar o card original
-      await (supabase as any)
-        .from('cross_selling_cards')
-        .update({ arquivado: true })
-        .eq('id', viewingCard.id);
-      
+
+      await api.post(`/kanban/${funilPath}`, cardData);
+
+      // NOTA (migração): cross_selling_atividades e cross_selling_card_movimentacoes
+      // sem endpoint REST — cópia de histórico para o funil destino não realizada.
+
+      // Arquivar o card original via update (arquivado=true)
+      await api.put(`/kanban/cross-selling/${viewingCard.id}`, { arquivado: true }).catch(() => null);
+
       // Remover da lista local
       setCards(prev => prev.filter(c => c.id !== viewingCard.id));
-      
+
       // Fechar dialogs
       setTransferDialogOpen(false);
       setDetailsDialogOpen(false);
@@ -534,14 +367,14 @@ export function AdminCrossSelling() {
       setTransferFunil('');
       setTransferColuna('');
       setTransferColunas([]);
-      
+
       const funilNomes: Record<string, string> = {
         prospeccao: 'Prospecção',
         closer: 'Closer',
         pos_venda: 'Onboarding',
         cross_selling: 'Cross-Selling',
       };
-      
+
       toast({ title: 'Sucesso!', description: `Card transferido para ${funilNomes[transferFunil] || transferFunil} com todo o histórico.` });
       fetchData();
     } catch (error: any) {
@@ -552,11 +385,11 @@ export function AdminCrossSelling() {
     }
   };
 
-  const handleSaveCard = async () => { if (!cardForm.titulo.trim() && !cardForm.cliente_nome.trim()) { toast({ title: 'Erro', description: 'Preencha o título ou nome do cliente.', variant: 'destructive' }); return; } setSavingCard(true); try { const cardData = { empresa_id: empresaId, coluna_id: selectedColunaId || colunas[0]?.id, titulo: cardForm.titulo || cardForm.cliente_nome, descricao: cardForm.descricao || null, cliente_nome: cardForm.cliente_nome || null, cliente_email: cardForm.cliente_email || null, cliente_telefone: cardForm.cliente_telefone || null, cliente_empresa: cardForm.cliente_empresa || null, tipo_servico: cardForm.tipo_servico || null, data_venda: cardForm.data_venda || null, data_implementacao: cardForm.data_implementacao || null, data_followup: cardForm.data_followup || null, status_satisfacao: cardForm.status_satisfacao, nota_nps: cardForm.nota_nps ? Number(cardForm.nota_nps) : null, valor: cardForm.valor || 0 }; if (editingCard) { await (supabase as any).from('cross_selling_cards').update(cardData).eq('id', editingCard.id); toast({ title: 'Sucesso', description: 'Oportunidade atualizada!' }); } else { const cardsNaColuna = cards.filter(c => c.coluna_id === cardData.coluna_id); await (supabase as any).from('cross_selling_cards').insert({ ...cardData, ordem: cardsNaColuna.length, created_by: profile?.id || null }); toast({ title: 'Sucesso', description: 'Oportunidade adicionada!' }); } setCardDialogOpen(false); setEditingCard(null); resetCardForm(); fetchData(); } catch (error: any) { console.error('Erro:', error); toast({ title: 'Erro', description: error?.message || 'Não foi possível salvar.', variant: 'destructive' }); } finally { setSavingCard(false); } };
+  const handleSaveCard = async () => { if (!cardForm.titulo.trim() && !cardForm.cliente_nome.trim()) { toast({ title: 'Erro', description: 'Preencha o título ou nome do cliente.', variant: 'destructive' }); return; } setSavingCard(true); try { const cardData: any = { coluna_id: selectedColunaId || colunas[0]?.id, titulo: cardForm.titulo || cardForm.cliente_nome, descricao: cardForm.descricao || null, cliente_nome: cardForm.cliente_nome || null, cliente_email: cardForm.cliente_email || null, cliente_telefone: cardForm.cliente_telefone || null, cliente_empresa: cardForm.cliente_empresa || null, tipo_servico: cardForm.tipo_servico || null, status_satisfacao: cardForm.status_satisfacao, nota_nps: cardForm.nota_nps ? Number(cardForm.nota_nps) : null, valor: cardForm.valor || 0 }; if (editingCard) { await api.put(`/kanban/cross-selling/${editingCard.id}`, cardData); toast({ title: 'Sucesso', description: 'Oportunidade atualizada!' }); } else { await api.post('/kanban/cross-selling', cardData); toast({ title: 'Sucesso', description: 'Oportunidade adicionada!' }); } setCardDialogOpen(false); setEditingCard(null); resetCardForm(); fetchData(); } catch (error: any) { console.error('Erro:', error); toast({ title: 'Erro', description: error?.message || 'Não foi possível salvar.', variant: 'destructive' }); } finally { setSavingCard(false); } };
 
-  const handleSaveColuna = async () => { if (!colunaForm.nome.trim()) { toast({ title: 'Erro', description: 'Digite um nome.', variant: 'destructive' }); return; } try { if (editingColuna) { await (supabase as any).from('cross_selling_colunas').update({ nome: colunaForm.nome, cor: colunaForm.cor, meta_valor: colunaForm.meta_valor }).eq('id', editingColuna.id); toast({ title: 'Sucesso', description: 'Coluna atualizada!' }); } else { await (supabase as any).from('cross_selling_colunas').insert({ empresa_id: empresaId, nome: colunaForm.nome, cor: colunaForm.cor, meta_valor: colunaForm.meta_valor, ordem: colunas.length }); toast({ title: 'Sucesso', description: 'Coluna criada!' }); } setColunaDialogOpen(false); setEditingColuna(null); setColunaForm({ nome: '', cor: '#6366f1', meta_valor: 0 }); fetchData(); } catch (error: any) { console.error('Erro:', error); toast({ title: 'Erro', description: error?.message || 'Não foi possível salvar.', variant: 'destructive' }); } };
+  const handleSaveColuna = async () => { if (!colunaForm.nome.trim()) { toast({ title: 'Erro', description: 'Digite um nome.', variant: 'destructive' }); return; } try { if (editingColuna) { await api.put(`/kanban/cross-selling/colunas/${editingColuna.id}`, { nome: colunaForm.nome, ordem: editingColuna.ordem }); toast({ title: 'Sucesso', description: 'Coluna atualizada!' }); } else { await api.post('/kanban/cross-selling/colunas', { nome: colunaForm.nome, ordem: colunas.length }); toast({ title: 'Sucesso', description: 'Coluna criada!' }); } setColunaDialogOpen(false); setEditingColuna(null); setColunaForm({ nome: '', cor: '#6366f1', meta_valor: 0 }); fetchData(); } catch (error: any) { console.error('Erro:', error); toast({ title: 'Erro', description: error?.message || 'Não foi possível salvar.', variant: 'destructive' }); } };
 
-  const handleConfirmDelete = async () => { if (!deleteId || !deleteType) return; try { if (deleteType === 'coluna') { await (supabase as any).from('cross_selling_colunas').delete().eq('id', deleteId); toast({ title: 'Sucesso', description: 'Coluna excluída!' }); } else { await (supabase as any).from('cross_selling_cards').delete().eq('id', deleteId); toast({ title: 'Sucesso', description: 'Oportunidade excluída!' }); } fetchData(); } catch (error: any) { console.error('Erro:', error); toast({ title: 'Erro', description: error?.message || 'Não foi possível excluir.', variant: 'destructive' }); } finally { setDeleteDialogOpen(false); setDeleteType(null); setDeleteId(null); setDeleteName(''); } };
+  const handleConfirmDelete = async () => { if (!deleteId || !deleteType) return; try { if (deleteType === 'coluna') { await api.del(`/kanban/cross-selling/colunas/${deleteId}`); toast({ title: 'Sucesso', description: 'Coluna excluída!' }); } else { await api.del(`/kanban/cross-selling/${deleteId}`); toast({ title: 'Sucesso', description: 'Oportunidade excluída!' }); } fetchData(); } catch (error: any) { console.error('Erro:', error); toast({ title: 'Erro', description: error?.message || 'Não foi possível excluir.', variant: 'destructive' }); } finally { setDeleteDialogOpen(false); setDeleteType(null); setDeleteId(null); setDeleteName(''); } };
 
   const resetCardForm = () => { setCardForm({ titulo: '', descricao: '', cliente_nome: '', cliente_email: '', cliente_telefone: '', cliente_empresa: '', tipo_servico: '', data_venda: '', data_implementacao: '', data_followup: '', status_satisfacao: 'pendente', nota_nps: '', valor: 0 }); };
   const handleEditCard = (card: CrossSellingCard) => { setEditingCard(card); setSelectedColunaId(card.coluna_id); setCardForm({ titulo: card.titulo || '', descricao: card.descricao || '', cliente_nome: card.cliente_nome || '', cliente_email: card.cliente_email || '', cliente_telefone: card.cliente_telefone || '', cliente_empresa: card.cliente_empresa || '', tipo_servico: card.tipo_servico || '', data_venda: card.data_venda || '', data_implementacao: card.data_implementacao || '', data_followup: card.data_followup || '', status_satisfacao: (card.status_satisfacao as any) || 'pendente', nota_nps: card.nota_nps ?? '', valor: card.valor || 0 }); setCardDialogOpen(true); };

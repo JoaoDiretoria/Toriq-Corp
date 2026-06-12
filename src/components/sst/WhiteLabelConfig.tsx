@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useWhiteLabel } from '@/hooks/useWhiteLabel';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Loader2 } from 'lucide-react';
 import { 
   ChevronDown, 
@@ -276,18 +276,10 @@ export function WhiteLabelConfig() {
 
   const loadConfigFromDatabase = async () => {
     if (!empresaId) return;
-    
+
     setLoading(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('white_label_config')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .maybeSingle();
-
-      if (error) {
-        throw error;
-      }
+      const data = await api.get<any>('/white-label/config').catch(() => null);
 
       if (data) {
         setConfigId(data.id);
@@ -409,7 +401,6 @@ export function WhiteLabelConfig() {
     setSaving(true);
     try {
       const dataToSave = {
-        empresa_id: empresaId,
         title: config.title,
         subtitle: config.subtitle,
         subject: config.subject,
@@ -481,26 +472,10 @@ export function WhiteLabelConfig() {
         a_assign: config.aAssign,
       };
 
-      if (configId) {
-        // Update
-        const { error } = await (supabase as any)
-          .from('white_label_config')
-          .update(dataToSave)
-          .eq('id', configId);
-
-        if (error) throw error;
-      } else {
-        // Insert
-        const { data, error } = await (supabase as any)
-          .from('white_label_config')
-          .insert(dataToSave)
-          .select()
-          .single();
-
-        if (error) throw error;
-        if (data) {
-          setConfigId(data.id);
-        }
+      // PUT /white-label/config é upsert — cria ou atualiza, empresa_id vem do token
+      const saved = await api.put<any>('/white-label/config', dataToSave);
+      if (saved?.id) {
+        setConfigId(saved.id);
       }
 
       // Aplicar as cores ao sistema
@@ -524,14 +499,80 @@ export function WhiteLabelConfig() {
 
     setSaving(true);
     try {
-      if (configId) {
-        const { error } = await (supabase as any)
-          .from('white_label_config')
-          .delete()
-          .eq('id', configId);
-
-        if (error) throw error;
-      }
+      // NOTA (migração): não há endpoint DELETE para white_label_config.
+      // Restauração é feita salvando os valores padrão via PUT (upsert).
+      const defaultsToSave = {
+        title: DEFAULTS.title,
+        subtitle: DEFAULTS.subtitle,
+        subject: DEFAULTS.subject,
+        domain: DEFAULTS.domain,
+        font_body: DEFAULTS.fontBody,
+        font_heading: DEFAULTS.fontHeading,
+        base_font_size: DEFAULTS.baseFontSize,
+        font_weight: DEFAULTS.fontWeight,
+        line_height: DEFAULTS.lineHeight,
+        density: DEFAULTS.density,
+        radius: DEFAULTS.radius,
+        card_shadow: DEFAULTS.cardShadow,
+        bg_color: DEFAULTS.bgColor,
+        surface_color: DEFAULTS.surfaceColor,
+        border_color: DEFAULTS.borderColor,
+        text_color: DEFAULTS.textColor,
+        muted_color: DEFAULTS.mutedColor,
+        primary_color: DEFAULTS.primaryColor,
+        secondary_color: DEFAULTS.secondaryColor,
+        link_color: DEFAULTS.linkColor,
+        icon_color: DEFAULTS.iconColor,
+        badge_bg: DEFAULTS.badgeBg,
+        success_color: DEFAULTS.successColor,
+        warning_color: DEFAULTS.warningColor,
+        error_color: DEFAULTS.errorColor,
+        info_color: DEFAULTS.infoColor,
+        button_bg: DEFAULTS.buttonBg,
+        button_text: DEFAULTS.buttonText,
+        button_hover: DEFAULTS.buttonHover,
+        button_disabled: DEFAULTS.buttonDisabled,
+        empty_tone: DEFAULTS.emptyTone,
+        login_bg: DEFAULTS.loginBg,
+        about_text: DEFAULTS.aboutText,
+        email_footer: DEFAULTS.emailFooter,
+        logo_url: DEFAULTS.logoDataUrl,
+        favicon_url: DEFAULTS.faviconDataUrl,
+        login_image_url: DEFAULTS.loginImageDataUrl,
+        col_header_bg: DEFAULTS.colHeaderBg,
+        col_header_text: DEFAULTS.colHeaderText,
+        col_border: DEFAULTS.colBorder,
+        col_shadow: DEFAULTS.colShadow,
+        col_width: DEFAULTS.colWidth,
+        col_auto_width: DEFAULTS.colAutoWidth === 1,
+        card_bg: DEFAULTS.cardBg,
+        card_border: DEFAULTS.cardBorder,
+        card_stripe: DEFAULTS.cardStripe,
+        stripe_mode: DEFAULTS.stripeMode,
+        card_compact: DEFAULTS.cardCompact === 1,
+        blocked_color: DEFAULTS.blockedColor,
+        f_title: DEFAULTS.fTitle,
+        f_subtitle: DEFAULTS.fSubtitle,
+        f_id: DEFAULTS.fId,
+        f_tags: DEFAULTS.fTags,
+        f_assignee: DEFAULTS.fAssignee,
+        f_date: DEFAULTS.fDate,
+        f_sla: DEFAULTS.fSla,
+        f_priority: DEFAULTS.fPriority,
+        f_points: DEFAULTS.fPoints,
+        f_labels: DEFAULTS.fLabels,
+        label_required: DEFAULTS.labelRequired === 1,
+        label_limit: DEFAULTS.labelLimit,
+        label_palette: DEFAULTS.labelPalette,
+        avatar_shape: DEFAULTS.avatarShape,
+        avatar_size: DEFAULTS.avatarSize,
+        avatar_photo: DEFAULTS.avatarPhoto === 1,
+        a_move: DEFAULTS.aMove,
+        a_done: DEFAULTS.aDone,
+        a_comment: DEFAULTS.aComment,
+        a_assign: DEFAULTS.aAssign,
+      };
+      await api.put<any>('/white-label/config', defaultsToSave).catch(() => null);
 
       resetConfig(); // Resetar as cores do sistema
       setConfig(DEFAULTS);
@@ -608,23 +649,23 @@ export function WhiteLabelConfig() {
 
     setUploadingImage(key);
     try {
-      const fileExt = file.name.split('.').pop();
-      const typePrefix = key.replace('DataUrl', '');
-      const fileName = `white-label/${typePrefix}_${empresaId}_${Date.now()}.${fileExt}`;
+      const apiUrl: string = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:8000';
+      const formData = new FormData();
+      formData.append('file', file);
 
-      // Upload para o storage
-      const { error: uploadError } = await supabase.storage
-        .from('treinamentos')
-        .upload(fileName, file, { upsert: true });
+      // Upload para o storage via POST /storage/white-label/upload
+      const res = await fetch(`${apiUrl}/storage/white-label/upload`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      });
 
-      if (uploadError) throw uploadError;
+      if (!res.ok) {
+        throw new Error(`Upload falhou: ${res.status}`);
+      }
 
-      // Obter URL pública
-      const { data: urlData } = supabase.storage
-        .from('treinamentos')
-        .getPublicUrl(fileName);
-
-      updateConfig(key, urlData.publicUrl);
+      const urlData: any = await res.json();
+      updateConfig(key, urlData.url);
 
       toast({
         title: 'Sucesso',

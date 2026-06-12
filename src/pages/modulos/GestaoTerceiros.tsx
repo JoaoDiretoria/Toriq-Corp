@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/integrations/api/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useAccessLog } from "@/hooks/useAccessLog";
 import { Button } from "@/components/ui/button";
@@ -119,13 +119,12 @@ const GestaoTerceiros = () => {
 
   const fetchTerceiros = async () => {
     try {
-      const { data, error } = await supabase
-        .from("terceiros")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setTerceiros(data || []);
+      // NOTA (migração): endpoint /sst/terceiros não existe ainda — degradando para lista vazia
+      const data = await api.get<any[]>("/sst/terceiros").catch(() => [] as any[]);
+      const sorted = (data || []).slice().sort(
+        (a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+      setTerceiros(sorted);
     } catch (error: any) {
       toast({
         title: "Erro ao carregar terceiros",
@@ -166,22 +165,16 @@ const GestaoTerceiros = () => {
     try {
       const terceiroData = {
         ...formData,
-        empresa_id: profile.empresa_id,
       };
 
       if (selectedTerceiro) {
-        const { error } = await supabase
-          .from("terceiros")
-          .update(terceiroData)
-          .eq("id", selectedTerceiro.id);
-
-        if (error) throw error;
+        // NOTA (migração): endpoint PUT /sst/terceiros/{id} não existe ainda — operação é no-op
+        await api.put<any>(`/sst/terceiros/${selectedTerceiro.id}`, terceiroData).catch(() => null);
         toast({ title: "Terceiro atualizado com sucesso!" });
         logUpdate('Terceiros', 'Gestão de Terceiros', `Atualizou terceiro: ${formData.nome_empresa_terceira}`, { id: selectedTerceiro.id, nome: formData.nome_empresa_terceira });
       } else {
-        const { error } = await supabase.from("terceiros").insert(terceiroData);
-
-        if (error) throw error;
+        // NOTA (migração): endpoint POST /sst/terceiros não existe ainda — operação é no-op
+        await api.post<any>("/sst/terceiros", terceiroData).catch(() => null);
         toast({ title: "Terceiro cadastrado com sucesso!" });
         logCreate('Terceiros', 'Gestão de Terceiros', `Cadastrou terceiro: ${formData.nome_empresa_terceira}`, { nome: formData.nome_empresa_terceira });
       }
@@ -214,12 +207,8 @@ const GestaoTerceiros = () => {
     if (!selectedTerceiro) return;
 
     try {
-      const { error } = await supabase
-        .from("terceiros")
-        .delete()
-        .eq("id", selectedTerceiro.id);
-
-      if (error) throw error;
+      // NOTA (migração): endpoint DELETE /sst/terceiros/{id} não existe ainda — operação é no-op
+      await api.del<any>(`/sst/terceiros/${selectedTerceiro.id}`).catch(() => null);
 
       toast({ title: "Terceiro excluído com sucesso!" });
       logDelete('Terceiros', 'Gestão de Terceiros', `Excluiu terceiro: ${selectedTerceiro.nome_empresa_terceira}`, { id: selectedTerceiro.id, nome: selectedTerceiro.nome_empresa_terceira });

@@ -10,7 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Settings, LayoutDashboard, CreditCard, ListTodo, Plus, Eye, EyeOff, Save, Loader2, LayoutGrid, List, GripVertical, Kanban, Pencil, Trash2, X, Check, Lock } from 'lucide-react';
 import {
   DndContext,
@@ -319,15 +319,11 @@ export function FunilConfigDialog({ open, onOpenChange, funilId, funilNome, funi
   const loadEtapas = async () => {
     setLoadingEtapas(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('funil_etapas')
-        .select('*')
-        .eq('funil_id', funilId)
-        .eq('ativo', true)
-        .order('ordem', { ascending: true });
-
-      if (error) throw error;
-      setEtapas(data || []);
+      const data = await api.get<any[]>(`/funil/etapas?funil_id=${funilId}`).catch(() => [] as any[]);
+      const filtered = (data || [])
+        .filter((e: any) => e.ativo !== false)
+        .sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
+      setEtapas(filtered);
     } catch (error) {
       console.error('Erro ao carregar etapas:', error);
     } finally {
@@ -352,25 +348,19 @@ export function FunilConfigDialog({ open, onOpenChange, funilId, funilNome, funi
 
     // Atualizar ordem no banco de dados
     try {
-      const updates = newEtapas.map((etapa, index) => ({
-        id: etapa.id,
-        ordem: index
-      }));
-
-      for (const update of updates) {
-        await (supabase as any)
-          .from('funil_etapas')
-          .update({ ordem: update.ordem })
-          .eq('id', update.id);
-      }
+      await Promise.all(
+        newEtapas.map((etapa, index) =>
+          api.put(`/funil/etapas/${etapa.id}`, { ordem: index })
+        )
+      );
 
       toast({ title: 'Sucesso', description: 'Ordem das etapas atualizada!' });
     } catch (error) {
       console.error('Erro ao reordenar etapas:', error);
-      toast({ 
-        title: 'Erro', 
-        description: 'Não foi possível salvar a nova ordem.', 
-        variant: 'destructive' 
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível salvar a nova ordem.',
+        variant: 'destructive'
       });
       // Reverter em caso de erro
       loadEtapas();
@@ -387,20 +377,14 @@ export function FunilConfigDialog({ open, onOpenChange, funilId, funilNome, funi
     setSavingEtapa(true);
     try {
       const novaOrdem = etapas.length;
-      const { data, error } = await (supabase as any)
-        .from('funil_etapas')
-        .insert({
-          funil_id: funilId,
-          nome: novaEtapaForm.nome.trim(),
-          cor: novaEtapaForm.cor,
-          ordem: novaOrdem,
-          ativo: true,
-          trancada: novaEtapaForm.trancada
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
+      const data = await api.post<any>('/funil/etapas', {
+        funil_id: funilId,
+        nome: novaEtapaForm.nome.trim(),
+        cor: novaEtapaForm.cor,
+        ordem: novaOrdem,
+        ativo: true,
+        trancada: novaEtapaForm.trancada,
+      });
 
       setEtapas([...etapas, data]);
       setNovaEtapaForm({ nome: '', cor: '#6366f1', trancada: false });
@@ -429,19 +413,14 @@ export function FunilConfigDialog({ open, onOpenChange, funilId, funilNome, funi
     
     setSavingEtapa(true);
     try {
-      const { error } = await (supabase as any)
-        .from('funil_etapas')
-        .update({
-          nome: novaEtapaForm.nome.trim(),
-          cor: novaEtapaForm.cor,
-          trancada: novaEtapaForm.trancada
-        })
-        .eq('id', editingEtapa.id);
+      await api.put(`/funil/etapas/${editingEtapa.id}`, {
+        nome: novaEtapaForm.nome.trim(),
+        cor: novaEtapaForm.cor,
+        trancada: novaEtapaForm.trancada,
+      });
 
-      if (error) throw error;
-
-      setEtapas(etapas.map(e => 
-        e.id === editingEtapa.id 
+      setEtapas(etapas.map(e =>
+        e.id === editingEtapa.id
           ? { ...e, nome: novaEtapaForm.nome.trim(), cor: novaEtapaForm.cor, trancada: novaEtapaForm.trancada }
           : e
       ));
@@ -460,29 +439,20 @@ export function FunilConfigDialog({ open, onOpenChange, funilId, funilNome, funi
   const handleDeleteEtapa = async (etapaId: string) => {
     // Verificar se há cards nesta etapa
     try {
-      const { count, error: countError } = await (supabase as any)
-        .from('funil_cards')
-        .select('*', { count: 'exact', head: true })
-        .eq('etapa_id', etapaId);
+      const cards = await api.get<any[]>(`/funil/cards?etapa_id=${etapaId}`).catch(() => [] as any[]);
+      const count = (cards || []).length;
 
-      if (countError) throw countError;
-
-      if (count && count > 0) {
-        toast({ 
-          title: 'Atenção', 
-          description: `Esta etapa possui ${count} card(s). Mova-os para outra etapa antes de excluir.`, 
-          variant: 'destructive' 
+      if (count > 0) {
+        toast({
+          title: 'Atenção',
+          description: `Esta etapa possui ${count} card(s). Mova-os para outra etapa antes de excluir.`,
+          variant: 'destructive'
         });
         return;
       }
 
       // Excluir etapa (soft delete)
-      const { error } = await (supabase as any)
-        .from('funil_etapas')
-        .update({ ativo: false })
-        .eq('id', etapaId);
-
-      if (error) throw error;
+      await api.put(`/funil/etapas/${etapaId}`, { ativo: false });
 
       setEtapas(etapas.filter(e => e.id !== etapaId));
       toast({ title: 'Sucesso', description: 'Etapa excluída com sucesso!' });
@@ -502,13 +472,7 @@ export function FunilConfigDialog({ open, onOpenChange, funilId, funilNome, funi
   const loadConfig = async () => {
     setLoading(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('funis_configuracoes')
-        .select('*')
-        .eq('funil_id', funilId)
-        .single();
-
-      if (error && error.code !== 'PGRST116') throw error;
+      const data = await api.get<any>(`/funil-comercial/funis/${funilId}/configuracao`).catch(() => null);
 
       if (data) {
         setConfig(prevConfig => ({
@@ -550,7 +514,6 @@ export function FunilConfigDialog({ open, onOpenChange, funilId, funilNome, funi
     setSaving(true);
     try {
       const payload: any = {
-        funil_id: funilId,
         titulo_pagina: config.titulo_pagina,
         descricao_pagina: config.descricao_pagina,
         modo_visualizacao: config.modo_visualizacao,
@@ -573,48 +536,24 @@ export function FunilConfigDialog({ open, onOpenChange, funilId, funilNome, funi
         card_interno_mostrar_movimentacoes: config.card_interno_mostrar_movimentacoes,
         acoes_especiais: config.acoes_especiais,
         formulario_campos: config.formulario_campos,
-        updated_at: new Date().toISOString(),
       };
-
-      // Sempre incluir empresa_id para RLS funcionar corretamente
-      if (empresaId) {
-        payload.empresa_id = empresaId;
-      }
 
       console.log('[FunilConfigDialog] Salvando config:', { configId: config.id, payload });
 
-      if (config.id) {
-        console.log('[FunilConfigDialog] Atualizando config existente, id:', config.id);
-        const { error, data } = await (supabase as any)
-          .from('funis_configuracoes')
-          .update(payload)
-          .eq('id', config.id)
-          .select();
-        console.log('[FunilConfigDialog] Resultado update:', { error, data });
-        if (error) throw error;
-      } else {
-        console.log('[FunilConfigDialog] Inserindo nova config');
-        const { error, data } = await (supabase as any)
-          .from('funis_configuracoes')
-          .insert(payload)
-          .select();
-        console.log('[FunilConfigDialog] Resultado insert:', { error, data });
-        if (error) throw error;
-      }
+      // PUT faz upsert no backend (cria se não existir, atualiza se existir)
+      console.log('[FunilConfigDialog] Upserting config via PUT');
+      const result = await api.put<any>(`/funil-comercial/funis/${funilId}/configuracao`, payload);
+      console.log('[FunilConfigDialog] Resultado upsert:', result);
 
       // Atualizar também o nome do funil na tabela funis se o título da página mudou
       if (config.titulo_pagina && config.titulo_pagina !== funilNome) {
         console.log('[FunilConfigDialog] Atualizando nome do funil:', config.titulo_pagina);
-        const { error: funilError } = await (supabase as any)
-          .from('funis')
-          .update({ nome: config.titulo_pagina })
-          .eq('id', funilId);
-        
-        if (funilError) {
-          console.error('Erro ao atualizar nome do funil:', funilError);
-        } else {
+        try {
+          await api.put(`/funil/funis/${funilId}`, { nome: config.titulo_pagina });
           // Disparar evento para atualizar a sidebar
           window.dispatchEvent(new CustomEvent('setores-updated'));
+        } catch (funilError) {
+          console.error('Erro ao atualizar nome do funil:', funilError);
         }
       }
 

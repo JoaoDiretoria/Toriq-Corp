@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
 import { useHierarquia } from '@/hooks/useHierarquia';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -186,15 +186,13 @@ export function ToriqCorpTarefas({ onNavigate }: ToriqCorpTarefasProps) {
 
   const loadFunis = async () => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('funis')
-        .select('id, nome, tipo, setor_id, setor:setores(nome)')
-        .eq('empresa_id', empresaId)
-        .eq('ativo', true)
-        .order('nome');
-
-      if (error) throw error;
-      setFunis(data || []);
+      const data = await api.get<any[]>('/funil/funis').catch(() => [] as any[]);
+      // Filtros aplicados no cliente: ativo=true, ordenar por nome
+      // setor.nome não disponível no endpoint (só setor_id) — degradado graciosamente
+      const funisFiltrados = (data || [])
+        .filter((f: any) => f.ativo !== false)
+        .sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || ''));
+      setFunis(funisFiltrados);
     } catch (error) {
       console.error('Erro ao carregar funis:', error);
     }
@@ -203,78 +201,79 @@ export function ToriqCorpTarefas({ onNavigate }: ToriqCorpTarefasProps) {
   const loadTarefas = async () => {
     try {
       setLoading(true);
-      
-      // Função auxiliar para aplicar filtros comuns
-      const aplicarFiltros = (query: any) => {
-        // Aplicar filtro de hierarquia
-        const filtroHierarquia = getFiltroUsuarios();
+
+      // GET /funil-comercial/atividades-unificadas — sem paginação no backend;
+      // todos os filtros e paginação são aplicados no cliente.
+      const allData = await api.get<any[]>('/funil-comercial/atividades-unificadas').catch(() => [] as any[]);
+
+      // Aplicar filtros no cliente
+      const filtroHierarquia = getFiltroUsuarios();
+      let filtrado = (allData || []).filter((t: any) => {
+        // Filtro de hierarquia
         if (filtroHierarquia.length > 0) {
-          query = query.or(`criador_id.in.(${filtroHierarquia.join(',')}),responsavel_id.in.(${filtroHierarquia.join(',')})`);
+          const visivel =
+            filtroHierarquia.includes(t.criador_id) ||
+            filtroHierarquia.includes(t.responsavel_id);
+          if (!visivel) return false;
         }
 
+        // Filtro de status
         if (filtroStatus === 'pendentes') {
-          query = query.in('status', ['a_realizar', 'programada', 'pendente']);
+          if (!['a_realizar', 'programada', 'pendente'].includes(t.status)) return false;
         } else if (filtroStatus === 'concluida') {
-          query = query.eq('status', 'concluida');
+          if (t.status !== 'concluida') return false;
         }
 
-        if (filtroTipoAtividade) {
-          query = query.eq('tipo', filtroTipoAtividade);
-        }
+        // Filtro de tipo de atividade
+        if (filtroTipoAtividade && t.tipo !== filtroTipoAtividade) return false;
 
-        if (filtroUsuario && filtroUsuario !== 'todos') {
-          query = query.eq('responsavel_id', filtroUsuario);
-        }
+        // Filtro de usuário responsável
+        if (filtroUsuario && filtroUsuario !== 'todos' && t.responsavel_id !== filtroUsuario) return false;
 
+        // Filtro de funil
         if (filtroFunil && filtroFunil !== 'todos') {
           if (filtroFunil.startsWith('funil_')) {
             const funilId = filtroFunil.replace('funil_', '');
-            query = query.eq('funil_id', funilId);
+            if (t.funil_id !== funilId) return false;
           } else {
-            query = query.eq('funil_origem', filtroFunil);
+            if (t.funil_origem !== filtroFunil) return false;
           }
         }
 
+        // Filtro de data
         if (filtroData === 'hoje') {
           const hoje = new Date().toISOString().split('T')[0];
-          query = query.eq('prazo', hoje);
+          if (!t.prazo || t.prazo.split('T')[0] !== hoje) return false;
         } else if (filtroData === 'semana') {
           const hoje = new Date();
           const inicioSemana = startOfWeek(hoje, { locale: ptBR }).toISOString().split('T')[0];
           const fimSemana = endOfWeek(hoje, { locale: ptBR }).toISOString().split('T')[0];
-          query = query.gte('prazo', inicioSemana).lte('prazo', fimSemana);
+          if (!t.prazo || t.prazo.split('T')[0] < inicioSemana || t.prazo.split('T')[0] > fimSemana) return false;
         } else if (filtroData === 'definir' && dataInicio && dataFim) {
-          query = query.gte('prazo', dataInicio.toISOString().split('T')[0]).lte('prazo', dataFim.toISOString().split('T')[0]);
+          const inicio = dataInicio.toISOString().split('T')[0];
+          const fim = dataFim.toISOString().split('T')[0];
+          if (!t.prazo || t.prazo.split('T')[0] < inicio || t.prazo.split('T')[0] > fim) return false;
         }
 
-        return query;
-      };
+        return true;
+      });
 
-      // Buscar contagem total
-      let countQuery = (supabase as any)
-        .from('atividades_unificadas')
-        .select('*', { count: 'exact', head: true })
-        .eq('empresa_id', empresaId);
-      
-      countQuery = aplicarFiltros(countQuery);
-      const { count } = await countQuery;
-      setTotalTarefas(count || 0);
+      // Ordenar por prazo asc, nulos por último
+      filtrado.sort((a: any, b: any) => {
+        if (!a.prazo && !b.prazo) return 0;
+        if (!a.prazo) return 1;
+        if (!b.prazo) return -1;
+        return a.prazo.localeCompare(b.prazo);
+      });
 
-      // Buscar dados paginados
+      // Contagem total após filtros
+      setTotalTarefas(filtrado.length);
+
+      // Paginação no cliente
       const offset = (paginaAtual - 1) * itensPorPagina;
-      let query = (supabase as any)
-        .from('atividades_unificadas')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('prazo', { ascending: true, nullsFirst: false })
-        .range(offset, offset + itensPorPagina - 1);
+      const paginado = filtrado.slice(offset, offset + itensPorPagina);
 
-      query = aplicarFiltros(query);
-      const { data, error } = await query;
-
-      if (error) throw error;
-      
-      setTarefas(data || []);
+      setTarefas(paginado);
     } catch (error) {
       console.error('Erro ao carregar tarefas:', error);
       toast({
@@ -289,56 +288,47 @@ export function ToriqCorpTarefas({ onNavigate }: ToriqCorpTarefasProps) {
 
   const loadUsuarios = async () => {
     try {
-      // Buscar apenas usuários da empresa (role = 'cliente_torq')
-      let query = (supabase as any)
-        .from('profiles')
-        .select('id, nome, grupo_acesso, setor:setores(nome)')
-        .eq('empresa_id', empresaId)
-        .eq('role', 'cliente_torq')
-        .order('nome');
+      // GET /admin/users/hierarquia — retorna profiles da empresa; role filtrado no cliente
+      // setor.nome não disponível no endpoint (só setor_id) — degradado graciosamente
+      const profilesData = await api.get<any[]>('/admin/users/hierarquia').catch(() => [] as any[]);
 
       // Aplicar filtro de hierarquia para usuários visíveis
       const filtroHierarquia = getFiltroUsuarios();
-      if (filtroHierarquia.length > 0) {
-        query = query.in('id', filtroHierarquia);
-      }
+      const profilesFiltrados = (profilesData || []).filter((p: any) => {
+        if (filtroHierarquia.length > 0 && !filtroHierarquia.includes(p.id)) return false;
+        return true;
+      });
 
-      const { data: profilesData, error } = await query;
+      // Buscar atividades para calcular contagem por usuário no cliente
+      const allAtividades = await api.get<any[]>('/funil-comercial/atividades-unificadas').catch(() => [] as any[]);
 
-      if (error) throw error;
-
-      // Buscar contagem de tarefas por usuário (responsável) - conforme filtro de status atual
-      const usuariosComContagem: Usuario[] = await Promise.all(
-        (profilesData || []).map(async (p: any) => {
-          let countQuery = (supabase as any)
-            .from('atividades_unificadas')
-            .select('*', { count: 'exact', head: true })
-            .eq('empresa_id', empresaId)
-            .eq('responsavel_id', p.id);
-          
-          // Aplicar mesmo filtro de status usado na listagem
+      // Contar tarefas por responsável conforme filtro de status atual
+      const contarTarefas = (userId: string): number => {
+        return (allAtividades || []).filter((t: any) => {
+          if (t.responsavel_id !== userId) return false;
           if (filtroStatus === 'pendentes') {
-            countQuery = countQuery.in('status', ['a_realizar', 'programada', 'pendente']);
+            return ['a_realizar', 'programada', 'pendente'].includes(t.status);
           } else if (filtroStatus === 'concluida') {
-            countQuery = countQuery.eq('status', 'concluida');
+            return t.status === 'concluida';
           }
-          // Se 'todas', não aplica filtro de status
+          return true;
+        }).length;
+      };
 
-          const { count } = await countQuery;
+      const usuariosComContagem: Usuario[] = profilesFiltrados.map((p: any) => ({
+        id: p.id,
+        nome: p.nome || '',
+        grupo_acesso: p.grupo_acesso,
+        setor: undefined, // setor.nome não disponível no endpoint /admin/users/hierarquia
+        total_tarefas: contarTarefas(p.id),
+      }));
 
-          return {
-            id: p.id,
-            nome: p.nome,
-            grupo_acesso: p.grupo_acesso,
-            setor: p.setor,
-            total_tarefas: count || 0,
-          };
-        })
-      );
+      // Ordenar por nome
+      usuariosComContagem.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
 
       // Filtrar para exibir apenas usuários que têm tarefas (conforme filtro atual)
       const usuariosComTarefas = usuariosComContagem.filter(u => (u.total_tarefas || 0) > 0);
-      
+
       // Se não houver nenhum usuário com tarefas, mostrar todos da hierarquia
       setUsuarios(usuariosComTarefas.length > 0 ? usuariosComTarefas : usuariosComContagem);
     } catch (error) {
@@ -356,12 +346,16 @@ export function ToriqCorpTarefas({ onNavigate }: ToriqCorpTarefasProps) {
 
   const handleFinalizarTarefa = async (tarefaId: string) => {
     try {
-      const { error } = await (supabase as any)
-        .from('funil_card_atividades')
-        .update({ status: 'concluida', updated_at: new Date().toISOString() })
-        .eq('id', tarefaId);
-
-      if (error) throw error;
+      const tarefa = tarefas.find(t => t.id === tarefaId);
+      if (!tarefa) throw new Error('tarefa não encontrada no estado');
+      // PUT /funil/cards/{card_id}/atividades/{atividade_id}
+      await api.put(`/funil/cards/${tarefa.card_id}/atividades/${tarefaId}`, {
+        tipo: tarefa.tipo,
+        descricao: tarefa.descricao,
+        status: 'concluida',
+        prazo: tarefa.prazo ? tarefa.prazo.split('T')[0] : null,
+        horario: tarefa.horario || null,
+      });
       toast({ title: 'Sucesso', description: 'Tarefa finalizada!' });
       loadTarefas();
     } catch (error) {
@@ -372,12 +366,16 @@ export function ToriqCorpTarefas({ onNavigate }: ToriqCorpTarefasProps) {
 
   const handleReabrirTarefa = async (tarefaId: string) => {
     try {
-      const { error } = await (supabase as any)
-        .from('funil_card_atividades')
-        .update({ status: 'a_realizar', updated_at: new Date().toISOString() })
-        .eq('id', tarefaId);
-
-      if (error) throw error;
+      const tarefa = tarefas.find(t => t.id === tarefaId);
+      if (!tarefa) throw new Error('tarefa não encontrada no estado');
+      // PUT /funil/cards/{card_id}/atividades/{atividade_id}
+      await api.put(`/funil/cards/${tarefa.card_id}/atividades/${tarefaId}`, {
+        tipo: tarefa.tipo,
+        descricao: tarefa.descricao,
+        status: 'a_realizar',
+        prazo: tarefa.prazo ? tarefa.prazo.split('T')[0] : null,
+        horario: tarefa.horario || null,
+      });
       toast({ title: 'Sucesso', description: 'Tarefa reaberta!' });
       loadTarefas();
     } catch (error) {

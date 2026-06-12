@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
@@ -519,7 +519,6 @@ export function ProdutosServicosImportExport({
         const codigo = gerarCodigoAutomatico(data.natureza, i);
 
         const produtoData = {
-          empresa_id: empresaId,
           nome: data.nome,
           codigo: codigo,
           preco: data.preco,
@@ -533,14 +532,11 @@ export function ProdutosServicosImportExport({
           ativo: true, // Sempre ativo na criação
         };
 
-        const { error } = await (supabase as any)
-          .from('produtos_servicos')
-          .insert(produtoData);
-
-        if (error) {
-          results.errors.push({ row: rowNumber, error: error.message });
-        } else {
+        try {
+          await api.post<any>('/produtos/catalogo', produtoData);
           results.success++;
+        } catch (err: any) {
+          results.errors.push({ row: rowNumber, error: err?.detail ?? err?.message ?? 'Erro ao importar' });
         }
       }
 

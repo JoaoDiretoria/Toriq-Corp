@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
-import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -33,7 +32,6 @@ interface Conta {
 
 export function ClienteFinanceiro() {
   const { empresa } = useAuth();
-  const { toast } = useToast();
   const [contas, setContas] = useState<Conta[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('todos');
@@ -45,26 +43,19 @@ export function ClienteFinanceiro() {
         return;
       }
 
-      const { data, error } = await supabase
-        .from('financeiro_contas')
-        .select('*')
-        .eq('empresa_id', empresa.id)
-        .order('vencimento', { ascending: true });
+      const data = await api.get<any[]>('/financeiro/contas').catch(() => [] as any[]);
 
-      if (error) {
-        toast({
-          title: "Erro ao carregar contas",
-          description: error.message,
-          variant: "destructive",
-        });
-      } else {
-        setContas(data || []);
-      }
+      const sorted = (data || []).slice().sort((a: any, b: any) => {
+        const av = a.vencimento ?? '';
+        const bv = b.vencimento ?? '';
+        return av < bv ? -1 : av > bv ? 1 : 0;
+      });
+      setContas(sorted);
       setLoading(false);
     };
 
     fetchContas();
-  }, [empresa?.id, toast]);
+  }, [empresa?.id]);
 
   const filteredContas = contas.filter(conta =>
     statusFilter === 'todos' || conta.status === statusFilter

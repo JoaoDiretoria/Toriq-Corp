@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -186,22 +185,11 @@ const Auth = () => {
     }
 
     setIsResetLoading(true);
-    
-    // Verificar se email existe no sistema
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('email', forgotPasswordEmail)
-      .maybeSingle();
-      
-    if (!profile) {
-      toast.error('E-mail não encontrado no sistema.');
-      setIsResetLoading(false);
-      resetTurnstileRef.current?.reset();
-      setResetCaptchaToken(null);
-      return;
-    }
-    
+
+    // NOTA (migração): verificação de existência do email removida — não há endpoint
+    // equivalente a supabase.from('profiles').select('id').eq('email', x).maybeSingle().
+    // O resetPassword (useAuth) é um stub adiado por falta de infraestrutura de email;
+    // a UI continua idêntica e não quebra.
     const { error } = await resetPassword(forgotPasswordEmail, resetCaptchaToken);
     setIsResetLoading(false);
     

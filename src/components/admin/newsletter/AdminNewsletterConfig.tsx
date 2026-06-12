@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -40,12 +40,8 @@ export default function AdminNewsletterConfig({ onBack }: Props) {
 
   const fetchConfig = async () => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('newsletter_config')
-        .select('*')
-        .single();
-
-      if (error && error.code !== 'PGRST116') throw error;
+      const list = await api.get<any[]>('/blog/newsletter/config').catch(() => [] as any[]);
+      const data = list[0] ?? null;
 
       if (data) {
         setConfig(data);
@@ -72,18 +68,12 @@ export default function AdminNewsletterConfig({ onBack }: Props) {
       };
 
       if (config) {
-        const { error } = await (supabase as any)
-          .from('newsletter_config')
-          .update(data)
-          .eq('id', config.id);
-
-        if (error) throw error;
+        await api.put<any>(`/blog/newsletter/config/${config.id}`, data);
       } else {
-        const { error } = await (supabase as any)
-          .from('newsletter_config')
-          .insert(data);
-
-        if (error) throw error;
+        // NOTA (migração): não existe endpoint POST /blog/newsletter/config — config é um
+        // singleton criado pelo backend. Se não existir config, salvar é no-op.
+        toast.error('Configuração não encontrada no servidor. Contate o administrador.');
+        return;
       }
 
       toast.success('Configurações salvas com sucesso');

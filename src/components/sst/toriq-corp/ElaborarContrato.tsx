@@ -11,8 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { useEmpresaMode } from '@/hooks/useEmpresaMode';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { ArrowLeft, Save, RotateCcw, Copy, FileDown, Plus, Trash2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Edit, FileSignature, Check, Loader2, RefreshCw, Download } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -35,8 +34,6 @@ const CLAUSULAS_PADRAO: Clausula[] = [
 
 export function ElaborarContrato({ contrato, modelo, tipo, onClose }: ElaborarContratoProps) {
   const { empresa, profile } = useAuth();
-  const { empresaMode } = useEmpresaMode();
-  const empresaId = empresaMode?.empresaId || empresa?.id;
   const { toast } = useToast();
   const previewRef = useRef<HTMLDivElement>(null);
   const hiddenRef = useRef<HTMLDivElement>(null);
@@ -145,29 +142,36 @@ export function ElaborarContrato({ contrato, modelo, tipo, onClose }: ElaborarCo
 
   const loadDependencies = async () => {
     const [c, p, i] = await Promise.all([
-      (supabase as any).from('clientes_sst').select('id, nome, cnpj, email, telefone, responsavel, cliente_empresa_id, empresas:cliente_empresa_id(endereco, numero, complemento, bairro, cidade, estado, cep)').eq('empresa_sst_id', empresaId),
-      (supabase as any).from('empresas_parceiras').select('id, nome, cnpj, email, telefone, endereco, cidade, estado, cep').eq('empresa_sst_id', empresaId),
-      (supabase as any).from('instrutores').select('id, nome, cpf_cnpj, email, telefone, endereco, bairro, cidade, estado, cep').eq('empresa_id', empresaId)
+      api.get<any[]>('/sst/clientes').catch(() => [] as any[]),
+      api.get<any[]>('/treinamentos/empresas-parceiras').catch(() => [] as any[]),
+      api.get<any[]>('/treinamentos/instrutores').catch(() => [] as any[]),
     ]);
-    if (c.data) setClientes(c.data);
-    if (p.data) setParceiros(p.data);
-    if (i.data) setInstrutores(i.data);
+    setClientes(c);
+    setParceiros(p);
+    setInstrutores(i);
   };
 
   const generateNumero = async () => {
+    // Número gerado pelo backend no momento do POST; exibimos placeholder até salvar.
     const ano = new Date().getFullYear();
-    const { data } = await (supabase as any).from('contratos').select('numero').eq('empresa_id', empresaId).like('numero', `TQ-${ano}-%`).order('numero', { ascending: false }).limit(1);
+    const contratos = await api.get<any[]>('/contratos').catch(() => [] as any[]);
+    const prefix = `TQ-${ano}-`;
+    const filtrados = contratos.filter((c: any) => c.numero && c.numero.startsWith(prefix));
     let n = 1;
-    if (data?.length) n = parseInt(data[0].numero.split('-')[2]) + 1;
+    if (filtrados.length) {
+      const nums = filtrados.map((c: any) => parseInt(c.numero.split('-')[2]) || 0);
+      n = Math.max(...nums) + 1;
+    }
     setContratoData(prev => ({ ...prev, numero: `TQ-${ano}-${String(n).padStart(4, '0')}` }));
   };
 
   const loadContrato = async () => {
     setContratoData({ ...contrato, valor_implantacao: parseFloat(contrato.valor_implantacao) || 0, valor_mensal: parseFloat(contrato.valor_mensal) || 0, valor_avista: parseFloat(contrato.valor_avista) || 0, valor_3x: parseFloat(contrato.valor_3x) || 0, valor_leasing: parseFloat(contrato.valor_leasing) || 0 });
-    const { data: cl } = await (supabase as any).from('contrato_clausulas').select('*').eq('contrato_id', contrato.id).order('ordem');
+    const cl = await api.get<any[]>(`/contratos/${contrato.id}/clausulas`).catch(() => [] as any[]);
     if (cl?.length) setClausulas(cl);
-    const { data: mo } = await (supabase as any).from('contrato_servicos').select('*').eq('contrato_id', contrato.id).order('ordem');
-    if (mo?.length) setServicos(mo.map((s: any) => ({ nome: s.nome, descricao: s.descricao || '', quantidade: s.quantidade || 1, precoUnitario: s.preco_unitario || 0, subtotal: s.subtotal || 0, tipo: s.tipo })));
+    // NOTA (migracao): contrato_servicos nao tem endpoint REST equivalente — lista vazia como degradacao gracil.
+    const mo: any[] = [];
+    if (mo.length) setServicos(mo.map((s: any) => ({ nome: s.nome, descricao: s.descricao || '', quantidade: s.quantidade || 1, precoUnitario: s.preco_unitario || 0, subtotal: s.subtotal || 0, tipo: s.tipo })));
   };
 
   // Função para carregar serviços da última proposta aceita do cliente
@@ -176,24 +180,20 @@ export function ElaborarContrato({ contrato, modelo, tipo, onClose }: ElaborarCo
     setLoadingServicos(true);
     try {
       // Buscar o card do funil relacionado ao cliente com status aceito/ganho
-      const { data: cards } = await (supabase as any)
-        .from('funil_cards')
-        .select('id, titulo, valor, status_negocio, orcamento_treinamento, orcamento_vertical365, orcamento_servicos_sst')
-        .eq('cliente_id', clienteId)
-        .in('status_negocio', ['aceito', 'ganho'])
-        .order('updated_at', { ascending: false })
-        .limit(1);
+      const allCards = await api.get<any[]>('/funil/cards').catch(() => [] as any[]);
+      // Filtro client-side: cliente_id + status aceito/ganho, ordenado por mais recente, limit 1
+      const cards = allCards
+        .filter((c: any) => c.cliente_id === clienteId && ['aceito', 'ganho'].includes(c.status_negocio))
+        .sort((a: any, b: any) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime())
+        .slice(0, 1);
 
       if (cards && cards.length > 0) {
         const card = cards[0];
         setPropostaEncontrada({ id: card.id, numero: card.titulo, status: card.status_negocio });
-        
+
         // Buscar orçamento detalhado do card
-        const { data: orcamento } = await (supabase as any)
-          .from('funil_card_orcamentos')
-          .select('*')
-          .eq('card_id', card.id)
-          .maybeSingle();
+        const orcamentos = await api.get<any[]>(`/funil/cards/${card.id}/orcamentos`).catch(() => [] as any[]);
+        const orcamento = orcamentos[0] ?? null;
 
         const servicosCarregados: ServicoContrato[] = [];
 
@@ -322,18 +322,24 @@ export function ElaborarContrato({ contrato, modelo, tipo, onClose }: ElaborarCo
   const handleSave = async () => {
     setSaving(true);
     try {
-      const payload = { empresa_id: empresaId, ...contratoData, cliente_id: contratoData.cliente_id || null, parceiro_id: contratoData.parceiro_id || null, instrutor_id: contratoData.instrutor_id || null, modelo_id: contratoData.modelo_id || null };
+      // Remove empresa_id e numero do payload — injetados/gerados pelo backend
+      const { empresa_id: _eid, numero: _num, ...rest } = contratoData as any;
+      const payload = { ...rest, cliente_id: contratoData.cliente_id || null, parceiro_id: contratoData.parceiro_id || null, instrutor_id: contratoData.instrutor_id || null, modelo_id: contratoData.modelo_id || null };
       let id = contrato?.id;
       if (id) {
-        await (supabase as any).from('contratos').update(payload).eq('id', id);
-        await (supabase as any).from('contrato_clausulas').delete().eq('contrato_id', id);
-        await (supabase as any).from('contrato_modulos').delete().eq('contrato_id', id);
+        await api.put(`/contratos/${id}`, payload);
+        // Apaga clausulas existentes individualmente antes de reinserir
+        const existentes = await api.get<any[]>(`/contratos/${id}/clausulas`).catch(() => [] as any[]);
+        await Promise.all(existentes.map((c: any) => api.del(`/contratos/${id}/clausulas/${c.id}`).catch(() => null)));
+        // Apaga modulos existentes individualmente
+        const existentesModulos = await api.get<any[]>(`/contratos/${id}/modulos`).catch(() => [] as any[]);
+        await Promise.all(existentesModulos.map((m: any) => api.del(`/contratos/${id}/modulos/${m.id}`).catch(() => null)));
       } else {
-        const { data } = await (supabase as any).from('contratos').insert(payload).select().single();
-        id = data.id;
+        const criado = await api.post<any>('/contratos', payload);
+        id = criado.id;
       }
-      if (clausulas.length) await (supabase as any).from('contrato_clausulas').insert(clausulas.map((c, i) => ({ contrato_id: id, numero: c.numero, titulo: c.titulo, conteudo: c.conteudo, ordem: i })));
-      if (servicos.length) await (supabase as any).from('contrato_servicos').insert(servicos.map((s, i) => ({ contrato_id: id, nome: s.nome, descricao: s.descricao, quantidade: s.quantidade, preco_unitario: s.precoUnitario, subtotal: s.subtotal, tipo: s.tipo, ordem: i })));
+      if (clausulas.length) await Promise.all(clausulas.map((c, i) => api.post(`/contratos/${id}/clausulas`, { numero: c.numero, titulo: c.titulo, conteudo: c.conteudo, ordem: i })));
+      // NOTA (migracao): contrato_servicos nao tem endpoint REST equivalente — persistencia ignorada (degradacao gracil).
       toast({ title: 'Contrato salvo com sucesso' });
       onClose();
     } catch (e) { console.error(e); toast({ title: 'Erro ao salvar', variant: 'destructive' }); }

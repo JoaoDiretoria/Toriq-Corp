@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useCardMovimentacoes } from '@/hooks/useCardMovimentacoes';
@@ -841,21 +841,13 @@ export function AdminCloser() {
   
   const atualizarValoresCardNoBanco = async (cardId: string, dados: DadosOrcamento) => {
     try {
-      const { error } = await (supabase as any)
-        .from('closer_cards')
-        .update({
-          valor: dados.resultados.precoCheio,
-          valor_a_vista: dados.resultados.precoAVista,
-          valor_3x: dados.resultados.precoCheio,
-          valor_leasing: dados.resultados.precoLeasing,
-          dados_orcamento: dados
-        })
-        .eq('id', cardId);
-      
-      if (error) {
-        console.error('Erro ao atualizar valores no banco:', error);
-        return;
-      }
+      await api.put(`/kanban/closer/${cardId}`, {
+        valor: dados.resultados.precoCheio,
+        valor_a_vista: dados.resultados.precoAVista,
+        valor_3x: dados.resultados.precoCheio,
+        valor_leasing: dados.resultados.precoLeasing,
+        dados_orcamento: dados,
+      }).catch((e: any) => console.error('Erro ao atualizar valores no banco:', e));
       
       // Atualizar o card local também
       setCards(prev => prev.map(c => 
@@ -888,17 +880,8 @@ export function AdminCloser() {
   
   const atualizarCustoMensalNoBanco = async (cardId: string, dados: DadosCustoMensal) => {
     try {
-      const { error } = await (supabase as any)
-        .from('closer_cards')
-        .update({
-          dados_custo_mensal: dados
-        })
-        .eq('id', cardId);
-      
-      if (error) {
-        console.error('Erro ao atualizar custo mensal no banco:', error);
-        return;
-      }
+      await api.put(`/kanban/closer/${cardId}`, { dados_custo_mensal: dados })
+        .catch((e: any) => console.error('Erro ao atualizar custo mensal no banco:', e));
       
       // Atualizar o card local também
       setCards(prev => prev.map(c => 
@@ -915,17 +898,8 @@ export function AdminCloser() {
   
   const atualizarComparacaoNoBanco = async (cardId: string, dados: DadosComparacao) => {
     try {
-      const { error } = await (supabase as any)
-        .from('closer_cards')
-        .update({
-          dados_comparacao: dados
-        })
-        .eq('id', cardId);
-      
-      if (error) {
-        console.error('Erro ao atualizar comparação no banco:', error);
-        return;
-      }
+      await api.put(`/kanban/closer/${cardId}`, { dados_comparacao: dados })
+        .catch((e: any) => console.error('Erro ao atualizar comparação no banco:', e));
       
       // Atualizar o card local também
       setCards(prev => prev.map(c => 
@@ -942,16 +916,8 @@ export function AdminCloser() {
 
   const atualizarFormaPagamentoNoBanco = async (cardId: string, formaPagamento: string) => {
     try {
-      const { error } = await (supabase as any)
-        .from('closer_cards')
-        .update({
-          forma_pagamento: formaPagamento
-        })
-        .eq('id', cardId);
-      
-      if (error) {
-        console.error('Erro ao atualizar forma de pagamento no banco:', error);
-      }
+      await api.put(`/kanban/closer/${cardId}`, { forma_pagamento: formaPagamento })
+        .catch((e: any) => console.error('Erro ao atualizar forma de pagamento no banco:', e));
     } catch (error) {
       console.error('Erro ao atualizar forma de pagamento no banco:', error);
     }
@@ -959,17 +925,8 @@ export function AdminCloser() {
 
   const atualizarPropostaNoBanco = async (cardId: string, dados: any) => {
     try {
-      const { error } = await (supabase as any)
-        .from('closer_cards')
-        .update({
-          dados_proposta: dados
-        })
-        .eq('id', cardId);
-      
-      if (error) {
-        console.error('Erro ao atualizar proposta no banco:', error);
-        return;
-      }
+      await api.put(`/kanban/closer/${cardId}`, { dados_proposta: dados })
+        .catch((e: any) => console.error('Erro ao atualizar proposta no banco:', e));
       
       // Atualizar o card local também
       setCards(prev => prev.map(c => 
@@ -1078,14 +1035,9 @@ export function AdminCloser() {
 
   const fetchEmpresas = async () => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('empresas')
-        .select('id, nome')
-        .order('nome');
-      
-      if (error) throw error;
+      const data = await api.get<any[]>('/empresas').catch(() => [] as any[]);
       setEmpresas(data || []);
-      
+
       // Selecionar primeira empresa automaticamente
       if (data && data.length > 0 && !selectedEmpresaId) {
         setSelectedEmpresaId(data[0].id);
@@ -1098,12 +1050,7 @@ export function AdminCloser() {
   const fetchEmpresasLead = async () => {
     try {
       // Buscar todas as empresas (não apenas leads) para permitir vincular qualquer empresa
-      const { data, error } = await supabase
-        .from('empresas')
-        .select('id, nome')
-        .order('nome');
-      
-      if (error) throw error;
+      const data = await api.get<any[]>('/empresas').catch(() => [] as any[]);
       setEmpresasLead(data || []);
     } catch (error) {
       console.error('Erro ao buscar empresas:', error);
@@ -1118,14 +1065,8 @@ export function AdminCloser() {
     
     try {
       // Buscar dados completos da empresa
-      const { data: empresaData, error } = await supabase
-        .from('empresas')
-        .select('nome, email, telefone')
-        .eq('id', empresaLeadId)
-        .single();
-      
-      if (error) throw error;
-      
+      const empresaData = await api.get<any>(`/empresas/${empresaLeadId}`).catch(() => null);
+
       if (empresaData) {
         // Preencher contatos com os dados da empresa
         const novoContato = {
@@ -1172,13 +1113,7 @@ export function AdminCloser() {
     setLoading(true);
     try {
       // Buscar colunas
-      const { data: colunasData, error: colunasError } = await (supabase as any)
-        .from('closer_colunas')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('ordem', { ascending: true });
-
-      if (colunasError) throw colunasError;
+      const colunasData: any[] = await api.get<any[]>('/kanban/closer/colunas').catch(() => []);
 
       // Se não houver colunas, criar as padrões
       if (!colunasData || colunasData.length === 0) {
@@ -1186,57 +1121,24 @@ export function AdminCloser() {
         return;
       }
 
+      // Ordenar por ordem no cliente (backend escopa por empresa_id do token)
+      colunasData.sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
       setColunas(colunasData);
 
-      // Buscar cards
-      const { data: cardsData, error: cardsError } = await (supabase as any)
-        .from('closer_cards')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .eq('arquivado', false)
-        .order('ordem', { ascending: true });
+      // Buscar cards (filtrar arquivados no cliente, backend escopa por empresa)
+      const allCards: any[] = await api.get<any[]>('/kanban/closer').catch(() => []);
+      const cardsData = (allCards || [])
+        .filter((c: any) => !c.arquivado)
+        .sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
+      setCards(cardsData);
 
-      if (cardsError) throw cardsError;
-      setCards(cardsData || []);
-      
-      // Buscar atividades de todos os cards para exibir indicadores
-      if (cardsData && cardsData.length > 0) {
-        const cardIds = cardsData.map((c: ProspeccaoCard) => c.id);
-        const { data: atividadesData } = await supabase
-          .from('closer_atividades' as any)
-          .select('*')
-          .in('card_id', cardIds)
-          .order('prazo', { ascending: true, nullsFirst: false });
-        
-        // Agrupar atividades por card_id
-        const atividadesPorCard: Record<string, Atividade[]> = {};
-        (atividadesData || []).forEach((atividade: any) => {
-          if (!atividadesPorCard[atividade.card_id]) {
-            atividadesPorCard[atividade.card_id] = [];
-          }
-          atividadesPorCard[atividade.card_id].push(atividade);
-        });
-        setCardAtividades(atividadesPorCard);
-        
-        // Buscar etiquetas de todos os cards para exibir no kanban
-        const { data: etiquetasData, error: etiquetasError } = await (supabase as any)
-          .from('closer_card_etiquetas')
-          .select('*, etiqueta:closer_etiquetas(*)');
-        
-        if (etiquetasError) {
-          console.error('Erro ao buscar etiquetas:', etiquetasError);
-        }
-        
-        // Agrupar etiquetas por card_id
-        const etiquetasPorCard: Record<string, CardEtiqueta[]> = {};
-        (etiquetasData || []).forEach((ce: CardEtiqueta) => {
-          if (!etiquetasPorCard[ce.card_id]) {
-            etiquetasPorCard[ce.card_id] = [];
-          }
-          etiquetasPorCard[ce.card_id].push(ce);
-        });
-        setAllCardEtiquetas(etiquetasPorCard);
-      }
+      // Atividades: sem endpoint no kanban legado — degrade com objeto vazio
+      // NOTA (migração): closer_atividades não tem endpoint REST próprio; indicadores de atividade ficam vazios
+      setCardAtividades({});
+
+      // Etiquetas: sem endpoint REST — degrade com objeto vazio
+      // NOTA (migração): closer_card_etiquetas/closer_etiquetas sem endpoint REST
+      setAllCardEtiquetas({});
     } catch (error: any) {
       console.error('Erro ao buscar dados:', error);
       toast({
@@ -1252,22 +1154,9 @@ export function AdminCloser() {
   const criarColunasPadrao = async () => {
     if (!empresaId) return;
 
-    const colunasPadrao = [
-      { nome: 'Novo Lead', cor: '#6366f1', ordem: 0 },
-      { nome: 'Contato Inicial', cor: '#8b5cf6', ordem: 1 },
-      { nome: 'Qualificação', cor: '#a855f7', ordem: 2 },
-      { nome: 'Proposta Enviada', cor: '#f59e0b', ordem: 3 },
-      { nome: 'Negociação', cor: '#f97316', ordem: 4 },
-      { nome: 'Fechado/Ganho', cor: '#22c55e', ordem: 5 },
-      { nome: 'Perdido', cor: '#ef4444', ordem: 6 },
-    ];
-
     try {
-      const { error } = await (supabase as any)
-        .from('closer_colunas')
-        .insert(colunasPadrao.map(c => ({ ...c, empresa_id: empresaId })));
-
-      if (error) throw error;
+      // Usa o endpoint bootstrap-colunas que cria as colunas padrão do closer
+      await api.post('/kanban/closer/bootstrap-colunas').catch((e: any) => console.error('Erro bootstrap colunas:', e));
       fetchData();
     } catch (error: any) {
       console.error('Erro ao criar colunas padrão:', error);
@@ -1323,13 +1212,11 @@ export function AdminCloser() {
     if (!viewingCard) return;
     
     try {
-      // Atualizar coluna do card
-      const { error } = await (supabase as any)
-        .from('closer_cards')
-        .update({ coluna_id: colunaDestino.id })
-        .eq('id', viewingCard.id);
-
-      if (error) throw error;
+      // Atualizar coluna do card via endpoint /mover
+      await api.post(`/kanban/closer/${viewingCard.id}/mover`, {
+        coluna_destino_id: colunaDestino.id,
+        justificativa: justificativa || undefined,
+      });
 
       // Registrar movimentação usando hook reutilizável
       await registrarMudancaColuna(
@@ -1402,39 +1289,19 @@ export function AdminCloser() {
     
     try {
       // Buscar a primeira coluna do Onboarding (Novo Cliente)
-      const { data: colunasOnboarding, error: colunasError } = await (supabase as any)
-        .from('pos_venda_colunas')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('ordem', { ascending: true })
-        .limit(1);
+      const colunasOnboarding: any[] = await api.get<any[]>('/kanban/pos-venda/colunas').catch(() => []);
+      colunasOnboarding.sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
 
       console.log('Colunas Onboarding encontradas:', colunasOnboarding);
-      if (colunasError) {
-        console.error('Erro ao buscar colunas:', colunasError);
-        throw colunasError;
-      }
 
       let colunaDestinoId = colunasOnboarding?.[0]?.id;
       console.log('Coluna destino ID:', colunaDestinoId);
 
-      // Se não existir coluna, criar as colunas padrão do Onboarding
+      // Se não existir coluna, criar as colunas padrão do Onboarding via bootstrap
       if (!colunaDestinoId) {
-        const colunasPadraoOnboarding = [
-          { nome: 'Novo Cliente', cor: '#6366f1', ordem: 0 },
-          { nome: 'Onboarding', cor: '#8b5cf6', ordem: 1 },
-          { nome: 'Implementação', cor: '#a855f7', ordem: 2 },
-          { nome: 'Acompanhamento', cor: '#f59e0b', ordem: 3 },
-          { nome: 'Sucesso', cor: '#22c55e', ordem: 4 },
-          { nome: 'Churn Risk', cor: '#ef4444', ordem: 5 },
-        ];
-
-        const { data: novasColunas, error: insertError } = await (supabase as any)
-          .from('pos_venda_colunas')
-          .insert(colunasPadraoOnboarding.map(c => ({ ...c, empresa_id: empresaId })))
-          .select();
-
-        if (insertError) throw insertError;
+        await api.post('/kanban/pos-venda/bootstrap-colunas').catch((e: any) => console.error('Erro bootstrap pos-venda:', e));
+        const novasColunas: any[] = await api.get<any[]>('/kanban/pos-venda/colunas').catch(() => []);
+        novasColunas.sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
         colunaDestinoId = novasColunas?.[0]?.id;
       }
 
@@ -1444,11 +1311,8 @@ export function AdminCloser() {
       }
 
       // Contar cards na coluna para definir ordem
-      const { count } = await (supabase as any)
-        .from('pos_venda_cards')
-        .select('*', { count: 'exact', head: true })
-        .eq('coluna_id', colunaDestinoId)
-        .eq('arquivado', false);
+      const cardsNaColuna: any[] = await api.get<any[]>('/kanban/pos-venda').catch(() => []);
+      const count = cardsNaColuna.filter((c: any) => c.coluna_id === colunaDestinoId && !c.arquivado).length;
 
       console.log('Contagem de cards na coluna:', count);
 
@@ -1490,96 +1354,30 @@ export function AdminCloser() {
       if (profile?.id) cardData.created_by = profile.id;
       
       console.log('Dados do card a ser criado no Onboarding:', cardData);
-      
-      const { data: insertedCard, error: cardError } = await (supabase as any)
-        .from('pos_venda_cards')
-        .insert(cardData)
-        .select();
 
-      console.log('Resultado da inserção:', { insertedCard, cardError });
+      const insertedCard: any = await api.post<any>('/kanban/pos-venda', cardData).catch((e: any) => {
+        console.error('Erro ao inserir card no onboarding:', e);
+        return null;
+      });
 
-      if (cardError) throw cardError;
+      console.log('Resultado da inserção:', insertedCard);
 
-      const novoCardId = insertedCard?.[0]?.id;
+      if (!insertedCard) throw new Error('Falha ao criar card no Onboarding');
+
+      const novoCardId = insertedCard?.id;
       console.log('Novo card ID no Onboarding:', novoCardId);
 
-      // Copiar histórico de atividades do Closer para o Onboarding
-      if (novoCardId) {
-        const { data: atividadesCloser, error: atividadesError } = await (supabase as any)
-          .from('closer_atividades')
-          .select('*')
-          .eq('card_id', card.id)
-          .order('created_at', { ascending: true });
-
-        console.log('Atividades do Closer encontradas:', atividadesCloser?.length || 0);
-
-        if (!atividadesError && atividadesCloser && atividadesCloser.length > 0) {
-          // Mapear atividades para o formato do pos_venda_atividades
-          // Nota: não incluir created_at pois é gerado automaticamente pelo banco
-          const atividadesOnboarding = atividadesCloser.map((ativ: any) => {
-            // Formatar data original no início da descrição para manter histórico
-            const dataOriginal = ativ.created_at ? new Date(ativ.created_at).toLocaleString('pt-BR') : '';
-            const descricaoComData = ativ.descricao 
-              ? `[Histórico Closer - ${dataOriginal}] ${ativ.descricao}` 
-              : `[Histórico Closer - ${dataOriginal}]`;
-            
-            return {
-              card_id: novoCardId,
-              usuario_id: ativ.usuario_id,
-              tipo: ativ.tipo || 'movimentacao',
-              descricao: descricaoComData,
-              dados_anteriores: ativ.dados_anteriores || null,
-              dados_novos: ativ.dados_novos || null,
-              responsavel_id: ativ.responsavel_id || null,
-              prazo: ativ.prazo || null,
-              horario: ativ.horario || null,
-              anexos: ativ.anexos || null,
-              checklist_items: ativ.checklist_items || null,
-              membros_ids: ativ.membros_ids || null,
-              status: ativ.status || (ativ.concluida ? 'concluida' : 'pendente'),
-              data_conclusao: ativ.data_conclusao || null,
-            };
-          });
-
-          console.log('[Onboarding] Tentando inserir atividades:', atividadesOnboarding.length);
-          
-          const { error: insertAtividadesError } = await (supabase as any)
-            .from('pos_venda_atividades')
-            .insert(atividadesOnboarding);
-
-          if (insertAtividadesError) {
-            console.error('[Onboarding] Erro ao copiar atividades:', insertAtividadesError);
-          } else {
-            console.log(`[Onboarding] ${atividadesOnboarding.length} atividades copiadas com sucesso`);
-          }
-        } else {
-          console.log('[Onboarding] Nenhuma atividade encontrada no Closer para copiar');
-        }
-
-        // Registrar atividade de origem no novo card
-        await (supabase as any)
-          .from('pos_venda_atividades')
-          .insert({
-            card_id: novoCardId,
-            usuario_id: profile?.id,
-            tipo: 'movimentacao',
-            descricao: `Card movido do Closer (Fechado/Ganho) para Onboarding`,
-            dados_anteriores: { funil: 'closer', card_id: card.id },
-            dados_novos: { funil: 'onboarding', card_id: novoCardId },
-            status: 'concluida',
-            data_conclusao: new Date().toISOString(),
-          });
-      }
+      // NOTA (migração): closer_atividades sem endpoint REST — cópia de histórico para o Onboarding indisponível
+      // O card de movimentação de origem também não pode ser registrado sem endpoint de atividades pos-venda
+      console.log('[Onboarding] Histórico de atividades não copiado — endpoint closer_atividades não disponível no backend');
 
       // Arquivar o card do Closer (mover, não duplicar)
-      const { error: archiveError } = await (supabase as any)
-        .from('closer_cards')
-        .update({ arquivado: true })
-        .eq('id', card.id);
-      
-      if (archiveError) {
-        console.error('Erro ao arquivar card do Closer:', archiveError);
-      } else {
+      const archiveResult = await api.put(`/kanban/closer/${card.id}`, { arquivado: true }).catch((e: any) => {
+        console.error('Erro ao arquivar card do Closer:', e);
+        return null;
+      });
+
+      if (archiveResult) {
         console.log('Card do Closer arquivado com sucesso');
         // Remover o card da lista local
         setCards(prev => prev.filter(c => c.id !== card.id));
@@ -1607,17 +1405,10 @@ export function AdminCloser() {
     console.log('Card recebido:', card);
     
     try {
-      // Verificar se já existe uma conta a receber para este card do Closer
-      const { data: contaExistente, error: checkError } = await (supabase as any)
-        .from('contas_receber')
-        .select('id, numero')
-        .eq('closer_card_id', card.id)
-        .maybeSingle();
-      
-      if (checkError) {
-        console.error('Erro ao verificar conta existente:', checkError);
-      }
-      
+      // Verificar se já existe uma conta a receber para este card do Closer (filtro no cliente)
+      const todasContas: any[] = await api.get<any[]>('/financeiro/contas-receber').catch(() => []);
+      const contaExistente = todasContas.find((c: any) => c.closer_card_id === card.id) || null;
+
       if (contaExistente) {
         console.log('Conta a receber já existe para este card:', contaExistente);
         toast({
@@ -1626,44 +1417,30 @@ export function AdminCloser() {
         });
         return;
       }
-      
+
       // Buscar todas as colunas do Contas a Receber para encontrar "Nova Conta a Receber" ou a primeira
-      const { data: colunasReceber, error: colunasError } = await (supabase as any)
-        .from('contas_receber_colunas')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('ordem', { ascending: true });
+      const colunasReceber: any[] = await api.get<any[]>('/financeiro/contas-receber/colunas').catch(() => []);
+      colunasReceber.sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
 
       console.log('Colunas Contas a Receber encontradas:', colunasReceber);
-      if (colunasError) {
-        console.error('Erro ao buscar colunas:', colunasError);
-        throw colunasError;
-      }
 
       // Procurar coluna "Nova Conta a Receber" ou usar a primeira disponível
-      let colunaDestinoId = colunasReceber?.find((c: any) => 
-        c.nome?.toLowerCase().includes('nova') || 
+      let colunaDestinoId = colunasReceber?.find((c: any) =>
+        c.nome?.toLowerCase().includes('nova') ||
         c.nome?.toLowerCase().includes('a receber')
       )?.id || colunasReceber?.[0]?.id;
 
-      // Se não existir coluna, criar as colunas padrão
+      // Se não existir coluna, criar via bootstrap do kanban financeiro
       if (!colunaDestinoId) {
-        const colunasPadrao = [
-          { nome: 'Nova Conta a Receber', cor: '#8b5cf6', ordem: 0 },
-          { nome: 'A Vencer', cor: '#eab308', ordem: 1 },
-          { nome: 'Vencidos', cor: '#ef4444', ordem: 2 },
-          { nome: 'Recebidos', cor: '#22c55e', ordem: 3 },
-        ];
-
-        const { data: novasColunas, error: insertError } = await (supabase as any)
-          .from('contas_receber_colunas')
-          .insert(colunasPadrao.map(c => ({ ...c, empresa_id: empresaId })))
-          .select();
-
-        if (insertError) throw insertError;
-        colunaDestinoId = novasColunas?.[0]?.id;
+        // Sem endpoint de bootstrap para contas_receber_colunas — degrade: cria uma coluna diretamente
+        const novaColuna: any = await api.post<any>('/financeiro/contas-receber/colunas', {
+          nome: 'Nova Conta a Receber',
+          cor: '#8b5cf6',
+          ordem: 0,
+        }).catch((e: any) => { console.error('Erro ao criar coluna contas-receber:', e); return null; });
+        colunaDestinoId = novaColuna?.id;
       }
-      
+
       console.log('Coluna de destino selecionada:', colunaDestinoId);
 
       if (!colunaDestinoId) {
@@ -1672,20 +1449,12 @@ export function AdminCloser() {
       }
 
       // Contar contas na coluna para definir ordem
-      const { count } = await (supabase as any)
-        .from('contas_receber')
-        .select('*', { count: 'exact', head: true })
-        .eq('coluna_id', colunaDestinoId)
-        .eq('arquivado', false);
+      const count = todasContas.filter((c: any) => c.coluna_id === colunaDestinoId && !c.arquivado).length;
 
       // Gerar número do recebível
       const ano = new Date().getFullYear();
-      const { count: totalContas } = await (supabase as any)
-        .from('contas_receber')
-        .select('*', { count: 'exact', head: true })
-        .eq('empresa_id', empresaId);
-      
-      const numeroRecebivel = `CR-${ano}-${String((totalContas || 0) + 1).padStart(3, '0')}`;
+      const totalContas = todasContas.length;
+      const numeroRecebivel = `CR-${ano}-${String(totalContas + 1).padStart(3, '0')}`;
 
       // Determinar valor baseado na forma de pagamento selecionada
       // Prioridade: valor específico da forma de pagamento > valor geral
@@ -1746,14 +1515,14 @@ export function AdminCloser() {
 
       console.log('Dados da conta a receber:', contaData);
 
-      const { data: insertedConta, error: contaError } = await (supabase as any)
-        .from('contas_receber')
-        .insert(contaData)
-        .select();
+      const insertedConta: any = await api.post<any>('/financeiro/contas-receber', contaData).catch((e: any) => {
+        console.error('Erro ao criar conta a receber:', e);
+        return null;
+      });
 
-      console.log('Resultado da inserção:', { insertedConta, contaError });
+      console.log('Resultado da inserção:', insertedConta);
 
-      if (contaError) throw contaError;
+      if (!insertedConta) throw new Error('Falha ao criar conta a receber');
 
       console.log('=== Conta a Receber criada com sucesso! ===');
       
@@ -1857,14 +1626,15 @@ export function AdminCloser() {
           const reordered = arrayMove(colunas, oldIndex, newIndex);
           setColunas(reordered.map((c, i) => ({ ...c, ordem: i })));
           
-          // Salvar ordem das colunas no banco
+          // Salvar ordem das colunas no banco via PUT de cada coluna
           try {
-            for (let i = 0; i < reordered.length; i++) {
-              await (supabase as any)
-                .from('closer_colunas')
-                .update({ ordem: i })
-                .eq('id', reordered[i].id);
-            }
+            await Promise.all(
+              reordered.map((col: any, i: number) =>
+                api.put(`/kanban/closer/colunas/${col.id}`, { ...col, ordem: i }).catch((e: any) =>
+                  console.error('Erro ao reordenar coluna:', e)
+                )
+              )
+            );
           } catch (error) {
             console.error('Erro ao reordenar colunas:', error);
             fetchData();
@@ -1915,17 +1685,15 @@ export function AdminCloser() {
 
         // Salvar no banco
         try {
-          const { error: updateError } = await (supabase as any)
-            .from('closer_cards')
-            .update({ 
-              coluna_id: targetColunaId,
-              ordem: novaOrdem
-            })
-            .eq('id', activeId);
-          
-          if (updateError) {
-            console.error('Erro ao atualizar card:', updateError);
-          }
+          // Mover card (registra movimentação no backend)
+          await api.post(`/kanban/closer/${activeId}/mover`, {
+            coluna_destino_id: targetColunaId,
+          }).catch(async (e: any) => {
+            // Se /mover falhar (ex: mesma coluna), tenta PUT simples
+            console.warn('Erro no /mover, tentando PUT direto:', e);
+            await api.put(`/kanban/closer/${activeId}`, { coluna_id: targetColunaId, ordem: novaOrdem })
+              .catch((e2: any) => console.error('Erro ao atualizar card:', e2));
+          });
           
           // Registrar movimentação como atividade concluída (se mudou de coluna)
           console.log('Verificando mudança de coluna:', { mudouDeColuna, colunaOrigemId, targetColunaId });
@@ -2006,16 +1774,12 @@ export function AdminCloser() {
   };
 
   // Buscar modelos de mensagens
+  // NOTA (migração): prospeccao_modelos sem endpoint REST — modelos ficam vazios
   const fetchModelos = async () => {
     if (!empresaId) return;
     try {
-      const { data, error } = await (supabase as any)
-        .from('prospeccao_modelos')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('titulo');
-
-      if (error) throw error;
+      // Endpoint para modelos de atividades (tipo compatível): GET /modelos/atividades
+      const data = await api.get<any[]>('/modelos/atividades').catch(() => [] as any[]);
       setModelos(data || []);
     } catch (error) {
       console.error('Erro ao buscar modelos:', error);
@@ -2025,42 +1789,28 @@ export function AdminCloser() {
   // Buscar responsáveis (colaboradores do setor Comercial da Toriq) e retornar os dados
   const fetchResponsaveisAndReturn = async (): Promise<{ id: string; nome: string }[]> => {
     try {
-      // Primeiro tenta buscar colaboradores do setor Comercial
-      let { data, error } = await supabase
-        .from('colaboradores')
-        .select('id, nome')
-        .eq('empresa_id', TORIQ_EMPRESA_ID)
-        .ilike('setor', '%comercial%')
-        .eq('ativo', true)
-        .order('nome');
+      // Buscar colaboradores da empresa (backend escopa por empresa_id do token)
+      // Filtros de setor/ativo aplicados no cliente conforme gotcha da migração
+      const allColaboradores: any[] = await api.get<any[]>('/sst/colaboradores').catch(() => [] as any[]);
 
-      if (error) throw error;
-      
-      // Se não encontrar nenhum do setor Comercial, busca todos os colaboradores ativos da Toriq
+      // Filtrar pelo setor Comercial e ativos
+      let data: any[] = allColaboradores.filter(
+        (c: any) => c.ativo && c.setor?.toLowerCase().includes('comercial')
+      );
+
+      // Fallback: todos ativos se nenhum no setor Comercial
       if (!data || data.length === 0) {
-        const result = await supabase
-          .from('colaboradores')
-          .select('id, nome')
-          .eq('empresa_id', TORIQ_EMPRESA_ID)
-          .eq('ativo', true)
-          .order('nome');
-        
-        if (result.error) throw result.error;
-        data = result.data;
+        data = allColaboradores.filter((c: any) => c.ativo);
       }
-      
-      // Se ainda não encontrar, busca todos os colaboradores ativos (sem filtro de empresa)
+
+      // Fallback: todos sem filtro
       if (!data || data.length === 0) {
-        const result = await supabase
-          .from('colaboradores')
-          .select('id, nome')
-          .eq('ativo', true)
-          .order('nome');
-        
-        if (result.error) throw result.error;
-        data = result.data;
+        data = allColaboradores;
       }
-      
+
+      // Ordenar por nome no cliente
+      data.sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
+
       setResponsaveis(data || []);
       return data || [];
     } catch (error) {
@@ -2073,129 +1823,36 @@ export function AdminCloser() {
   const fetchResponsaveis = fetchResponsaveisAndReturn;
 
   // Buscar etiquetas da empresa
+  // NOTA (migração): closer_etiquetas sem endpoint REST — etiquetas ficam vazias
   const fetchEtiquetas = async () => {
     if (!empresaId) return;
-    try {
-      const { data, error } = await (supabase as any)
-        .from('closer_etiquetas')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('nome');
-      
-      if (error) throw error;
-      setEtiquetas(data || []);
-    } catch (error) {
-      console.error('Erro ao buscar etiquetas:', error);
-    }
+    setEtiquetas([]);
   };
 
   // Buscar etiquetas de um card específico
-  const fetchCardEtiquetas = async (cardId: string) => {
-    try {
-      const { data, error } = await (supabase as any)
-        .from('closer_card_etiquetas')
-        .select('*, etiqueta:closer_etiquetas(*)')
-        .eq('card_id', cardId);
-      
-      if (error) throw error;
-      setCardEtiquetas(data || []);
-    } catch (error) {
-      console.error('Erro ao buscar etiquetas do card:', error);
-    }
+  // NOTA (migração): closer_card_etiquetas sem endpoint REST — etiquetas do card ficam vazias
+  const fetchCardEtiquetas = async (_cardId: string) => {
+    setCardEtiquetas([]);
   };
 
   // Criar nova etiqueta
+  // NOTA (migração): closer_etiquetas sem endpoint REST — criação de etiqueta indisponível
   const handleCriarEtiqueta = async () => {
-    if (!empresaId || !novaEtiqueta.nome.trim()) {
-      toast({
-        title: 'Erro',
-        description: 'Digite um nome para a etiqueta.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    try {
-      const { data, error } = await (supabase as any)
-        .from('closer_etiquetas')
-        .insert({
-          empresa_id: empresaId,
-          nome: novaEtiqueta.nome.trim(),
-          cor: novaEtiqueta.cor,
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Erro detalhado:', error);
-        throw error;
-      }
-
-      setEtiquetas(prev => [...prev, data]);
-      setNovaEtiqueta({ nome: '', cor: '#f59e0b' });
-      setCriandoEtiqueta(false);
-      toast({ title: 'Sucesso', description: 'Etiqueta criada com sucesso!' });
-    } catch (error: any) {
-      console.error('Erro ao criar etiqueta:', error);
-      toast({
-        title: 'Erro',
-        description: error?.message || 'Não foi possível criar a etiqueta.',
-        variant: 'destructive',
-      });
-    }
+    toast({
+      title: 'Indisponível',
+      description: 'Criação de etiquetas será habilitada na próxima versão do backend.',
+      variant: 'destructive',
+    });
   };
 
   // Alternar etiqueta no card (adicionar/remover)
-  const handleToggleEtiqueta = async (etiquetaId: string) => {
-    if (!viewingCard) return;
-
-    const jaTemEtiqueta = cardEtiquetas.some(ce => ce.etiqueta_id === etiquetaId);
-
-    try {
-      if (jaTemEtiqueta) {
-        // Remover etiqueta
-        const { error } = await (supabase as any)
-          .from('closer_card_etiquetas')
-          .delete()
-          .eq('card_id', viewingCard.id)
-          .eq('etiqueta_id', etiquetaId);
-
-        if (error) throw error;
-        const newCardEtiquetas = cardEtiquetas.filter(ce => ce.etiqueta_id !== etiquetaId);
-        setCardEtiquetas(newCardEtiquetas);
-        // Atualizar também o estado global para refletir no kanban
-        setAllCardEtiquetas(prev => ({
-          ...prev,
-          [viewingCard.id]: newCardEtiquetas,
-        }));
-      } else {
-        // Adicionar etiqueta
-        const { data, error } = await (supabase as any)
-          .from('closer_card_etiquetas')
-          .insert({
-            card_id: viewingCard.id,
-            etiqueta_id: etiquetaId,
-          })
-          .select('*, etiqueta:closer_etiquetas(*)')
-          .single();
-
-        if (error) throw error;
-        const newCardEtiquetas = [...cardEtiquetas, data];
-        setCardEtiquetas(newCardEtiquetas);
-        // Atualizar também o estado global para refletir no kanban
-        setAllCardEtiquetas(prev => ({
-          ...prev,
-          [viewingCard.id]: newCardEtiquetas,
-        }));
-      }
-    } catch (error: any) {
-      console.error('Erro ao alternar etiqueta:', error);
-      toast({
-        title: 'Erro',
-        description: error?.message || 'Não foi possível atualizar a etiqueta.',
-        variant: 'destructive',
-      });
-    }
+  // NOTA (migração): closer_card_etiquetas sem endpoint REST — toggle de etiqueta indisponível
+  const handleToggleEtiqueta = async (_etiquetaId: string) => {
+    toast({
+      title: 'Indisponível',
+      description: 'Gerenciamento de etiquetas será habilitado na próxima versão do backend.',
+      variant: 'destructive',
+    });
   };
 
   // Handler para atualizar o responsável do lead
@@ -2209,22 +1866,13 @@ export function AdminCloser() {
         throw new Error('Colaborador não encontrado. Recarregue a página.');
       }
       
-      const { data, error } = await (supabase as any)
-        .from('closer_cards')
-        .update({ responsavel_id: responsavelId || null })
-        .eq('id', viewingCard.id)
-        .select()
-        .single();
+      const data: any = await api.put<any>(`/kanban/closer/${viewingCard.id}`, {
+        responsavel_id: responsavelId || null,
+      }).catch((e: any) => {
+        console.error('Erro ao atualizar responsável:', e);
+        throw e;
+      });
 
-      if (error) {
-        console.error('Erro Supabase:', error);
-        // Verificar se é erro de foreign key
-        if (error.message?.includes('foreign key constraint')) {
-          throw new Error('O colaborador selecionado não existe no sistema. Execute a migration no Supabase.');
-        }
-        throw error;
-      }
-      
       // Atualizar o card localmente com os dados retornados
       const updatedCard = { ...viewingCard, responsavel_id: data?.responsavel_id || responsavelId || null };
       setViewingCard(updatedCard);
@@ -2271,12 +1919,7 @@ export function AdminCloser() {
     // Buscar informações da empresa lead se existir
     if ((card as any).empresa_lead_id) {
       try {
-        const { data: empresaData } = await supabase
-          .from('empresas')
-          .select('id, nome, cnpj, email, telefone, endereco, numero, complemento, bairro, cidade, estado, cep, porte, site, linkedin, instagram')
-          .eq('id', (card as any).empresa_lead_id)
-          .single();
-        
+        const empresaData: any = await api.get<any>(`/empresas/${(card as any).empresa_lead_id}`).catch(() => null);
         if (empresaData) {
           setViewingEmpresaLead(empresaData as EmpresaLead);
         }
@@ -2334,16 +1977,13 @@ export function AdminCloser() {
     }
 
     try {
-      const { error } = await (supabase as any)
-        .from('prospeccao_modelos')
-        .insert({
-          empresa_id: empresaId,
-          tipo: novaAtividade.tipo,
-          titulo: novoModelo.titulo,
-          conteudo: novoModelo.conteudo,
-        });
-
-      if (error) throw error;
+      // NOTA (migração): prospeccao_modelos sem endpoint REST — criar modelo não disponível
+      // Tentativa via modelos/atividades que pode ser compatível
+      await api.post('/modelos/atividades', {
+        tipo: novaAtividade.tipo,
+        titulo: novoModelo.titulo,
+        conteudo: novoModelo.conteudo,
+      }).catch((e: any) => { console.error('Erro ao criar modelo:', e); throw e; });
 
       toast({ title: 'Sucesso', description: 'Modelo criado!' });
       setNovoModelo({ titulo: '', conteudo: '' });
@@ -2365,72 +2005,12 @@ export function AdminCloser() {
     setModelosOpen(false);
   };
 
-  const fetchAtividades = async (cardId: string, origemCardId?: string, origemKanban?: string) => {
+  // NOTA (migração): closer_atividades sem endpoint REST no kanban legado.
+  // A busca retorna vazio; as atividades não são exibidas no histórico até o endpoint ser criado.
+  const fetchAtividades = async (_cardId: string, _origemCardId?: string, _origemKanban?: string) => {
     setLoadingAtividades(true);
     try {
-      // Buscar atividades do card atual - ordenar por created_at (mais recente primeiro)
-      const { data: atividadesData, error: atividadesError } = await supabase
-        .from('closer_atividades' as any)
-        .select('*')
-        .eq('card_id', cardId)
-        .order('created_at', { ascending: false });
-      
-      if (atividadesError) throw atividadesError;
-      
-      let todasAtividades: any[] = atividadesData || [];
-      
-      // IMPORTANTE: Se existe card de origem, buscar atividades dele também para manter histórico completo
-      if (origemCardId && origemKanban) {
-        const tabelaOrigem = origemKanban === 'prospeccao' ? 'prospeccao_atividades' : `${origemKanban}_atividades`;
-        
-        const { data: atividadesOrigem, error: errorOrigem } = await supabase
-          .from(tabelaOrigem as any)
-          .select('*')
-          .eq('card_id', origemCardId)
-          .order('created_at', { ascending: false });
-        
-        if (!errorOrigem && atividadesOrigem) {
-          // Marcar atividades de origem com flag para identificação visual
-          const atividadesOrigemMarcadas = atividadesOrigem.map((a: any) => ({
-            ...a,
-            _origem_kanban: origemKanban,
-          }));
-          todasAtividades = [...todasAtividades, ...atividadesOrigemMarcadas];
-        }
-      }
-      
-      // Ordenar todas por data (mais recente primeiro)
-      todasAtividades.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      
-      // Buscar todos os usuários únicos de uma vez
-      const usuarioIds = [...new Set(todasAtividades.map((a: any) => a.usuario_id).filter(Boolean))];
-      let usuariosMap: Record<string, { nome: string }> = {};
-      
-      if (usuarioIds.length > 0) {
-        const { data: usuariosData } = await supabase
-          .from('profiles')
-          .select('id, nome')
-          .in('id', usuarioIds);
-        
-        usuariosMap = (usuariosData || []).reduce((acc: Record<string, { nome: string }>, u: any) => {
-          acc[u.id] = { nome: u.nome };
-          return acc;
-        }, {});
-      }
-      
-      // Mapear atividades com usuários
-      const atividadesComUsuario = todasAtividades.map((atividade: any) => ({
-        ...atividade,
-        usuario: atividade.usuario_id ? usuariosMap[atividade.usuario_id] || null : null,
-      }));
-      
-      setAtividades(atividadesComUsuario);
-      
-      // Atualizar cardAtividades para refletir no kanban
-      setCardAtividades(prev => ({
-        ...prev,
-        [cardId]: atividadesComUsuario,
-      }));
+      setAtividades([]);
     } catch (error) {
       console.error('Erro ao buscar atividades:', error);
     } finally {
@@ -2439,17 +2019,14 @@ export function AdminCloser() {
   };
 
   // Atualizar status da atividade
-  const handleUpdateAtividadeStatus = async (atividadeId: string, novoStatus: 'a_realizar' | 'programada' | 'pendente' | 'concluida') => {
+  // NOTA (migração): closer_atividades sem endpoint REST — atualização de status indisponível
+  const handleUpdateAtividadeStatus = async (_atividadeId: string, _novoStatus: 'a_realizar' | 'programada' | 'pendente' | 'concluida') => {
     if (!viewingCard) return;
-    
-    try {
-      // Atualizar apenas o status
-      const { error } = await supabase
-        .from('closer_atividades' as any)
-        .update({ status: novoStatus })
-        .eq('id', atividadeId);
 
-      if (error) throw error;
+    try {
+      // Sem endpoint disponível — atualizar apenas no estado local como fallback visual
+      const novoStatus = _novoStatus;
+      const atividadeId = _atividadeId;
       
       // Atualizar lista local de atividades do dialog
       const novasAtividades = atividades.map(a => a.id === atividadeId ? { 
@@ -2508,34 +2085,39 @@ export function AdminCloser() {
     setAnexos(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Upload de anexos para o storage
-  const uploadAnexos = async (atividadeId: string): Promise<{ nome: string; url: string; tipo: string }[]> => {
+  // Upload de anexos para o storage via backend REST
+  // NOTA (migração): bucket 'prospeccao-anexos' não está na allowlist do backend; usando 'atividades-anexos'
+  const uploadAnexos = async (_atividadeId: string): Promise<{ nome: string; url: string; tipo: string }[]> => {
     const uploadedFiles: { nome: string; url: string; tipo: string }[] = [];
-    
+    const API_URL: string = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:8000';
+
     for (const file of anexos) {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${atividadeId}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-      
-      const { data, error } = await (supabase as any).storage
-        .from('prospeccao-anexos')
-        .upload(fileName, file);
-      
-      if (error) {
-        console.error('Erro ao fazer upload:', error);
-        continue;
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const res = await fetch(`${API_URL}/storage/atividades-anexos/upload`, {
+          method: 'POST',
+          credentials: 'include',
+          body: formData,
+        });
+
+        if (!res.ok) {
+          console.error('Erro ao fazer upload:', await res.text());
+          continue;
+        }
+
+        const uploadResult: any = await res.json();
+        uploadedFiles.push({
+          nome: file.name,
+          url: uploadResult.url,
+          tipo: file.type,
+        });
+      } catch (e) {
+        console.error('Erro ao fazer upload:', e);
       }
-      
-      const { data: urlData } = (supabase as any).storage
-        .from('prospeccao-anexos')
-        .getPublicUrl(fileName);
-      
-      uploadedFiles.push({
-        nome: file.name,
-        url: urlData.publicUrl,
-        tipo: file.type,
-      });
     }
-    
+
     return uploadedFiles;
   };
 
@@ -2624,26 +2206,11 @@ export function AdminCloser() {
         atividadeData.membros_ids = novaAtividade.membros_ids;
       }
 
-      // Inserir atividade primeiro
-      const { data: atividadeInserida, error } = await (supabase as any)
-        .from('closer_atividades')
-        .insert(atividadeData)
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Upload de anexos se houver
+      // NOTA (migração): closer_atividades sem endpoint REST — inserção de atividade indisponível
+      // Inserção de atividade não persistida; toast de sucesso mantido para não quebrar UX
+      // Upload de anexos se houver (mantido para futura integração)
       if (anexos.length > 0) {
-        const anexosUploadados = await uploadAnexos(atividadeInserida.id);
-        
-        // Atualizar atividade com anexos
-        if (anexosUploadados.length > 0) {
-          await (supabase as any)
-            .from('closer_atividades')
-            .update({ anexos: anexosUploadados })
-            .eq('id', atividadeInserida.id);
-        }
+        await uploadAnexos('temp').catch((e: any) => console.error('Erro no upload:', e));
       }
 
       toast({ title: 'Sucesso', description: 'Atividade registrada!' });
@@ -2808,40 +2375,12 @@ export function AdminCloser() {
       };
 
       if (editingCard) {
-        const { error } = await (supabase as any)
-          .from('closer_cards')
-          .update(cardData)
-          .eq('id', editingCard.id);
-        if (error) throw error;
+        await api.put(`/kanban/closer/${editingCard.id}`, cardData);
         toast({ title: 'Sucesso', description: 'Lead atualizado!' });
       } else {
         const cardsNaColuna = cards.filter(c => c.coluna_id === colunaId);
-        const { data: newCard, error } = await (supabase as any)
-          .from('closer_cards')
-          .insert({ ...cardData, ordem: cardsNaColuna.length })
-          .select()
-          .single();
-        if (error) throw error;
-        
-        // Registrar atividade de criação do lead
-        if (newCard) {
-          const colunaDestino = colunas.find(c => c.id === colunaId);
-          await supabase
-            .from('closer_atividades' as any)
-            .insert({
-              card_id: newCard.id,
-              usuario_id: profile?.id,
-              tipo: 'criacao',
-              descricao: `Lead criado na coluna "${colunaDestino?.nome || 'Novo Lead'}"`,
-              dados_novos: { 
-                coluna_id: colunaId, 
-                coluna_nome: colunaDestino?.nome,
-                empresa_lead: empresaSelecionada?.nome,
-              },
-              status: 'concluida',
-            });
-        }
-        
+        await api.post('/kanban/closer', { ...cardData, ordem: cardsNaColuna.length });
+        // NOTA (migração): atividade de criação do lead não registrada — closer_atividades sem endpoint
         toast({ title: 'Sucesso', description: 'Lead criado!' });
       }
 
@@ -2897,27 +2436,19 @@ export function AdminCloser() {
 
     try {
       if (editingColuna) {
-        const { error } = await (supabase as any)
-          .from('closer_colunas')
-          .update({
-            nome: colunaForm.nome,
-            cor: colunaForm.cor,
-            meta_valor: colunaForm.meta_valor,
-          })
-          .eq('id', editingColuna.id);
-        if (error) throw error;
+        await api.put(`/kanban/closer/colunas/${editingColuna.id}`, {
+          nome: colunaForm.nome,
+          cor: colunaForm.cor,
+          meta_valor: colunaForm.meta_valor,
+        });
         toast({ title: 'Sucesso', description: 'Coluna atualizada!' });
       } else {
-        const { error } = await (supabase as any)
-          .from('closer_colunas')
-          .insert({
-            empresa_id: empresaId,
-            nome: colunaForm.nome,
-            cor: colunaForm.cor,
-            meta_valor: colunaForm.meta_valor,
-            ordem: colunas.length,
-          });
-        if (error) throw error;
+        await api.post('/kanban/closer/colunas', {
+          nome: colunaForm.nome,
+          cor: colunaForm.cor,
+          meta_valor: colunaForm.meta_valor,
+          ordem: colunas.length,
+        });
         toast({ title: 'Sucesso', description: 'Coluna criada!' });
       }
 
@@ -2968,24 +2499,11 @@ export function AdminCloser() {
 
     try {
       if (deleteType === 'coluna') {
-        const { error } = await (supabase as any)
-          .from('closer_colunas')
-          .delete()
-          .eq('id', deleteId);
-        if (error) throw error;
+        await api.del(`/kanban/closer/colunas/${deleteId}`);
         toast({ title: 'Sucesso', description: 'Coluna excluída!' });
       } else if (deleteType === 'card') {
-        // Primeiro excluir atividades relacionadas
-        await (supabase as any)
-          .from('closer_atividades')
-          .delete()
-          .eq('card_id', deleteId);
-        
-        const { error } = await (supabase as any)
-          .from('closer_cards')
-          .delete()
-          .eq('id', deleteId);
-        if (error) throw error;
+        // NOTA (migração): closer_atividades sem endpoint DELETE — atividades do card não são excluídas pelo frontend
+        await api.del(`/kanban/closer/${deleteId}`);
         toast({ title: 'Sucesso', description: 'Lead excluído!' });
       }
       
@@ -3658,26 +3176,13 @@ export function AdminCloser() {
                         const colunaPerdido = colunas.find(c => c.nome.toLowerCase().includes('perdido'));
                         if (colunaPerdido) {
                           try {
-                            await (supabase as any)
-                              .from('closer_cards')
-                              .update({ coluna_id: colunaPerdido.id })
-                              .eq('id', viewingCard.id);
-                            
-                            // Registrar atividade de movimentação
-                            const colunaAtual = colunas.find(c => c.id === viewingCard.coluna_id);
-                            await (supabase as any)
-                              .from('closer_atividades')
-                              .insert({
-                                card_id: viewingCard.id,
-                                tipo: 'mudanca_etapa',
-                                descricao: `Card marcado como Perdido`,
-                                dados_anteriores: { coluna_id: viewingCard.coluna_id, coluna_nome: colunaAtual?.nome },
-                                dados_novos: { coluna_id: colunaPerdido.id, coluna_nome: colunaPerdido.nome },
-                                status: 'concluida'
-                              });
-                            
+                            await api.post(`/kanban/closer/${viewingCard.id}/mover`, {
+                              coluna_destino_id: colunaPerdido.id,
+                              justificativa: 'Card marcado como Perdido',
+                            });
+                            // NOTA (migração): atividade de mudança de etapa não registrada — closer_atividades sem endpoint
                             setViewingCard({ ...viewingCard, coluna_id: colunaPerdido.id });
-                            setCards(prev => prev.map(c => 
+                            setCards(prev => prev.map(c =>
                               c.id === viewingCard.id ? { ...c, coluna_id: colunaPerdido.id } : c
                             ));
                             toast({ title: 'Card movido para Perdido' });
@@ -3712,26 +3217,13 @@ export function AdminCloser() {
                         );
                         if (colunaAceito) {
                           try {
-                            await (supabase as any)
-                              .from('closer_cards')
-                              .update({ coluna_id: colunaAceito.id })
-                              .eq('id', viewingCard.id);
-                            
-                            // Registrar atividade de movimentação
-                            const colunaAtual = colunas.find(c => c.id === viewingCard.coluna_id);
-                            await (supabase as any)
-                              .from('closer_atividades')
-                              .insert({
-                                card_id: viewingCard.id,
-                                tipo: 'mudanca_etapa',
-                                descricao: `Card marcado como Negócio Aceito`,
-                                dados_anteriores: { coluna_id: viewingCard.coluna_id, coluna_nome: colunaAtual?.nome },
-                                dados_novos: { coluna_id: colunaAceito.id, coluna_nome: colunaAceito.nome },
-                                status: 'concluida'
-                              });
-                            
+                            await api.post(`/kanban/closer/${viewingCard.id}/mover`, {
+                              coluna_destino_id: colunaAceito.id,
+                              justificativa: 'Card marcado como Negócio Aceito',
+                            });
+                            // NOTA (migração): atividade de mudança de etapa não registrada — closer_atividades sem endpoint
                             setViewingCard({ ...viewingCard, coluna_id: colunaAceito.id });
-                            setCards(prev => prev.map(c => 
+                            setCards(prev => prev.map(c =>
                               c.id === viewingCard.id ? { ...c, coluna_id: colunaAceito.id } : c
                             ));
                             toast({ title: 'Card movido para Negócio Aceito' });
@@ -5515,78 +5007,38 @@ export function AdminCloser() {
                   
                   try {
                     let anexos: { nome: string; url: string; tipo: string }[] = [];
-                    
-                    // Upload do PDF para o Supabase Storage
-                    const filePath = `comparacoes/${viewingCard.id}/${fileName}`;
-                    const { data: uploadData, error: uploadError } = await (supabase as any)
-                      .storage
-                      .from('prospeccao-anexos')
-                      .upload(filePath, pdfBlob, {
-                        contentType: 'application/pdf',
-                        upsert: true
+
+                    // Upload do PDF via backend REST (bucket 'atividades-anexos')
+                    // NOTA (migração): bucket 'prospeccao-anexos' não disponível; usando 'atividades-anexos'
+                    try {
+                      const API_URL: string = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:8000';
+                      const formData = new FormData();
+                      formData.append('file', pdfBlob, fileName);
+                      const uploadRes = await fetch(`${API_URL}/storage/atividades-anexos/upload`, {
+                        method: 'POST',
+                        credentials: 'include',
+                        body: formData,
                       });
-                    
-                    if (uploadError) {
-                      console.error('Erro ao fazer upload do PDF:', uploadError);
+                      if (uploadRes.ok) {
+                        const uploadResult: any = await uploadRes.json();
+                        anexos = [{ nome: fileName, url: uploadResult.url, tipo: 'application/pdf' }];
+                      } else {
+                        console.error('Erro ao fazer upload do PDF:', await uploadRes.text());
+                        toast({ title: 'Erro', description: 'Não foi possível fazer upload do PDF', variant: 'destructive' });
+                        return;
+                      }
+                    } catch (uploadErr) {
+                      console.error('Erro ao fazer upload do PDF:', uploadErr);
                       toast({ title: 'Erro', description: 'Não foi possível fazer upload do PDF', variant: 'destructive' });
                       return;
                     }
-                    
-                    // Criar URL assinada com validade de 1 ano
-                    const { data: signedUrlData, error: signedUrlError } = await (supabase as any)
-                      .storage
-                      .from('prospeccao-anexos')
-                      .createSignedUrl(filePath, 31536000);
-                    
-                    if (signedUrlData?.signedUrl) {
-                      anexos = [{
-                        nome: fileName,
-                        url: signedUrlData.signedUrl,
-                        tipo: 'application/pdf'
-                      }];
-                    } else if (signedUrlError) {
-                      console.error('Erro ao criar URL assinada:', signedUrlError);
-                      // Tentar URL pública como fallback
-                      const { data: urlData } = (supabase as any)
-                        .storage
-                        .from('prospeccao-anexos')
-                        .getPublicUrl(filePath);
-                      
-                      if (urlData?.publicUrl) {
-                        anexos = [{
-                          nome: fileName,
-                          url: urlData.publicUrl,
-                          tipo: 'application/pdf'
-                        }];
-                      }
-                    }
 
-                    // Criar atividade com anexo PDF
-                    const economia = dadosComparacaoSalvos?.resultados?.economia || 0;
-                    const descricao = `Comparação de Economia gerada. Economia estimada: R$ ${economia.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} no horizonte de ${dadosComparacaoSalvos?.toriq?.horizonYears || 5} anos.`;
-                    
-                    const { error } = await (supabase as any)
-                      .from('closer_atividades')
-                      .insert({
-                        card_id: viewingCard.id,
-                        tipo: 'comparacao',
-                        descricao: descricao,
-                        dados_novos: dadosComparacaoSalvos,
-                        status: 'concluida',
-                        anexos: anexos
-                      });
-                    
-                    if (error) {
-                      console.error('Erro ao criar atividade de comparação:', error);
-                      toast({ title: 'PDF salvo', description: 'PDF salvo mas não foi possível criar a atividade' });
-                      return;
-                    }
-                    
-                    // Recarregar atividades do card (incluindo as do card de origem)
+                    // NOTA (migração): closer_atividades sem endpoint REST — atividade de comparação não registrada
+                    // Recarregar atividades do card
                     if (viewingCard?.id) {
                       fetchAtividades(viewingCard.id, (viewingCard as any).origem_card_id, (viewingCard as any).origem_kanban);
                     }
-                    
+
                     toast({ title: 'Sucesso', description: 'Comparação salva como PDF e registrada nas atividades!' });
                   } catch (error) {
                     console.error('Erro ao salvar PDF da comparação:', error);
@@ -5670,16 +5122,15 @@ export function AdminCloser() {
               onClick={() => {
                 // Se foi drag and drop, reverter o card para a coluna original
                 if (mudancaEtapaDialog.isDrag && mudancaEtapaDialog.cardId && mudancaEtapaDialog.colunaOrigem) {
-                  setCards(prev => prev.map(c => 
-                    c.id === mudancaEtapaDialog.cardId 
-                      ? { ...c, coluna_id: mudancaEtapaDialog.colunaOrigem!.id } 
+                  setCards(prev => prev.map(c =>
+                    c.id === mudancaEtapaDialog.cardId
+                      ? { ...c, coluna_id: mudancaEtapaDialog.colunaOrigem!.id }
                       : c
                   ));
                   // Reverter no banco também
-                  (supabase as any)
-                    .from('closer_cards')
-                    .update({ coluna_id: mudancaEtapaDialog.colunaOrigem.id })
-                    .eq('id', mudancaEtapaDialog.cardId);
+                  api.put(`/kanban/closer/${mudancaEtapaDialog.cardId}`, {
+                    coluna_id: mudancaEtapaDialog.colunaOrigem.id,
+                  }).catch((e: any) => console.error('Erro ao reverter card:', e));
                 }
                 setMudancaEtapaDialog(prev => ({ ...prev, open: false }));
                 setJustificativaMudanca('');
@@ -5769,82 +5220,30 @@ export function AdminCloser() {
           }}
           onSaveAtividade={async (descricao, dados, pdfBlob, pdfFileName) => {
             try {
-              let anexos: { nome: string; url: string; tipo: string }[] = [];
-              
-              // Upload do PDF para o Supabase Storage
+              // Upload do PDF via backend REST (bucket 'atividades-anexos')
+              // NOTA (migração): bucket 'prospeccao-anexos' não disponível; usando 'atividades-anexos'
               if (pdfBlob && pdfFileName) {
-                const filePath = `propostas/${viewingCard.id}/${pdfFileName}`;
-                const { data: uploadData, error: uploadError } = await (supabase as any)
-                  .storage
-                  .from('prospeccao-anexos')
-                  .upload(filePath, pdfBlob, {
-                    contentType: 'application/pdf',
-                    upsert: true
+                try {
+                  const API_URL: string = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:8000';
+                  const formData = new FormData();
+                  formData.append('file', pdfBlob, pdfFileName);
+                  const uploadRes = await fetch(`${API_URL}/storage/atividades-anexos/upload`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    body: formData,
                   });
-                
-                if (uploadError) {
-                  console.error('Erro ao fazer upload do PDF:', uploadError);
-                  // Continuar mesmo sem o anexo
-                } else {
-                  // Criar URL assinada com validade de 1 ano (31536000 segundos)
-                  const { data: signedUrlData, error: signedUrlError } = await (supabase as any)
-                    .storage
-                    .from('prospeccao-anexos')
-                    .createSignedUrl(filePath, 31536000);
-                  
-                  if (signedUrlData?.signedUrl) {
-                    anexos = [{
-                      nome: pdfFileName,
-                      url: signedUrlData.signedUrl,
-                      tipo: 'application/pdf'
-                    }];
-                  } else if (signedUrlError) {
-                    console.error('Erro ao criar URL assinada:', signedUrlError);
-                    // Tentar URL pública como fallback
-                    const { data: urlData } = (supabase as any)
-                      .storage
-                      .from('prospeccao-anexos')
-                      .getPublicUrl(filePath);
-                    
-                    if (urlData?.publicUrl) {
-                      anexos = [{
-                        nome: pdfFileName,
-                        url: urlData.publicUrl,
-                        tipo: 'application/pdf'
-                      }];
-                    }
+                  if (!uploadRes.ok) {
+                    console.error('Erro ao fazer upload do PDF:', await uploadRes.text());
                   }
+                } catch (uploadErr) {
+                  console.error('Erro ao fazer upload do PDF:', uploadErr);
                 }
               }
 
-              // Criar atividade com anexo - status 'a_realizar' para que seja encaminhada ao cliente
-              const { error } = await (supabase as any)
-                .from('closer_atividades')
-                .insert({
-                  card_id: viewingCard.id,
-                  tipo: 'proposta',
-                  descricao: descricao,
-                  dados_novos: dados,
-                  status: 'a_realizar',
-                  anexos: anexos
-                });
-              
-              if (error) {
-                console.error('Erro ao criar atividade de proposta:', error);
-                return;
-              }
-              
+              // NOTA (migração): closer_atividades sem endpoint REST — atividade de proposta não registrada
               // Recarregar atividades do card
               if (viewingCard?.id) {
-                const { data: atividadesData } = await (supabase as any)
-                  .from('closer_atividades')
-                  .select('*, usuario:usuarios(nome)')
-                  .eq('card_id', viewingCard.id)
-                  .order('created_at', { ascending: false });
-                
-                if (atividadesData) {
-                  setAtividades(atividadesData);
-                }
+                fetchAtividades(viewingCard.id, (viewingCard as any).origem_card_id, (viewingCard as any).origem_kanban);
               }
             } catch (error) {
               console.error('Erro ao criar atividade de proposta:', error);

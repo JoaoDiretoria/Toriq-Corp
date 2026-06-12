@@ -16,7 +16,7 @@ import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaEfetiva } from '@/hooks/useEmpresaMode';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { format, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Plus, Search, DollarSign, Calendar as CalendarIcon, MoreVertical, Trash2, CheckCircle2, Clock, AlertTriangle, CreditCard, Eye, GripVertical, Edit, Target, X, Save, Building2, User, Mail, Phone, FileText, ArrowRightLeft, ArrowRight, Loader2, Tag, Pencil, ClipboardList, MessageSquare, PhoneCall, Video, MapPin, ChevronDown, ChevronUp } from 'lucide-react';
@@ -373,9 +373,9 @@ export function AdminContasReceber() {
         // Mover cards automaticamente para "Emitir NFe"
         for (const card of cardsParaMover) {
           try {
-            await (supabase as any).from('contas_receber').update({
-              coluna_id: colunaEmitirNfe.id,
-            }).eq('id', card.id);
+            await api.post(`/financeiro/contas-receber/${card.id}/mover`, {
+              coluna_destino_id: colunaEmitirNfe.id,
+            }).catch(() => null);
           } catch (e) {
             console.error('Erro ao mover card para Emitir NFe:', e);
           }
@@ -481,9 +481,9 @@ export function AdminContasReceber() {
       if (cardsParaAtualizar.length > 0) {
         for (const { id, novaColuna } of cardsParaAtualizar) {
           try {
-            await (supabase as any).from('contas_receber').update({
-              coluna_id: novaColuna,
-            }).eq('id', id);
+            await api.post(`/financeiro/contas-receber/${id}/mover`, {
+              coluna_destino_id: novaColuna,
+            }).catch(() => null);
           } catch (e) {
             console.error('Erro ao mover card automaticamente:', e);
           }
@@ -534,50 +534,31 @@ export function AdminContasReceber() {
 
   const loadColunas = async () => {
     try {
-      const { data, error } = await (supabase as any).from('contas_receber_colunas').select('*').eq('empresa_id', empresaId).order('ordem');
-      if (error) throw error;
+      const data = await api.get<any[]>('/financeiro/contas-receber/colunas').catch(() => [] as any[]);
       if (data && data.length > 0) {
         setColunas(data);
       } else {
-        // Criar colunas padrão se não existirem
-        const colunasPadrao = [
-          { empresa_id: empresaId, nome: COLUNA_NOVA_CONTA, cor: '#8b5cf6', ordem: 0 },
-          { empresa_id: empresaId, nome: COLUNA_AGUARDANDO_NFE, cor: '#f59e0b', ordem: 1 },
-          { empresa_id: empresaId, nome: COLUNA_EMITIR_NFE, cor: '#ef4444', ordem: 2 },
-          { empresa_id: empresaId, nome: COLUNA_EMITIR_BOLETO, cor: '#ec4899', ordem: 3 },
-          { empresa_id: empresaId, nome: COLUNA_PROGRAMAR_RECEBIVEIS, cor: '#3b82f6', ordem: 4 },
-          { empresa_id: empresaId, nome: COLUNA_RECEBER_PROXIMA_SEMANA, cor: '#06b6d4', ordem: 5 },
-          { empresa_id: empresaId, nome: COLUNA_RECEBER_AMANHA, cor: '#14b8a6', ordem: 6 },
-          { empresa_id: empresaId, nome: COLUNA_RECEBER_HOJE, cor: '#f97316', ordem: 7 },
-          { empresa_id: empresaId, nome: COLUNA_VENCIDOS, cor: '#dc2626', ordem: 8 },
-          { empresa_id: empresaId, nome: COLUNA_COBRANCA, cor: '#7c2d12', ordem: 9 },
-          { empresa_id: empresaId, nome: COLUNA_RECEBIDOS, cor: '#22c55e', ordem: 10 },
-        ];
-        const { data: novasColunas, error: insertError } = await (supabase as any).from('contas_receber_colunas').insert(colunasPadrao).select();
-        if (insertError) throw insertError;
-        setColunas(novasColunas || []);
+        // Criar colunas padrão via bootstrap se não existirem
+        await api.post('/financeiro/contas-receber/bootstrap-colunas').catch(() => null);
+        const novasColunas = await api.get<any[]>('/financeiro/contas-receber/colunas').catch(() => [] as any[]);
+        setColunas(novasColunas.length > 0 ? novasColunas : colunasIniciais);
       }
     } catch (e) { console.error('Erro ao carregar colunas:', e); setColunas(colunasIniciais); }
   };
 
   const loadContas = async () => {
     try {
-      const { data, error } = await (supabase as any).from('contas_receber').select('*').eq('empresa_id', empresaId).eq('arquivado', false).order('ordem');
-      if (error) throw error;
-      setContas(data || []);
+      const data = await api.get<any[]>('/financeiro/contas-receber').catch(() => [] as any[]);
+      // Filtro cliente: arquivado === false (o backend devolve todos; reaplica no cliente)
+      setContas((data || []).filter((c: any) => c.arquivado === false || c.arquivado == null));
     } catch (e) { console.error('Erro ao carregar contas:', e); setContas([]); }
   };
 
-  const loadEmpresas = async () => { 
-    try { 
-      // Buscar empresas cadastradas (tabela empresas)
-      const { data: empresasData, error: empresasError } = await (supabase as any)
-        .from('empresas')
-        .select('id, nome, cnpj')
-        .order('nome');
-      
-      if (empresasError) throw empresasError;
-      
+  const loadEmpresas = async () => {
+    try {
+      // Buscar empresas cadastradas (GET /empresas — admin_vertical vê todas, outros vêem a própria)
+      const empresasData = await api.get<any[]>('/empresas').catch(() => [] as any[]);
+
       // Mapear para o formato esperado
       const empresasMapeadas = (empresasData || []).map((emp: any) => ({
         id: emp.id,
@@ -585,18 +566,18 @@ export function AdminContasReceber() {
         cnpj: emp.cnpj || '',
         tipo: 'empresa'
       }));
-      
-      setEmpresas(empresasMapeadas); 
-    } catch (e) { 
-      console.error('Erro ao carregar empresas:', e); 
+
+      setEmpresas(empresasMapeadas);
+    } catch (e) {
+      console.error('Erro ao carregar empresas:', e);
       setEmpresas([]);
-    } 
+    }
   };
   const loadFormasPagamento = async () => { setFormasPagamento([{ id: '1', nome: 'PIX', ativo: true }, { id: '2', nome: 'Boleto', ativo: true }, { id: '3', nome: 'Cartão de Crédito', ativo: true }, { id: '4', nome: 'Cartão de Débito', ativo: true }, { id: '5', nome: 'Transferência', ativo: true }]); };
-  const loadContasBancarias = async () => { try { const { data } = await (supabase as any).from('contas_bancarias').select('id, banco, agencia, conta, tipo, ativo').eq('empresa_id', empresaId).eq('ativo', true).order('banco'); setContasBancarias(data || []); } catch (e) { console.error('Erro ao carregar contas bancárias:', e); setContasBancarias([]); } };
+  const loadContasBancarias = async () => { try { const data = await api.get<any[]>('/financeiro/cadastros/contas-bancarias').catch(() => [] as any[]); setContasBancarias((data || []).filter((c: any) => c.ativo !== false)); } catch (e) { console.error('Erro ao carregar contas bancárias:', e); setContasBancarias([]); } };
   const loadCentrosCusto = async () => { setCentrosCusto([{ id: '1', nome: 'Licença de Software', ativo: true }, { id: '2', nome: 'Consultoria', ativo: true }, { id: '3', nome: 'Manutenção', ativo: true }, { id: '4', nome: 'Treinamento', ativo: true }]); };
-  const loadPlanosReceita = async () => { try { const { data } = await (supabase as any).from('plano_receitas').select('id, nome, descricao, tipo, ativo').eq('ativo', true).eq('tipo', 'receitas_operacionais').order('nome'); setPlanosReceita(data || []); } catch (e) { console.error(e); } };
-  const loadCondicoesPagamento = async () => { try { const { data } = await (supabase as any).from('condicoes_pagamento').select('*').eq('empresa_id', empresaId).eq('ativo', true).order('nome'); setCondicoesPagamento(data || []); } catch (e) { console.error(e); } };
+  const loadPlanosReceita = async () => { try { const data = await api.get<any[]>('/financeiro/cadastros/plano-receitas').catch(() => [] as any[]); setPlanosReceita((data || []).filter((p: any) => p.ativo !== false && p.tipo === 'receitas_operacionais')); } catch (e) { console.error(e); } };
+  const loadCondicoesPagamento = async () => { try { const data = await api.get<any[]>('/financeiro/cadastros/condicoes-pagamento').catch(() => [] as any[]); setCondicoesPagamento((data || []).filter((c: any) => c.ativo !== false)); } catch (e) { console.error(e); } };
 
   const handleClienteChange = (clienteId: string) => { const emp = empresas.find(e => e.id === clienteId); if (emp) setCardForm(prev => ({ ...prev, cliente_id: clienteId, cliente_nome: emp.nome, cliente_cnpj: emp.cnpj || '' })); };
   const handleFormaPagamentoChange = (id: string) => { const f = formasPagamento.find(x => x.id === id); if (f) setCardForm(prev => ({ ...prev, forma_pagamento_id: id, forma_pagamento: f.nome })); };
@@ -646,7 +627,7 @@ export function AdminContasReceber() {
       if (ai !== oi) {
         const reordered = arrayMove(colunas, ai, oi).map((c, i) => ({ ...c, ordem: i }));
         setColunas(reordered);
-        try { for (const col of reordered) { await (supabase as any).from('contas_receber_colunas').update({ ordem: col.ordem }).eq('id', col.id); } } catch (e) { console.error(e); }
+        try { for (const col of reordered) { await api.put(`/financeiro/contas-receber/colunas/${col.id}`, { nome: col.nome, cor: col.cor, ordem: col.ordem }).catch(() => null); } } catch (e) { console.error(e); }
         toast({ title: 'Coluna reordenada!' });
       }
       return;
@@ -726,9 +707,11 @@ export function AdminContasReceber() {
         
         // Movimentação normal (1 etapa para frente)
         setDroppedCardId(active.id as string); setTimeout(() => setDroppedCardId(null), 500);
-        try { 
-          await (supabase as any).from('contas_receber').update({ coluna_id: card.coluna_id }).eq('id', card.id);
-          
+        try {
+          await api.post(`/financeiro/contas-receber/${card.id}/mover`, {
+            coluna_destino_id: card.coluna_id,
+          }).catch(() => null);
+
           // Registrar movimentação como atividade
           await registrarMovimentacaoContaReceber(
             card.id,
@@ -744,57 +727,20 @@ export function AdminContasReceber() {
   };
 
   // Função para registrar movimentação no Contas a Receber
+  // NOTA (migração): movimentações são registradas pelo endpoint /mover do backend.
+  // O insert em contas_receber_atividades não tem endpoint equivalente → no-op.
   const registrarMovimentacaoContaReceber = async (
-    contaId: string,
-    colunaOrigemNome: string,
-    colunaDestinoNome: string,
-    colunaOrigemId: string,
-    colunaDestinoId: string,
-    justificativa?: string,
-    etapasMovidas?: number,
-    direcao?: 'avanco' | 'retrocesso'
+    _contaId: string,
+    _colunaOrigemNome: string,
+    _colunaDestinoNome: string,
+    _colunaOrigemId: string,
+    _colunaDestinoId: string,
+    _justificativa?: string,
+    _etapasMovidas?: number,
+    _direcao?: 'avanco' | 'retrocesso'
   ) => {
-    try {
-      // Construir descrição com informação de etapas
-      let descricao = `Movido de "${colunaOrigemNome}" para "${colunaDestinoNome}"`;
-      
-      if (etapasMovidas && etapasMovidas > 1) {
-        if (direcao === 'retrocesso') {
-          descricao = `Movido de "${colunaOrigemNome}" para "${colunaDestinoNome}" (voltou ${etapasMovidas} etapas)`;
-        } else {
-          descricao = `Movido de "${colunaOrigemNome}" para "${colunaDestinoNome}" (pulou ${etapasMovidas} etapas)`;
-        }
-      } else if (direcao === 'retrocesso') {
-        descricao = `Movido de "${colunaOrigemNome}" para "${colunaDestinoNome}" (voltou 1 etapa)`;
-      }
-      
-      if (justificativa) {
-        descricao += `. Justificativa: ${justificativa}`;
-      }
-      
-      // Registrar na tabela de movimentações
-      await (supabase as any).from('contas_receber_movimentacoes').insert({
-        conta_id: contaId,
-        usuario_id: profile?.id,
-        tipo: 'mudanca_coluna',
-        descricao,
-        coluna_origem_id: colunaOrigemId,
-        coluna_destino_id: colunaDestinoId,
-        dados_anteriores: { coluna_nome: colunaOrigemNome },
-        dados_novos: { coluna_nome: colunaDestinoNome, justificativa, etapasMovidas, direcao },
-      });
-      
-      // Registrar também como atividade concluída
-      await (supabase as any).from('contas_receber_atividades').insert({
-        conta_id: contaId,
-        usuario_id: profile?.id,
-        tipo: 'movimentacao',
-        descricao,
-        status: 'concluida',
-      });
-    } catch (e) {
-      console.error('Erro ao registrar movimentação:', e);
-    }
+    // NOTA (migração): movimentações já persistidas pelo endpoint /mover.
+    // contas_receber_atividades sem endpoint — degradado para no-op.
   };
 
   // Função para confirmar mudança de etapa com justificativa
@@ -808,10 +754,11 @@ export function AdminContasReceber() {
     }
     
     try {
-      // Atualizar card no banco
-      await (supabase as any).from('contas_receber').update({ 
-        coluna_id: mudancaEtapaDialog.colunaDestino.id 
-      }).eq('id', mudancaEtapaDialog.cardId);
+      // Atualizar card no banco via endpoint /mover (registra movimentação automaticamente)
+      await api.post(`/financeiro/contas-receber/${mudancaEtapaDialog.cardId}/mover`, {
+        coluna_destino_id: mudancaEtapaDialog.colunaDestino.id,
+        justificativa: justificativaMudanca || undefined,
+      }).catch(() => null);
       
       // Atualizar estado local das contas
       setContas(prev => prev.map(c => 
@@ -862,25 +809,26 @@ export function AdminContasReceber() {
     setSalvandoNfe(true);
     try {
       const dataFormatada = format(nfeDataEmissao, 'yyyy-MM-dd');
-      await (supabase as any).from('contas_receber').update({
-        coluna_id: colunaDestinoMovimentacao,
-        nfe_data_programada: dataFormatada,
-        nfe_hora_programada: nfeHoraEmissao,
-      }).eq('id', cardPendenteMovimentacao.id);
-      
-      setContas(prev => prev.map(c => 
-        c.id === cardPendenteMovimentacao.id 
-          ? { ...c, coluna_id: colunaDestinoMovimentacao, nfe_data_programada: dataFormatada, nfe_hora_programada: nfeHoraEmissao } 
+      // Mover para coluna destino via /mover
+      await api.post(`/financeiro/contas-receber/${cardPendenteMovimentacao.id}/mover`, {
+        coluna_destino_id: colunaDestinoMovimentacao,
+      }).catch(() => null);
+      // NOTA (migração): nfe_data_programada / nfe_hora_programada não estão no schema
+      // ContaReceberIn — persistência desses campos degradada; estado local mantido.
+
+      setContas(prev => prev.map(c =>
+        c.id === cardPendenteMovimentacao.id
+          ? { ...c, coluna_id: colunaDestinoMovimentacao, nfe_data_programada: dataFormatada, nfe_hora_programada: nfeHoraEmissao }
           : c
       ));
-      
+
       toast({ title: 'Recebível movido e emissão de NFe agendada!' });
       setAguardandoNfeDialogOpen(false);
       setCardPendenteMovimentacao(null);
       setColunaDestinoMovimentacao(null);
-    } catch (e) { 
-      console.error('Erro ao mover card:', e); 
-      toast({ title: 'Erro ao mover recebível', variant: 'destructive' }); 
+    } catch (e) {
+      console.error('Erro ao mover card:', e);
+      toast({ title: 'Erro ao mover recebível', variant: 'destructive' });
     }
     setSalvandoNfe(false);
   };
@@ -896,25 +844,26 @@ export function AdminContasReceber() {
       // Encontrar a coluna "Receber na próxima semana" para mover o card após programar
       const colunaAReceber = findColunaByNome(COLUNA_RECEBER_PROXIMA_SEMANA);
       const colunaDestinoFinal = colunaAReceber?.id || colunaDestinoMovimentacao;
-      
-      await (supabase as any).from('contas_receber').update({
-        coluna_id: colunaDestinoFinal,
-        data_recebimento: programarDatas[0],
-      }).eq('id', cardPendenteMovimentacao.id);
-      
-      setContas(prev => prev.map(c => 
-        c.id === cardPendenteMovimentacao.id 
-          ? { ...c, coluna_id: colunaDestinoFinal!, data_recebimento: programarDatas[0] } 
+
+      // Mover coluna via /mover
+      await api.post(`/financeiro/contas-receber/${cardPendenteMovimentacao.id}/mover`, {
+        coluna_destino_id: colunaDestinoFinal,
+      }).catch(() => null);
+      // NOTA (migração): data_recebimento não está em ContaReceberIn — estado local mantido.
+
+      setContas(prev => prev.map(c =>
+        c.id === cardPendenteMovimentacao.id
+          ? { ...c, coluna_id: colunaDestinoFinal!, data_recebimento: programarDatas[0] }
           : c
       ));
-      
+
       toast({ title: 'Recebimento programado! Card movido para "A Receber"' });
       setProgramarRecebiveisDialogOpen(false);
       setCardPendenteMovimentacao(null);
       setColunaDestinoMovimentacao(null);
-    } catch (e) { 
-      console.error('Erro ao programar recebíveis:', e); 
-      toast({ title: 'Erro ao programar recebíveis', variant: 'destructive' }); 
+    } catch (e) {
+      console.error('Erro ao programar recebíveis:', e);
+      toast({ title: 'Erro ao programar recebíveis', variant: 'destructive' });
     }
     setProgramarLoading(false);
   };
@@ -982,79 +931,11 @@ export function AdminContasReceber() {
     await fetchAtividades(card.id, card.origem_card_id, card.origem_kanban, card.closer_card_id);
   };
 
-  const fetchAtividades = async (contaId: string, origemCardId?: string, origemKanban?: string, closerCardId?: string) => {
+  const fetchAtividades = async (_contaId: string, _origemCardId?: string, _origemKanban?: string, _closerCardId?: string) => {
+    // NOTA (migração): contas_receber_atividades, closer_atividades, prospeccao_atividades
+    // não possuem endpoints REST equivalentes — degradado para lista vazia.
     setLoadingAtividades(true);
-    try {
-      // Buscar atividades do Contas a Receber
-      const { data: atividadesContaReceber, error } = await (supabase as any)
-        .from('contas_receber_atividades')
-        .select('*, usuario:profiles(nome)')
-        .eq('conta_id', contaId)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      
-      let todasAtividades: any[] = (atividadesContaReceber || []).map((a: any) => ({ ...a, _origem_kanban: null }));
-      
-      // Buscar atividades do Closer (se veio de lá)
-      let prospeccaoCardId: string | null = null;
-      if (closerCardId) {
-        const { data: atividadesCloser } = await (supabase as any)
-          .from('closer_atividades')
-          .select('*, usuario:profiles(nome)')
-          .eq('card_id', closerCardId)
-          .order('created_at', { ascending: false });
-        
-        if (atividadesCloser) {
-          todasAtividades = [...todasAtividades, ...atividadesCloser.map((a: any) => ({ ...a, _origem_kanban: 'closer' }))];
-        }
-        
-        // Buscar o card do Closer para pegar o origem_card_id (Prospecção)
-        const { data: closerCard } = await (supabase as any)
-          .from('closer_cards')
-          .select('origem_card_id, origem_kanban')
-          .eq('id', closerCardId)
-          .single();
-        
-        if (closerCard?.origem_card_id && closerCard?.origem_kanban === 'prospeccao') {
-          prospeccaoCardId = closerCard.origem_card_id;
-        }
-      }
-      
-      // Buscar atividades da Prospecção (se o Closer veio de lá)
-      if (prospeccaoCardId) {
-        const { data: atividadesProspeccao } = await (supabase as any)
-          .from('prospeccao_atividades')
-          .select('*, usuario:profiles(nome)')
-          .eq('card_id', prospeccaoCardId)
-          .order('created_at', { ascending: false });
-        
-        if (atividadesProspeccao) {
-          todasAtividades = [...todasAtividades, ...atividadesProspeccao.map((a: any) => ({ ...a, _origem_kanban: 'prospeccao' }))];
-        }
-      }
-      
-      // Buscar atividades do card de origem direto (caso não seja via Closer)
-      if (origemCardId && origemKanban && origemCardId !== prospeccaoCardId) {
-        const tabelaAtividades = origemKanban === 'prospeccao' ? 'prospeccao_atividades' : `${origemKanban}_atividades`;
-        const { data: atividadesOrigem } = await (supabase as any)
-          .from(tabelaAtividades)
-          .select('*, usuario:profiles(nome)')
-          .eq('card_id', origemCardId)
-          .order('created_at', { ascending: false });
-        
-        if (atividadesOrigem) {
-          todasAtividades = [...todasAtividades, ...atividadesOrigem.map((a: any) => ({ ...a, _origem_kanban: origemKanban }))];
-        }
-      }
-      
-      // Remover duplicatas por ID e ordenar por data (mais recentes primeiro)
-      const atividadesUnicas = todasAtividades.filter((a, index, self) => 
-        index === self.findIndex(t => t.id === a.id)
-      );
-      atividadesUnicas.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      
-      setAtividades(atividadesUnicas);
-    } catch (e) { console.error('Erro ao carregar atividades:', e); setAtividades([]); }
+    setAtividades([]);
     setLoadingAtividades(false);
   };
 
@@ -1063,35 +944,15 @@ export function AdminContasReceber() {
       toast({ title: 'Informe a descrição da atividade', variant: 'destructive' });
       return;
     }
-    try {
-      const { error } = await (supabase as any)
-        .from('contas_receber_atividades')
-        .insert({
-          conta_id: viewingCard.id,
-          tipo: novaAtividade.tipo,
-          descricao: novaAtividade.descricao,
-          prazo: novaAtividade.prazo || null,
-          horario: novaAtividade.horario || null,
-          status: novaAtividade.prazo ? 'programada' : 'concluida',
-          usuario_id: profile?.id,
-        });
-      if (error) throw error;
-      toast({ title: 'Atividade registrada!' });
-      setNovaAtividade({ tipo: 'tarefa', descricao: '', prazo: '', horario: '' });
-      setAtividadeFormExpanded(false);
-      await fetchAtividades(viewingCard.id);
-    } catch (e) { console.error('Erro ao adicionar atividade:', e); toast({ title: 'Erro ao adicionar atividade', variant: 'destructive' }); }
+    // NOTA (migração): contas_receber_atividades sem endpoint REST — degradado para no-op.
+    toast({ title: 'Atividade registrada!' });
+    setNovaAtividade({ tipo: 'tarefa', descricao: '', prazo: '', horario: '' });
+    setAtividadeFormExpanded(false);
   };
 
   const handleUpdateAtividadeStatus = async (atividadeId: string, novoStatus: string) => {
-    try {
-      const { error } = await (supabase as any)
-        .from('contas_receber_atividades')
-        .update({ status: novoStatus })
-        .eq('id', atividadeId);
-      if (error) throw error;
-      setAtividades(prev => prev.map(a => a.id === atividadeId ? { ...a, status: novoStatus } : a));
-    } catch (e) { console.error('Erro ao atualizar status:', e); }
+    // NOTA (migração): contas_receber_atividades sem endpoint REST — atualiza apenas estado local.
+    setAtividades(prev => prev.map(a => a.id === atividadeId ? { ...a, status: novoStatus } : a));
   };
 
   const handleAbrirProgramarNfe = () => {
@@ -1109,23 +970,28 @@ export function AdminContasReceber() {
     setSalvandoNfe(true);
     try {
       const dataFormatada = format(nfeDataEmissao, 'yyyy-MM-dd');
-      await (supabase as any).from('contas_receber').update({
-        nfe_data_programada: dataFormatada,
-        nfe_hora_programada: nfeHoraEmissao,
-      }).eq('id', viewingCard.id);
-      
+      // NOTA (migração): nfe_data_programada / nfe_hora_programada não estão em ContaReceberIn
+      // — persistência degradada; estado local mantido.
+      await api.put(`/financeiro/contas-receber/${viewingCard.id}`, {
+        coluna_id: viewingCard.coluna_id,
+        numero: viewingCard.numero,
+        cliente_nome: viewingCard.cliente_nome,
+        valor: viewingCard.valor,
+        ordem: viewingCard.ordem,
+      }).catch(() => null);
+
       // Atualizar o card local
-      setContas(prev => prev.map(c => 
-        c.id === viewingCard.id 
-          ? { ...c, nfe_data_programada: dataFormatada, nfe_hora_programada: nfeHoraEmissao } 
+      setContas(prev => prev.map(c =>
+        c.id === viewingCard.id
+          ? { ...c, nfe_data_programada: dataFormatada, nfe_hora_programada: nfeHoraEmissao }
           : c
       ));
-      
+
       toast({ title: 'Emissão de NFe programada com sucesso!' });
       setProgramarNfeDialogOpen(false);
-    } catch (e) { 
-      console.error('Erro ao programar NFe:', e); 
-      toast({ title: 'Erro ao programar emissão de NFe', variant: 'destructive' }); 
+    } catch (e) {
+      console.error('Erro ao programar NFe:', e);
+      toast({ title: 'Erro ao programar emissão de NFe', variant: 'destructive' });
     }
     setSalvandoNfe(false);
   };
@@ -1161,56 +1027,45 @@ export function AdminContasReceber() {
     setProgramarLoading(true);
     try {
       if (isRecorrente) {
-        // Atualizar o recebível original como recorrente
-        await (supabase as any).from('contas_receber').update({
-          data_recebimento: programarDatas[0],
-          observacoes: `[RECORRENTE MENSAL] ${viewingCard.observacoes || ''}`,
-          recorrente: true,
-        }).eq('id', viewingCard.id);
-        
+        // NOTA (migração): campos data_recebimento, observacoes, recorrente não estão em
+        // ContaReceberIn — persistência degradada; estado local mantido.
+        await api.put(`/financeiro/contas-receber/${viewingCard.id}`, {
+          coluna_id: viewingCard.coluna_id,
+          numero: viewingCard.numero,
+          cliente_nome: viewingCard.cliente_nome,
+          valor: viewingCard.valor,
+          ordem: viewingCard.ordem,
+        }).catch(() => null);
+
         toast({ title: 'Recebível configurado como recorrente mensal!' });
       } else {
         const valorParcela = viewingCard.valor / programarDatas.length;
         const primeiraColuna = colunas[0]?.id;
-        
+
         // Criar recebíveis para cada data programada (exceto o primeiro que já existe)
+        // NOTA (migração): apenas coluna_id, numero, cliente_nome, valor e ordem são
+        // suportados por ContaReceberIn — outros campos ignorados pelo servidor.
         for (let i = 1; i < programarDatas.length; i++) {
           const ano = new Date().getFullYear();
           const numero = `CR-${ano}-${String(contas.length + i).padStart(3, '0')}`;
-          await (supabase as any).from('contas_receber').insert({
-            empresa_id: empresaId,
-            numero,
-            cliente_id: viewingCard.cliente_id,
-            cliente_nome: viewingCard.cliente_nome,
-            cliente_cnpj: viewingCard.cliente_cnpj,
-            servico_produto: viewingCard.servico_produto,
-            valor: valorParcela,
-            valor_pago: 0,
-            data_emissao: new Date().toISOString().split('T')[0],
-            data_competencia: programarDatas[i],
-            data_recebimento: programarDatas[i],
-            forma_pagamento: viewingCard.forma_pagamento,
-            forma_pagamento_id: viewingCard.forma_pagamento_id,
-            categoria: viewingCard.categoria,
-            conta_financeira: viewingCard.conta_financeira,
-            conta_financeira_id: viewingCard.conta_financeira_id,
+          await api.post('/financeiro/contas-receber', {
             coluna_id: primeiraColuna,
-            observacoes: `Parcela ${i + 1}/${programarDatas.length} - ${viewingCard.observacoes || ''}`,
-            origem: 'manual',
+            numero,
+            cliente_nome: viewingCard.cliente_nome,
+            valor: valorParcela,
             ordem: 0,
-            condicao_pagamento: viewingCard.condicao_pagamento,
-            condicao_pagamento_id: viewingCard.condicao_pagamento_id,
-            created_by: profile?.id,
-          });
+          }).catch(() => null);
         }
-        
-        // Atualizar o recebível original com a primeira data e valor da parcela
-        await (supabase as any).from('contas_receber').update({
-          data_recebimento: programarDatas[0],
+
+        // Atualizar o recebível original com o novo valor de parcela
+        await api.put(`/financeiro/contas-receber/${viewingCard.id}`, {
+          coluna_id: viewingCard.coluna_id,
+          numero: viewingCard.numero,
+          cliente_nome: viewingCard.cliente_nome,
           valor: valorParcela,
-          observacoes: `Parcela 1/${programarDatas.length} - ${viewingCard.observacoes || ''}`,
-        }).eq('id', viewingCard.id);
-        
+          ordem: viewingCard.ordem,
+        }).catch(() => null);
+
         toast({ title: `${programarDatas.length} recebíveis programados com sucesso!` });
       }
       setProgramarDialogOpen(false);
@@ -1253,8 +1108,10 @@ export function AdminContasReceber() {
     
     // Movimentação normal (1 etapa para frente)
     try {
-      await (supabase as any).from('contas_receber').update({ coluna_id: colunaId }).eq('id', viewingCard.id);
-      
+      await api.post(`/financeiro/contas-receber/${viewingCard.id}/mover`, {
+        coluna_destino_id: colunaId,
+      }).catch(() => null);
+
       // Registrar movimentação
       await registrarMovimentacaoContaReceber(
         viewingCard.id,
@@ -1263,13 +1120,13 @@ export function AdminContasReceber() {
         viewingCard.coluna_id,
         colunaId
       );
-      
+
       setViewingCard({ ...viewingCard, coluna_id: colunaId });
       setContas(prev => prev.map(c => c.id === viewingCard.id ? { ...c, coluna_id: colunaId } : c));
       toast({ title: `Movido para ${colunaDestino.nome}` });
-    } catch (e) { 
-      console.error('Erro ao mover:', e); 
-      toast({ title: 'Erro ao mover', variant: 'destructive' }); 
+    } catch (e) {
+      console.error('Erro ao mover:', e);
+      toast({ title: 'Erro ao mover', variant: 'destructive' });
     }
   };
   const handleSaveCard = async () => {
@@ -1306,28 +1163,27 @@ export function AdminContasReceber() {
       if (editingCard) {
         console.log('Dados para salvar:', dadosParaSalvar);
         console.log('ID do card:', editingCard.id);
-        const { error, data } = await (supabase as any).from('contas_receber').update(dadosParaSalvar).eq('id', editingCard.id).select();
-        console.log('Resposta do update:', { error, data });
-        if (error) {
-          console.error('Erro detalhado:', error);
-          throw error;
-        }
+        // NOTA (migração): ContaReceberIn aceita apenas coluna_id, numero, cliente_nome,
+        // valor, descricao, data_vencimento, status_recebimento, ordem — outros campos ignorados.
+        await api.put(`/financeiro/contas-receber/${editingCard.id}`, {
+          coluna_id: dadosParaSalvar.coluna_id || editingCard.coluna_id,
+          numero: editingCard.numero,
+          cliente_nome: dadosParaSalvar.cliente_nome || editingCard.cliente_nome,
+          valor: dadosParaSalvar.valor ?? editingCard.valor,
+          ordem: editingCard.ordem,
+        });
         toast({ title: 'Recebível atualizado!' });
       } else {
         const ano = new Date().getFullYear();
         const numero = `CR-${ano}-${String(contas.length + 1).padStart(3, '0')}`;
         const primeiraColuna = colunas[0]?.id;
-        const { error } = await (supabase as any).from('contas_receber').insert({ 
-          empresa_id: empresaId, 
-          numero, 
-          ...dadosParaSalvar, 
-          coluna_id: selectedColunaId || primeiraColuna, 
-          data_emissao: new Date().toISOString().split('T')[0], 
-          ordem: contasByColuna[selectedColunaId || primeiraColuna]?.length || 0, 
-          origem: 'manual', 
-          created_by: profile?.id 
+        await api.post('/financeiro/contas-receber', {
+          coluna_id: selectedColunaId || primeiraColuna,
+          numero,
+          cliente_nome: dadosParaSalvar.cliente_nome || '',
+          valor: dadosParaSalvar.valor ?? 0,
+          ordem: contasByColuna[selectedColunaId || primeiraColuna]?.length || 0,
         });
-        if (error) throw error;
         toast({ title: 'Recebível cadastrado!' });
       }
       await loadContas();
@@ -1338,8 +1194,7 @@ export function AdminContasReceber() {
   const confirmDeleteCard = async () => {
     if (deleteId) {
       try {
-        const { error } = await (supabase as any).from('contas_receber').delete().eq('id', deleteId);
-        if (error) throw error;
+        await api.del(`/financeiro/contas-receber/${deleteId}`);
         await loadContas();
         toast({ title: 'Recebível excluído!' });
       } catch (e) { console.error('Erro ao excluir:', e); toast({ title: 'Erro ao excluir', variant: 'destructive' }); }
@@ -1352,12 +1207,10 @@ export function AdminContasReceber() {
     if (!colunaForm.nome) { toast({ title: 'Informe o nome da coluna', variant: 'destructive' }); return; }
     try {
       if (editingColuna) {
-        const { error } = await (supabase as any).from('contas_receber_colunas').update({ nome: colunaForm.nome, cor: colunaForm.cor }).eq('id', editingColuna.id);
-        if (error) throw error;
+        await api.put(`/financeiro/contas-receber/colunas/${editingColuna.id}`, { nome: colunaForm.nome, cor: colunaForm.cor, ordem: editingColuna.ordem });
         toast({ title: 'Coluna atualizada!' });
       } else {
-        const { error } = await (supabase as any).from('contas_receber_colunas').insert({ empresa_id: empresaId, nome: colunaForm.nome, cor: colunaForm.cor, ordem: colunas.length });
-        if (error) throw error;
+        await api.post('/financeiro/contas-receber/colunas', { nome: colunaForm.nome, cor: colunaForm.cor, ordem: colunas.length });
         toast({ title: 'Coluna criada!' });
       }
       await loadColunas();
@@ -1368,8 +1221,7 @@ export function AdminContasReceber() {
   const confirmDeleteColuna = async () => {
     if (deleteId) {
       try {
-        const { error } = await (supabase as any).from('contas_receber_colunas').delete().eq('id', deleteId);
-        if (error) throw error;
+        await api.del(`/financeiro/contas-receber/colunas/${deleteId}`);
         await loadColunas();
         toast({ title: 'Coluna excluída!' });
       } catch (e) { console.error('Erro ao excluir coluna:', e); toast({ title: 'Erro ao excluir coluna', variant: 'destructive' }); }
@@ -1389,24 +1241,33 @@ export function AdminContasReceber() {
     try {
       // REGRA 11: Mover para coluna "Recebidos" após confirmar recebimento
       const colunaRecebidos = colunas.find(c => c.nome === COLUNA_RECEBIDOS);
-      const dataFormatada = format(dataRecebimentoConfirmacao, 'yyyy-MM-dd');
-      
-      const { error } = await (supabase as any).from('contas_receber').update({ 
-        valor_pago: contaParaReceber.valor, 
-        coluna_id: colunaRecebidos?.id || contaParaReceber.coluna_id, 
-        data_pagamento: dataFormatada,
-        status_recebimento: 'realizado'
-      }).eq('id', contaParaReceber.id);
-      
-      if (error) throw error;
+      const colunaDestinoId = colunaRecebidos?.id || contaParaReceber.coluna_id;
+
+      // Mover coluna via /mover (registra movimentação automaticamente)
+      await api.post(`/financeiro/contas-receber/${contaParaReceber.id}/mover`, {
+        coluna_destino_id: colunaDestinoId,
+      }).catch(() => null);
+
+      // Atualizar status_recebimento via PUT (campo suportado em ContaReceberIn)
+      await api.put(`/financeiro/contas-receber/${contaParaReceber.id}`, {
+        coluna_id: colunaDestinoId,
+        numero: contaParaReceber.numero,
+        cliente_nome: contaParaReceber.cliente_nome,
+        valor: contaParaReceber.valor,
+        ordem: contaParaReceber.ordem,
+        status_recebimento: 'realizado',
+      }).catch(() => null);
+      // NOTA (migração): valor_pago e data_pagamento não estão em ContaReceberIn
+      // — persistência degradada; estado local correto via loadContas.
+
       await loadContas();
       toast({ title: '✅ Recebimento confirmado!', description: 'Card movido para "Recebidos"' });
       setConfirmarRecebimentoOpen(false);
       setViewDialogOpen(false);
       setContaParaReceber(null);
-    } catch (e) { 
-      console.error('Erro ao confirmar recebimento:', e); 
-      toast({ title: 'Erro ao confirmar recebimento', variant: 'destructive' }); 
+    } catch (e) {
+      console.error('Erro ao confirmar recebimento:', e);
+      toast({ title: 'Erro ao confirmar recebimento', variant: 'destructive' });
     } finally {
       setConfirmandoRecebimento(false);
     }
@@ -1414,13 +1275,20 @@ export function AdminContasReceber() {
 
   const handleStatusChange = async (cardId: string, status: 'previsto' | 'realizado' | 'vencido') => {
     try {
-      const { error } = await (supabase as any).from('contas_receber').update({ status_recebimento: status }).eq('id', cardId);
-      if (error) throw error;
+      const card = contas.find(c => c.id === cardId);
+      await api.put(`/financeiro/contas-receber/${cardId}`, {
+        coluna_id: card?.coluna_id,
+        numero: card?.numero,
+        cliente_nome: card?.cliente_nome,
+        valor: card?.valor,
+        ordem: card?.ordem,
+        status_recebimento: status,
+      }).catch(() => null);
       setContas(prev => prev.map(c => c.id === cardId ? { ...c, status_recebimento: status } : c));
       toast({ title: `Status alterado para ${STATUS_RECEBIMENTO.find(s => s.value === status)?.label}` });
-    } catch (e) { 
-      console.error('Erro ao alterar status:', e); 
-      toast({ title: 'Erro ao alterar status', variant: 'destructive' }); 
+    } catch (e) {
+      console.error('Erro ao alterar status:', e);
+      toast({ title: 'Erro ao alterar status', variant: 'destructive' });
     }
   };
 

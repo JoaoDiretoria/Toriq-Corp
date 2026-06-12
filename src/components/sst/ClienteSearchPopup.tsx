@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Search, Building2, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useDebounce } from '@/hooks/useDebounce';
 
@@ -42,113 +42,45 @@ export function ClienteSearchPopup({
 
   const fetchClientes = useCallback(async () => {
     if (!empresaId) return;
-    
+
     setLoading(true);
     try {
-      const db = supabase as any;
-      
-      // Calcular offset
-      const from = (currentPage - 1) * ITEMS_PER_PAGE;
-      const to = from + ITEMS_PER_PAGE - 1;
-      
-      // Query base
-      let query = db
-        .from('clientes_sst')
-        .select(`
-          id, 
-          nome,
-          cliente_empresa:empresas!clientes_sst_cliente_empresa_id_fkey(
-            razao_social,
-            nome_fantasia,
-            cnpj,
-            cidade, 
-            estado
-          )
-        `, { count: 'exact' })
-        .eq('empresa_sst_id', empresaId);
-      
-      // Aplicar busca se houver termo
+      // GET /sst/clientes — backend escopa por empresa_sst_id do token
+      const todos = await api.get<any[]>('/sst/clientes').catch(() => [] as any[]);
+
+      // Mapear para o shape esperado pela UI
+      // NOTA (migração): os campos razao_social, municipio e uf vinham de um JOIN
+      // com a tabela `empresas` (cliente_empresa_id) que o backend não expõe ainda.
+      // cnpj vem diretamente de clientes_sst.cnpj; municipio/uf ficam vazios até
+      // o endpoint retornar esses dados.
+      let clientesFormatados: Cliente[] = (todos || []).map((c: any) => ({
+        id: c.id,
+        nome: c.nome,
+        razao_social: undefined,
+        cnpj: c.cnpj,
+        municipio: '',
+        uf: ''
+      }));
+
+      // Aplicar filtro de busca no cliente (o endpoint retorna todos sem filtro)
       if (debouncedSearch.trim()) {
-        // Buscar por nome do cliente_sst OU dados da empresa vinculada
-        query = query.or(`nome.ilike.%${debouncedSearch}%`);
+        const termo = debouncedSearch.trim().toLowerCase();
+        clientesFormatados = clientesFormatados.filter((c) =>
+          c.nome.toLowerCase().includes(termo) ||
+          (c.cnpj && c.cnpj.toLowerCase().includes(termo))
+        );
       }
-      
-      // Ordenar e paginar
-      query = query.order('nome', { ascending: true }).range(from, to);
-      
-      const { data, error, count } = await query;
-      
-      if (error) throw error;
-      
-      // Se tem busca, fazer busca adicional por CNPJ/razão social na empresa
-      let clientesFormatados: Cliente[] = [];
-      
-      if (debouncedSearch.trim()) {
-        // Buscar também por CNPJ ou razão social da empresa vinculada
-        const { data: empresasData } = await db
-          .from('empresas')
-          .select('id, razao_social, nome_fantasia, cnpj, cidade, estado')
-          .or(`razao_social.ilike.%${debouncedSearch}%,cnpj.ilike.%${debouncedSearch}%,nome_fantasia.ilike.%${debouncedSearch}%`);
-        
-        const empresaIds = (empresasData || []).map((e: any) => e.id);
-        
-        if (empresaIds.length > 0) {
-          const { data: clientesVinculados } = await db
-            .from('clientes_sst')
-            .select(`
-              id, 
-              nome,
-              cliente_empresa:empresas!clientes_sst_cliente_empresa_id_fkey(
-                razao_social,
-                nome_fantasia,
-                cnpj,
-                cidade, 
-                estado
-              )
-            `)
-            .eq('empresa_sst_id', empresaId)
-            .in('cliente_empresa_id', empresaIds);
-          
-          // Combinar resultados únicos
-          const todosClientes = [...(data || []), ...(clientesVinculados || [])];
-          const clientesUnicos = todosClientes.filter((c, idx, arr) => 
-            arr.findIndex(x => x.id === c.id) === idx
-          );
-          
-          clientesFormatados = clientesUnicos.map((c: any) => ({
-            id: c.id,
-            nome: c.nome,
-            razao_social: c.cliente_empresa?.razao_social || c.cliente_empresa?.nome_fantasia,
-            cnpj: c.cliente_empresa?.cnpj,
-            municipio: c.cliente_empresa?.cidade || '',
-            uf: c.cliente_empresa?.estado || ''
-          }));
-        } else {
-          clientesFormatados = (data || []).map((c: any) => ({
-            id: c.id,
-            nome: c.nome,
-            razao_social: c.cliente_empresa?.razao_social || c.cliente_empresa?.nome_fantasia,
-            cnpj: c.cliente_empresa?.cnpj,
-            municipio: c.cliente_empresa?.cidade || '',
-            uf: c.cliente_empresa?.estado || ''
-          }));
-        }
-      } else {
-        clientesFormatados = (data || []).map((c: any) => ({
-          id: c.id,
-          nome: c.nome,
-          razao_social: c.cliente_empresa?.razao_social || c.cliente_empresa?.nome_fantasia,
-          cnpj: c.cliente_empresa?.cnpj,
-          municipio: c.cliente_empresa?.cidade || '',
-          uf: c.cliente_empresa?.estado || ''
-        }));
-      }
-      
+
       // Ordenar clientes de A-Z pelo nome
       clientesFormatados.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-      
-      setClientes(clientesFormatados);
-      setTotalCount(count || clientesFormatados.length);
+
+      // Calcular total e fatia de página
+      const total = clientesFormatados.length;
+      const from = (currentPage - 1) * ITEMS_PER_PAGE;
+      const paginados = clientesFormatados.slice(from, from + ITEMS_PER_PAGE);
+
+      setClientes(paginados);
+      setTotalCount(total);
     } catch (error) {
       console.error('Erro ao buscar clientes:', error);
     } finally {

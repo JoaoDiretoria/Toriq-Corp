@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,16 +29,12 @@ export function ClientePerfil() {
         return;
       }
 
-      const { data, error } = await supabase
-        .from('configuracoes_empresa')
-        .select('*')
-        .eq('empresa_id', empresa.id)
-        .maybeSingle();
+      const data = await api.get<ConfiguracaoEmpresa>('/white-label/config').catch(() => null);
 
-      if (error) {
+      if (data === null) {
         toast({
           title: "Erro ao carregar configurações",
-          description: error.message,
+          description: "Não foi possível obter as configurações da empresa.",
           variant: "destructive",
         });
       } else {

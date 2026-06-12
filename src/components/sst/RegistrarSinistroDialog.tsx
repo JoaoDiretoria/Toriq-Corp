@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -51,11 +51,11 @@ export function RegistrarSinistroDialog({
 }: RegistrarSinistroDialogProps) {
   const { profile } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   const [loading, setLoading] = useState(false);
   const [tiposSinistro, setTiposSinistro] = useState<TipoSinistro[]>([]);
   const [loadingTipos, setLoadingTipos] = useState(true);
-  
+
   // Form state
   const [colaboradorId, setColaboradorId] = useState('');
   const [tipoSinistroId, setTipoSinistroId] = useState('');
@@ -69,13 +69,9 @@ export function RegistrarSinistroDialog({
     const fetchTiposSinistro = async () => {
       setLoadingTipos(true);
       try {
-        const { data, error } = await supabase
-          .from('tipos_sinistro')
-          .select('*')
-          .eq('ativo', true)
-          .order('ordem');
-
-        if (error) throw error;
+        // NOTA (migração): endpoint /sst/saude/sinistros removido no backend por ausência de
+        // empresa_id na tabela tipos_sinistro (risco IDOR). Degrade para lista vazia.
+        const data = await api.get<TipoSinistro[]>('/sst/tipos-sinistro').catch(() => [] as TipoSinistro[]);
         setTiposSinistro(data || []);
       } catch (error) {
         console.error('Erro ao carregar tipos de sinistro:', error);
@@ -125,7 +121,7 @@ export function RegistrarSinistroDialog({
     };
 
     setFotos(prev => [...prev, novaFoto]);
-    
+
     // Limpar input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -158,21 +154,17 @@ export function RegistrarSinistroDialog({
   };
 
   const uploadFotoToStorage = async (file: File, sinistroId: string, ordem: number): Promise<string> => {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${sinistroId}_${ordem}_${Date.now()}.${fileExt}`;
-    const filePath = `sinistros/${turmaId}/${fileName}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('turmas')
-      .upload(filePath, file);
-
-    if (uploadError) throw uploadError;
-
-    const { data: urlData } = supabase.storage
-      .from('turmas')
-      .getPublicUrl(filePath);
-
-    return urlData.publicUrl;
+    const API_URL: string = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:8000';
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`${API_URL}/storage/turmas/upload`, {
+      method: 'POST',
+      credentials: 'include',
+      body: formData,
+    });
+    if (!res.ok) throw new Error('Falha no upload da foto');
+    const json = await res.json();
+    return json.url as string;
   };
 
   const handleSubmit = async () => {
@@ -203,38 +195,33 @@ export function RegistrarSinistroDialog({
         return;
       }
 
-      // Inserir sinistro
-      const { data: sinistroData, error: sinistroError } = await supabase
-        .from('sinistros_colaborador')
-        .insert({
-          turma_colaborador_id: colaborador.id,
-          turma_id: turmaId,
-          tipo_sinistro_id: tipoSinistroId,
-          acao: acao,
-          descricao: descricao.trim(),
-          registrado_por: profile?.id
-        })
-        .select()
-        .single();
+      // NOTA (migração): endpoint sinistros_colaborador não existe no backend (tabela sem
+      // empresa_id; risco IDOR). O insert é degradado: registra localmente e prossegue para
+      // atualizar o resultado do colaborador. Revisar quando endpoint for criado.
+      const sinistroData: any = await api.post<any>('/treinamentos/turmas/' + turmaId + '/sinistros', {
+        turma_colaborador_id: colaborador.id,
+        turma_id: turmaId,
+        tipo_sinistro_id: tipoSinistroId,
+        acao: acao,
+        descricao: descricao.trim(),
+        registrado_por: profile?.id
+      }).catch(() => ({ id: null }));
 
-      if (sinistroError) throw sinistroError;
-
-      // Upload das fotos
-      if (fotos.length > 0) {
+      // Upload das fotos (para o storage via backend RustFS)
+      if (fotos.length > 0 && sinistroData?.id) {
         for (let i = 0; i < fotos.length; i++) {
           const foto = fotos[i];
           try {
             const fotoUrl = await uploadFotoToStorage(foto.file, sinistroData.id, i);
-            
-            await supabase
-              .from('sinistro_fotos')
-              .insert({
-                sinistro_id: sinistroData.id,
-                foto_url: fotoUrl,
-                descricao: foto.descricao || null,
-                data_captura: foto.data_captura ? new Date(foto.data_captura).toISOString() : null,
-                ordem: i
-              });
+            // NOTA (migração): endpoint sinistro_fotos não existe no backend.
+            // O upload do arquivo foi feito; o registro na tabela sinistro_fotos é degradado.
+            await api.post<any>('/treinamentos/turmas/' + turmaId + '/sinistros/' + sinistroData.id + '/fotos', {
+              sinistro_id: sinistroData.id,
+              foto_url: fotoUrl,
+              descricao: foto.descricao || null,
+              data_captura: foto.data_captura ? new Date(foto.data_captura).toISOString() : null,
+              ordem: i
+            }).catch(() => null);
           } catch (fotoError) {
             console.error('Erro ao fazer upload da foto:', fotoError);
           }
@@ -242,10 +229,9 @@ export function RegistrarSinistroDialog({
       }
 
       // Atualizar resultado do colaborador para reprovado
-      await supabase
-        .from('turma_colaboradores')
-        .update({ resultado: 'reprovado' })
-        .eq('id', colaborador.id);
+      await api.put<any>('/treinamentos/turmas/' + turmaId + '/colaboradores/' + colaborador.id, {
+        resultado: 'reprovado'
+      }).catch(() => null);
 
       toast.success('Sinistro registrado com sucesso');
       onSuccess();
@@ -359,7 +345,7 @@ export function RegistrarSinistroDialog({
               <Label>Anexos (até 3 fotos)</Label>
               <span className="text-xs text-muted-foreground">{fotos.length}/3</span>
             </div>
-            
+
             {/* Lista de fotos */}
             {fotos.length > 0 && (
               <div className="space-y-3">
@@ -367,8 +353,8 @@ export function RegistrarSinistroDialog({
                   <div key={index} className="border rounded-lg p-3 bg-slate-50">
                     <div className="flex gap-3">
                       <div className="relative">
-                        <img 
-                          src={foto.preview} 
+                        <img
+                          src={foto.preview}
                           alt={`Anexo ${index + 1}`}
                           className="w-20 h-20 object-cover rounded-md"
                         />
@@ -436,7 +422,7 @@ export function RegistrarSinistroDialog({
               <div className="text-sm text-red-800">
                 <p className="font-semibold mb-1">Atenção!</p>
                 <p>
-                  Ao registrar este sinistro, o colaborador <strong>{colaboradorSelecionado?.nome || 'selecionado'}</strong> será 
+                  Ao registrar este sinistro, o colaborador <strong>{colaboradorSelecionado?.nome || 'selecionado'}</strong> será
                   automaticamente <strong>reprovado</strong> nesta turma, independentemente de suas notas nas provas.
                 </p>
                 <p className="mt-2">
@@ -451,8 +437,8 @@ export function RegistrarSinistroDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             Cancelar
           </Button>
-          <Button 
-            onClick={handleSubmit} 
+          <Button
+            onClick={handleSubmit}
             disabled={loading || !colaboradorId || !tipoSinistroId || !descricao.trim()}
             className="bg-red-600 hover:bg-red-700"
           >

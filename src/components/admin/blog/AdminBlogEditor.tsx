@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -172,20 +172,20 @@ export function AdminBlogEditor({ blog, categorias, autores, onClose, onSave }: 
       const fileName = `${Date.now()}-${generateSlug(file.name.split('.')[0])}.webp`;
       const filePath = isCover ? `covers/${fileName}` : `content/${fileName}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('blog-images')
-        .upload(filePath, compressedBlob, {
-          contentType: 'image/webp',
-          cacheControl: '31536000',
-        });
+      const formData = new FormData();
+      formData.append('file', new File([compressedBlob], filePath, { type: 'image/webp' }));
 
-      if (uploadError) throw uploadError;
+      const API_URL: string = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:8000';
+      const res = await fetch(`${API_URL}/storage/blog-images/upload`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      });
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('blog-images')
-        .getPublicUrl(filePath);
+      if (!res.ok) throw new Error(`Upload falhou: ${res.status}`);
 
-      return publicUrl;
+      const result: any = await res.json();
+      return result.url as string;
     } catch (error) {
       console.error('Erro ao fazer upload:', error);
       toast.error('Erro ao fazer upload da imagem');
@@ -238,27 +238,11 @@ export function AdminBlogEditor({ blog, categorias, autores, onClose, onSave }: 
     }));
   };
 
-  const sendNewsletterNotification = async (blogId: string, titulo: string, slug: string, descricao: string) => {
-    try {
-      const baseUrl = window.location.origin;
-      const { data, error } = await supabase.functions.invoke('send-newsletter', {
-        body: {
-          tipo: 'blog',
-          referencia_id: blogId,
-          titulo,
-          url: `${baseUrl}/blog/${slug}`,
-          descricao,
-        },
-      });
-      
-      if (error) {
-        console.error('Erro ao enviar newsletter:', error);
-      } else if (data?.total > 0) {
-        toast.success(`Newsletter enviada para ${data.total} inscritos!`);
-      }
-    } catch (err) {
-      console.error('Erro ao enviar newsletter:', err);
-    }
+  // NOTA (migração): send-newsletter era uma Supabase Edge Function sem equivalente
+  // REST no backend Python. O disparo de newsletter é agora gerenciado por jobs
+  // em background que lêem a tabela newsletter_disparos. Função degradada para no-op.
+  const sendNewsletterNotification = async (_blogId: string, _titulo: string, _slug: string, _descricao: string) => {
+    // no-op: sem endpoint /blog/newsletter/disparar no backend atual
   };
 
   const handleSubmit = async (status?: string) => {
@@ -283,44 +267,33 @@ export function AdminBlogEditor({ blog, categorias, autores, onClose, onSave }: 
         status: finalStatus,
         tags: formData.tags.length > 0 ? formData.tags : null,
         tempo_leitura: tempoLeitura,
-        publicado_em: finalStatus === 'publicado' ? new Date().toISOString() : (blog?.status === 'publicado' ? blog.publicado_em : null),
+        publicado_em: finalStatus === 'publicado' ? new Date().toISOString() : (blog?.status === 'publicado' ? (blog as any).publicado_em : null),
       };
 
       if (blog) {
-        const { error } = await (supabase as any)
-          .from('blogs')
-          .update(blogData)
-          .eq('id', blog.id);
+        await api.put<any>(`/blog/admin/posts/${blog.id}`, blogData);
 
-        if (error) throw error;
-        
         // Disparar newsletter se está sendo publicado pela primeira vez
         if (finalStatus === 'publicado' && blog.status !== 'publicado') {
           sendNewsletterNotification(blog.id, formData.titulo, formData.slug, formData.descricao);
         }
-        
+
         toast.success('Blog atualizado com sucesso');
       } else {
-        const { data: newBlog, error } = await (supabase as any)
-          .from('blogs')
-          .insert(blogData)
-          .select('id')
-          .single();
+        const newBlog = await api.post<any>('/blog/admin/posts', blogData);
 
-        if (error) throw error;
-        
         // Disparar newsletter se publicado diretamente
         if (finalStatus === 'publicado' && newBlog) {
           sendNewsletterNotification(newBlog.id, formData.titulo, blogData.slug, formData.descricao);
         }
-        
+
         toast.success('Blog criado com sucesso');
       }
 
       onSave();
     } catch (error: any) {
       console.error('Erro ao salvar blog:', error);
-      if (error.code === '23505') {
+      if (error.status === 409 || error.code === '23505') {
         toast.error('Já existe um blog com este slug');
       } else {
         toast.error('Erro ao salvar blog');

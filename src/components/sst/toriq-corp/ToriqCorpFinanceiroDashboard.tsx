@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DollarSign, TrendingUp, TrendingDown, Wallet, Building2, Users, Package, CheckCircle } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaEfetiva } from '@/hooks/useEmpresaMode';
 import { parseISO, startOfMonth, endOfMonth, format } from 'date-fns';
@@ -113,23 +113,23 @@ export function ToriqCorpFinanceiroDashboard() {
     setLoading(true);
     try {
       // Carregar dados em paralelo
-      const [contasReceberRes, contasPagarRes, contasBancariasRes, clientesRes, fornecedoresRes, colunasReceberRes, colunasPagarRes] = await Promise.all([
-        supabase.from('contas_receber').select('*').eq('empresa_id', empresaId),
-        supabase.from('contas_pagar').select('*').eq('empresa_id', empresaId),
-        supabase.from('contas_bancarias').select('*').eq('empresa_id', empresaId),
-        supabase.from('clientes_sst').select('id, razao_social, nome_fantasia').eq('empresa_sst_id', empresaId),
-        supabase.from('fornecedores').select('id, razao_social, nome_fantasia').eq('empresa_id', empresaId),
-        supabase.from('contas_receber_colunas').select('id, nome, cor').eq('empresa_id', empresaId),
-        supabase.from('contas_pagar_colunas').select('id, nome, cor').eq('empresa_id', empresaId),
+      const [contasReceberData, contasPagarData, contasBancariasData, clientesData, fornecedoresData, colunasReceberData, colunasPagarData] = await Promise.all([
+        api.get<any[]>('/financeiro/contas-receber').catch(() => [] as any[]),
+        api.get<any[]>('/financeiro/contas-pagar').catch(() => [] as any[]),
+        api.get<any[]>('/financeiro/cadastros/contas-bancarias').catch(() => [] as any[]),
+        api.get<any[]>('/sst/clientes').catch(() => [] as any[]),
+        api.get<any[]>('/financeiro/cadastros/fornecedores').catch(() => [] as any[]),
+        api.get<any[]>('/financeiro/contas-receber/colunas').catch(() => [] as any[]),
+        api.get<any[]>('/financeiro/contas-pagar/colunas').catch(() => [] as any[]),
       ]);
 
-      setContasReceber(contasReceberRes.data || []);
-      setContasPagar(contasPagarRes.data || []);
-      setContasBancarias(contasBancariasRes.data || []);
-      setClientes(clientesRes.data || []);
-      setFornecedores(fornecedoresRes.data || []);
+      setContasReceber(contasReceberData || []);
+      setContasPagar(contasPagarData || []);
+      setContasBancarias(contasBancariasData || []);
+      setClientes(clientesData || []);
+      setFornecedores(fornecedoresData || []);
       // Combinar colunas de receber e pagar para o kanban
-      const todasColunas = [...(colunasReceberRes.data || []), ...(colunasPagarRes.data || [])];
+      const todasColunas = [...(colunasReceberData || []), ...(colunasPagarData || [])];
       setColunasKanban(todasColunas);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);

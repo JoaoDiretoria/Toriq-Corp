@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api, ApiError } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -65,26 +65,19 @@ export function ClienteSetores() {
     queryKey: ['setores', profile?.empresa_id],
     queryFn: async () => {
       if (!profile?.empresa_id) return [];
-      const { data, error } = await supabase
-        .from('setores')
-        .select('*')
-        .eq('empresa_id', profile.empresa_id)
-        .order('nome');
-      if (error) throw error;
-      return data as Setor[];
+      const data = await api.get<any[]>('/sst/setores').catch(() => [] as any[]);
+      return ([...data] as Setor[]).sort((a, b) => a.nome.localeCompare(b.nome));
     },
     enabled: !!profile?.empresa_id,
   });
 
   const createMutation = useMutation({
     mutationFn: async (data: { nome: string; descricao: string; ativo: boolean }) => {
-      const { error } = await supabase.from('setores').insert({
-        empresa_id: profile?.empresa_id,
+      await api.post('/sst/setores', {
         nome: data.nome,
         descricao: data.descricao || null,
         ativo: data.ativo,
       });
-      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['setores'] });
@@ -92,7 +85,7 @@ export function ClienteSetores() {
       handleCloseDialog();
     },
     onError: (error: any) => {
-      if (error.code === '23505') {
+      if (error instanceof ApiError && error.status === 409) {
         toast({ title: 'Já existe um setor com este nome', variant: 'destructive' });
       } else {
         toast({ title: 'Erro ao criar setor', variant: 'destructive' });
@@ -102,15 +95,11 @@ export function ClienteSetores() {
 
   const updateMutation = useMutation({
     mutationFn: async (data: { id: string; nome: string; descricao: string; ativo: boolean }) => {
-      const { error } = await supabase
-        .from('setores')
-        .update({
-          nome: data.nome,
-          descricao: data.descricao || null,
-          ativo: data.ativo,
-        })
-        .eq('id', data.id);
-      if (error) throw error;
+      await api.put(`/sst/setores/${data.id}`, {
+        nome: data.nome,
+        descricao: data.descricao || null,
+        ativo: data.ativo,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['setores'] });
@@ -118,7 +107,7 @@ export function ClienteSetores() {
       handleCloseDialog();
     },
     onError: (error: any) => {
-      if (error.code === '23505') {
+      if (error instanceof ApiError && error.status === 409) {
         toast({ title: 'Já existe um setor com este nome', variant: 'destructive' });
       } else {
         toast({ title: 'Erro ao atualizar setor', variant: 'destructive' });
@@ -128,8 +117,7 @@ export function ClienteSetores() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('setores').delete().eq('id', id);
-      if (error) throw error;
+      await api.del(`/sst/setores/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['setores'] });

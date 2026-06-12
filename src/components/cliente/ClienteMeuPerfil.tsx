@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -55,13 +55,8 @@ export function ClienteMeuPerfil() {
 
       try {
         // Buscar dados completos da empresa
-        const { data: empresaData, error: empresaError } = await supabase
-          .from('empresas')
-          .select('*')
-          .eq('id', empresa.id)
-          .single();
+        const empresaData = await api.get<EmpresaCompleta>('/empresas/me').catch(() => null);
 
-        if (empresaError) throw empresaError;
         setEmpresaCompleta(empresaData);
 
         // Simular último acesso (poderia vir de uma tabela de logs)

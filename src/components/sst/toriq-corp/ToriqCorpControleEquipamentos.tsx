@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { 
   HardHat, 
   Package, 
@@ -319,6 +319,12 @@ export function ToriqCorpControleEquipamentos() {
   const [modelosAtividade, setModelosAtividade] = useState<{id: string; tipo: 'tarefa' | 'checklist'; nome: string; descricao: string; itens?: string[]}[]>([]);
   const [showModelosDialog, setShowModelosDialog] = useState(false);
   const [novoModelo, setNovoModelo] = useState({ nome: '', descricao: '', itens: [] as string[] });
+
+  // Mapas internos: nome → id (para CRUD de categorias, unidades, status, finalidades)
+  const [categoriaIdMap, setCategoriaIdMap] = useState<Record<string, string>>({});
+  const [unidadeIdMap, setUnidadeIdMap] = useState<Record<string, string>>({});
+  const [statusIdMap, setStatusIdMap] = useState<Record<string, string>>({});
+  const [finalidadeIdMap, setFinalidadeIdMap] = useState<Record<string, string>>({});
   
   // Estados para membros da empresa
   const [membrosEmpresa, setMembrosEmpresa] = useState<{id: string; nome: string; email?: string}[]>([]);
@@ -331,7 +337,7 @@ export function ToriqCorpControleEquipamentos() {
   const [selectedKit, setSelectedKit] = useState<Kit | null>(null);
   const [showKitDetalhes, setShowKitDetalhes] = useState(false);
 
-  // Carregar dados do Supabase
+  // Carregar dados
   useEffect(() => {
     if (empresaId) {
       loadData();
@@ -341,158 +347,113 @@ export function ToriqCorpControleEquipamentos() {
   const loadData = async () => {
     if (!empresaId) return;
     setLoading(true);
-    
+
     try {
       // Carregar equipamentos
-      const { data: equipamentosData, error: equipamentosError } = await (supabase as any)
-        .from('equipamentos_sst')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('nome');
-      
-      if (equipamentosError) throw equipamentosError;
-      if (equipamentosData) setEquipamentos(equipamentosData);
+      const equipamentosData: any[] = await api.get<any[]>('/sst/epi/equipamentos').catch(() => []);
+      const equipamentosOrdenados = [...equipamentosData].sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+      setEquipamentos(equipamentosOrdenados);
 
-      // Carregar kits com seus itens
-      const { data: kitsData, error: kitsError } = await (supabase as any)
-        .from('equipamentos_kits')
-        .select('*, equipamentos_kit_itens(equipamento_id, quantidade)')
-        .eq('empresa_id', empresaId)
-        .order('nome');
-      
-      if (kitsError) throw kitsError;
-      if (kitsData) {
-        const kitsFormatados = kitsData.map((kit: any) => ({
-          ...kit,
-          equipamentos: kit.equipamentos_kit_itens || []
-        }));
-        setKits(kitsFormatados);
-      }
+      // Carregar kits e seus itens
+      const kitsData: any[] = await api.get<any[]>('/sst/epi/kits').catch(() => []);
+      const kitsOrdenados = [...kitsData].sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+      const kitsComItens = await Promise.all(
+        kitsOrdenados.map(async (kit: any) => {
+          const itens: any[] = await api.get<any[]>(`/sst/epi/kits/${kit.id}/itens`).catch(() => []);
+          return { ...kit, equipamentos: itens };
+        })
+      );
+      setKits(kitsComItens);
 
-      // Carregar movimentações
-      const { data: movimentacoesData, error: movimentacoesError } = await (supabase as any)
-        .from('equipamentos_movimentacoes')
-        .select(`
-          *,
-          equipamento:equipamentos_sst(*),
-          usuario_separou:profiles!equipamentos_movimentacoes_usuario_separou_id_fkey(nome),
-          usuario_utilizou:profiles!equipamentos_movimentacoes_usuario_utilizou_id_fkey(nome),
-          usuario_recebeu:profiles!equipamentos_movimentacoes_usuario_recebeu_id_fkey(nome)
-        `)
-        .eq('empresa_id', empresaId)
-        .order('created_at', { ascending: false });
-      
-      if (movimentacoesError) throw movimentacoesError;
-      if (movimentacoesData) setMovimentacoes(movimentacoesData);
+      // Carregar movimentações e enriquecer com dados locais
+      const movimentacoesData: any[] = await api.get<any[]>('/sst/epi/movimentacoes').catch(() => []);
+      const movimentacoesOrdenadas = [...movimentacoesData].sort((a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+      // Enriquecer movimentações com equipamento e usuario_separou a partir dos dados locais
+      const membrosData: any[] = await api.get<any[]>('/admin/users').catch(() => []);
+      const membrosMap: Record<string, { nome: string }> = {};
+      membrosData.forEach((u: any) => { membrosMap[u.id] = { nome: u.nome }; });
+      const movimentacoesEnriquecidas = movimentacoesOrdenadas.map((m: any) => ({
+        ...m,
+        equipamento: equipamentosOrdenados.find((e: any) => e.id === m.equipamento_id) || undefined,
+        usuario_separou: m.usuario_separou_id ? membrosMap[m.usuario_separou_id] : undefined,
+        usuario_utilizou: m.usuario_utilizou_id ? membrosMap[m.usuario_utilizou_id] : undefined,
+        usuario_recebeu: m.usuario_recebeu_id ? membrosMap[m.usuario_recebeu_id] : undefined,
+      }));
+      setMovimentacoes(movimentacoesEnriquecidas);
+      setMembrosEmpresa(membrosData.map((u: any) => ({ id: u.id, nome: u.nome, email: u.email })));
 
       // Carregar categorias
-      const { data: categoriasData, error: categoriasError } = await (supabase as any)
-        .from('equipamentos_categorias')
-        .select('nome')
-        .eq('empresa_id', empresaId)
-        .order('nome');
-      
-      if (!categoriasError && categoriasData && categoriasData.length > 0) {
-        setCategorias(categoriasData.map((c: any) => c.nome));
+      const categoriasData: any[] = await api.get<any[]>('/sst/epi/categorias').catch(() => []);
+      if (categoriasData.length > 0) {
+        const sorted = [...categoriasData].sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+        setCategorias(sorted.map((c: any) => c.nome));
+        const cMap: Record<string, string> = {};
+        sorted.forEach((c: any) => { cMap[c.nome] = c.id; });
+        setCategoriaIdMap(cMap);
       }
 
       // Carregar unidades
-      const { data: unidadesData, error: unidadesError } = await (supabase as any)
-        .from('equipamentos_unidades')
-        .select('nome')
-        .eq('empresa_id', empresaId)
-        .order('nome');
-      
-      if (!unidadesError && unidadesData && unidadesData.length > 0) {
-        setUnidades(unidadesData.map((u: any) => u.nome));
+      const unidadesData: any[] = await api.get<any[]>('/sst/epi/unidades').catch(() => []);
+      if (unidadesData.length > 0) {
+        const sorted = [...unidadesData].sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+        setUnidades(sorted.map((u: any) => u.nome));
+        const uMap: Record<string, string> = {};
+        sorted.forEach((u: any) => { uMap[u.nome] = u.id; });
+        setUnidadeIdMap(uMap);
       }
 
       // Carregar status
-      const { data: statusData, error: statusError } = await (supabase as any)
-        .from('equipamentos_status')
-        .select('codigo, nome, cor')
-        .eq('empresa_id', empresaId);
-      
-      if (!statusError && statusData && statusData.length > 0) {
-        setStatusList(statusData.map((s: any) => ({ id: s.codigo, nome: s.nome, cor: s.cor })));
+      const statusData: any[] = await api.get<any[]>('/sst/epi/status').catch(() => []);
+      if (statusData.length > 0) {
+        setStatusList(statusData.map((s: any) => ({ id: s.codigo || s.id, nome: s.nome, cor: s.cor })));
+        const sMap: Record<string, string> = {};
+        statusData.forEach((s: any) => { sMap[s.codigo || s.id] = s.id; });
+        setStatusIdMap(sMap);
       }
 
       // Carregar finalidades (usado para)
-      const { data: finalidadesData, error: finalidadesError } = await (supabase as any)
-        .from('equipamentos_finalidades')
-        .select('nome')
-        .eq('empresa_id', empresaId)
-        .order('nome');
-      
-      if (!finalidadesError && finalidadesData && finalidadesData.length > 0) {
-        setUsadoParaList(finalidadesData.map((f: any) => f.nome));
+      const finalidadesData: any[] = await api.get<any[]>('/sst/epi/finalidades').catch(() => []);
+      if (finalidadesData.length > 0) {
+        const sorted = [...finalidadesData].sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+        setUsadoParaList(sorted.map((f: any) => f.nome));
+        const fMap: Record<string, string> = {};
+        sorted.forEach((f: any) => { fMap[f.nome] = f.id; });
+        setFinalidadeIdMap(fMap);
       }
 
       // Carregar modelos de atividades
-      const { data: modelosData, error: modelosError } = await (supabase as any)
-        .from('equipamentos_modelos_atividade')
-        .select('*')
-        .eq('empresa_id', empresaId);
-      
-      if (!modelosError && modelosData) {
-        setModelosAtividade(modelosData.map((m: any) => ({
-          id: m.id,
-          tipo: m.tipo,
-          nome: m.nome,
-          descricao: m.descricao || '',
-          itens: m.itens || []
-        })));
-      }
+      const modelosData: any[] = await api.get<any[]>('/sst/epi/modelos-atividade').catch(() => []);
+      setModelosAtividade(modelosData.map((m: any) => ({
+        id: m.id,
+        tipo: m.tipo,
+        nome: m.nome,
+        descricao: m.descricao || '',
+        itens: m.itens || []
+      })));
 
-      // Carregar membros da empresa
-      await loadMembrosEmpresa();
-      
       // Carregar clientes
       await loadClientes();
-      
+
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
-      toast({ 
-        title: 'Erro ao carregar dados', 
-        description: 'Não foi possível carregar os dados. Verifique sua conexão.', 
-        variant: 'destructive' 
+      toast({
+        title: 'Erro ao carregar dados',
+        description: 'Não foi possível carregar os dados. Verifique sua conexão.',
+        variant: 'destructive'
       });
     } finally {
       setLoading(false);
     }
   };
   
-  // Carregar membros da empresa SST
-  const loadMembrosEmpresa = async () => {
-    try {
-      if (!empresaId) return;
-      
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, nome, email')
-        .eq('empresa_id', empresaId)
-        .order('nome');
-      
-      if (error) throw error;
-      if (data) setMembrosEmpresa(data);
-    } catch (error) {
-      console.error('Erro ao carregar membros:', error);
-    }
-  };
-
   // Carregar clientes da empresa SST
   const loadClientes = async () => {
     try {
-      if (!empresaId) return;
-      
-      const { data, error } = await supabase
-        .from('clientes_sst')
-        .select('id, nome')
-        .eq('empresa_sst_id', empresaId)
-        .order('nome');
-      
-      if (error) throw error;
-      if (data) setClientes(data);
+      const data: any[] = await api.get<any[]>('/sst/clientes').catch(() => []);
+      const sorted = [...data].sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+      setClientes(sorted.map((c: any) => ({ id: c.id, nome: c.nome })));
     } catch (error) {
       console.error('Erro ao carregar clientes:', error);
     }
@@ -501,14 +462,11 @@ export function ToriqCorpControleEquipamentos() {
   // Carregar histórico de uma movimentação
   const loadMovimentacaoHistorico = async (movimentacaoId: string) => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('equipamentos_movimentacoes_historico')
-        .select('*')
-        .eq('movimentacao_id', movimentacaoId)
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      setMovimentacaoHistorico(data || []);
+      const data: any[] = await api.get<any[]>(`/sst/epi/movimentacoes/${movimentacaoId}/historico`).catch(() => []);
+      const sorted = [...data].sort((a: any, b: any) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+      setMovimentacaoHistorico(sorted);
     } catch (error) {
       console.error('Erro ao carregar histórico:', error);
       setMovimentacaoHistorico([]);
@@ -521,16 +479,18 @@ export function ToriqCorpControleEquipamentos() {
       setFunilCardInfo(null);
       return;
     }
-    
+
     try {
-      const { data, error } = await (supabase as any)
-        .from('funil_cards')
-        .select('id, titulo, funil:funis(id, nome)')
-        .eq('id', funilCardId)
-        .single();
-      
-      if (error) throw error;
-      setFunilCardInfo(data);
+      const data: any = await api.get<any>(`/funil/cards/${funilCardId}`).catch(() => null);
+      if (data) {
+        setFunilCardInfo({
+          id: data.id,
+          titulo: data.titulo,
+          funil: data.funil_id ? { id: data.funil_id, nome: data.funil_nome || '' } : undefined
+        });
+      } else {
+        setFunilCardInfo(null);
+      }
     } catch (error) {
       console.error('Erro ao carregar info do funil/card:', error);
       setFunilCardInfo(null);
@@ -552,23 +512,18 @@ export function ToriqCorpControleEquipamentos() {
     }
   ) => {
     try {
-      const { error } = await (supabase as any)
-        .from('equipamentos_movimentacoes_historico')
-        .insert({
-          movimentacao_id: movimentacaoId,
-          tipo,
-          descricao,
-          funil_id: dadosAdicionais?.funil_id,
-          funil_nome: dadosAdicionais?.funil_nome,
-          card_id: dadosAdicionais?.card_id,
-          card_titulo: dadosAdicionais?.card_titulo,
-          status_anterior: dadosAdicionais?.status_anterior,
-          status_novo: dadosAdicionais?.status_novo,
-          usuario_id: profile?.id,
-          usuario_nome: profile?.nome
-        });
-      
-      if (error) throw error;
+      await api.post(`/sst/epi/movimentacoes/${movimentacaoId}/historico`, {
+        tipo,
+        descricao,
+        funil_id: dadosAdicionais?.funil_id,
+        funil_nome: dadosAdicionais?.funil_nome,
+        card_id: dadosAdicionais?.card_id,
+        card_titulo: dadosAdicionais?.card_titulo,
+        status_anterior: dadosAdicionais?.status_anterior,
+        status_novo: dadosAdicionais?.status_novo,
+        usuario_id: profile?.id,
+        usuario_nome: profile?.nome
+      });
     } catch (error) {
       console.error('Erro ao registrar histórico:', error);
     }
@@ -625,42 +580,29 @@ export function ToriqCorpControleEquipamentos() {
 
   // CRUD Categorias
   const handleSaveCategoria = async () => {
-    if (!novaCategoria.trim() || !empresaId) {
+    if (!novaCategoria.trim()) {
       toast({ title: 'Erro', description: 'Digite o nome da categoria.', variant: 'destructive' });
       return;
     }
-    
+
     try {
       if (editingCategoria) {
-        // Atualizar categoria existente
-        const { error } = await (supabase as any)
-          .from('equipamentos_categorias')
-          .update({ nome: novaCategoria.trim() })
-          .eq('empresa_id', empresaId)
-          .eq('nome', editingCategoria);
-        
-        if (error) throw error;
-        
-        // Atualizar equipamentos com a categoria antiga
-        await (supabase as any)
-          .from('equipamentos_sst')
-          .update({ categoria: novaCategoria.trim() })
-          .eq('empresa_id', empresaId)
-          .eq('categoria', editingCategoria);
-        
+        const categoriaId = categoriaIdMap[editingCategoria];
+        if (categoriaId) {
+          await api.put(`/sst/epi/categorias/${categoriaId}`, { nome: novaCategoria.trim() });
+          // Atualizar equipamentos com a categoria antiga no cliente
+          setEquipamentos(prev => prev.map(eq =>
+            eq.categoria === editingCategoria ? { ...eq, categoria: novaCategoria.trim() } : eq
+          ));
+        }
       } else {
         if (categorias.includes(novaCategoria.trim())) {
           toast({ title: 'Erro', description: 'Categoria já existe.', variant: 'destructive' });
           return;
         }
-        
-        const { error } = await (supabase as any)
-          .from('equipamentos_categorias')
-          .insert({ empresa_id: empresaId, nome: novaCategoria.trim() });
-        
-        if (error) throw error;
+        await api.post('/sst/epi/categorias', { nome: novaCategoria.trim() });
       }
-      
+
       await loadData();
       setNovaCategoria('');
       setEditingCategoria(null);
@@ -677,15 +619,12 @@ export function ToriqCorpControleEquipamentos() {
       toast({ title: 'Erro', description: 'Categoria em uso. Remova os equipamentos primeiro.', variant: 'destructive' });
       return;
     }
-    
+
     try {
-      const { error } = await (supabase as any)
-        .from('equipamentos_categorias')
-        .delete()
-        .eq('empresa_id', empresaId)
-        .eq('nome', cat);
-      
-      if (error) throw error;
+      const categoriaId = categoriaIdMap[cat];
+      if (categoriaId) {
+        await api.del(`/sst/epi/categorias/${categoriaId}`);
+      }
       await loadData();
       toast({ title: 'Sucesso', description: 'Categoria removida.' });
     } catch (error) {
@@ -696,39 +635,29 @@ export function ToriqCorpControleEquipamentos() {
 
   // CRUD Unidades
   const handleSaveUnidade = async () => {
-    if (!novaUnidade.trim() || !empresaId) {
+    if (!novaUnidade.trim()) {
       toast({ title: 'Erro', description: 'Digite o nome da unidade.', variant: 'destructive' });
       return;
     }
-    
+
     try {
       if (editingUnidade) {
-        const { error } = await (supabase as any)
-          .from('equipamentos_unidades')
-          .update({ nome: novaUnidade.trim() })
-          .eq('empresa_id', empresaId)
-          .eq('nome', editingUnidade);
-        
-        if (error) throw error;
-        
-        await (supabase as any)
-          .from('equipamentos_sst')
-          .update({ unidade_medida: novaUnidade.trim() })
-          .eq('empresa_id', empresaId)
-          .eq('unidade_medida', editingUnidade);
+        const unidadeId = unidadeIdMap[editingUnidade];
+        if (unidadeId) {
+          await api.put(`/sst/epi/unidades/${unidadeId}`, { nome: novaUnidade.trim() });
+          // Atualizar equipamentos com a unidade antiga no cliente
+          setEquipamentos(prev => prev.map(eq =>
+            eq.unidade_medida === editingUnidade ? { ...eq, unidade_medida: novaUnidade.trim() } : eq
+          ));
+        }
       } else {
         if (unidades.includes(novaUnidade.trim())) {
           toast({ title: 'Erro', description: 'Unidade já existe.', variant: 'destructive' });
           return;
         }
-        
-        const { error } = await (supabase as any)
-          .from('equipamentos_unidades')
-          .insert({ empresa_id: empresaId, nome: novaUnidade.trim() });
-        
-        if (error) throw error;
+        await api.post('/sst/epi/unidades', { nome: novaUnidade.trim() });
       }
-      
+
       await loadData();
       setNovaUnidade('');
       setEditingUnidade(null);
@@ -745,15 +674,12 @@ export function ToriqCorpControleEquipamentos() {
       toast({ title: 'Erro', description: 'Unidade em uso. Remova os equipamentos primeiro.', variant: 'destructive' });
       return;
     }
-    
+
     try {
-      const { error } = await (supabase as any)
-        .from('equipamentos_unidades')
-        .delete()
-        .eq('empresa_id', empresaId)
-        .eq('nome', uni);
-      
-      if (error) throw error;
+      const unidadeId = unidadeIdMap[uni];
+      if (unidadeId) {
+        await api.del(`/sst/epi/unidades/${unidadeId}`);
+      }
       await loadData();
       toast({ title: 'Sucesso', description: 'Unidade removida.' });
     } catch (error) {
@@ -764,41 +690,35 @@ export function ToriqCorpControleEquipamentos() {
 
   // CRUD Status
   const handleSaveStatus = async () => {
-    if (!novoStatus.nome.trim() || !empresaId) {
+    if (!novoStatus.nome.trim()) {
       toast({ title: 'Erro', description: 'Digite o nome do status.', variant: 'destructive' });
       return;
     }
-    
-    const statusId = novoStatus.id || novoStatus.nome.toLowerCase().replace(/\s+/g, '_').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    
+
+    const statusCodigo = novoStatus.id || novoStatus.nome.toLowerCase().replace(/\s+/g, '_').normalize('NFD').replace(/[̀-ͯ]/g, '');
+
     try {
       if (editingStatus) {
-        const { error } = await (supabase as any)
-          .from('equipamentos_status')
-          .update({ codigo: statusId, nome: novoStatus.nome.trim(), cor: novoStatus.cor })
-          .eq('empresa_id', empresaId)
-          .eq('codigo', editingStatus);
-        
-        if (error) throw error;
-        
-        await (supabase as any)
-          .from('equipamentos_sst')
-          .update({ status: statusId })
-          .eq('empresa_id', empresaId)
-          .eq('status', editingStatus);
+        const statusDbId = statusIdMap[editingStatus];
+        if (statusDbId) {
+          await api.put(/sst/epi/status/, {
+            codigo: statusCodigo,
+            nome: novoStatus.nome.trim(),
+            cor: novoStatus.cor
+          });
+        }
       } else {
-        if (statusList.some(s => s.id === statusId)) {
+        if (statusList.some(s => s.id === statusCodigo)) {
           toast({ title: 'Erro', description: 'Status já existe.', variant: 'destructive' });
           return;
         }
-        
-        const { error } = await (supabase as any)
-          .from('equipamentos_status')
-          .insert({ empresa_id: empresaId, codigo: statusId, nome: novoStatus.nome.trim(), cor: novoStatus.cor });
-        
-        if (error) throw error;
+        await api.post('/sst/epi/status', {
+          codigo: statusCodigo,
+          nome: novoStatus.nome.trim(),
+          cor: novoStatus.cor
+        });
       }
-      
+
       await loadData();
       setNovoStatus({ id: '', nome: '', cor: 'bg-gray-100 text-gray-700 border-gray-300' });
       setEditingStatus(null);
@@ -815,15 +735,12 @@ export function ToriqCorpControleEquipamentos() {
       toast({ title: 'Erro', description: 'Status em uso. Remova os equipamentos primeiro.', variant: 'destructive' });
       return;
     }
-    
+
     try {
-      const { error } = await (supabase as any)
-        .from('equipamentos_status')
-        .delete()
-        .eq('empresa_id', empresaId)
-        .eq('codigo', statusId);
-      
-      if (error) throw error;
+      const statusDbId = statusIdMap[statusId];
+      if (statusDbId) {
+        await api.del(/sst/epi/status/);
+      }
       await loadData();
       toast({ title: 'Sucesso', description: 'Status removido.' });
     } catch (error) {
@@ -831,36 +748,27 @@ export function ToriqCorpControleEquipamentos() {
       toast({ title: 'Erro', description: 'Não foi possível remover o status.', variant: 'destructive' });
     }
   };
-
   // CRUD Usado Para
   const handleSaveUsadoPara = async () => {
-    if (!novoUsadoPara.trim() || !empresaId) {
+    if (!novoUsadoPara.trim()) {
       toast({ title: 'Erro', description: 'Digite o nome da finalidade.', variant: 'destructive' });
       return;
     }
-    
+
     try {
       if (editingUsadoPara) {
-        const { error } = await (supabase as any)
-          .from('equipamentos_finalidades')
-          .update({ nome: novoUsadoPara.trim() })
-          .eq('empresa_id', empresaId)
-          .eq('nome', editingUsadoPara);
-        
-        if (error) throw error;
+        const finalidadeId = finalidadeIdMap[editingUsadoPara];
+        if (finalidadeId) {
+          await api.put(/sst/epi/finalidades/, { nome: novoUsadoPara.trim() });
+        }
       } else {
         if (usadoParaList.includes(novoUsadoPara.trim())) {
           toast({ title: 'Erro', description: 'Finalidade já existe.', variant: 'destructive' });
           return;
         }
-        
-        const { error } = await (supabase as any)
-          .from('equipamentos_finalidades')
-          .insert({ empresa_id: empresaId, nome: novoUsadoPara.trim() });
-        
-        if (error) throw error;
+        await api.post('/sst/epi/finalidades', { nome: novoUsadoPara.trim() });
       }
-      
+
       await loadData();
       setNovoUsadoPara('');
       setEditingUsadoPara(null);
@@ -877,15 +785,12 @@ export function ToriqCorpControleEquipamentos() {
       toast({ title: 'Erro', description: 'Finalidade em uso. Remova dos equipamentos primeiro.', variant: 'destructive' });
       return;
     }
-    
+
     try {
-      const { error } = await (supabase as any)
-        .from('equipamentos_finalidades')
-        .delete()
-        .eq('empresa_id', empresaId)
-        .eq('nome', item);
-      
-      if (error) throw error;
+      const finalidadeId = finalidadeIdMap[item];
+      if (finalidadeId) {
+        await api.del(/sst/epi/finalidades/);
+      }
       await loadData();
       toast({ title: 'Sucesso', description: 'Finalidade removida.' });
     } catch (error) {
@@ -893,55 +798,43 @@ export function ToriqCorpControleEquipamentos() {
       toast({ title: 'Erro', description: 'Não foi possível remover a finalidade.', variant: 'destructive' });
     }
   };
-
   // CRUD Equipamentos
   const handleSaveEquipamento = async () => {
-    if (!equipamentoForm.nome || !equipamentoForm.categoria || !empresaId) {
+    if (!equipamentoForm.nome || !equipamentoForm.categoria) {
       toast({ title: 'Erro', description: 'Preencha nome e categoria.', variant: 'destructive' });
       return;
     }
 
     try {
       if (editingEquipamento) {
-        const { error } = await (supabase as any)
-          .from('equipamentos_sst')
-          .update({
-            nome: equipamentoForm.nome,
-            codigo: equipamentoForm.codigo,
-            numero_serie: equipamentoForm.numero_serie,
-            categoria: equipamentoForm.categoria,
-            unidade_medida: equipamentoForm.unidade_medida,
-            quantidade: equipamentoForm.quantidade,
-            usado_para: equipamentoForm.usado_para,
-            status: equipamentoForm.status,
-            local_base: equipamentoForm.local_base,
-            validade_calibracao: equipamentoForm.validade_calibracao,
-            observacoes: equipamentoForm.observacoes,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', editingEquipamento.id);
-        
-        if (error) throw error;
+        await api.put(/sst/epi/equipamentos/, {
+          nome: equipamentoForm.nome,
+          codigo: equipamentoForm.codigo,
+          numero_serie: equipamentoForm.numero_serie,
+          categoria: equipamentoForm.categoria,
+          unidade_medida: equipamentoForm.unidade_medida,
+          quantidade: equipamentoForm.quantidade,
+          usado_para: equipamentoForm.usado_para,
+          status: equipamentoForm.status,
+          local_base: equipamentoForm.local_base,
+          validade_calibracao: equipamentoForm.validade_calibracao,
+          observacoes: equipamentoForm.observacoes
+        });
         toast({ title: 'Sucesso', description: 'Equipamento atualizado.' });
       } else {
-        const { error } = await (supabase as any)
-          .from('equipamentos_sst')
-          .insert({
-            empresa_id: empresaId,
-            nome: equipamentoForm.nome,
-            codigo: equipamentoForm.codigo || gerarCodigoEquipamento(),
-            numero_serie: equipamentoForm.numero_serie,
-            categoria: equipamentoForm.categoria,
-            unidade_medida: equipamentoForm.unidade_medida,
-            quantidade: equipamentoForm.quantidade || 1,
-            usado_para: equipamentoForm.usado_para,
-            status: equipamentoForm.status || 'disponivel',
-            local_base: equipamentoForm.local_base,
-            validade_calibracao: equipamentoForm.validade_calibracao,
-            observacoes: equipamentoForm.observacoes
-          });
-        
-        if (error) throw error;
+        await api.post('/sst/epi/equipamentos', {
+          nome: equipamentoForm.nome,
+          codigo: equipamentoForm.codigo || gerarCodigoEquipamento(),
+          numero_serie: equipamentoForm.numero_serie,
+          categoria: equipamentoForm.categoria,
+          unidade_medida: equipamentoForm.unidade_medida,
+          quantidade: equipamentoForm.quantidade || 1,
+          usado_para: equipamentoForm.usado_para,
+          status: equipamentoForm.status || 'disponivel',
+          local_base: equipamentoForm.local_base,
+          validade_calibracao: equipamentoForm.validade_calibracao,
+          observacoes: equipamentoForm.observacoes
+        });
         toast({ title: 'Sucesso', description: 'Equipamento cadastrado.' });
       }
 
@@ -957,14 +850,9 @@ export function ToriqCorpControleEquipamentos() {
 
   const handleDeleteEquipamento = async (id: string) => {
     if (!confirm('Deseja realmente excluir este equipamento?')) return;
-    
+
     try {
-      const { error } = await (supabase as any)
-        .from('equipamentos_sst')
-        .delete()
-        .eq('id', id);
-      
-      if (error) throw error;
+      await api.del(/sst/epi/equipamentos/);
       await loadData();
       toast({ title: 'Sucesso', description: 'Equipamento excluído.' });
     } catch (error) {
@@ -972,7 +860,6 @@ export function ToriqCorpControleEquipamentos() {
       toast({ title: 'Erro', description: 'Não foi possível excluir o equipamento.', variant: 'destructive' });
     }
   };
-
   // Validar se há estoque suficiente para criar a quantidade de kits
   const validarEstoqueParaKits = (qtdKits: number): { valido: boolean; mensagem: string } => {
     if (!kitForm.equipamentos || kitForm.equipamentos.length === 0) {
@@ -1026,73 +913,53 @@ export function ToriqCorpControleEquipamentos() {
 
   // CRUD Kits
   const handleSaveKit = async () => {
-    if (!kitForm.nome || !kitForm.tipo_servico || !empresaId) {
+    if (!kitForm.nome || !kitForm.tipo_servico) {
       toast({ title: 'Erro', description: 'Preencha nome e tipo de serviço.', variant: 'destructive' });
       return;
     }
 
     try {
       if (editingKit) {
-        const { error } = await (supabase as any)
-          .from('equipamentos_kits')
-          .update({
-            nome: kitForm.nome,
-            codigo: kitForm.codigo,
-            tipo_servico: kitForm.tipo_servico,
-            descricao: kitForm.descricao,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', editingKit.id);
-        
-        if (error) throw error;
-        
-        // Atualizar itens do kit
-        await (supabase as any)
-          .from('equipamentos_kit_itens')
-          .delete()
-          .eq('kit_id', editingKit.id);
-        
+        await api.put(/sst/epi/kits/, {
+          nome: kitForm.nome,
+          codigo: kitForm.codigo,
+          tipo_servico: kitForm.tipo_servico,
+          descricao: kitForm.descricao
+        });
+
+        // Remover itens antigos e reinserir
+        const itensAtuais: any[] = await api.get(/sst/epi/kits//itens).catch(() => []);
+        await Promise.all(itensAtuais.map((item: any) =>
+          api.del(/sst/epi/kits//itens/).catch(() => null)
+        ));
+
         if (kitForm.equipamentos && kitForm.equipamentos.length > 0) {
-          const itens = kitForm.equipamentos.map(item => ({
-            kit_id: editingKit.id,
-            equipamento_id: item.equipamento_id,
-            quantidade: item.quantidade
-          }));
-          
-          await (supabase as any)
-            .from('equipamentos_kit_itens')
-            .insert(itens);
+          await Promise.all(kitForm.equipamentos.map((item) =>
+            api.post(/sst/epi/kits//itens, {
+              equipamento_id: item.equipamento_id,
+              quantidade: item.quantidade
+            })
+          ));
         }
 
         toast({ title: 'Sucesso', description: 'Kit atualizado.' });
       } else {
-        const { data: newKit, error } = await (supabase as any)
-          .from('equipamentos_kits')
-          .insert({
-            empresa_id: empresaId,
-            nome: kitForm.nome,
-            codigo: gerarCodigoKit(),
-            tipo_servico: kitForm.tipo_servico,
-            descricao: kitForm.descricao
-          })
-          .select()
-          .single();
-        
-        if (error) throw error;
-        
-        // Inserir itens do kit
+        const newKit: any = await api.post('/sst/epi/kits', {
+          nome: kitForm.nome,
+          codigo: gerarCodigoKit(),
+          tipo_servico: kitForm.tipo_servico,
+          descricao: kitForm.descricao
+        });
+
         if (kitForm.equipamentos && kitForm.equipamentos.length > 0 && newKit) {
-          const itens = kitForm.equipamentos.map(item => ({
-            kit_id: newKit.id,
-            equipamento_id: item.equipamento_id,
-            quantidade: item.quantidade
-          }));
-          
-          await (supabase as any)
-            .from('equipamentos_kit_itens')
-            .insert(itens);
+          await Promise.all(kitForm.equipamentos.map((item) =>
+            api.post(/sst/epi/kits//itens, {
+              equipamento_id: item.equipamento_id,
+              quantidade: item.quantidade
+            })
+          ));
         }
-        
+
         toast({ title: 'Sucesso', description: 'Kit cadastrado com sucesso.' });
       }
 
@@ -1108,14 +975,9 @@ export function ToriqCorpControleEquipamentos() {
 
   const handleDeleteKit = async (id: string) => {
     if (!confirm('Deseja realmente excluir este kit?')) return;
-    
+
     try {
-      const { error } = await (supabase as any)
-        .from('equipamentos_kits')
-        .delete()
-        .eq('id', id);
-      
-      if (error) throw error;
+      await api.del(/sst/epi/kits/);
       await loadData();
       toast({ title: 'Sucesso', description: 'Kit excluído.' });
     } catch (error) {
@@ -1123,11 +985,10 @@ export function ToriqCorpControleEquipamentos() {
       toast({ title: 'Erro', description: 'Não foi possível excluir o kit.', variant: 'destructive' });
     }
   };
-
   // Movimentações - Kits ou Equipamentos Individuais
   const handleSaveMovimentacao = async () => {
     // Validação comum
-    if (!movimentacaoForm.tipo_servico || !movimentacaoForm.cliente_id || !empresaId) {
+    if (!movimentacaoForm.tipo_servico || !movimentacaoForm.cliente_id) {
       toast({ title: 'Erro', description: 'Preencha todos os campos obrigatórios.', variant: 'destructive' });
       return;
     }
@@ -1138,13 +999,13 @@ export function ToriqCorpControleEquipamentos() {
         toast({ title: 'Erro', description: 'Selecione um Kit.', variant: 'destructive' });
         return;
       }
-      
+
       const kit = kits.find(k => k.id === movimentacaoForm.kit_id);
       if (!kit) {
         toast({ title: 'Erro', description: 'Kit não encontrado.', variant: 'destructive' });
         return;
       }
-      
+
       // Se for movimentação de saída, verificar disponibilidade de todos os equipamentos do kit
       if (movimentacaoForm.tipo === 'saida') {
         const qtdKits = movimentacaoForm.quantidade || 1;
@@ -1153,12 +1014,12 @@ export function ToriqCorpControleEquipamentos() {
           const qtdNecessaria = item.quantidade * qtdKits;
           return disponivel < qtdNecessaria;
         });
-        
+
         if (estoqueInsuficiente) {
-          toast({ 
-            title: 'Estoque Insuficiente', 
-            description: 'Um ou mais equipamentos do kit não possuem estoque disponível para esta movimentação.', 
-            variant: 'destructive' 
+          toast({
+            title: 'Estoque Insuficiente',
+            description: 'Um ou mais equipamentos do kit não possuem estoque disponível para esta movimentação.',
+            variant: 'destructive'
           });
           return;
         }
@@ -1166,33 +1027,25 @@ export function ToriqCorpControleEquipamentos() {
 
       try {
         const now = new Date().toISOString();
-        
-        // Inserir movimentação de kit
-        const { data: newMovimentacao, error } = await (supabase as any)
-          .from('equipamentos_movimentacoes')
-          .insert({
-            empresa_id: empresaId,
-            kit_id: movimentacaoForm.kit_id,
-            tipo: movimentacaoForm.tipo || 'saida',
-            quantidade: movimentacaoForm.quantidade || 1,
-            tipo_servico: movimentacaoForm.tipo_servico,
-            cliente_id: movimentacaoForm.cliente_id,
-            responsavel_retirada: movimentacaoForm.responsavel_retirada,
-            usuario_separou_id: profile?.id,
-            data_saida: movimentacaoForm.tipo === 'saida' ? now : null,
-            data_retorno: movimentacaoForm.tipo === 'entrada' ? now : null,
-            status: movimentacaoForm.status || 'demanda',
-            observacoes: movimentacaoForm.observacoes
-          })
-          .select()
-          .single();
-        
-        if (error) throw error;
+
+        const newMovimentacao: any = await api.post('/sst/epi/movimentacoes', {
+          kit_id: movimentacaoForm.kit_id,
+          tipo: movimentacaoForm.tipo || 'saida',
+          quantidade: movimentacaoForm.quantidade || 1,
+          tipo_servico: movimentacaoForm.tipo_servico,
+          cliente_id: movimentacaoForm.cliente_id,
+          responsavel_retirada: movimentacaoForm.responsavel_retirada,
+          usuario_separou_id: profile?.id,
+          data_saida: movimentacaoForm.tipo === 'saida' ? now : null,
+          data_retorno: movimentacaoForm.tipo === 'entrada' ? now : null,
+          status: movimentacaoForm.status || 'demanda',
+          observacoes: movimentacaoForm.observacoes
+        });
 
         await loadData();
-        toast({ 
-          title: 'Sucesso', 
-          description: `Movimentação ${newMovimentacao?.numero_movimentacao || ''} registrada com sucesso!` 
+        toast({
+          title: 'Sucesso',
+          description: Movimentação  registrada com sucesso!
         });
         setShowMovimentacaoDialog(false);
         setMovimentacaoForm({ tipo: 'saida', status: 'demanda' });
@@ -1214,12 +1067,12 @@ export function ToriqCorpControleEquipamentos() {
           const { disponivel } = calcularDisponibilidade(item.equipamento_id);
           return disponivel < item.quantidade;
         });
-        
+
         if (estoqueInsuficiente) {
-          toast({ 
-            title: 'Estoque Insuficiente', 
-            description: 'Um ou mais equipamentos não possuem estoque disponível.', 
-            variant: 'destructive' 
+          toast({
+            title: 'Estoque Insuficiente',
+            description: 'Um ou mais equipamentos não possuem estoque disponível.',
+            variant: 'destructive'
           });
           return;
         }
@@ -1227,36 +1080,28 @@ export function ToriqCorpControleEquipamentos() {
 
       try {
         const now = new Date().toISOString();
-        
+
         // Calcular quantidade total de itens
         const qtdTotal = equipamentosMovimentacao.reduce((acc, item) => acc + item.quantidade, 0);
-        
-        // Criar UMA única movimentação com a lista de equipamentos em JSON
-        const { data: newMovimentacao, error } = await (supabase as any)
-          .from('equipamentos_movimentacoes')
-          .insert({
-            empresa_id: empresaId,
-            equipamentos_lista: equipamentosMovimentacao,
-            tipo: movimentacaoForm.tipo || 'saida',
-            quantidade: qtdTotal,
-            tipo_servico: movimentacaoForm.tipo_servico,
-            cliente_id: movimentacaoForm.cliente_id,
-            responsavel_retirada: movimentacaoForm.responsavel_retirada,
-            usuario_separou_id: profile?.id,
-            data_saida: movimentacaoForm.tipo === 'saida' ? now : null,
-            data_retorno: movimentacaoForm.tipo === 'entrada' ? now : null,
-            status: movimentacaoForm.status || 'demanda',
-            observacoes: movimentacaoForm.observacoes
-          })
-          .select()
-          .single();
-        
-        if (error) throw error;
+
+        const newMovimentacao: any = await api.post('/sst/epi/movimentacoes', {
+          equipamentos_lista: equipamentosMovimentacao,
+          tipo: movimentacaoForm.tipo || 'saida',
+          quantidade: qtdTotal,
+          tipo_servico: movimentacaoForm.tipo_servico,
+          cliente_id: movimentacaoForm.cliente_id,
+          responsavel_retirada: movimentacaoForm.responsavel_retirada,
+          usuario_separou_id: profile?.id,
+          data_saida: movimentacaoForm.tipo === 'saida' ? now : null,
+          data_retorno: movimentacaoForm.tipo === 'entrada' ? now : null,
+          status: movimentacaoForm.status || 'demanda',
+          observacoes: movimentacaoForm.observacoes
+        });
 
         await loadData();
-        toast({ 
-          title: 'Sucesso', 
-          description: `Movimentação ${newMovimentacao?.numero_movimentacao || ''} registrada com ${equipamentosMovimentacao.length} equipamento(s)!` 
+        toast({
+          title: 'Sucesso',
+          description: Movimentação  registrada com  equipamento(s)!
         });
         setShowMovimentacaoDialog(false);
         setMovimentacaoForm({ tipo: 'saida', status: 'demanda' });
@@ -1268,7 +1113,6 @@ export function ToriqCorpControleEquipamentos() {
       }
     }
   };
-
   // Função para calcular quantidade disponível de um equipamento
   // Disponível = Total - Em Uso (movimentações ativas, não devolvidas)
   const calcularDisponibilidade = (equipamentoId: string): { total: number; emUso: number; disponivel: number } => {
@@ -1920,11 +1764,7 @@ export function ToriqCorpControleEquipamentos() {
                             m.id === draggedCard ? { ...m, status: coluna.id as Movimentacao['status'] } : m
                           );
                           setMovimentacoes(updated);
-                          // Atualizar no Supabase
-                          await (supabase as any)
-                            .from('equipamentos_movimentacoes')
-                            .update({ status: coluna.id })
-                            .eq('id', draggedCard);
+                          await api.put(`/sst/epi/movimentacoes/${draggedCard}`, { status: coluna.id }).catch(() => null);
                           setDraggedCard(null);
                           toast({ title: 'Card movido para ' + coluna.nome });
                         }
@@ -2065,29 +1905,25 @@ export function ToriqCorpControleEquipamentos() {
                                       e.stopPropagation();
                                       if (confirm('Deseja excluir esta movimentação?')) {
                                         try {
-                                          // Se foi saída, devolver estoque no Supabase
+                                          // Se foi saída, devolver estoque (atualizar equipamentos via API)
                                           if (mov.tipo === 'saida' && kit) {
                                             const qtdKits = mov.quantidade || 1;
-                                            for (const itemKit of kit.equipamentos) {
-                                              const equip = equipamentos.find(eq => eq.id === itemKit.equipamento_id);
-                                              if (equip) {
-                                                await (supabase as any)
-                                                  .from('equipamentos_sst')
-                                                  .update({ 
+                                            await Promise.all(
+                                              kit.equipamentos.map(async (itemKit) => {
+                                                const equip = equipamentos.find(eq => eq.id === itemKit.equipamento_id);
+                                                if (equip) {
+                                                  await api.put(`/sst/epi/equipamentos/${itemKit.equipamento_id}`, {
                                                     quantidade: (equip.quantidade || 0) + (itemKit.quantidade * qtdKits),
                                                     status: 'disponivel'
-                                                  })
-                                                  .eq('id', itemKit.equipamento_id);
-                                              }
-                                            }
+                                                  }).catch(() => null);
+                                                }
+                                              })
+                                            );
                                           }
-                                          
-                                          // Excluir movimentação no Supabase
-                                          await (supabase as any)
-                                            .from('equipamentos_movimentacoes')
-                                            .delete()
-                                            .eq('id', mov.id);
-                                          
+
+                                          // Excluir movimentação
+                                          await api.del(`/sst/epi/movimentacoes/${mov.id}`);
+
                                           await loadData();
                                           toast({ title: 'Movimentação excluída' });
                                         } catch (error) {
@@ -3269,10 +3105,7 @@ export function ToriqCorpControleEquipamentos() {
                           m.id === selectedMovimentacao.id ? { ...m, status: col.id as Movimentacao['status'] } : m
                         );
                         setMovimentacoes(updated);
-                        await (supabase as any)
-                          .from('equipamentos_movimentacoes')
-                          .update({ status: col.id })
-                          .eq('id', selectedMovimentacao.id);
+                        await api.put(`/sst/epi/movimentacoes/${selectedMovimentacao.id}`, { status: col.id }).catch(() => null);
                         setSelectedMovimentacao({ ...selectedMovimentacao, status: col.id as Movimentacao['status'] });
                         toast({ title: 'Status atualizado para ' + col.nome });
                       }}
@@ -3966,10 +3799,7 @@ export function ToriqCorpControleEquipamentos() {
                         onClick={async (e) => {
                           e.stopPropagation();
                           try {
-                            await (supabase as any)
-                              .from('equipamentos_modelos_atividade')
-                              .delete()
-                              .eq('id', modelo.id);
+                            await api.del(`/sst/epi/modelos-atividade/${modelo.id}`);
                             const updated = modelosAtividade.filter(m => m.id !== modelo.id);
                             setModelosAtividade(updated);
                             toast({ title: 'Modelo excluído' });
@@ -4040,26 +3870,21 @@ export function ToriqCorpControleEquipamentos() {
                     itens: tipoAtividade === 'checklist' ? novoModelo.itens : undefined
                   };
                   
-                  // Salvar no Supabase
-                  (supabase as any)
-                    .from('equipamentos_modelos_atividade')
-                    .insert({
-                      empresa_id: empresaId,
-                      tipo: modelo.tipo,
-                      nome: modelo.nome,
-                      descricao: modelo.descricao,
-                      itens: modelo.itens
-                    })
-                    .then(() => {
-                      const updated = [...modelosAtividade, modelo];
-                      setModelosAtividade(updated);
-                      setNovoModelo({ nome: '', descricao: '', itens: [] });
-                      toast({ title: 'Modelo criado com sucesso!' });
-                    })
-                    .catch((error: any) => {
-                      console.error('Erro ao criar modelo:', error);
-                      toast({ title: 'Erro', description: 'Não foi possível criar o modelo.', variant: 'destructive' });
-                    });
+                  // Salvar via API REST
+                  api.post('/sst/epi/modelos-atividade', {
+                    tipo: modelo.tipo,
+                    nome: modelo.nome,
+                    descricao: modelo.descricao,
+                    itens: modelo.itens
+                  }).then((saved: any) => {
+                    const updated = [...modelosAtividade, { ...modelo, id: saved?.id || modelo.id }];
+                    setModelosAtividade(updated);
+                    setNovoModelo({ nome: '', descricao: '', itens: [] });
+                    toast({ title: 'Modelo criado com sucesso!' });
+                  }).catch((error: any) => {
+                    console.error('Erro ao criar modelo:', error);
+                    toast({ title: 'Erro', description: 'Não foi possível criar o modelo.', variant: 'destructive' });
+                  });
                 }}
               >
                 <Plus className="h-4 w-4 mr-2" />

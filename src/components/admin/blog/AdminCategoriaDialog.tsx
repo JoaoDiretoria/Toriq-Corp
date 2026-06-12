@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import {
   Dialog,
   DialogContent,
@@ -83,29 +83,20 @@ export function AdminCategoriaDialog({ open, onOpenChange, categorias, onRefresh
       const slug = generateSlug(formData.nome);
       
       if (editingId) {
-        const { error } = await (supabase as any)
-          .from('blog_categorias')
-          .update({
-            nome: formData.nome,
-            slug,
-            descricao: formData.descricao || null,
-            cor: formData.cor,
-          })
-          .eq('id', editingId);
-
-        if (error) throw error;
+        await api.put<any>(`/blog/categorias/${editingId}`, {
+          nome: formData.nome,
+          slug,
+          descricao: formData.descricao || null,
+          cor: formData.cor,
+        });
         toast.success('Categoria atualizada com sucesso');
       } else {
-        const { error } = await (supabase as any)
-          .from('blog_categorias')
-          .insert({
-            nome: formData.nome,
-            slug,
-            descricao: formData.descricao || null,
-            cor: formData.cor,
-          });
-
-        if (error) throw error;
+        await api.post<any>('/blog/categorias', {
+          nome: formData.nome,
+          slug,
+          descricao: formData.descricao || null,
+          cor: formData.cor,
+        });
         toast.success('Categoria criada com sucesso');
       }
 
@@ -113,7 +104,7 @@ export function AdminCategoriaDialog({ open, onOpenChange, categorias, onRefresh
       onRefresh();
     } catch (error: any) {
       console.error('Erro ao salvar categoria:', error);
-      if (error.code === '23505') {
+      if (error?.status === 409) {
         toast.error('Já existe uma categoria com este nome');
       } else {
         toast.error('Erro ao salvar categoria');
@@ -127,12 +118,7 @@ export function AdminCategoriaDialog({ open, onOpenChange, categorias, onRefresh
     if (!confirm('Tem certeza que deseja excluir esta categoria?')) return;
 
     try {
-      const { error } = await (supabase as any)
-        .from('blog_categorias')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await api.del<any>(`/blog/categorias/${id}`);
       toast.success('Categoria excluída com sucesso');
       onRefresh();
     } catch (error) {

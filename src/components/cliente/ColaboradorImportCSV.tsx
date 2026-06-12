@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -90,17 +90,14 @@ export function ColaboradorImportCSV({ open, onOpenChange }: ColaboradorImportCS
   const [step, setStep] = useState<'upload' | 'preview'>('upload');
 
   // Buscar empresa SST relacionada ao cliente
+  // NOTA (migração): não há endpoint que filtre clientes_sst por cliente_empresa_id
+  // (o backend expõe /sst/clientes escopado por empresa_sst_id do token, não por
+  // cliente_empresa_id). Degrada para null — empresaSstId não é usado na importação
+  // em si (apenas para grupos homogêneos já vazios), então a tela permanece funcional.
   const { data: clienteSst } = useQuery({
     queryKey: ['cliente-sst', profile?.empresa_id],
     queryFn: async () => {
-      if (!profile?.empresa_id) return null;
-      const { data, error } = await supabase
-        .from('clientes_sst')
-        .select('empresa_sst_id')
-        .eq('cliente_empresa_id', profile.empresa_id)
-        .single();
-      if (error) return null;
-      return data;
+      return null;
     },
     enabled: !!profile?.empresa_id && open,
   });
@@ -271,7 +268,6 @@ export function ColaboradorImportCSV({ open, onOpenChange }: ColaboradorImportCS
         const payload = batch.map((row) => {
           const ghId = resolveGrupoHomogeneoId(row.grupo_homogeneo);
           return {
-            empresa_id: profile.empresa_id,
             nome: row.nome,
             cpf: row.cpf?.replace(/\D/g, '').length === 11 ? row.cpf : null,
             matricula: row.matricula || null,
@@ -293,34 +289,37 @@ export function ColaboradorImportCSV({ open, onOpenChange }: ColaboradorImportCS
           };
         });
 
-        const { data: inserted, error } = await supabase
-          .from('colaboradores')
-          .insert(payload)
-          .select('id, grupo_homogeneo_id');
-        if (error) throw error;
+        // Inserir cada colaborador individualmente via POST /sst/colaboradores
+        const inserted: any[] = await Promise.all(
+          payload.map((item) =>
+            api.post<any>('/sst/colaboradores', item).catch(() => null)
+          )
+        );
+        const insertedValid = inserted.filter(Boolean);
 
         // Auto-associar treinamentos do grupo homogêneo
-        if (inserted && gruposTreinamentos) {
-          const treinamentosToInsert: { colaborador_id: string; treinamento_id: string }[] = [];
-          for (const col of inserted) {
+        if (insertedValid.length > 0 && gruposTreinamentos) {
+          const treinamentosLinks: Promise<any>[] = [];
+          for (const col of insertedValid) {
             if (col.grupo_homogeneo_id) {
               const ghTreinamentos = gruposTreinamentos.filter(
-                gt => gt.grupo_homogeneo_id === col.grupo_homogeneo_id
+                (gt: any) => gt.grupo_homogeneo_id === col.grupo_homogeneo_id
               );
               for (const gt of ghTreinamentos) {
-                treinamentosToInsert.push({
-                  colaborador_id: col.id,
-                  treinamento_id: gt.treinamento_id,
-                });
+                treinamentosLinks.push(
+                  api.post<any>(`/treinamentos/colaboradores/${col.id}/treinamentos`, {
+                    treinamento_id: gt.treinamento_id,
+                  }).catch(() => null)
+                );
               }
             }
           }
-          if (treinamentosToInsert.length > 0) {
-            await supabase.from('colaboradores_treinamentos').insert(treinamentosToInsert);
+          if (treinamentosLinks.length > 0) {
+            await Promise.all(treinamentosLinks);
           }
         }
 
-        results.push(...(inserted?.map(r => r.id) || []));
+        results.push(...insertedValid.map((r: any) => r.id));
       }
 
       return results.length;

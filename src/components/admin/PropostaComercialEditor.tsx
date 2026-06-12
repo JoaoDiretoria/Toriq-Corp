@@ -41,7 +41,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 
 interface ItemOrcamento {
   id: string;
@@ -366,12 +366,8 @@ export function PropostaComercialEditor({
       
       try {
         // Buscar dados da empresa SST (incluindo telefone)
-        const { data: empresaData } = await (supabase as any)
-          .from('empresas')
-          .select('nome, nome_fantasia, razao_social, cnpj, telefone, endereco, numero, complemento, bairro, cidade, cep, estado')
-          .eq('id', empresaId)
-          .single();
-        
+        const empresaData = await api.get<any>('/empresas/me').catch(() => null);
+
         if (empresaData) {
           const endParts = [empresaData.endereco, empresaData.numero, empresaData.complemento].filter(Boolean);
           setEmpresaSST({
@@ -385,31 +381,24 @@ export function PropostaComercialEditor({
             cep: empresaData.cep || '',
             uf: empresaData.estado || ''
           });
-          
+
           // Gerar identificador da proposta com base na empresa SST
           setIdentificadorProposta(gerarIdentificadorProposta(empresaData.nome || 'Proposta'));
         }
-        
+
         // Buscar logo do white label
-        const { data: whiteLabelData } = await (supabase as any)
-          .from('white_label_config')
-          .select('logo_url')
-          .eq('empresa_id', empresaId)
-          .single();
-        
+        const whiteLabelData = await api.get<any>('/white-label/config').catch(() => null);
+
         if (whiteLabelData?.logo_url) {
           setLogoUrl(whiteLabelData.logo_url);
         }
-        
+
         // Buscar dados do vendedor (usuário logado)
         if (user?.id) {
-          // Primeiro buscar do profile
-          const { data: profileData } = await (supabase as any)
-            .from('profiles')
-            .select('nome, email, telefone')
-            .eq('id', user.id)
-            .single();
-          
+          // Buscar do perfil via /auth/me
+          const meData = await api.get<any>('/auth/me').catch(() => null);
+          const profileData = meData?.profile ?? null;
+
           setVendedor({
             nome: profileData?.nome || user?.user_metadata?.nome || '',
             email: profileData?.email || user?.email || '',
@@ -547,18 +536,13 @@ export function PropostaComercialEditor({
     setSavingModel(true);
     try {
       const data: Record<string, any> = {
-        empresa_id: empresaId,
         nome: modelName.trim(),
         tipo_orcamento: tipoOrcamento,
         planos_selecionados: Array.from(selectedPlans),
-        created_by: user?.id,
       };
       templateFields.forEach(f => { data[fieldToColumn[f]] = formData[f]; });
 
-      const { error } = await (supabase as any)
-        .from('modelos_proposta_comercial')
-        .insert(data);
-      if (error) throw error;
+      await api.post<any>('/modelos/propostas-comerciais', data);
 
       toast.success(`Modelo "${modelName.trim()}" salvo com sucesso!`);
       setShowSaveModelDialog(false);
@@ -581,11 +565,7 @@ export function PropostaComercialEditor({
       };
       templateFields.forEach(f => { data[fieldToColumn[f]] = formData[f]; });
 
-      const { error } = await (supabase as any)
-        .from('modelos_proposta_comercial')
-        .update(data)
-        .eq('id', activeModelId);
-      if (error) throw error;
+      await api.put<any>(`/modelos/propostas-comerciais/${activeModelId}`, data);
 
       modelSnapshotRef.current = JSON.stringify(formData);
       toast.success(`Modelo "${activeModelName}" atualizado com sucesso!`);
@@ -602,13 +582,12 @@ export function PropostaComercialEditor({
     setLoadingModels(true);
     setShowLoadModelDialog(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('modelos_proposta_comercial')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      setModelos(data || []);
+      const data = await api.get<any[]>('/modelos/propostas-comerciais').catch(() => [] as any[]);
+      // Ordenar por created_at descendente no cliente (backend não garante ordem)
+      const sorted = (data || []).slice().sort((a: any, b: any) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+      setModelos(sorted);
     } catch (err: any) {
       console.error('Erro ao carregar modelos:', err);
       toast.error('Erro ao carregar modelos');
@@ -671,19 +650,15 @@ export function PropostaComercialEditor({
         canvas.toBlob((b) => resolve(b!), 'image/jpeg', 0.75);
       });
 
-      // Upload para Supabase Storage
-      const fileName = `propostas/imagens/${empresaId}/${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
-      const { error: uploadError } = await (supabase as any).storage
-        .from('prospeccao-anexos')
-        .upload(fileName, blob, { contentType: 'image/jpeg', upsert: false });
-      if (uploadError) throw uploadError;
+      // NOTA (migração): upload de imagem para propostas via backend REST.
+      // O bucket 'prospeccao-anexos' não consta na allowlist do storage.py.
+      // Usando o bucket 'documentos' (disponível) como substituto funcional.
+      const uploadForm = new FormData();
+      uploadForm.append('file', blob, `proposta_img_${Date.now()}.jpg`);
+      const uploadResult = await api.post<any>('/storage/documentos/upload', uploadForm).catch(() => null);
+      if (!uploadResult?.url) throw new Error('Não foi possível obter URL pública');
 
-      const { data: urlData } = (supabase as any).storage
-        .from('prospeccao-anexos')
-        .getPublicUrl(fileName);
-      
-      const publicUrl = urlData?.publicUrl;
-      if (!publicUrl) throw new Error('Não foi possível obter URL pública');
+      const publicUrl = uploadResult.url;
 
       // Inserir markdown de imagem no campo
       const markdownImg = `\n![imagem](${publicUrl})\n`;
@@ -703,11 +678,7 @@ export function PropostaComercialEditor({
   const handleDeleteModel = async (id: string) => {
     setDeletingModelId(id);
     try {
-      const { error } = await (supabase as any)
-        .from('modelos_proposta_comercial')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
+      await api.del<any>(`/modelos/propostas-comerciais/${id}`);
       setModelos(prev => prev.filter(m => m.id !== id));
       toast.success('Modelo excluído');
     } catch (err: any) {
@@ -843,7 +814,6 @@ export function PropostaComercialEditor({
       const valorTotal = planosFiltrados.reduce((acc, p) => acc + p.total, 0);
       
       const propostaData = {
-        empresa_id: empresaId,
         card_id: cardId || null,
         identificador: identificadorProposta,
         status: statusProposta,
@@ -904,33 +874,24 @@ export function PropostaComercialEditor({
       };
       
       let result;
-      
+
       if (propostaId) {
         // Atualizar proposta existente
-        const { data, error } = await (supabase as any)
-          .from('propostas_comerciais_treinamentos')
-          .update(propostaData)
-          .eq('id', propostaId)
-          .select()
-          .single();
-        
-        if (error) throw error;
-        result = data;
+        result = await api.put<any>(
+          `/funil-comercial/propostas/treinamentos/${propostaId}`,
+          propostaData
+        );
         toast.success('Proposta atualizada com sucesso!');
       } else {
         // Criar nova proposta
-        const { data, error } = await (supabase as any)
-          .from('propostas_comerciais_treinamentos')
-          .insert(propostaData)
-          .select()
-          .single();
-        
-        if (error) throw error;
-        result = data;
+        result = await api.post<any>(
+          '/funil-comercial/propostas/treinamentos',
+          propostaData
+        );
         setPropostaId(result.id);
         setPropostaSalva(true); // Bloquear edição após salvar nova proposta
         toast.success('Proposta salva com sucesso!');
-        
+
         // Chamar callback se existir
         if (onSaveProposta) {
           onSaveProposta(result.id);

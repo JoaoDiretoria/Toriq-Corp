@@ -38,7 +38,7 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { toast } from 'sonner';
 import { useLocation } from 'react-router-dom';
 import { MODULOS_CONFIG, getTodasTelasPorModulo } from '@/config/modulosTelas';
@@ -887,124 +887,60 @@ export function FloatingSupportWidget({ className }: FloatingSupportWidgetProps)
     try {
       // Determinar destino do ticket baseado na role do solicitante
       // admin_vertical -> não faz sentido abrir ticket (é quem recebe)
-      // empresa_sst -> vai para admin global (empresa_destino_id = NULL)
-      // instrutor -> vai para empresa SST que criou o instrutor (tabela instrutores)
-      // cliente_final -> vai para empresa SST que criou o cliente (profile.empresa_id aponta para empresa cliente, precisa buscar empresa_sst_id)
-      // empresa_parceira -> vai para empresa SST que criou a parceira
-      let empresaDestinoId: string | null = null;
-      
-      if (profile.role === 'cliente_torq') {
-        // Empresa SST -> ticket vai para admin global (Toriq)
-        empresaDestinoId = null;
-      } else if (profile.role === 'instrutor') {
-        // Instrutor -> buscar empresa na tabela instrutores e verificar se é SST ou parceira
-        const { data: instrutor } = await (supabase as any)
-          .from('instrutores')
-          .select('empresa_id')
-          .eq('user_id', user.id)
-          .single();
-        
-        if (instrutor?.empresa_id) {
-          // Verificar se a empresa é SST ou parceira
-          const { data: empresa } = await (supabase as any)
-            .from('empresas')
-            .select('tipo')
-            .eq('id', instrutor.empresa_id)
-            .single();
-          
-          if (empresa?.tipo === 'empresa_parceira') {
-            // Se instrutor é de empresa parceira, ticket vai para a parceira
-            empresaDestinoId = instrutor.empresa_id;
-          } else {
-            // Se instrutor é de empresa SST, ticket vai para a SST
-            empresaDestinoId = instrutor.empresa_id;
-          }
-        }
-      } else if (profile.role === 'cliente_final') {
-        // Cliente final -> buscar empresa SST na tabela clientes_sst usando cliente_empresa_id
-        if (profile.empresa_id) {
-          const { data: clienteSst, error: clienteError } = await (supabase as any)
-            .from('clientes_sst')
-            .select('empresa_sst_id')
-            .eq('cliente_empresa_id', profile.empresa_id)
-            .maybeSingle();
-          
-          if (clienteError) {
-            console.error('Erro ao buscar empresa SST do cliente:', clienteError);
-          }
-          
-          empresaDestinoId = clienteSst?.empresa_sst_id || null;
-          console.log('[Ticket] Cliente final - empresa_id:', profile.empresa_id, '-> empresa_sst_id:', empresaDestinoId);
-        }
-      } else if (profile.role === 'empresa_parceira') {
-        // Empresa parceira -> buscar empresa SST na tabela empresas_parceiras usando parceira_empresa_id
-        if (profile.empresa_id) {
-          const { data: parceiraSst } = await (supabase as any)
-            .from('empresas_parceiras')
-            .select('empresa_sst_id')
-            .eq('parceira_empresa_id', profile.empresa_id)
-            .single();
-          empresaDestinoId = parceiraSst?.empresa_sst_id || null;
-        }
-      }
-      
-      // Criar ticket
-      const { data: ticket, error: ticketError } = await (supabase as any)
-        .from('tickets_suporte')
-        .insert({
-          solicitante_id: user.id,
-          solicitante_nome: profile.nome || user.email,
-          solicitante_email: user.email,
-          empresa_solicitante_id: profile.empresa_id,
-          empresa_destino_id: empresaDestinoId,
-          role_solicitante: profile.role,
-          tipo: form.tipo,
-          modulo: detectedLocation.modulo || null,
-          tela: detectedLocation.tela || null,
-          prioridade: form.prioridade,
-          impacto_operacional: form.impacto_operacional,
-          titulo: form.titulo,
-          descricao: form.descricao,
-          tela_origem: location.pathname,
-          url_origem: window.location.href,
-          navegador: navigator.userAgent,
-        })
-        .select()
-        .single();
-      
-      if (ticketError) throw ticketError;
-      
-      // Upload de anexos
+      // cliente_torq -> vai para admin global (empresa_destino_id = NULL)
+      // instrutor / cliente_final / empresa_parceira -> resolução de empresa_destino_id
+      //   não possui endpoint REST equivalente; degradando para null (ticket ainda criado).
+      // NOTA (migração): consultas a instrutores, clientes_sst e empresas_parceiras
+      //   para resolução de empresa_destino_id foram removidas — não há endpoint REST.
+      //   O campo empresa_destino_id fica null para esses roles até que o backend
+      //   implemente a resolução automática por token.
+      const empresaDestinoId: string | null = null;
+
+      // Criar ticket via REST
+      const ticket = await api.post<any>('/suporte/tickets', {
+        empresa_destino_id: empresaDestinoId,
+        role_solicitante: profile.role,
+        tipo: form.tipo,
+        modulo: detectedLocation.modulo || null,
+        tela: detectedLocation.tela || null,
+        prioridade: form.prioridade,
+        impacto_operacional: form.impacto_operacional,
+        titulo: form.titulo,
+        descricao: form.descricao,
+        tela_origem: location.pathname,
+        url_origem: window.location.href,
+        navegador: navigator.userAgent,
+      });
+
+      // Upload de anexos via storage REST
       if (anexos.length > 0 && ticket) {
+        const API_URL: string = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:8000';
         for (const file of anexos) {
           try {
             const compressed = await compressImage(file);
-            const fileName = `${ticket.id}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-            
-            const { data: uploadData, error: uploadError } = await supabase.storage
-              .from('tickets-anexos')
-              .upload(fileName, compressed, {
-                contentType: 'image/jpeg',
-              });
-            
-            if (uploadError) {
-              console.error('Erro ao fazer upload:', uploadError);
+            const uploadForm = new FormData();
+            uploadForm.append('file', new File([compressed], file.name.replace(/[^a-zA-Z0-9.-]/g, '_'), { type: 'image/jpeg' }));
+
+            const uploadRes = await fetch(`${API_URL}/storage/tickets-anexos/upload`, {
+              method: 'POST',
+              credentials: 'include',
+              body: uploadForm,
+            });
+
+            if (!uploadRes.ok) {
+              console.error('Erro ao fazer upload:', await uploadRes.text());
               continue;
             }
-            
-            const { data: { publicUrl } } = supabase.storage
-              .from('tickets-anexos')
-              .getPublicUrl(fileName);
-            
-            await (supabase as any)
-              .from('tickets_suporte_anexos')
-              .insert({
-                ticket_id: ticket.id,
-                nome_arquivo: file.name,
-                url: publicUrl,
-                tamanho_bytes: compressed.size,
-                tipo_mime: 'image/jpeg',
-              });
+
+            const uploadData: any = await uploadRes.json();
+            const publicUrl: string = uploadData.url ?? '';
+
+            await api.post<any>(`/suporte/tickets/${ticket.id}/anexos`, {
+              nome_arquivo: file.name,
+              url: publicUrl,
+              tamanho_bytes: compressed.size,
+              tipo_mime: 'image/jpeg',
+            });
           } catch (err) {
             console.error('Erro ao processar anexo:', err);
           }

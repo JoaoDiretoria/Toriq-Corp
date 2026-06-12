@@ -23,7 +23,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 
 
 // Item do orçamento - apenas custo técnico base (sem deslocamento, encargos ou margem por item)
@@ -297,22 +297,16 @@ export function PropostaComercialServicosSSTEditor({ onClose, dadosOrcamento, cl
     const loadEmpresaData = async () => {
       if (!empresaId) return;
       try {
-        const { data: empresaData } = await (supabase as any).from('empresas').select('nome, razao_social, cnpj, telefone').eq('id', empresaId).single();
+        const empresaData = await api.get<any>('/empresas/me').catch(() => null);
         if (empresaData) {
           setEmpresaSST({ nome: empresaData.nome || '', razaoSocial: empresaData.razao_social || '', cnpj: empresaData.cnpj || '', telefone: empresaData.telefone || '' });
           if (!propostaExistente) setIdentificadorProposta(gerarIdentificadorProposta(empresaData.nome || 'SST'));
+          if (empresaData.logo_url) setLogoUrl(empresaData.logo_url);
         }
-        const { data: whiteLabelData } = await (supabase as any).from('white_label_config').select('logo_url').eq('empresa_id', empresaId).single();
-        if (whiteLabelData?.logo_url) setLogoUrl(whiteLabelData.logo_url);
+        // NOTA (migração): perfil do vendedor não expõe telefone via API;
+        // nome e email vêm do useAuth; telefone fica vazio (degradação graceful).
         if (user?.id) {
-          const { data: profileData } = await (supabase as any).from('profiles').select('nome, email, telefone').eq('id', user.id).single();
-          const profilePhone = profileData?.telefone || '';
-          let phone = profilePhone;
-          if (!phone) {
-            const { data: colaboradorData } = await (supabase as any).from('colaboradores').select('telefone').eq('email', user.email).eq('empresa_id', empresaId).single();
-            phone = colaboradorData?.telefone || '';
-          }
-          setVendedor({ nome: profileData?.nome || user?.user_metadata?.nome || '', email: profileData?.email || user?.email || '', telefone: phone });
+          setVendedor({ nome: user?.user_metadata?.nome || '', email: user?.email || '', telefone: '' });
         }
       } catch (error) { console.error('Erro ao carregar dados da empresa:', error); }
     };
@@ -324,11 +318,8 @@ export function PropostaComercialServicosSSTEditor({ onClose, dadosOrcamento, cl
     const loadProdutos = async () => {
       if (!empresaId) return;
       try {
-        const { data } = await (supabase as any)
-          .from('produtos_servicos')
-          .select('id, norma, categoria:categoria_id(nome), catalogo:treinamento_id(norma)')
-          .eq('empresa_id', empresaId);
-        if (data) {
+        const data = await api.get<any[]>('/produtos/catalogo').catch(() => [] as any[]);
+        if (data && data.length) {
           const map: Record<string, { norma: string | null; categoria: string | null }> = {};
           data.forEach((p: any) => {
             // Format norma as "NR-XX" if it's just a number
@@ -547,7 +538,7 @@ export function PropostaComercialServicosSSTEditor({ onClose, dadosOrcamento, cl
     setSalvandoProposta(true);
     try {
       const propostaData = {
-        empresa_id: empresaId, card_id: cardId || null, identificador: identificadorProposta, status: statusProposta,
+        card_id: cardId || null, identificador: identificadorProposta, status: statusProposta,
         cliente_empresa: formData.clienteEmpresa, cliente_razao_social: formData.clienteRazaoSocial, cliente_cnpj: formData.clienteCnpj,
         cliente_email: formData.clienteEmail, cliente_telefone: formData.clienteTelefone,
         cliente_endereco: formData.clienteEndereco, cliente_bairro: formData.clienteBairro, cliente_cidade: formData.clienteCidade,
@@ -557,16 +548,14 @@ export function PropostaComercialServicosSSTEditor({ onClose, dadosOrcamento, cl
         titulo_diferenciais: formData.tituloDiferenciais, titulo_investimento: formData.tituloInvestimento, titulo_pagamento: formData.tituloPagamento,
         titulo_infos: formData.tituloInfos, titulo_passos: formData.tituloPassos, descricao: formData.descricao, servicos: formData.servicos, publico: formData.publico,
         dores: formData.dores, solucoes: formData.solucoes, diferenciais: formData.diferenciais, pagamento: formData.pagamento, infos: formData.infos, passos: formData.passos,
-        dados_orcamento: dadosOrcamento || {}, valor_total: totaisOrcamento?.precoTotal || 0, created_by: user?.id, updated_at: new Date().toISOString()
+        dados_orcamento: dadosOrcamento || {}, valor_total: totaisOrcamento?.precoTotal || 0
       };
       if (propostaId) {
-        const { error } = await (supabase as any).from('propostas_comerciais_servicos_sst').update(propostaData).eq('id', propostaId);
-        if (error) throw error;
+        await api.put<any>(`/funil-comercial/propostas/servicos-sst/${propostaId}`, propostaData);
         toast.success('Proposta atualizada com sucesso!');
         onSaveProposta?.(propostaId);
       } else {
-        const { data, error } = await (supabase as any).from('propostas_comerciais_servicos_sst').insert(propostaData).select().single();
-        if (error) throw error;
+        const data = await api.post<any>('/funil-comercial/propostas/servicos-sst', propostaData);
         setPropostaId(data.id);
         toast.success('Proposta salva com sucesso!');
         onSaveProposta?.(data.id);
@@ -587,10 +576,9 @@ export function PropostaComercialServicosSSTEditor({ onClose, dadosOrcamento, cl
     if (!empresaId || !modelName.trim()) { toast.error('Informe um nome para o modelo'); return; }
     setSavingModel(true);
     try {
-      const data: Record<string, any> = { empresa_id: empresaId, nome: modelName.trim(), tipo_orcamento: 'servicos_sst', created_by: user?.id };
+      const data: Record<string, any> = { nome: modelName.trim(), tipo_orcamento: 'servicos_sst' };
       templateFieldsSST.forEach(f => { data[fieldToColumnSST[f]] = formData[f]; });
-      const { error } = await (supabase as any).from('modelos_proposta_comercial').insert(data);
-      if (error) throw error;
+      await api.post<any>('/modelos/propostas-comerciais', data);
       toast.success('Modelo salvo com sucesso!');
       setShowSaveModelDialog(false);
       setModelName('');
@@ -602,9 +590,11 @@ export function PropostaComercialServicosSSTEditor({ onClose, dadosOrcamento, cl
     setShowLoadModelDialog(true);
     setLoadingModelos(true);
     try {
-      const { data, error } = await (supabase as any).from('modelos_proposta_comercial').select('*').eq('empresa_id', empresaId).eq('tipo_orcamento', 'servicos_sst').order('created_at', { ascending: false });
-      if (error) throw error;
-      setModelos(data || []);
+      const data = await api.get<any[]>('/modelos/propostas-comerciais').catch(() => [] as any[]);
+      // filtro cliente-side: backend escopa por empresa_id do token; filtramos tipo_orcamento localmente
+      const filtered = (data || []).filter((m: any) => m.tipo_orcamento === 'servicos_sst')
+        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      setModelos(filtered);
     } catch (error: any) { console.error('Erro ao carregar modelos:', error); toast.error('Erro ao carregar modelos'); } finally { setLoadingModelos(false); }
   };
 
@@ -630,8 +620,7 @@ export function PropostaComercialServicosSSTEditor({ onClose, dadosOrcamento, cl
     try {
       const data: Record<string, any> = {};
       templateFieldsSST.forEach(f => { data[fieldToColumnSST[f]] = formData[f]; });
-      const { error } = await (supabase as any).from('modelos_proposta_comercial').update(data).eq('id', activeModelId);
-      if (error) throw error;
+      await api.put<any>(`/modelos/propostas-comerciais/${activeModelId}`, data);
       modelSnapshotRef.current = JSON.stringify(formData);
       toast.success(`Modelo "${activeModelName}" atualizado com sucesso!`);
     } catch (error: any) { console.error('Erro ao atualizar modelo:', error); toast.error(error.message || 'Erro ao atualizar modelo'); } finally { setUpdatingModel(false); }
@@ -644,8 +633,7 @@ export function PropostaComercialServicosSSTEditor({ onClose, dadosOrcamento, cl
   const handleDeleteModel = async (id: string) => {
     setDeletingModelId(id);
     try {
-      const { error } = await (supabase as any).from('modelos_proposta_comercial').delete().eq('id', id);
-      if (error) throw error;
+      await api.del<any>(`/modelos/propostas-comerciais/${id}`);
       setModelos(prev => prev.filter(m => m.id !== id));
       toast.success('Modelo excluído');
     } catch (error: any) { toast.error('Erro ao excluir modelo'); } finally { setDeletingModelId(null); }

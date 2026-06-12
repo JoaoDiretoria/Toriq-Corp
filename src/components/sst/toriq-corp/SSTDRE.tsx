@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { DollarSign, TrendingUp, TrendingDown, Percent, FileText, BarChart3, PieChart, Printer, Loader2 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaEfetiva } from '@/hooks/useEmpresaMode';
 import { parseISO, startOfMonth, endOfMonth } from 'date-fns';
@@ -111,12 +111,9 @@ export function SSTDRE() {
     try {
       // Carregar colunas de contas a receber para identificar "Recebidos"
       try {
-        const { data: colunasReceberData } = await (supabase as any)
-          .from('contas_receber_colunas')
-          .select('id, nome')
-          .eq('empresa_id', empresaId);
-        
-        const colunaRecebidosFound = colunasReceberData?.find((c: any) => 
+        const colunasReceberData = await api.get<any[]>('/financeiro/contas-receber/colunas').catch(() => [] as any[]);
+
+        const colunaRecebidosFound = colunasReceberData?.find((c: any) =>
           c.nome.toLowerCase().includes('recebido')
         );
         setColunaRecebidos(colunaRecebidosFound?.id || null);
@@ -126,12 +123,9 @@ export function SSTDRE() {
 
       // Carregar colunas de contas a pagar para identificar "Pagos"
       try {
-        const { data: colunasPagarData } = await (supabase as any)
-          .from('contas_pagar_colunas')
-          .select('id, nome')
-          .eq('empresa_id', empresaId);
-        
-        const colunaPagosFound = colunasPagarData?.find((c: any) => 
+        const colunasPagarData = await api.get<any[]>('/financeiro/contas-pagar/colunas').catch(() => [] as any[]);
+
+        const colunaPagosFound = colunasPagarData?.find((c: any) =>
           c.nome.toLowerCase().includes('pago')
         );
         setColunaPagos(colunaPagosFound?.id || null);
@@ -140,23 +134,19 @@ export function SSTDRE() {
       }
 
       // Carregar contas a pagar (mesma query do Fluxo de Caixa)
-      const { data: contasPagarData } = await (supabase as any)
-        .from('contas_pagar')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .eq('arquivado', false);
-      
-      setContasPagar(contasPagarData || []);
+      // Filtro .eq('arquivado', false) reaplicado no cliente pois o backend devolve tudo
+      const contasPagarRaw = await api.get<any[]>('/financeiro/contas-pagar').catch(() => [] as any[]);
+      const contasPagarData = (contasPagarRaw || []).filter((c: any) => c.arquivado === false || c.arquivado == null);
+
+      setContasPagar(contasPagarData);
 
       // Carregar contas a receber (mesma query do Fluxo de Caixa)
+      // Filtro .eq('arquivado', false) reaplicado no cliente pois o backend devolve tudo
       try {
-        const { data: contasReceberData } = await (supabase as any)
-          .from('contas_receber')
-          .select('*')
-          .eq('empresa_id', empresaId)
-          .eq('arquivado', false);
-        
-        setContasReceber(contasReceberData || []);
+        const contasReceberRaw = await api.get<any[]>('/financeiro/contas-receber').catch(() => [] as any[]);
+        const contasReceberData = (contasReceberRaw || []).filter((c: any) => c.arquivado === false || c.arquivado == null);
+
+        setContasReceber(contasReceberData);
       } catch (e) {
         setContasReceber([]);
       }

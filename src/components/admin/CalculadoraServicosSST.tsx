@@ -11,7 +11,7 @@ import { ArrowLeft, Calculator, Save, RotateCcw, AlertCircle, CheckCircle2, Aler
 import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { TreinamentoSelectorModal } from './TreinamentoSelectorModal';
 
 interface ProdutoServico {
@@ -268,22 +268,35 @@ export function CalculadoraServicosSST({ onClose, onSave, empresaInicial, dadosS
     const fetchProdutosServicos = async () => {
       if (!profile?.empresa_id) return;
       try {
-        // Buscar produtos com todos os campos necessários (igual à calculadora de treinamento)
-        const { data, error } = await (supabase as any)
-          .from('produtos_servicos')
-          .select(`
-            id, nome, codigo, preco, descricao, tipo, carga_horaria, ch_formacao, ch_reciclagem, colaboradores_por_turma, norma,
-            classificacao_id, forma_cobranca_id, treinamento_id,
-            categoria:categorias_produtos(id, nome, cor),
-            classificacao:classificacoes_produtos(id, nome),
-            forma_cobranca:formas_cobranca(id, nome),
-            treinamento:catalogo_treinamentos(id, nome, norma, ch_formacao, ch_reciclagem)
-          `)
-          .eq('empresa_id', profile.empresa_id)
-          .eq('ativo', true)
-          .order('nome', { ascending: true });
-        if (error) throw error;
-        setProdutosServicos(data || []);
+        // Buscar produtos via backend REST
+        const raw = await api.get<any[]>('/produtos/catalogo').catch(() => [] as any[]);
+        // Filtrar apenas ativos e ordenar por nome (o endpoint devolve tudo)
+        const data: ProdutoServico[] = (raw || [])
+          .filter((p: any) => p.ativo !== false)
+          .sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'))
+          .map((p: any): ProdutoServico => ({
+            id: p.id,
+            nome: p.nome,
+            codigo: p.codigo ?? null,
+            preco: p.preco != null ? Number(p.preco) : null,
+            descricao: p.descricao ?? null,
+            tipo: p.tipo ?? 'servico',
+            carga_horaria: p.carga_horaria ?? null,
+            ch_formacao: p.ch_formacao ?? null,
+            ch_reciclagem: p.ch_reciclagem ?? null,
+            treinamento_id: p.treinamento_id ?? null,
+            natureza_id: p.natureza_id ?? null,
+            classificacao_id: p.classificacao_id ?? null,
+            forma_cobranca_id: p.forma_cobranca_id ?? null,
+            colaboradores_por_turma: p.colaboradores_por_turma ?? null,
+            norma: p.norma ?? null,
+            // O endpoint retorna campos escalares; monta objetos de relação sinteticamente
+            categoria: p.categoria_plano ? { id: p.categoria_id ?? '', nome: p.categoria_plano, cor: '' } : null,
+            classificacao: p.classificacao ? { id: p.classificacao_id ?? '', nome: p.classificacao } : null,
+            forma_cobranca: p.forma_cobranca ? { id: p.forma_cobranca_id ?? '', nome: p.forma_cobranca } : null,
+            treinamento: null,
+          }));
+        setProdutosServicos(data);
       } catch (err) { console.error('Erro ao buscar produtos/servicos:', err); } finally { setLoadingProdutos(false); }
     };
     fetchProdutosServicos();

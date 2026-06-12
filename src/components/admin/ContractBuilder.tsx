@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -643,18 +643,17 @@ export function ContractBuilder({ isOpen, onClose, empresaId, cardData }: Contra
   const [editingClausula, setEditingClausula] = useState<string | null>(null);
   const [servicos, setServicos] = useState<{ id: string; nome: string; descricao: string | null }[]>([]);
 
-  // Carregar serviços do Supabase
+  // Carregar serviços do backend
   useEffect(() => {
     if (!isOpen) return;
     const fetchServicos = async () => {
       try {
-        const { data, error } = await (supabase as any)
-          .from('servicos')
-          .select('id, nome, descricao')
-          .eq('ativo', true)
-          .order('ordem', { ascending: true });
-        if (error) throw error;
-        setServicos(data || []);
+        const data = await api.get<any[]>('/produtos/servicos').catch(() => [] as any[]);
+        // Filtro e ordenação client-side (o endpoint retorna todos)
+        const ativos = (data || [])
+          .filter((s: any) => s.ativo !== false)
+          .sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
+        setServicos(ativos);
       } catch (e) {
         console.error('Erro ao carregar serviços:', e);
       }
@@ -772,15 +771,11 @@ export function ContractBuilder({ isOpen, onClose, empresaId, cardData }: Contra
       // Buscar dados da empresa lead se existir
       if (cardData.empresa_lead_id) {
         try {
-          const { data: empresaData } = await (supabase as any)
-            .from('empresas')
-            .select('*')
-            .eq('id', cardData.empresa_lead_id)
-            .single();
+          const empresaData = await api.get<any>(`/empresas/${cardData.empresa_lead_id}`).catch(() => null);
 
           if (empresaData) {
             setEmpresaLead(empresaData as EmpresaLead);
-            
+
             // Atualizar dados do cliente com informações da empresa
             contractUpdate.clientName = empresaData.nome || contractUpdate.clientName;
             contractUpdate.clientCnpj = empresaData.cnpj || '';
@@ -789,7 +784,7 @@ export function ContractBuilder({ isOpen, onClose, empresaId, cardData }: Contra
             contractUpdate.clientCity = empresaData.cidade || '';
             contractUpdate.clientState = empresaData.estado || '';
             contractUpdate.clientCep = empresaData.cep || '';
-            
+
             // Montar endereço completo
             const enderecoParts = [
               empresaData.endereco,
@@ -953,7 +948,7 @@ export function ContractBuilder({ isOpen, onClose, empresaId, cardData }: Contra
     toast({ title: 'Contrato assinado com sucesso!' });
   }, [contract.signatureName, contract.signatureCpf, contract.signatureAccepted, toast]);
 
-  // Salvar contrato no Supabase
+  // Salvar contrato no backend
   const handleSave = useCallback(async () => {
     if (!empresaId) {
       toast({ title: 'Erro', description: 'Empresa não identificada. Não é possível salvar.', variant: 'destructive' });
@@ -963,19 +958,18 @@ export function ContractBuilder({ isOpen, onClose, empresaId, cardData }: Contra
     setSaving(true);
     try {
       // Mapear forma de pagamento para o formato do banco
-      const formaPagamento = contract.paymentSelected === 'cash' ? 'avista' : 
+      const formaPagamento = contract.paymentSelected === 'cash' ? 'avista' :
                              contract.paymentSelected === '3x' ? '3x' : 'leasing';
-      
+
       // Mapear status para o formato do banco
       const statusMap: Record<string, string> = {
         'Rascunho': 'rascunho',
-        'Enviado': 'enviado', 
+        'Enviado': 'enviado',
         'Assinado': 'assinado',
         'Cancelado': 'cancelado',
       };
 
       const payload = {
-        empresa_id: empresaId,
         numero: contract.contractId,
         tipo: 'cliente',
         razao_social: contract.clientName || null,
@@ -1013,16 +1007,26 @@ export function ContractBuilder({ isOpen, onClose, empresaId, cardData }: Contra
 
       if (contratoId) {
         // Atualizar contrato existente
-        const { error } = await (supabase as any).from('contratos').update(payload).eq('id', contratoId);
-        if (error) throw error;
+        await api.put<any>(`/contratos/${contratoId}`, payload);
 
-        // Limpar cláusulas e módulos antigos
-        await (supabase as any).from('contrato_clausulas').delete().eq('contrato_id', contratoId);
-        await (supabase as any).from('contrato_modulos').delete().eq('contrato_id', contratoId);
+        // Limpar cláusulas antigas: listar e deletar individualmente
+        const oldClausulas = await api.get<any[]>(`/contratos/${contratoId}/clausulas`).catch(() => [] as any[]);
+        await Promise.all(
+          (oldClausulas || []).map((c: any) =>
+            api.del(`/contratos/${contratoId}/clausulas/${c.id}`).catch(() => null)
+          )
+        );
+
+        // Limpar módulos antigos: listar e deletar individualmente
+        const oldModulos = await api.get<any[]>(`/contratos/${contratoId}/modulos`).catch(() => [] as any[]);
+        await Promise.all(
+          (oldModulos || []).map((mod: any) =>
+            api.del(`/contratos/${contratoId}/modulos/${mod.id}`).catch(() => null)
+          )
+        );
       } else {
         // Inserir novo contrato
-        const { data, error } = await (supabase as any).from('contratos').insert(payload).select().single();
-        if (error) throw error;
+        const data = await api.post<any>('/contratos', payload);
         contratoId = data.id;
         setSavedContractId(data.id);
       }
@@ -1030,30 +1034,32 @@ export function ContractBuilder({ isOpen, onClose, empresaId, cardData }: Contra
       // Salvar cláusulas
       if (clausulas.length > 0) {
         const sortedClausulas = [...clausulas].sort((a, b) => a.ordem - b.ordem);
-        const clausulasPayload = sortedClausulas.map((c, i) => ({
-          contrato_id: contratoId,
-          numero: parseInt(c.numero) || (i + 1),
-          titulo: c.titulo,
-          conteudo: c.conteudo,
-          ordem: i,
-        }));
-        const { error: clausulasError } = await (supabase as any).from('contrato_clausulas').insert(clausulasPayload);
-        if (clausulasError) throw clausulasError;
+        await Promise.all(
+          sortedClausulas.map((c, i) =>
+            api.post(`/contratos/${contratoId}/clausulas`, {
+              numero: parseInt(c.numero) || (i + 1),
+              titulo: c.titulo,
+              conteudo: c.conteudo,
+              ordem: i,
+            }).catch(() => null)
+          )
+        );
       }
 
       // Salvar módulos
       if (contract.modules.length > 0) {
-        const modulosPayload = contract.modules.map((m, i) => ({
-          contrato_id: contratoId,
-          nome: m.name,
-          versao: m.version || null,
-          tipo_cliente: m.mode || null,
-          descricao: m.purpose || null,
-          itens: m.features ? m.features.split('\n').filter(Boolean) : [],
-          ordem: i,
-        }));
-        const { error: modulosError } = await (supabase as any).from('contrato_modulos').insert(modulosPayload);
-        if (modulosError) throw modulosError;
+        await Promise.all(
+          contract.modules.map((mod, i) =>
+            api.post(`/contratos/${contratoId}/modulos`, {
+              nome: mod.name,
+              versao: mod.version || null,
+              tipo_cliente: mod.mode || null,
+              descricao: mod.purpose || null,
+              itens: mod.features ? mod.features.split('\n').filter(Boolean) : [],
+              ordem: i,
+            }).catch(() => null)
+          )
+        );
       }
 
       toast({ title: 'Contrato salvo com sucesso!', description: `Nº ${contract.contractId}` });

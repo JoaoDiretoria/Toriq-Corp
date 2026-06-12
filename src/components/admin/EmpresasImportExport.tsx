@@ -20,7 +20,8 @@ import { Label } from '@/components/ui/label';
 import { Download, Upload, FileSpreadsheet, Loader2, AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, X, Trash2, PlayCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
+import { useAuth } from '@/hooks/useAuth';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -92,7 +93,8 @@ type ImportStep = 'upload' | 'enriching' | 'review' | 'importing' | 'complete';
 
 export function EmpresasImportExport({ empresas, onImportSuccess }: EmpresasImportExportProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+  const { profile } = useAuth();
+
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<'csv' | 'xlsx'>('xlsx');
@@ -631,15 +633,11 @@ export function EmpresasImportExport({ empresas, onImportSuccess }: EmpresasImpo
           instagram: row.data['Instagram']?.toString().trim() || null,
         };
 
-        const { data: empresaInserida, error } = await supabase
-          .from('empresas')
-          .insert(empresaData as any)
-          .select('id')
-          .single();
+        // NOTA (migracao): POST /empresas nao existe no backend novo; degrade graciosamente
+        const empresaInserida = await api.post<{ id: string }>('/empresas', empresaData as any)
+          .catch((err: any) => { throw new Error(err?.detail || err?.message || 'Endpoint de criação de empresa indisponível'); });
 
-        if (error) throw error;
-
-        // Inserir contato se houver dados
+        // NOTA (migracao): POST /empresa_contatos nao existe no backend novo; degrade graciosamente
         const contatoNome = row.data['Contato - Nome']?.toString().trim();
         if (contatoNome && empresaInserida?.id) {
           const contatoData = {
@@ -652,9 +650,9 @@ export function EmpresasImportExport({ empresas, onImportSuccess }: EmpresasImpo
             principal: true,
           };
 
-          await (supabase as any)
-            .from('empresa_contatos')
-            .insert(contatoData);
+          await api.post('/empresa-contatos', contatoData as any).catch(() => {
+            // NOTA (migracao): endpoint empresa_contatos nao existe — contato ignorado
+          });
         }
 
         results.success++;
@@ -1183,25 +1181,12 @@ export function EmpresasImportExport({ empresas, onImportSuccess }: EmpresasImpo
                         const validRows = validatedData.filter(r => r.errors.length === 0);
                         const dataToImport = validRows.map(r => r.data);
                         
-                        // Pegar empresa_id do primeiro registro ou usar um ID genérico
-                        const { data: { user } } = await supabase.auth.getUser();
-                        if (!user) {
-                          toast.error('Usuário não autenticado');
-                          return;
-                        }
-                        
-                        // Buscar empresa do usuário
-                        const { data: profile } = await supabase
-                          .from('profiles')
-                          .select('empresa_id')
-                          .eq('id', user.id)
-                          .single();
-                        
+                        // Pegar empresa_id do perfil autenticado (via useAuth — migrado do supabase.auth + profiles)
                         if (!profile?.empresa_id) {
                           toast.error('Empresa não encontrada');
                           return;
                         }
-                        
+
                         await startImport(profile.empresa_id, 'empresas', dataToImport);
                         setImportDialogOpen(false);
                         resetImportState();

@@ -17,7 +17,7 @@ import { getEstados, getCidadesPorEstado, type Estado, type Cidade } from '@/lib
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { TreinamentoSelectorModal } from './TreinamentoSelectorModal';
 
 // Interface para item do orçamento
@@ -234,40 +234,35 @@ export function CalculadoraTreinamentoNormativo({ onClose, onSave, onSaveOrcamen
   // Função para carregar orçamento salvo do banco de dados
   const carregarOrcamentoSalvo = async () => {
     if (!cardId || orcamentoJaCarregado[0]) return;
-    
+
     setCarregandoOrcamentoSalvo(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('funil_card_orcamentos')
-        .select('*')
-        .eq('card_id', cardId)
-        .maybeSingle();
-      
-      if (error) throw error;
-      
+      const lista = await api.get<any[]>(`/funil/cards/${cardId}/orcamentos`).catch(() => [] as any[]);
+      const data = lista && lista.length > 0 ? lista[0] : null;
+
       if (data) {
         setOrcamentoSalvoId(data.id);
-        
+
         // Carregar itens salvos por plano
-        const itensOuro = data.itens_ouro && data.itens_ouro.length > 0 
-          ? data.itens_ouro 
+        const itensOuro = data.itens_ouro && data.itens_ouro.length > 0
+          ? data.itens_ouro
           : [criarItemVazio()];
-        const itensPrata = data.itens_prata && data.itens_prata.length > 0 
-          ? data.itens_prata 
+        const itensPrata = data.itens_prata && data.itens_prata.length > 0
+          ? data.itens_prata
           : [criarItemVazio()];
-        const itensBronze = data.itens_bronze && data.itens_bronze.length > 0 
-          ? data.itens_bronze 
+        const itensBronze = data.itens_bronze && data.itens_bronze.length > 0
+          ? data.itens_bronze
           : [criarItemVazio()];
-        
+
         setItensPorPlano({
           OURO: itensOuro,
           PRATA: itensPrata,
           BRONZE: itensBronze
         });
-        
+
         // Marcar como carregado para evitar loops
         orcamentoJaCarregado[1](true);
-        
+
         console.log('Orçamento carregado do banco:', data);
       }
     } catch (err) {
@@ -286,53 +281,20 @@ export function CalculadoraTreinamentoNormativo({ onClose, onSave, onSaveOrcamen
 
   // Carregar produtos/serviços quando abrir o popup
   const carregarProdutosServicos = async () => {
-    if (!empresaId) return;
-    
+    // NOTA (migração): rpc('get_empresa_sst_pai') removido — sem endpoint equivalente.
+    // O backend escopa por empresa_id do token; a lógica de "empresa SST pai" não tem
+    // equivalente REST ainda — degradando para buscar o catálogo da empresa autenticada.
     setCarregandoTreinamentos(true);
     try {
-      // Primeiro, buscar a empresa SST pai
-      const { data: empresaSstPai } = await (supabase as any)
-        .rpc('get_empresa_sst_pai', { p_empresa_id: empresaId });
-      
-      const empresaParaBuscar = empresaSstPai || empresaId;
-      
-      // Buscar produtos da empresa SST pai
-      let { data, error } = await (supabase as any)
-        .from('produtos_servicos')
-        .select(`
-          id, nome, codigo, preco, descricao, tipo, carga_horaria, ch_formacao, ch_reciclagem, colaboradores_por_turma,
-          classificacao_id, forma_cobranca_id, treinamento_id,
-          categoria:categorias_produtos(id, nome, cor),
-          classificacao:classificacoes_produtos(id, nome),
-          forma_cobranca:formas_cobranca(id, nome),
-          treinamento:catalogo_treinamentos(id, nome, norma, ch_formacao, ch_reciclagem)
-        `)
-        .eq('empresa_id', empresaParaBuscar)
-        .eq('ativo', true)
-        .order('nome', { ascending: true });
-      
-      // Se não encontrou produtos, buscar todos os produtos ativos (fallback)
-      if (!data || data.length === 0) {
-        const { data: todosProdutos, error: errTodos } = await (supabase as any)
-          .from('produtos_servicos')
-          .select(`
-            id, nome, codigo, preco, descricao, tipo, carga_horaria, ch_formacao, ch_reciclagem, colaboradores_por_turma,
-            classificacao_id, forma_cobranca_id, treinamento_id,
-            categoria:categorias_produtos(id, nome, cor),
-            classificacao:classificacoes_produtos(id, nome),
-            forma_cobranca:formas_cobranca(id, nome),
-            treinamento:catalogo_treinamentos(id, nome, norma, ch_formacao, ch_reciclagem)
-          `)
-          .eq('ativo', true)
-          .order('nome', { ascending: true });
-        
-        if (!errTodos) {
-          data = todosProdutos;
-        }
-      }
-      
-      if (error) throw error;
-      setProdutosServicos(data || []);
+      // GET /produtos/catalogo — backend escopa por empresa_id do token
+      const todos = await api.get<any[]>('/produtos/catalogo').catch(() => [] as any[]);
+
+      // Reaplica filtro ativo=true no cliente (o endpoint devolve tudo)
+      const data = (todos || [])
+        .filter((p: any) => p.ativo !== false)
+        .sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || ''));
+
+      setProdutosServicos(data);
     } catch (err) {
       console.error('Erro ao carregar produtos/serviços:', err);
       toast({
@@ -419,9 +381,8 @@ export function CalculadoraTreinamentoNormativo({ onClose, onSave, onSaveOrcamen
       const totalPrata = itensPorPlano.PRATA.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
       const totalBronze = itensPorPlano.BRONZE.reduce((acc, item) => acc + (item.precoUnitario * item.quantidade), 0);
 
+      // NOTA (migração): empresa_id removido do payload — backend injeta pelo token.
       const dadosOrcamento = {
-        card_id: cardId,
-        empresa_id: empresaId,
         cliente_nome: config.empresa,
         cidade_destino: config.cidade,
         estado_destino: config.estadoDestino,
@@ -435,46 +396,23 @@ export function CalculadoraTreinamentoNormativo({ onClose, onSave, onSaveOrcamen
         config: config,
       };
 
-      let savedId = orcamentoSalvoId;
-
       if (orcamentoSalvoId) {
         // Atualizar existente usando o ID já conhecido
-        const { error } = await (supabase as any)
-          .from('funil_card_orcamentos')
-          .update(dadosOrcamento)
-          .eq('id', orcamentoSalvoId);
-
-        if (error) throw error;
+        await api.put<any>(`/funil/cards/${cardId}/orcamentos/${orcamentoSalvoId}`, dadosOrcamento);
         console.log('Orçamento atualizado no banco:', orcamentoSalvoId);
       } else {
         // Verificar se já existe um orçamento para este card (fallback)
-        const { data: existente } = await (supabase as any)
-          .from('funil_card_orcamentos')
-          .select('id')
-          .eq('card_id', cardId)
-          .maybeSingle();
+        const lista = await api.get<any[]>(`/funil/cards/${cardId}/orcamentos`).catch(() => [] as any[]);
+        const existente = lista && lista.length > 0 ? lista[0] : null;
 
         if (existente?.id) {
           // Atualizar existente
-          const { error } = await (supabase as any)
-            .from('funil_card_orcamentos')
-            .update(dadosOrcamento)
-            .eq('id', existente.id);
-
-          if (error) throw error;
-          savedId = existente.id;
+          await api.put<any>(`/funil/cards/${cardId}/orcamentos/${existente.id}`, dadosOrcamento);
           setOrcamentoSalvoId(existente.id);
           console.log('Orçamento atualizado no banco (fallback):', existente.id);
         } else {
           // Criar novo
-          const { data: novoOrcamento, error } = await (supabase as any)
-            .from('funil_card_orcamentos')
-            .insert(dadosOrcamento)
-            .select('id')
-            .single();
-
-          if (error) throw error;
-          savedId = novoOrcamento?.id;
+          const novoOrcamento = await api.post<any>(`/funil/cards/${cardId}/orcamentos`, dadosOrcamento);
           setOrcamentoSalvoId(novoOrcamento?.id);
           console.log('Novo orçamento criado no banco:', novoOrcamento?.id);
         }

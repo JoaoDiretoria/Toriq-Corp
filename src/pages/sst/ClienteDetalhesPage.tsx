@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
 import { useToast } from '@/hooks/use-toast';
@@ -55,18 +55,11 @@ export default function ClienteDetalhesPage() {
 
       setLoading(true);
       try {
-        const { data, error } = await (supabase as any)
-          .from('clientes_sst')
-          .select(`
-            *,
-            cliente_empresa:empresas!clientes_sst_cliente_empresa_id_fkey(id, nome, cnpj, razao_social, nome_fantasia, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado)
-          `)
-          .eq('id', clienteId)
-          .eq('empresa_sst_id', empresaId)
-          .single();
-
-        if (error) throw error;
-        setCliente(data);
+        // NOTA (migração): endpoint GET /sst/clientes/{id} não retorna o join
+        // com empresas (cliente_empresa). O campo cliente_empresa ficará null;
+        // o componente ClienteDetalhesContent já lida graciosamente com null.
+        const data = await api.get<any>(`/sst/clientes/${clienteId}`);
+        setCliente(data ?? null);
       } catch (error: any) {
         console.error('Erro ao carregar cliente:', error);
         toast({

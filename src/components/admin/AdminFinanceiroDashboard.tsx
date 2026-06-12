@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useToast } from '@/hooks/use-toast';
 import { format, parseISO, getMonth, getYear, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -48,8 +48,6 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-
-const TORIQ_EMPRESA_ID = '11111111-1111-1111-1111-111111111111';
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 const MESES_COMPLETOS = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
@@ -210,15 +208,16 @@ export function AdminFinanceiroDashboard() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [contasPagarRes, contasReceberRes, contasBancariasRes] = await Promise.all([
-        (supabase as any).from('contas_pagar').select('*').eq('empresa_id', TORIQ_EMPRESA_ID),
-        (supabase as any).from('contas_receber').select('*').eq('empresa_id', TORIQ_EMPRESA_ID),
-        (supabase as any).from('contas_bancarias').select('*').eq('empresa_id', TORIQ_EMPRESA_ID).eq('ativo', true),
+      const [contasPagarData, contasReceberData, contasBancariasData] = await Promise.all([
+        api.get<any[]>('/financeiro/contas-pagar').catch(() => [] as any[]),
+        api.get<any[]>('/financeiro/contas-receber').catch(() => [] as any[]),
+        api.get<any[]>('/financeiro/cadastros/contas-bancarias').catch(() => [] as any[]),
       ]);
 
-      if (contasPagarRes.data) setContasPagar(contasPagarRes.data as ContaPagar[]);
-      if (contasReceberRes.data) setContasReceber(contasReceberRes.data as ContaReceber[]);
-      if (contasBancariasRes.data) setContasBancarias(contasBancariasRes.data as ContaBancaria[]);
+      setContasPagar((contasPagarData ?? []) as ContaPagar[]);
+      setContasReceber((contasReceberData ?? []) as ContaReceber[]);
+      // Filtro .eq('ativo', true) reaplicado no cliente — o backend devolve todos
+      setContasBancarias(((contasBancariasData ?? []) as ContaBancaria[]).filter(c => c.ativo));
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       toast({ title: 'Erro', description: 'Erro ao carregar dados do dashboard', variant: 'destructive' });

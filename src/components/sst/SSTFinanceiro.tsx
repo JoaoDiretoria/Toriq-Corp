@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
 import { useToast } from '@/hooks/use-toast';
@@ -63,23 +63,12 @@ export function SSTFinanceiro() {
   const fetchContas = async () => {
     if (!empresaId) return;
 
-    const query = supabase
-      .from('financeiro_contas')
-      .select('*')
-      .eq('empresa_id', empresaId)
-      .order('vencimento', { ascending: true });
-
-    const { data, error } = await query;
-
-    if (error) {
-      toast({
-        title: "Erro ao carregar contas",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
-      setContas(data || []);
-    }
+    const data = await api.get<any[]>('/financeiro/contas').catch(() => [] as any[]);
+    // reaplica ordenação por vencimento (ascending) no cliente
+    const sorted = [...data].sort((a, b) =>
+      (a.vencimento ?? '').localeCompare(b.vencimento ?? '')
+    );
+    setContas(sorted);
     setLoading(false);
   };
 
@@ -91,24 +80,14 @@ export function SSTFinanceiro() {
     e.preventDefault();
     if (!empresaId) return;
 
-    const { error } = await supabase
-      .from('financeiro_contas')
-      .insert({
-        empresa_id: empresaId,
+    try {
+      await api.post('/financeiro/contas', {
         tipo: formData.tipo,
         descricao: formData.descricao,
         valor: parseFloat(formData.valor),
         vencimento: formData.vencimento,
         status: formData.status,
       });
-
-    if (error) {
-      toast({
-        title: "Erro ao cadastrar conta",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
       toast({
         title: "Conta cadastrada",
         description: "A conta foi adicionada com sucesso.",
@@ -122,6 +101,12 @@ export function SSTFinanceiro() {
         status: 'pendente',
       });
       fetchContas();
+    } catch (err: any) {
+      toast({
+        title: "Erro ao cadastrar conta",
+        description: err?.detail ?? err?.message ?? "Erro desconhecido",
+        variant: "destructive",
+      });
     }
   };
 

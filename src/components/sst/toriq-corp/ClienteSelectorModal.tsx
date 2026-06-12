@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Search, Building2, Check, ChevronLeft, ChevronRight, X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 
 interface Cliente {
   id: string;
@@ -63,36 +63,34 @@ export function ClienteSelectorModal({
 
     setLoading(true);
     try {
-      const from = (currentPage - 1) * ITEMS_PER_PAGE;
-      const to = from + ITEMS_PER_PAGE - 1;
+      // GET /sst/clientes — backend escopa por empresa_id do token; sem paginação server-side
+      const allClientes = await api.get<any[]>('/sst/clientes').catch(() => [] as any[]);
 
-      let query = (supabase as any)
-        .from('clientes_sst')
-        .select('id, nome, cnpj', { count: 'exact' })
-        .eq('empresa_sst_id', empresaId)
-        .order('nome', { ascending: true });
+      // Ordenar por nome (client-side, equivalente ao .order('nome', { ascending: true }))
+      const sorted = [...allClientes].sort((a, b) =>
+        (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { sensitivity: 'base' })
+      );
 
-      // Aplicar filtro de busca
+      // Aplicar filtro de busca client-side
+      let filtered = sorted;
       if (debouncedSearch.trim()) {
-        const termo = debouncedSearch.trim();
+        const termo = debouncedSearch.trim().toLowerCase();
         const termoLimpo = termo.replace(/[.\-\/]/g, '');
-        
-        // Busca por nome OU cnpj
-        query = query.or(`nome.ilike.%${termo}%,cnpj.ilike.%${termo}%,cnpj.ilike.%${termoLimpo}%`);
+        filtered = sorted.filter((c: any) => {
+          const nomeMatch = (c.nome || '').toLowerCase().includes(termo);
+          const cnpj = (c.cnpj || '').toLowerCase();
+          const cnpjLimpo = cnpj.replace(/[.\-\/]/g, '');
+          const cnpjMatch = cnpj.includes(termo) || cnpjLimpo.includes(termoLimpo);
+          return nomeMatch || cnpjMatch;
+        });
       }
 
-      // Aplicar paginação
-      query = query.range(from, to);
+      // Paginação client-side
+      const from = (currentPage - 1) * ITEMS_PER_PAGE;
+      const to = from + ITEMS_PER_PAGE;
 
-      const { data, error, count } = await query;
-
-      if (error) {
-        console.error('Erro ao buscar clientes:', error);
-        return;
-      }
-
-      setClientes(data || []);
-      setTotalCount(count || 0);
+      setTotalCount(filtered.length);
+      setClientes(filtered.slice(from, to));
     } catch (err) {
       console.error('Erro ao buscar clientes:', err);
     } finally {
@@ -109,11 +107,7 @@ export function ClienteSelectorModal({
   useEffect(() => {
     if (selectedClienteId && !displayNome) {
       (async () => {
-        const { data } = await (supabase as any)
-          .from('clientes_sst')
-          .select('nome')
-          .eq('id', selectedClienteId)
-          .single();
+        const data = await api.get<any>(`/sst/clientes/${selectedClienteId}`).catch(() => null);
         if (data) {
           setDisplayNome(data.nome);
         }

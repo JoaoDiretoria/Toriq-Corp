@@ -47,7 +47,7 @@ import {
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { PropostaComercialEditor } from '@/components/admin/PropostaComercialEditor';
 import { PropostaComercialServicosSSTEditor } from '@/components/admin/PropostaComercialServicosSSTEditor';
 import { PropostaComercialVertical365Editor } from '@/components/admin/PropostaComercialVertical365Editor';
@@ -151,54 +151,29 @@ export function PropostasComerciais({ onClose, cardId, initialSearchTerm = '' }:
 
   const loadPropostas = async () => {
     if (!empresaId) return;
-    
+
     setLoading(true);
     try {
-      // Buscar propostas de treinamentos
-      let queryTreinamentos = (supabase as any)
-        .from('propostas_comerciais_treinamentos')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('created_at', { ascending: false });
-      
-      // Buscar propostas de serviços SST
-      let queryServicosSST = (supabase as any)
-        .from('propostas_comerciais_servicos_sst')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('created_at', { ascending: false });
-      
-      // Buscar propostas Vertical 365
-      let queryVertical365 = (supabase as any)
-        .from('propostas_comerciais_vertical365')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('created_at', { ascending: false });
-      
-      // Se tiver cardId, filtrar por card
-      if (cardId) {
-        queryTreinamentos = queryTreinamentos.eq('card_id', cardId);
-        queryServicosSST = queryServicosSST.eq('card_id', cardId);
-        queryVertical365 = queryVertical365.eq('card_id', cardId);
-      }
-      
-      const [resTreinamentos, resServicosSST, resVertical365] = await Promise.all([
-        queryTreinamentos,
-        queryServicosSST,
-        queryVertical365
+      const [dataTreinamentos, dataServicosSST, dataVertical365] = await Promise.all([
+        api.get<any[]>('/funil-comercial/propostas/treinamentos').catch(() => [] as any[]),
+        api.get<any[]>('/funil-comercial/propostas/servicos-sst').catch(() => [] as any[]),
+        api.get<any[]>('/funil-comercial/propostas/vertical365').catch(() => [] as any[]),
       ]);
-      
-      if (resTreinamentos.error) throw resTreinamentos.error;
-      if (resServicosSST.error) throw resServicosSST.error;
-      if (resVertical365.error) throw resVertical365.error;
-      
-      // Combinar e ordenar por data
-      const todasPropostas = [
-        ...(resTreinamentos.data || []).map((p: any) => ({ ...p, tipo_orcamento: p.tipo_orcamento || 'treinamento_normativo' })),
-        ...(resServicosSST.data || []).map((p: any) => ({ ...p, tipo_orcamento: 'servicos_sst' })),
-        ...(resVertical365.data || []).map((p: any) => ({ ...p, tipo_orcamento: 'vertical365' }))
-      ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      
+
+      // Combinar, anotar tipo e filtrar por card_id no cliente quando necessário
+      let todasPropostas = [
+        ...(dataTreinamentos || []).map((p: any) => ({ ...p, tipo_orcamento: p.tipo_orcamento || 'treinamento_normativo' })),
+        ...(dataServicosSST || []).map((p: any) => ({ ...p, tipo_orcamento: 'servicos_sst' })),
+        ...(dataVertical365 || []).map((p: any) => ({ ...p, tipo_orcamento: 'vertical365' }))
+      ];
+
+      // Filtro client-side por card_id (o endpoint não aceita query param para card_id)
+      if (cardId) {
+        todasPropostas = todasPropostas.filter((p: any) => p.card_id === cardId);
+      }
+
+      todasPropostas.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
       setPropostas(todasPropostas);
     } catch (error: any) {
       console.error('Erro ao carregar propostas:', error);
@@ -236,27 +211,21 @@ export function PropostasComerciais({ onClose, cardId, initialSearchTerm = '' }:
   // Salvar status e observação
   const handleSalvarStatus = async () => {
     if (!selectedProposta) return;
-    
+
     setSavingStatus(true);
     try {
-      // Determinar a tabela correta baseado no tipo de orçamento
-      const tabela = selectedProposta.tipo_orcamento === 'servicos_sst' 
-        ? 'propostas_comerciais_servicos_sst' 
+      // Determinar o path correto baseado no tipo de orçamento
+      const subPath = selectedProposta.tipo_orcamento === 'servicos_sst'
+        ? 'servicos-sst'
         : selectedProposta.tipo_orcamento === 'vertical365'
-        ? 'propostas_comerciais_vertical365'
-        : 'propostas_comerciais_treinamentos';
-      
-      const { error } = await (supabase as any)
-        .from(tabela)
-        .update({
-          status: statusTemp,
-          observacao: observacaoTemp,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', selectedProposta.id);
-      
-      if (error) throw error;
-      
+        ? 'vertical365'
+        : 'treinamentos';
+
+      await api.put(
+        `/funil-comercial/propostas/${subPath}/${selectedProposta.id}`,
+        { status: statusTemp, observacao: observacaoTemp }
+      );
+
       toast.success('Status atualizado com sucesso!');
       setShowObservacaoDialog(false);
       loadPropostas();
@@ -271,22 +240,17 @@ export function PropostasComerciais({ onClose, cardId, initialSearchTerm = '' }:
   // Deletar proposta
   const handleDeletarProposta = async (proposta: PropostaComercial) => {
     if (!confirm(`Deseja realmente excluir a proposta ${proposta.identificador}?`)) return;
-    
+
     try {
-      // Determinar a tabela correta baseado no tipo de orçamento
-      const tabela = proposta.tipo_orcamento === 'servicos_sst' 
-        ? 'propostas_comerciais_servicos_sst' 
+      // Determinar o path correto baseado no tipo de orçamento
+      const subPath = proposta.tipo_orcamento === 'servicos_sst'
+        ? 'servicos-sst'
         : proposta.tipo_orcamento === 'vertical365'
-        ? 'propostas_comerciais_vertical365'
-        : 'propostas_comerciais_treinamentos';
-      
-      const { error } = await (supabase as any)
-        .from(tabela)
-        .delete()
-        .eq('id', proposta.id);
-      
-      if (error) throw error;
-      
+        ? 'vertical365'
+        : 'treinamentos';
+
+      await api.del(`/funil-comercial/propostas/${subPath}/${proposta.id}`);
+
       toast.success('Proposta excluída com sucesso!');
       loadPropostas();
     } catch (error: any) {

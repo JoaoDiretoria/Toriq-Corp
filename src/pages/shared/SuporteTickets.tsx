@@ -53,7 +53,7 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { useHierarquia } from '@/hooks/useHierarquia';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { toast } from 'sonner';
 import { formatDistanceToNow, format, differenceInHours } from 'date-fns';
 import { 
@@ -250,38 +250,26 @@ export default function SuporteTickets() {
   const fetchTickets = async () => {
     setLoading(true);
     try {
-      let query = (supabase as any)
-        .from('tickets_suporte')
-        .select(`
-          *,
-          empresa_solicitante:empresas!tickets_suporte_empresa_solicitante_id_fkey(nome, tipo),
-          empresa_destino:empresas!tickets_suporte_empresa_destino_id_fkey(nome)
-        `)
-        .order('created_at', { ascending: false });
-      
+      let data: Ticket[] = await api.get<any[]>('/suporte/tickets').catch(() => [] as any[]);
+
       // Filtrar tickets baseado na role do usuário e hierarquia
+      // (o backend escopa por empresa_solicitante_id do token; filtros adicionais de role são reaplicados no cliente)
       if (profile?.role === 'admin_vertical') {
         // Admin global vê apenas tickets de cliente_torq (empresa_destino_id = NULL)
-        query = query.is('empresa_destino_id', null);
+        data = data.filter((t: any) => t.empresa_destino_id == null);
       } else if (profile?.role === 'cliente_torq') {
-        if (isAdministrador) {
-          // Administrador da empresa SST vê todos os tickets da empresa (para resolver)
-          // Tickets destinados à empresa OU criados por usuários da empresa
-          query = query.or(`empresa_destino_id.eq.${profile.empresa_id},empresa_solicitante_id.eq.${profile.empresa_id}`);
-        } else {
+        if (!isAdministrador) {
           // Gestor/Colaborador vê apenas seus próprios tickets
-          query = query.eq('solicitante_id', user?.id);
+          data = data.filter((t: any) => t.solicitante_id === user?.id);
         }
+        // isAdministrador: vê todos da empresa (já retornados pelo backend)
       } else {
         // Outros usuários (cliente, instrutor, parceiro) veem apenas seus próprios tickets
-        query = query.eq('solicitante_id', user?.id);
+        data = data.filter((t: any) => t.solicitante_id === user?.id);
       }
-      
-      const { data, error } = await query;
-      
-      if (error) throw error;
+
       setTickets(data || []);
-      
+
       // Extrair usuários únicos com tickets abertos
       const usuariosMap = new Map<string, { nome: string; total: number }>();
       (data || []).forEach((ticket: Ticket) => {
@@ -292,11 +280,11 @@ export default function SuporteTickets() {
           usuariosMap.set(ticket.solicitante_id, { nome: ticket.solicitante_nome, total: 1 });
         }
       });
-      
+
       const usuarios: UsuarioComTickets[] = Array.from(usuariosMap.entries())
         .map(([id, info]) => ({ id, nome: info.nome, total_tickets: info.total }))
         .sort((a, b) => b.total_tickets - a.total_tickets);
-      
+
       setUsuariosComTickets(usuarios);
     } catch (error) {
       console.error('Erro ao carregar tickets:', error);
@@ -309,14 +297,10 @@ export default function SuporteTickets() {
   // Buscar configuração de SLA da empresa
   const fetchSlaConfig = async () => {
     if (!profile?.empresa_id) return;
-    
+
     try {
-      const { data, error } = await (supabase as any)
-        .from('tickets_sla_config')
-        .select('*')
-        .eq('empresa_id', profile.empresa_id)
-        .single();
-      
+      const data = await api.get<any>('/suporte/sla-config').catch(() => null);
+
       if (data) {
         setSlaConfig(data);
         setSlaForm({
@@ -334,30 +318,11 @@ export default function SuporteTickets() {
   // Salvar configuração de SLA
   const handleSaveSlaConfig = async () => {
     if (!profile?.empresa_id) return;
-    
+
     setSalvandoSla(true);
     try {
-      const configData = {
-        empresa_id: profile.empresa_id,
-        ...slaForm,
-      };
-
-      if (slaConfig?.id) {
-        // Atualizar existente
-        const { error } = await (supabase as any)
-          .from('tickets_sla_config')
-          .update(slaForm)
-          .eq('id', slaConfig.id);
-        
-        if (error) throw error;
-      } else {
-        // Inserir novo
-        const { error } = await (supabase as any)
-          .from('tickets_sla_config')
-          .insert(configData);
-        
-        if (error) throw error;
-      }
+      // PUT /suporte/sla-config faz upsert (cria ou atualiza) automaticamente
+      await api.put<any>('/suporte/sla-config', slaForm);
 
       await fetchSlaConfig();
       setShowSlaConfig(false);
@@ -373,66 +338,40 @@ export default function SuporteTickets() {
   useEffect(() => {
     // Aguardar hierarquia carregar antes de buscar tickets
     if (loadingHierarquia) return;
-    
+
     fetchTickets();
     fetchSlaConfig();
-    
-    // Realtime subscription
-    const channel = supabase
-      .channel('tickets_changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'tickets_suporte' },
-        () => {
-          fetchTickets();
-        }
-      )
-      .subscribe();
-    
-    return () => {
-      supabase.removeChannel(channel);
-    };
+
+    // NOTA (migração): realtime removido — refetch/próximo load
   }, [loadingHierarquia, isAdministrador]);
 
 
   const fetchTicketDetails = async (ticket: Ticket) => {
     setSelectedTicket(ticket);
-    
+
     // Buscar comentários
-    const { data: comentariosData } = await (supabase as any)
-      .from('tickets_suporte_comentarios')
-      .select('*')
-      .eq('ticket_id', ticket.id)
-      .order('created_at', { ascending: true });
-    
-    setComentarios(comentariosData || []);
-    
+    const comentariosData = await api.get<any[]>(`/suporte/tickets/${ticket.id}/comentarios`).catch(() => [] as any[]);
+    // Comentários já vêm ordenados por created_at asc pelo backend (reaplica no cliente por segurança)
+    const comentariosOrdenados = (comentariosData || []).slice().sort((a: any, b: any) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+    setComentarios(comentariosOrdenados);
+
     // Buscar anexos
-    const { data: anexosData } = await (supabase as any)
-      .from('tickets_suporte_anexos')
-      .select('*')
-      .eq('ticket_id', ticket.id);
-    
+    const anexosData = await api.get<any[]>(`/suporte/tickets/${ticket.id}/anexos`).catch(() => [] as any[]);
     setAnexos(anexosData || []);
   };
 
   const handleEnviarComentario = async () => {
     if (!novoComentario.trim() || !selectedTicket || !profile) return;
-    
+
     setEnviandoComentario(true);
     try {
-      const { error } = await (supabase as any)
-        .from('tickets_suporte_comentarios')
-        .insert({
-          ticket_id: selectedTicket.id,
-          autor_id: user?.id,
-          autor_nome: profile.nome || user?.email,
-          conteudo: novoComentario,
-          interno: false,
-        });
-      
-      if (error) throw error;
-      
+      await api.post<any>(`/suporte/tickets/${selectedTicket.id}/comentarios`, {
+        conteudo: novoComentario,
+        interno: false,
+      });
+
       setNovoComentario('');
       fetchTicketDetails(selectedTicket);
       toast.success('Comentário enviado');
@@ -446,7 +385,7 @@ export default function SuporteTickets() {
 
   const handleAtualizarStatus = async (novoStatus: string) => {
     if (!selectedTicket) return;
-    
+
     setAtualizandoStatus(true);
     try {
       const updates: any = {
@@ -454,21 +393,16 @@ export default function SuporteTickets() {
         atendente_id: user?.id,
         atendente_nome: profile?.nome || user?.email,
       };
-      
+
       if (novoStatus === 'resolvido') {
         updates.resolvido_em = new Date().toISOString();
       }
-      
-      const { error } = await (supabase as any)
-        .from('tickets_suporte')
-        .update(updates)
-        .eq('id', selectedTicket.id);
-      
-      if (error) throw error;
-      
+
+      await api.put<any>(`/suporte/tickets/${selectedTicket.id}`, updates);
+
       // Criar notificação para o solicitante
       await criarNotificacaoAlteracao(selectedTicket, 'status', selectedTicket.status, novoStatus);
-      
+
       setSelectedTicket({ ...selectedTicket, ...updates });
       fetchTickets();
       toast.success('Status atualizado');
@@ -482,17 +416,12 @@ export default function SuporteTickets() {
 
   const handleAtualizarPrioridade = async (novaPrioridade: string) => {
     if (!selectedTicket || !canManageTickets) return;
-    
+
     try {
-      const { error } = await (supabase as any)
-        .from('tickets_suporte')
-        .update({ prioridade: novaPrioridade })
-        .eq('id', selectedTicket.id);
-      
-      if (error) throw error;
-      
+      await api.put<any>(`/suporte/tickets/${selectedTicket.id}`, { prioridade: novaPrioridade });
+
       await criarNotificacaoAlteracao(selectedTicket, 'prioridade', selectedTicket.prioridade, novaPrioridade);
-      
+
       setSelectedTicket({ ...selectedTicket, prioridade: novaPrioridade });
       fetchTickets();
       toast.success('Prioridade atualizada');
@@ -504,17 +433,12 @@ export default function SuporteTickets() {
 
   const handleAtualizarImpacto = async (novoImpacto: string) => {
     if (!selectedTicket || !canManageTickets) return;
-    
+
     try {
-      const { error } = await (supabase as any)
-        .from('tickets_suporte')
-        .update({ impacto_operacional: novoImpacto })
-        .eq('id', selectedTicket.id);
-      
-      if (error) throw error;
-      
+      await api.put<any>(`/suporte/tickets/${selectedTicket.id}`, { impacto_operacional: novoImpacto });
+
       await criarNotificacaoAlteracao(selectedTicket, 'impacto', selectedTicket.impacto_operacional, novoImpacto);
-      
+
       setSelectedTicket({ ...selectedTicket, impacto_operacional: novoImpacto });
       fetchTickets();
       toast.success('Impacto atualizado');
@@ -524,31 +448,10 @@ export default function SuporteTickets() {
     }
   };
 
-  const criarNotificacaoAlteracao = async (ticket: Ticket, campo: string, valorAntigo: string, valorNovo: string) => {
-    try {
-      // Não criar notificação se não houver empresa_id válido
-      if (!ticket.empresa_solicitante_id) {
-        console.warn('Notificação não criada: empresa_solicitante_id não encontrado');
-        return;
-      }
-      
-      const campoLabel = campo === 'status' ? 'Status' : campo === 'prioridade' ? 'Prioridade' : 'Impacto';
-      const configAntigo = campo === 'status' ? STATUS_CONFIG[valorAntigo] : campo === 'prioridade' ? PRIORIDADE_CONFIG[valorAntigo] : IMPACTO_CONFIG[valorAntigo];
-      const configNovo = campo === 'status' ? STATUS_CONFIG[valorNovo] : campo === 'prioridade' ? PRIORIDADE_CONFIG[valorNovo] : IMPACTO_CONFIG[valorNovo];
-      
-      await (supabase as any)
-        .from('notificacoes')
-        .insert({
-          user_id: ticket.solicitante_id,
-          empresa_id: ticket.empresa_solicitante_id,
-          tipo: 'ticket_atualizado',
-          titulo: `Ticket #${ticket.id.slice(0, 8)} atualizado`,
-          mensagem: `${campoLabel} alterado de "${configAntigo?.label || valorAntigo}" para "${configNovo?.label || valorNovo}"`,
-          dados: { ticket_id: ticket.id, campo, valor_antigo: valorAntigo, valor_novo: valorNovo },
-        });
-    } catch (error) {
-      console.error('Erro ao criar notificação:', error);
-    }
+  const criarNotificacaoAlteracao = async (_ticket: Ticket, _campo: string, _valorAntigo: string, _valorNovo: string) => {
+    // NOTA (migração): criação direta de notificação removida — o endpoint POST /notificacoes
+    // não existe no backend atual. Notificações de alteração de ticket serão emitidas
+    // pelo próprio backend quando suportado.
   };
 
   // Resetar página ao mudar filtros

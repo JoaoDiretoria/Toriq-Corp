@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -122,19 +122,9 @@ const ColaboradorDetalhes = () => {
     queryFn: async () => {
       if (!colaboradorId) return null;
       console.log('Buscando colaborador com ID:', colaboradorId);
-      const { data, error } = await supabase
-        .from('colaboradores')
-        .select(`
-          *
-        `)
-        .eq('id', colaboradorId)
-        .single();
-      if (error) {
-        console.error('Erro ao buscar colaborador:', error);
-        throw error;
-      }
+      const data = await api.get<Colaborador>(`/sst/colaboradores/${colaboradorId}`);
       console.log('Colaborador encontrado:', data);
-      return data as unknown as Colaborador;
+      return data;
     },
     enabled: !!colaboradorId,
     retry: false,
@@ -147,17 +137,16 @@ const ColaboradorDetalhes = () => {
     queryKey: ['treinamentos-individuais', colaborador?.id],
     queryFn: async () => {
       if (!colaborador?.id) return [];
-      const { data, error } = await supabase
-        .from('colaboradores_treinamentos')
-        .select(`
-          treinamento_id,
-          status,
-          catalogo_treinamentos(id, nome, norma, ch_formacao, ch_reciclagem, validade)
-        `)
-        .eq('colaborador_id', colaborador.id)
-        .eq('status', 'necessario');
-      if (error) throw error;
-      return (data || []).map((item: any) => item.catalogo_treinamentos) as TreinamentoNecessario[];
+      const [vinculosRaw, catalogoRaw] = await Promise.all([
+        api.get<any[]>(`/treinamentos/colaboradores/${colaborador.id}/treinamentos`).catch(() => [] as any[]),
+        api.get<any[]>('/treinamentos/catalogo').catch(() => [] as any[]),
+      ]);
+      const necessarios = (vinculosRaw || []).filter((v: any) => v.status === 'necessario');
+      const catalogoMap: Record<string, any> = {};
+      (catalogoRaw || []).forEach((c: any) => { catalogoMap[c.id] = c; });
+      return necessarios
+        .map((v: any) => catalogoMap[v.treinamento_id])
+        .filter(Boolean) as TreinamentoNecessario[];
     },
     enabled: !!colaborador?.id,
   });
@@ -167,43 +156,35 @@ const ColaboradorDetalhes = () => {
     queryKey: ['treinamentos-realizados', colaborador?.id],
     queryFn: async () => {
       if (!colaborador?.id) return [];
-      
-      // Buscar treinamentos realizados
-      const { data: treinamentosData, error: treinamentosError } = await supabase
-        .from('colaboradores_treinamentos')
-        .select(`
-          id,
-          treinamento_id,
-          status,
-          data_realizacao,
-          catalogo_treinamentos(id, nome, norma, ch_formacao, ch_reciclagem, validade)
-        `)
-        .eq('colaborador_id', colaborador.id)
-        .eq('status', 'realizado');
-      
-      if (treinamentosError) throw treinamentosError;
-      if (!treinamentosData || treinamentosData.length === 0) return [];
+
+      const [vinculosRaw, catalogoRaw] = await Promise.all([
+        api.get<any[]>(`/treinamentos/colaboradores/${colaborador.id}/treinamentos`).catch(() => [] as any[]),
+        api.get<any[]>('/treinamentos/catalogo').catch(() => [] as any[]),
+      ]);
+
+      const realizados = (vinculosRaw || []).filter((v: any) => v.status === 'realizado');
+      if (realizados.length === 0) return [];
+
+      const catalogoMap: Record<string, any> = {};
+      (catalogoRaw || []).forEach((c: any) => { catalogoMap[c.id] = c; });
 
       // Buscar datas de cada treinamento
       const treinamentosComDatas = await Promise.all(
-        treinamentosData.map(async (item: any) => {
-          const { data: datasData } = await supabase
-            .from('colaboradores_treinamentos_datas')
-            .select('data, inicio, fim, horas')
-            .eq('colaborador_treinamento_id', item.id)
-            .order('data', { ascending: true });
+        realizados.map(async (item: any) => {
+          const datasData = await api.get<any[]>(`/treinamentos/colaboradores-treinamentos/${item.id}/datas`).catch(() => [] as any[]);
 
           // Se não houver datas na nova tabela, usar data_realizacao legada
-          let datas = datasData || [];
+          let datas: any[] = datasData || [];
           if (datas.length === 0 && item.data_realizacao) {
             datas = [{ data: item.data_realizacao, inicio: '08:00', fim: '17:00', horas: 8 }];
           }
 
+          const catalogo = catalogoMap[item.treinamento_id];
           return {
-            id: item.catalogo_treinamentos?.id,
+            id: catalogo?.id,
             colaborador_treinamento_id: item.id,
-            nome: item.catalogo_treinamentos?.nome,
-            norma: item.catalogo_treinamentos?.norma,
+            nome: catalogo?.nome,
+            norma: catalogo?.norma,
             datas: datas.map((d: any) => ({
               data: d.data,
               inicio: d.inicio || '08:00',
@@ -220,87 +201,54 @@ const ColaboradorDetalhes = () => {
   });
 
   // Buscar turmas do colaborador
+  // NOTA (migracao): nao ha endpoint para listar turmas de um colaborador especifico
+  // (apenas /treinamentos/turmas/{turma_id}/colaboradores existe, o inverso nao).
+  // Implementado via busca de todas as turmas + filtro client-side por colaborador_id.
   const { data: turmasColaborador } = useQuery({
     queryKey: ['turmas-colaborador', colaborador?.id],
     queryFn: async () => {
       if (!colaborador?.id) return [];
-      
-      // Buscar turma_colaboradores
-      const { data: tcData, error: tcError } = await (supabase as any)
-        .from('turma_colaboradores')
-        .select('id, turma_id, resultado, nota_pos_teste')
-        .eq('colaborador_id', colaborador.id);
-      
-      if (tcError) throw tcError;
-      if (!tcData || tcData.length === 0) return [];
 
-      // Buscar detalhes das turmas
-      const turmaIds = tcData.map((tc: any) => tc.turma_id).filter(Boolean);
-      if (turmaIds.length === 0) return [];
+      const [todasTurmas, catalogoRaw] = await Promise.all([
+        api.get<any[]>('/treinamentos/turmas').catch(() => [] as any[]),
+        api.get<any[]>('/treinamentos/catalogo').catch(() => [] as any[]),
+      ]);
 
-      const { data: turmasData, error: turmasError } = await (supabase as any)
-        .from('turmas_treinamento')
-        .select(`
-          id,
-          codigo_turma,
-          numero_turma,
-          status,
-          validado,
-          treinamento_id
-        `)
-        .in('id', turmaIds);
+      if (!todasTurmas || todasTurmas.length === 0) return [];
 
-      if (turmasError) throw turmasError;
+      const catalogoMap: Record<string, any> = {};
+      (catalogoRaw || []).forEach((c: any) => { catalogoMap[c.id] = c; });
 
-      // Buscar treinamentos
-      const treinamentoIds = (turmasData || []).map((t: any) => t.treinamento_id).filter(Boolean);
-      const treinamentosMap: Record<string, any> = {};
-      if (treinamentoIds.length > 0) {
-        const { data: treinamentosData } = await supabase
-          .from('catalogo_treinamentos')
-          .select('id, nome, norma')
-          .in('id', treinamentoIds);
-        
-        (treinamentosData || []).forEach((t: any) => {
-          treinamentosMap[t.id] = t;
-        });
-      }
+      // Para cada turma, buscar colaboradores e verificar se o colaborador esta nessa turma
+      const resultados = await Promise.all(
+        todasTurmas.map(async (turma: any) => {
+          const tcList = await api.get<any[]>(`/treinamentos/turmas/${turma.id}/colaboradores`).catch(() => [] as any[]);
+          const tc = (tcList || []).find((t: any) => t.colaborador_id === colaborador.id);
+          if (!tc) return null;
 
-      // Buscar aulas das turmas
-      const { data: aulasData } = await (supabase as any)
-        .from('turmas_treinamento_aulas')
-        .select('turma_id, data')
-        .in('turma_id', turmaIds)
-        .order('data', { ascending: true });
+          const aulasData = await api.get<any[]>(`/treinamentos/turmas/${turma.id}/aulas`).catch(() => [] as any[]);
+          const aulas = (aulasData || [])
+            .map((a: any) => a.data)
+            .sort((a: string, b: string) => a.localeCompare(b));
 
-      // Mapear aulas por turma
-      const aulasPorTurma: Record<string, string[]> = {};
-      (aulasData || []).forEach((aula: any) => {
-        if (!aulasPorTurma[aula.turma_id]) {
-          aulasPorTurma[aula.turma_id] = [];
-        }
-        aulasPorTurma[aula.turma_id].push(aula.data);
-      });
+          const treinamento = turma.treinamento_id ? catalogoMap[turma.treinamento_id] : null;
+          return {
+            id: tc.id,
+            turma_id: turma.id,
+            codigo_turma: turma.codigo_turma || `Turma #${turma.numero_turma || '?'}`,
+            treinamento_nome: treinamento?.nome || '',
+            treinamento_norma: treinamento?.norma || '',
+            status: turma.status || 'agendado',
+            validado: turma.validado || false,
+            resultado: tc.resultado,
+            nota_pos_teste: tc.nota_pos_teste,
+            data_inicio: aulas[0] || null,
+            data_fim: aulas[aulas.length - 1] || null
+          };
+        })
+      );
 
-      // Combinar dados
-      return tcData.map((tc: any) => {
-        const turma = (turmasData || []).find((t: any) => t.id === tc.turma_id);
-        const treinamento = turma?.treinamento_id ? treinamentosMap[turma.treinamento_id] : null;
-        const aulas = aulasPorTurma[tc.turma_id] || [];
-        return {
-          id: tc.id,
-          turma_id: tc.turma_id,
-          codigo_turma: turma?.codigo_turma || `Turma #${turma?.numero_turma || '?'}`,
-          treinamento_nome: treinamento?.nome || '',
-          treinamento_norma: treinamento?.norma || '',
-          status: turma?.status || 'agendado',
-          validado: turma?.validado || false,
-          resultado: tc.resultado,
-          nota_pos_teste: tc.nota_pos_teste,
-          data_inicio: aulas[0] || null,
-          data_fim: aulas[aulas.length - 1] || null
-        };
-      });
+      return resultados.filter(Boolean);
     },
     enabled: !!colaborador?.id,
   });
@@ -310,34 +258,39 @@ const ColaboradorDetalhes = () => {
     queryKey: ['certificados-colaborador', colaborador?.id],
     queryFn: async () => {
       if (!colaborador?.id) return [];
-      
-      // Buscar certificados
-      const { data: certsData, error: certsError } = await (supabase as any)
-        .from('colaboradores_certificados')
-        .select('id, nome, arquivo_url, arquivo_path, data_emissao, data_validade, observacoes, turma_id')
-        .eq('colaborador_id', colaborador.id)
-        .order('data_emissao', { ascending: false });
-      
-      if (certsError) throw certsError;
+
+      const [certsData, catalogoRaw] = await Promise.all([
+        api.get<any[]>(`/treinamentos/colaboradores/${colaborador.id}/certificados`).catch(() => [] as any[]),
+        api.get<any[]>('/treinamentos/catalogo').catch(() => [] as any[]),
+      ]);
+
       if (!certsData || certsData.length === 0) return [];
 
-      // Buscar detalhes das turmas
+      const catalogoMap: Record<string, any> = {};
+      (catalogoRaw || []).forEach((c: any) => { catalogoMap[c.id] = c; });
+
+      // Buscar detalhes das turmas referenciadas nos certificados
       const turmaIds = certsData.map((c: any) => c.turma_id).filter(Boolean);
-      
       const turmasMap: Record<string, any> = {};
       if (turmaIds.length > 0) {
-        const { data: turmasData } = await supabase
-          .from('turmas_treinamento')
-          .select('id, codigo_turma, numero_turma, treinamento_id, catalogo_treinamentos(nome, norma)')
-          .in('id', turmaIds);
-        
-        (turmasData || []).forEach((t: any) => {
-          turmasMap[t.id] = t;
-        });
+        await Promise.all(
+          turmaIds.map(async (turmaId: string) => {
+            const turma = await api.get<any>(`/treinamentos/turmas/${turmaId}`).catch(() => null);
+            if (turma) turmasMap[turmaId] = turma;
+          })
+        );
       }
 
-      return certsData.map((cert: any) => {
+      // Ordenar por data_emissao descendente (cliente-side, pois o endpoint nao garante ordem)
+      const sorted = [...certsData].sort((a: any, b: any) => {
+        if (!a.data_emissao) return 1;
+        if (!b.data_emissao) return -1;
+        return b.data_emissao.localeCompare(a.data_emissao);
+      });
+
+      return sorted.map((cert: any) => {
         const turma = turmasMap[cert.turma_id];
+        const catalogo = turma?.treinamento_id ? catalogoMap[turma.treinamento_id] : null;
         return {
           id: cert.id,
           nome: cert.nome,
@@ -345,9 +298,9 @@ const ColaboradorDetalhes = () => {
           data_emissao: cert.data_emissao,
           data_validade: cert.data_validade,
           observacoes: cert.observacoes,
-          turma_codigo: turma?.codigo_turma || `Turma #${turma?.numero_turma || '?'}`,
-          treinamento_nome: turma?.catalogo_treinamentos?.nome || '',
-          treinamento_norma: turma?.catalogo_treinamentos?.norma || ''
+          turma_codigo: turma?.codigo_turma || (turma ? `Turma #${turma.numero_turma || '?'}` : ''),
+          treinamento_nome: catalogo?.nome || '',
+          treinamento_norma: catalogo?.norma || ''
         };
       });
     },
@@ -619,18 +572,18 @@ const ColaboradorDetalhes = () => {
   // Função para excluir treinamento realizado
   const handleExcluirTreinamentoRealizado = async (treinamentoId: string) => {
     if (!colaborador?.id) return;
-    
+
     if (!confirm('Tem certeza que deseja excluir este treinamento realizado?')) return;
 
     try {
-      const { error } = await supabase
-        .from('colaboradores_treinamentos')
-        .delete()
-        .eq('colaborador_id', colaborador.id)
-        .eq('treinamento_id', treinamentoId)
-        .eq('status', 'realizado');
+      // Buscar o vinculo para obter o ct_id necessario para o DELETE
+      const vinculos = await api.get<any[]>(`/treinamentos/colaboradores/${colaborador.id}/treinamentos`).catch(() => [] as any[]);
+      const vinculo = (vinculos || []).find(
+        (v: any) => v.treinamento_id === treinamentoId && v.status === 'realizado'
+      );
+      if (!vinculo) throw new Error('Vínculo não encontrado');
 
-      if (error) throw error;
+      await api.del(`/treinamentos/colaboradores/${colaborador.id}/treinamentos/${vinculo.id}`);
 
       queryClient.invalidateQueries({ queryKey: ['treinamentos-realizados'] });
       toast({
@@ -654,8 +607,8 @@ const ColaboradorDetalhes = () => {
       }
 
       // Pegar a primeira data das aulas realizadas como data do treinamento (para compatibilidade)
-      const primeiraData = aulasRealizadas.length > 0 
-        ? aulasRealizadas.sort((a, b) => a.data.localeCompare(b.data))[0].data 
+      const primeiraData = aulasRealizadas.length > 0
+        ? aulasRealizadas.sort((a, b) => a.data.localeCompare(b.data))[0].data
         : null;
 
       let colaboradorTreinamentoId: string;
@@ -663,56 +616,59 @@ const ColaboradorDetalhes = () => {
       if (editandoTreinamento) {
         // Atualizar registro existente
         colaboradorTreinamentoId = editandoTreinamento.colaborador_treinamento_id;
-        
-        const { error } = await supabase
-          .from('colaboradores_treinamentos')
-          .update({
+
+        await api.put(`/treinamentos/colaboradores/${colaborador.id}/treinamentos/${colaboradorTreinamentoId}`, {
+          status: 'realizado',
+          data_realizacao: primeiraData,
+        });
+
+        // Deletar datas antigas (buscar lista primeiro e deletar em loop)
+        const datasAntigas = await api.get<any[]>(`/treinamentos/colaboradores-treinamentos/${colaboradorTreinamentoId}/datas`).catch(() => [] as any[]);
+        await Promise.all(
+          (datasAntigas || []).map((d: any) =>
+            api.del(`/treinamentos/colaboradores-treinamentos/${colaboradorTreinamentoId}/datas/${d.id}`).catch(() => null)
+          )
+        );
+      } else {
+        // Verificar se ja existe vinculo para fazer upsert (update ou create)
+        const vinculosExistentes = await api.get<any[]>(`/treinamentos/colaboradores/${colaborador.id}/treinamentos`).catch(() => [] as any[]);
+        const vinculoExistente = (vinculosExistentes || []).find((v: any) => v.treinamento_id === treinamentoSelecionado);
+
+        if (vinculoExistente) {
+          colaboradorTreinamentoId = vinculoExistente.id;
+          await api.put(`/treinamentos/colaboradores/${colaborador.id}/treinamentos/${colaboradorTreinamentoId}`, {
             status: 'realizado',
             data_realizacao: primeiraData,
-          })
-          .eq('id', colaboradorTreinamentoId);
-
-        if (error) throw error;
-
-        // Deletar datas antigas
-        await supabase
-          .from('colaboradores_treinamentos_datas')
-          .delete()
-          .eq('colaborador_treinamento_id', colaboradorTreinamentoId);
-      } else {
-        // Inserir novo registro
-        const { data: insertedData, error } = await supabase
-          .from('colaboradores_treinamentos')
-          .upsert({
-            colaborador_id: colaborador.id,
+          });
+          // Deletar datas antigas
+          const datasAntigas = await api.get<any[]>(`/treinamentos/colaboradores-treinamentos/${colaboradorTreinamentoId}/datas`).catch(() => [] as any[]);
+          await Promise.all(
+            (datasAntigas || []).map((d: any) =>
+              api.del(`/treinamentos/colaboradores-treinamentos/${colaboradorTreinamentoId}/datas/${d.id}`).catch(() => null)
+            )
+          );
+        } else {
+          const created = await api.post<any>(`/treinamentos/colaboradores/${colaborador.id}/treinamentos`, {
             treinamento_id: treinamentoSelecionado,
             status: 'realizado',
             data_realizacao: primeiraData,
-          }, {
-            onConflict: 'colaborador_id,treinamento_id'
-          })
-          .select('id')
-          .single();
-
-        if (error) throw error;
-        colaboradorTreinamentoId = insertedData.id;
+          });
+          colaboradorTreinamentoId = created.id;
+        }
       }
 
       // Inserir todas as datas na nova tabela
       if (aulasRealizadas.length > 0) {
-        const datasParaInserir = aulasRealizadas.map(aula => ({
-          colaborador_treinamento_id: colaboradorTreinamentoId,
-          data: aula.data,
-          inicio: aula.inicio,
-          fim: aula.fim,
-          horas: aula.horas
-        }));
-
-        const { error: datasError } = await supabase
-          .from('colaboradores_treinamentos_datas')
-          .insert(datasParaInserir);
-
-        if (datasError) throw datasError;
+        await Promise.all(
+          aulasRealizadas.map((aula) =>
+            api.post(`/treinamentos/colaboradores-treinamentos/${colaboradorTreinamentoId}/datas`, {
+              data: aula.data,
+              inicio: aula.inicio,
+              fim: aula.fim,
+              horas: aula.horas,
+            })
+          )
+        );
       }
     },
     onSuccess: () => {

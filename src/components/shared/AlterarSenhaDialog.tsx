@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import {
   Dialog,
@@ -87,37 +87,26 @@ export function AlterarSenhaDialog({ open, onOpenChange }: AlterarSenhaDialogPro
     setError(null);
 
     try {
-      // Verificar senha atual fazendo re-login
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: user.email,
-        password: senhaAtual,
+      // Verificar senha atual e atualizar para nova senha via backend
+      await api.post('/auth/change-password', {
+        current_password: senhaAtual,
+        new_password: novaSenha,
       });
-
-      if (signInError) {
-        setError('Senha atual incorreta');
-        setLoading(false);
-        return;
-      }
-
-      // Atualizar para nova senha
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: novaSenha,
-      });
-
-      if (updateError) {
-        throw updateError;
-      }
 
       toast.success('Senha alterada com sucesso! Faça login novamente.');
-      
+
       // Fazer logout e redirecionar para login
       await signOut();
       handleClose();
       navigate('/auth');
-      
+
     } catch (err: any) {
       console.error('Erro ao alterar senha:', err);
-      setError(err.message || 'Erro ao alterar senha. Tente novamente.');
+      if (err?.status === 401) {
+        setError('Senha atual incorreta');
+      } else {
+        setError(err?.detail || err?.message || 'Erro ao alterar senha. Tente novamente.');
+      }
     } finally {
       setLoading(false);
     }

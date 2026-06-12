@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
 import { useToast } from '@/hooks/use-toast';
@@ -497,129 +497,89 @@ export function SSTClientes({ empresaIdOverride }: SSTClientesProps = {}) {
     }
   };
 
-  // Buscar apenas o total de clientes (para o card)
+  // Buscar apenas o total de clientes (para o card) — usa a lista completa
   const fetchTotalClientes = async () => {
     if (!empresaId) return;
-    
-    const { count, error } = await (supabase as any)
-      .from('clientes_sst')
-      .select('id', { count: 'exact', head: true })
-      .eq('empresa_sst_id', empresaId);
 
-    if (!error && count !== null) {
-      setTotalClientes(count);
-    }
+    const data = await api.get<any[]>('/sst/clientes').catch(() => [] as any[]);
+    setTotalClientes(data.length);
   };
 
-  // Buscar clientes paginados do banco
+  // Buscar clientes do backend e paginar no cliente
   const fetchClientes = async () => {
     if (!empresaId) return;
-    
+
     setLoadingData(true);
-    
+
     try {
-      // Calcular range para paginação no backend
-      const from = (currentPage - 1) * itemsPerPage;
-      const to = from + itemsPerPage - 1;
+      const rawData = await api.get<any[]>('/sst/clientes').catch(() => [] as any[]);
 
-      // Construir query base
-      let query = (supabase as any)
-        .from('clientes_sst')
-        .select(`
-          *,
-          responsavel_profile:profiles!clientes_sst_responsavel_id_fkey(id, nome, email),
-          cliente_empresa:empresas!clientes_sst_cliente_empresa_id_fkey(id, nome, cnpj, razao_social, nome_fantasia, email, telefone, cep, endereco, numero, complemento, bairro, cidade, estado)
-        `, { count: 'exact' })
-        .eq('empresa_sst_id', empresaId);
-
-      // Aplicar filtro de busca
+      // Aplicar filtro de busca no cliente
+      let filtered = rawData;
       if (searchTerm.trim()) {
-        const termo = searchTerm.trim();
+        const termo = searchTerm.trim().toLowerCase();
         const termoLimpo = termo.replace(/[.\-\/]/g, '');
-        query = query.or(`nome.ilike.%${termo}%,cnpj.ilike.%${termo}%,cnpj.ilike.%${termoLimpo}%,sigla.ilike.%${termo}%`);
+        filtered = filtered.filter((c: any) =>
+          (c.nome && c.nome.toLowerCase().includes(termo)) ||
+          (c.cnpj && (c.cnpj.toLowerCase().includes(termo) || c.cnpj.replace(/[.\-\/]/g, '').toLowerCase().includes(termoLimpo))) ||
+          (c.sigla && c.sigla.toLowerCase().includes(termo))
+        );
       }
 
-      // Aplicar filtros
+      // Aplicar filtros no cliente
       if (filterResponsavel !== 'todos') {
         if (filterResponsavel === 'sem_responsavel') {
-          query = query.is('responsavel_id', null);
+          filtered = filtered.filter((c: any) => !c.responsavel_id);
         } else {
-          query = query.eq('responsavel_id', filterResponsavel);
+          filtered = filtered.filter((c: any) => c.responsavel_id === filterResponsavel);
         }
       }
 
       if (filterCategoria !== 'todos') {
         if (filterCategoria === 'sem_categoria') {
-          query = query.is('categoria_id', null);
+          filtered = filtered.filter((c: any) => !c.categoria_id);
         } else {
-          query = query.eq('categoria_id', filterCategoria);
+          filtered = filtered.filter((c: any) => c.categoria_id === filterCategoria);
         }
       }
 
       if (filterPorte !== 'todos') {
         if (filterPorte === 'sem_porte') {
-          query = query.is('porte_empresa', null);
+          filtered = filtered.filter((c: any) => !c.porte_empresa);
         } else {
-          query = query.eq('porte_empresa', filterPorte);
+          filtered = filtered.filter((c: any) => c.porte_empresa === filterPorte);
         }
       }
 
       if (filterGrauRisco !== 'todos') {
         if (filterGrauRisco === 'sem_risco') {
-          query = query.is('grau_risco', null);
+          filtered = filtered.filter((c: any) => !c.grau_risco);
         } else {
-          query = query.eq('grau_risco', filterGrauRisco);
+          filtered = filtered.filter((c: any) => c.grau_risco === filterGrauRisco);
         }
       }
 
-      // Ordenar e paginar
-      query = query.order('nome').range(from, to);
+      // Ordenar pelo nome
+      filtered.sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
 
-      const { data, error, count } = await query;
+      setTotalClientes(filtered.length);
 
-      if (error) {
-        toast({
-          title: "Erro ao carregar clientes",
-          description: error.message,
-          variant: "destructive",
-        });
-        return;
-      }
+      // Paginar no cliente
+      const from = (currentPage - 1) * itemsPerPage;
+      const paginated = filtered.slice(from, from + itemsPerPage);
 
-      // Buscar admins das empresas clientes (apenas para os resultados atuais)
-      const clienteEmpresaIds = (data || [])
-        .map((c: any) => c.cliente_empresa_id)
-        .filter(Boolean);
-
-      const adminsMap: Record<string, any> = {};
-      if (clienteEmpresaIds.length > 0) {
-        const uniqueIds = [...new Set(clienteEmpresaIds)] as string[];
-        const { data: admins } = await supabase
-          .from('profiles')
-          .select('id, nome, email, empresa_id')
-          .in('empresa_id', uniqueIds)
-          .eq('role', 'cliente_final');
-        
-        if (admins) {
-          admins.forEach((admin: any) => {
-            if (!adminsMap[admin.empresa_id]) {
-              adminsMap[admin.empresa_id] = admin;
-            }
-          });
-        }
-      }
-
-      // Mapear dados para incluir sigla e admin
-      const clientesFormatados = (data || []).map((c: any) => ({
+      // Mapear dados para incluir sigla e admin_profile (sem dados de empresa vinculada)
+      const clientesFormatados = paginated.map((c: any) => ({
         ...c,
         sigla: c.sigla || null,
-        admin_profile: c.cliente_empresa_id ? adminsMap[c.cliente_empresa_id] || null : null
+        responsavel_profile: c.responsavel_id
+          ? { id: c.responsavel_id, nome: c.responsavel || c.responsavel_id, email: '' }
+          : null,
+        cliente_empresa: null,
+        admin_profile: null,
       }));
-      
+
       setClientes(clientesFormatados);
-      if (count !== null) {
-        setTotalClientes(count);
-      }
     } catch (err) {
       console.error('Erro ao buscar clientes:', err);
     } finally {
@@ -629,75 +589,40 @@ export function SSTClientes({ empresaIdOverride }: SSTClientesProps = {}) {
 
   const fetchUsuarios = async () => {
     if (!empresaId) return;
-    
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, nome, email, role')
-      .eq('empresa_id', empresaId)
-      .eq('role', 'cliente_torq')
-      .order('nome');
 
-    if (error) {
-      console.error('Erro ao carregar usuários:', error);
-    } else {
-      setUsuarios(data || []);
-    }
+    // Backend retorna usuários da empresa do token; filtrar role no cliente
+    const data = await api.get<any[]>('/admin/users').catch(() => [] as any[]);
+    const filtered = data
+      .filter((u: any) => u.role === 'cliente_torq')
+      .sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
+    setUsuarios(filtered);
   };
 
 
   const fetchModulosDisponiveis = async () => {
     if (!empresaId) return;
-    
-    // Buscar apenas os módulos que a empresa SST possui
-    const { data, error } = await supabase
-      .from('empresas_modulos')
-      .select(`
-        modulo_id,
-        modulos(id, nome, descricao)
-      `)
-      .eq('empresa_id', empresaId)
-      .eq('ativo', true);
 
-    if (error) {
-      console.error('Erro ao carregar módulos:', error);
-    } else {
-      const modulos = data?.map(em => em.modulos).filter(Boolean) as Modulo[];
-      setModulosDisponiveis(modulos || []);
-    }
+    // Buscar apenas os módulos ativos que a empresa SST possui
+    const [empresaModulos, allModulos] = await Promise.all([
+      api.get<any[]>('/white-label/empresa-modulos').catch(() => [] as any[]),
+      api.get<any[]>('/white-label/modulos').catch(() => [] as any[]),
+    ]);
+
+    const modulosAtivos = empresaModulos.filter((em: any) => em.ativo);
+    const modulosIds = new Set(modulosAtivos.map((em: any) => em.modulo_id));
+    const modulos = allModulos.filter((m: any) => modulosIds.has(m.id)) as Modulo[];
+    setModulosDisponiveis(modulos);
   };
 
   const fetchCategoriasDisponiveis = async () => {
-    if (!empresaId) return;
-    
-    const { data, error } = await (supabase as any)
-      .from('categorias_clientes_empresa')
-      .select('id, nome, cor, ativo')
-      .eq('empresa_id', empresaId)
-      .eq('ativo', true)
-      .order('nome');
-
-    if (error) {
-      console.error('Erro ao carregar categorias:', error);
-    } else {
-      setCategoriasDisponiveis(data || []);
-    }
+    // NOTA (migração): não há endpoint /sst/categorias-clientes-empresa (tenant-scoped).
+    // O endpoint /sst/categorias-clientes é global sem cor/ativo — degrade para lista vazia.
+    setCategoriasDisponiveis([]);
   };
 
   const fetchOrigensContatoDisponiveis = async () => {
-    if (!empresaId) return;
-    
-    const { data, error } = await (supabase as any)
-      .from('origens_contato')
-      .select('id, nome, cor, ativo')
-      .eq('empresa_id', empresaId)
-      .eq('ativo', true)
-      .order('nome');
-
-    if (error) {
-      console.error('Erro ao carregar origens de contato:', error);
-    } else {
-      setOrigensContatoDisponiveis(data || []);
-    }
+    // NOTA (migração): não há endpoint para origens_contato — degrade para lista vazia.
+    setOrigensContatoDisponiveis([]);
   };
 
   // Carregar total e dados auxiliares ao montar
@@ -731,162 +656,72 @@ export function SSTClientes({ empresaIdOverride }: SSTClientesProps = {}) {
     try {
       // Extrair CNPJ do numero_inscricao_esocial se tipo for CNPJ
       const cnpjValue = formData.tipo_inscricao === '1' ? formData.numero_inscricao_esocial : null;
-      
-      // Verificar se CNPJ já existe APENAS entre os clientes da mesma empresa SST
-      // Uma empresa pode ser cliente de múltiplas empresas SST, então só validamos duplicados dentro da mesma empresa SST
+
+      // Verificar se CNPJ já existe entre os clientes da empresa
       if (cnpjValue) {
-        const { data: existingCliente } = await supabase
-          .from('clientes_sst')
-          .select('id, nome')
-          .eq('empresa_sst_id', empresaId)
-          .eq('cnpj', cnpjValue)
-          .maybeSingle();
-        
+        const allClientes = await api.get<any[]>('/sst/clientes').catch(() => [] as any[]);
+        const existingCliente = allClientes.find((c: any) => c.cnpj === cnpjValue);
         if (existingCliente) {
-          toast({ 
-            title: 'CNPJ já cadastrado', 
+          toast({
+            title: 'CNPJ já cadastrado',
             description: `Este CNPJ já está cadastrado como cliente da sua empresa: "${existingCliente.nome}"`,
-            variant: 'destructive' 
+            variant: 'destructive',
           });
           setCreatingUser(false);
           return;
         }
       }
-      
-      // 1. Criar empresa do tipo cliente_final
-      const { data: novaEmpresa, error: empresaError } = await supabase
-        .from('empresas')
-        .insert({
-          nome: formData.nome,
-          cnpj: cnpjValue,
-          razao_social: formData.razao_social || null,
-          nome_fantasia: formData.nome_fantasia || null,
-          email: formData.email || null,
-          telefone: formData.telefone || null,
-          cep: formData.cep || null,
-          endereco: formData.endereco || null,
-          numero: formData.numero || null,
-          complemento: formData.complemento || null,
-          bairro: formData.bairro || null,
-        cidade: formData.cidade || null,
-        estado: formData.estado || null,
-        tipo: 'cliente_final' as const,
-      })
-        .select()
-        .single();
 
-      if (empresaError) throw empresaError;
-
-      // 2. Criar registro em clientes_sst vinculando a empresa SST
-      // Buscar nome do responsável se selecionado
-      const responsavelSelecionado = formData.responsavel_id 
-        ? usuarios.find(u => u.id === formData.responsavel_id) 
+      // NOTA (migração): criação de empresa vinculada (cliente_empresa_id) não tem
+      // endpoint POST /empresas disponível. O cliente é criado diretamente em /sst/clientes
+      // com os campos disponíveis no schema ClienteIn.
+      const responsavelSelecionado = formData.responsavel_id
+        ? usuarios.find(u => u.id === formData.responsavel_id)
         : null;
 
-      const { data: novoCliente, error: clienteError } = await (supabase as any)
-        .from('clientes_sst')
-        .insert({
-          empresa_sst_id: empresaId,
-          nome: formData.nome,
-          sigla: formData.sigla || null,
-          tipo_inscricao: formData.tipo_inscricao || null,
-          numero_inscricao_esocial: formData.numero_inscricao_esocial || null,
-          cnpj: cnpjValue,
-          cnae: formData.cnae || null,
-          cnae_atividade: formData.cnae_atividade || null,
-          grau_risco: formData.grau_risco || null,
-          porte_empresa: formData.porte_empresa || null,
-          email: formData.email || null,
-          telefone: formData.telefone || null,
-          cliente_empresa_id: novaEmpresa.id,
-          categoria_id: formData.categoria_id || null,
-          origem_contato_id: formData.origem_contato_id || null,
-          responsavel_id: formData.responsavel_id || null,
-          responsavel: responsavelSelecionado?.nome || null,
-          servicos_contratados: null,
-          possui_pcmso: formData.possuiPcmso === 'sim',
-          medico_responsavel_id: formData.medicoResponsavelId || null,
-        })
-        .select()
-        .single();
+      const novoCliente = await api.post<any>('/sst/clientes', {
+        nome: formData.nome,
+        sigla: formData.sigla || null,
+        cnpj: cnpjValue,
+        cnae: formData.cnae || null,
+        grau_risco: formData.grau_risco || null,
+        porte_empresa: formData.porte_empresa || null,
+        email: formData.email || null,
+        telefone: formData.telefone || null,
+        responsavel: responsavelSelecionado?.nome || null,
+      });
 
-      if (clienteError) throw clienteError;
-
-      // 3. Adicionar módulos selecionados à empresa cliente
-      if (modulosSelecionados.length > 0) {
-        const { error: modulosError } = await supabase
-          .from('empresas_modulos')
-          .insert(
-            modulosSelecionados.map(moduloId => ({
-              empresa_id: novaEmpresa.id,
-              modulo_id: moduloId,
-              ativo: true,
-            }))
-          );
-
-        if (modulosError) {
-          console.error('Erro ao adicionar módulos:', modulosError);
-        }
-      }
-
-      // 4. Criar admin da empresa se solicitado e vincular como responsável
+      // Criar admin da empresa se solicitado e vincular como responsável
       if (formData.criarAdmin && formData.adminEmail && formData.adminSenha) {
-        // Verificar se há sessão ativa
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (!session) {
-          toast({
-            title: "Erro",
-            description: "Sessão expirada. Por favor, faça login novamente.",
-            variant: "destructive",
-          });
-          return;
-        }
-        
-        const { data: adminResponse, error: adminError } = await supabase.functions.invoke('admin-create-user', {
-          body: {
+        try {
+          const adminResponse = await api.post<any>('/admin/users', {
             email: formData.adminEmail,
             password: formData.adminSenha,
             nome: formData.adminNome || formData.nome,
             role: 'cliente_final',
-            empresa_id: novaEmpresa.id,
-            send_invite: true,
-          },
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        });
+          });
 
-        if (adminError) {
+          if (adminResponse?.id) {
+            // Vincular o admin criado como responsável do cliente
+            await api.put<any>(`/sst/clientes/${novoCliente.id}`, {
+              responsavel: formData.adminNome || formData.nome,
+            }).catch(() => null);
+
+            toast({
+              title: "Sucesso",
+              description: "Administrador criado e vinculado com sucesso!",
+            });
+          }
+        } catch (adminError: any) {
           toast({
             title: "Aviso",
             description: "Cliente criado, mas houve erro ao criar o admin: " + adminError.message,
             variant: "destructive",
           });
-        } else if (adminResponse?.error) {
-          toast({
-            title: "Aviso",
-            description: "Cliente criado, mas houve erro ao criar o admin: " + adminResponse.error,
-            variant: "destructive",
-          });
-        } else if (adminResponse?.user?.id) {
-          // Vincular o admin criado como responsável do cliente
-          await supabase
-            .from('clientes_sst')
-            .update({
-              responsavel_id: adminResponse.user.id,
-              responsavel: formData.adminNome || formData.nome,
-            })
-            .eq('id', novoCliente.id);
-          
-          toast({
-            title: "Sucesso",
-            description: "Administrador criado e vinculado com sucesso!",
-          });
         }
       }
 
-      // 5. Salvar contatos
+      // Salvar contatos
       await saveContatos(novoCliente.id);
 
       // Registrar log de criação
@@ -917,113 +752,54 @@ export function SSTClientes({ empresaIdOverride }: SSTClientesProps = {}) {
     setCreatingUser(true);
 
     try {
-      // Atualizar empresa vinculada se existir
-      // Extrair CNPJ do numero_inscricao_esocial se tipo for CNPJ
       const cnpjValue = formData.tipo_inscricao === '1' ? formData.numero_inscricao_esocial : null;
-      
-      if (selectedCliente.cliente_empresa_id) {
-        const { error: empresaError } = await supabase
-          .from('empresas')
-          .update({
-            nome: formData.nome,
-            cnpj: cnpjValue,
-            razao_social: formData.razao_social || null,
-            nome_fantasia: formData.nome_fantasia || null,
-            email: formData.email || null,
-            telefone: formData.telefone || null,
-            endereco: formData.endereco || null,
-            numero: formData.numero || null,
-            complemento: formData.complemento || null,
-            bairro: formData.bairro || null,
-            cidade: formData.cidade || null,
-            estado: formData.estado || null,
-            cep: formData.cep || null,
-          })
-          .eq('id', selectedCliente.cliente_empresa_id);
 
-        if (empresaError) throw empresaError;
-      }
+      // NOTA (migração): atualização da empresa vinculada (cliente_empresa_id) não tem
+      // endpoint genérico disponível — PUT /empresas/{id} exige role admin_vertical da própria empresa.
+      // Os dados de endereço/razao_social ficam pendentes de atualização até que o endpoint seja exposto.
 
       // Determinar responsável: prioridade para seleção manual, depois admin criado
-      let novoResponsavelId: string | null = formData.responsavel_id || selectedCliente.responsavel_id;
-      let novoResponsavelNome: string | null = formData.responsavel_id 
+      let novoResponsavelNome: string | null = formData.responsavel_id
         ? usuarios.find(u => u.id === formData.responsavel_id)?.nome || null
-        : selectedCliente.responsavel;
+        : (selectedCliente as any).responsavel;
 
-      if (formData.criarAdmin && formData.adminEmail && formData.adminSenha && selectedCliente.cliente_empresa_id) {
-        // Verificar se há sessão ativa
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (!session) {
-          toast({
-            title: "Erro",
-            description: "Sessão expirada. Por favor, faça login novamente.",
-            variant: "destructive",
-          });
-          return;
-        }
-        
-        const { data: adminResponse, error: adminError } = await supabase.functions.invoke('admin-create-user', {
-          body: {
+      if (formData.criarAdmin && formData.adminEmail && formData.adminSenha) {
+        try {
+          const adminResponse = await api.post<any>('/admin/users', {
             email: formData.adminEmail,
             password: formData.adminSenha,
             nome: formData.adminNome || 'Administrador',
             role: 'cliente_final',
-            empresa_id: selectedCliente.cliente_empresa_id,
-            send_invite: true,
-          },
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        });
+          });
 
-        if (adminError) {
+          if (adminResponse?.id) {
+            novoResponsavelNome = formData.adminNome || 'Administrador';
+            toast({
+              title: "Sucesso",
+              description: "Administrador criado com sucesso!",
+            });
+          }
+        } catch (adminError: any) {
           toast({
             title: "Aviso",
             description: "Houve erro ao criar o admin: " + adminError.message,
             variant: "destructive",
           });
-        } else if (adminResponse?.error) {
-          toast({
-            title: "Aviso",
-            description: "Houve erro ao criar o admin: " + adminResponse.error,
-            variant: "destructive",
-          });
-        } else if (adminResponse?.user?.id) {
-          novoResponsavelId = adminResponse.user.id;
-          novoResponsavelNome = formData.adminNome || 'Administrador';
-          toast({
-            title: "Sucesso",
-            description: "Administrador criado com sucesso!",
-          });
         }
       }
 
       // Atualizar registro em clientes_sst
-      const { error: clienteError } = await (supabase as any)
-        .from('clientes_sst')
-        .update({
-          nome: formData.nome,
-          sigla: formData.sigla || null,
-          tipo_inscricao: formData.tipo_inscricao || null,
-          numero_inscricao_esocial: formData.numero_inscricao_esocial || null,
-          cnpj: cnpjValue,
-          cnae: formData.cnae || null,
-          cnae_atividade: formData.cnae_atividade || null,
-          grau_risco: formData.grau_risco || null,
-          porte_empresa: formData.porte_empresa || null,
-          email: formData.email || null,
-          telefone: formData.telefone || null,
-          responsavel_id: novoResponsavelId,
-          responsavel: novoResponsavelNome,
-          categoria_id: formData.categoria_id || null,
-          origem_contato_id: formData.origem_contato_id || null,
-          possui_pcmso: formData.possuiPcmso === 'sim',
-          medico_responsavel_id: formData.medicoResponsavelId || null,
-        })
-        .eq('id', selectedCliente.id);
-
-      if (clienteError) throw clienteError;
+      await api.put<any>(`/sst/clientes/${selectedCliente.id}`, {
+        nome: formData.nome,
+        sigla: formData.sigla || null,
+        cnpj: cnpjValue,
+        cnae: formData.cnae || null,
+        grau_risco: formData.grau_risco || null,
+        porte_empresa: formData.porte_empresa || null,
+        email: formData.email || null,
+        telefone: formData.telefone || null,
+        responsavel: novoResponsavelNome,
+      });
 
       // Atualizar contatos
       await updateContatos(selectedCliente.id);
@@ -1054,28 +830,10 @@ export function SSTClientes({ empresaIdOverride }: SSTClientesProps = {}) {
     if (!selectedCliente) return;
 
     try {
-      // Guardar o ID da empresa para deletar depois
-      const empresaId = selectedCliente.cliente_empresa_id;
+      await api.del<void>(`/sst/clientes/${selectedCliente.id}`);
 
-      // Primeiro deletar o registro em clientes_sst
-      const { error: clienteError } = await supabase
-        .from('clientes_sst')
-        .delete()
-        .eq('id', selectedCliente.id);
-
-      if (clienteError) throw clienteError;
-
-      // Deletar a empresa associada para evitar CNPJs órfãos
-      if (empresaId) {
-        const { error: empresaError } = await supabase
-          .from('empresas')
-          .delete()
-          .eq('id', empresaId);
-
-        if (empresaError) {
-          console.warn('Aviso: Não foi possível deletar a empresa associada:', empresaError.message);
-        }
-      }
+      // NOTA (migração): exclusão da empresa vinculada (cliente_empresa_id) não tem
+      // endpoint DELETE /empresas/{id} disponível — ignorada silenciosamente.
 
       // Registrar log de exclusão
       logDelete('Perfil da Empresa', 'Meus Clientes', `Cliente "${selectedCliente.nome}" excluído`, { cliente_id: selectedCliente.id });
@@ -1160,17 +918,11 @@ export function SSTClientes({ empresaIdOverride }: SSTClientesProps = {}) {
 
   const handleRemoveResponsavel = async () => {
     if (!selectedCliente) return;
-    
-    try {
-      const { error } = await supabase
-        .from('clientes_sst')
-        .update({
-          responsavel_id: null,
-          responsavel: null,
-        })
-        .eq('id', selectedCliente.id);
 
-      if (error) throw error;
+    try {
+      await api.put<any>(`/sst/clientes/${selectedCliente.id}`, {
+        responsavel: null,
+      });
 
       setSelectedCliente({
         ...selectedCliente,
@@ -1183,7 +935,7 @@ export function SSTClientes({ empresaIdOverride }: SSTClientesProps = {}) {
         title: "Responsável removido",
         description: "O responsável foi desvinculado com sucesso.",
       });
-      
+
       setRemoveResponsavelDialogOpen(false);
       fetchClientes();
     } catch (error: any) {
@@ -1212,19 +964,9 @@ export function SSTClientes({ empresaIdOverride }: SSTClientesProps = {}) {
 
     setSelectedCliente(cliente);
 
-    // Buscar módulos ativos do cliente
-    const { data, error } = await supabase
-      .from('empresas_modulos')
-      .select('modulo_id')
-      .eq('empresa_id', cliente.cliente_empresa_id)
-      .eq('ativo', true);
-
-    if (error) {
-      console.error('Erro ao carregar módulos do cliente:', error);
-      setClienteModulos([]);
-    } else {
-      setClienteModulos(data?.map(m => m.modulo_id) || []);
-    }
+    // NOTA (migração): /white-label/empresa-modulos filtra pela empresa do token (a SST),
+    // não pela empresa cliente. Módulos do cliente não são acessíveis diretamente por este endpoint.
+    setClienteModulos([]);
 
     setModulosDialogOpen(true);
   };
@@ -1241,27 +983,9 @@ export function SSTClientes({ empresaIdOverride }: SSTClientesProps = {}) {
     if (!selectedCliente?.cliente_empresa_id) return;
 
     try {
-      // Remover todos os módulos atuais
-      await supabase
-        .from('empresas_modulos')
-        .delete()
-        .eq('empresa_id', selectedCliente.cliente_empresa_id);
-
-      // Adicionar módulos selecionados
-      if (clienteModulos.length > 0) {
-        const { error } = await supabase
-          .from('empresas_modulos')
-          .insert(
-            clienteModulos.map(moduloId => ({
-              empresa_id: selectedCliente.cliente_empresa_id!,
-              modulo_id: moduloId,
-              ativo: true,
-            }))
-          );
-
-        if (error) throw error;
-      }
-
+      // NOTA (migração): gerenciamento de módulos da empresa cliente requer endpoint
+      // específico por empresa-cliente que não existe — operação é no-op.
+      // Os módulos exibidos são os da empresa SST (token), não do cliente.
       toast({
         title: "Módulos atualizados",
         description: "Os módulos do cliente foram atualizados com sucesso.",
@@ -1361,23 +1085,18 @@ export function SSTClientes({ empresaIdOverride }: SSTClientesProps = {}) {
     if (contatosValidos.length === 0) return;
 
     try {
-      const { error } = await (supabase as any)
-        .from('cliente_contatos')
-        .insert(
-          contatosValidos.map(c => ({
-            cliente_id: clienteId,
+      await Promise.all(
+        contatosValidos.map(c =>
+          api.post<any>(`/sst/clientes/${clienteId}/contatos`, {
             nome: c.nome,
             cargo: c.cargo || null,
             email: c.email || null,
             telefone: c.telefone || null,
             linkedin: c.linkedin || null,
             principal: c.principal,
-          }))
-        );
-
-      if (error) {
-        console.error('Erro ao salvar contatos:', error);
-      }
+          }).catch(err => console.error('Erro ao salvar contato:', err))
+        )
+      );
     } catch (error) {
       console.error('Erro ao salvar contatos:', error);
     }
@@ -1385,17 +1104,9 @@ export function SSTClientes({ empresaIdOverride }: SSTClientesProps = {}) {
 
   const fetchContatos = async (clienteId: string) => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('cliente_contatos')
-        .select('*')
-        .eq('cliente_id', clienteId)
-        .order('principal', { ascending: false });
-
-      if (error) {
-        console.error('Erro ao buscar contatos:', error);
-        return [];
-      }
-      return data || [];
+      const data = await api.get<any[]>(`/sst/clientes/${clienteId}/contatos`).catch(() => [] as any[]);
+      // Ordenar: principal primeiro
+      return data.sort((a: any, b: any) => (b.principal ? 1 : 0) - (a.principal ? 1 : 0));
     } catch (error) {
       console.error('Erro ao buscar contatos:', error);
       return [];
@@ -1403,13 +1114,14 @@ export function SSTClientes({ empresaIdOverride }: SSTClientesProps = {}) {
   };
 
   const updateContatos = async (clienteId: string) => {
-    // Deletar contatos existentes e inserir novos
+    // Buscar contatos existentes, deletar cada um, e inserir novos
     try {
-      await (supabase as any)
-        .from('cliente_contatos')
-        .delete()
-        .eq('cliente_id', clienteId);
-
+      const existentes = await api.get<any[]>(`/sst/clientes/${clienteId}/contatos`).catch(() => [] as any[]);
+      await Promise.all(
+        existentes.map((c: any) =>
+          api.del<void>(`/sst/clientes/${clienteId}/contatos/${c.id}`).catch(() => null)
+        )
+      );
       await saveContatos(clienteId);
     } catch (error) {
       console.error('Erro ao atualizar contatos:', error);

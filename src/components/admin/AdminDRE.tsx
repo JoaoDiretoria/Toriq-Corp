@@ -7,7 +7,7 @@ import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { parseISO, getMonth, getYear } from 'date-fns';
 import {
   TrendingUp,
@@ -43,8 +43,6 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-
-const TORIQ_EMPRESA_ID = '11111111-1111-1111-1111-111111111111';
 
 // Tipos de classificação de despesas do plano_despesas
 const TIPOS_DESPESA = {
@@ -112,28 +110,20 @@ export function AdminDRE() {
   const [contasPagar, setContasPagar] = useState<any[]>([]);
   const [contasReceber, setContasReceber] = useState<any[]>([]);
 
-  // Carregar dados do Supabase
+  // Carregar dados do backend
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
       try {
         // Carregar contas a pagar
-        const { data: contasPagarData } = await (supabase as any)
-          .from('contas_pagar')
-          .select('*')
-          .eq('empresa_id', TORIQ_EMPRESA_ID)
-          .eq('arquivado', false);
-        
-        setContasPagar(contasPagarData || []);
+        const contasPagarAll = await api.get<any[]>('/financeiro/contas-pagar').catch(() => [] as any[]);
+        // Filtro de arquivado replicado no cliente (backend devolve todos os registros do tenant)
+        setContasPagar((contasPagarAll || []).filter((c: any) => !c.arquivado));
 
         // Carregar contas a receber
-        const { data: contasReceberData } = await (supabase as any)
-          .from('contas_receber')
-          .select('*')
-          .eq('empresa_id', TORIQ_EMPRESA_ID)
-          .eq('arquivado', false);
-        
-        setContasReceber(contasReceberData || []);
+        const contasReceberAll = await api.get<any[]>('/financeiro/contas-receber').catch(() => [] as any[]);
+        // Filtro de arquivado replicado no cliente (backend devolve todos os registros do tenant)
+        setContasReceber((contasReceberAll || []).filter((c: any) => !c.arquivado));
       } catch (error) {
         console.error('Erro ao carregar dados:', error);
         toast({ title: 'Erro ao carregar dados', variant: 'destructive' });

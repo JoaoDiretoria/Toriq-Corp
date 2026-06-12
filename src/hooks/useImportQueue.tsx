@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { toast } from 'sonner';
 
 interface ImportJob {
@@ -36,18 +36,14 @@ export function ImportQueueProvider({ children }: { children: ReactNode }) {
   // Carregar jobs ativos ao iniciar
   const refreshJobs = useCallback(async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const all = await api.get<any[]>('/sistema/import-queue').catch(() => [] as any[]);
 
-      const { data, error } = await supabase
-        .from('import_queue' as any)
-        .select('*')
-        .in('status', ['pending', 'processing'])
-        .order('created_at', { ascending: false });
+      // Filtrar apenas pending/processing no cliente (o endpoint retorna todos da empresa)
+      const filtered = (all || []).filter((job: any) =>
+        job.status === 'pending' || job.status === 'processing'
+      );
 
-      if (error) throw error;
-
-      const jobs: ImportJob[] = (data || []).map((job: any) => ({
+      const jobs: ImportJob[] = filtered.map((job: any) => ({
         id: job.id,
         tipo: job.tipo,
         status: job.status,
@@ -84,36 +80,23 @@ export function ImportQueueProvider({ children }: { children: ReactNode }) {
   // Iniciar nova importação
   const startImport = async (empresaId: string, tipo: string, data: any[]): Promise<string | null> => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast.error('Usuário não autenticado');
-        return null;
-      }
-
-      const { data: job, error } = await supabase
-        .from('import_queue' as any)
-        .insert({
-          empresa_id: empresaId,
-          user_id: user.id,
-          tipo,
-          status: 'pending',
-          total_rows: data.length,
-          processed_rows: 0,
-          success_count: 0,
-          error_count: 0,
-          data: data,
-          errors: [],
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
+      // empresa_id e user_id são injetados pelo backend a partir do token
+      const job = await api.post<any>('/sistema/import-queue', {
+        tipo,
+        status: 'pending',
+        total_rows: data.length,
+        processed_rows: 0,
+        success_count: 0,
+        error_count: 0,
+        data: data,
+        errors: [],
+      });
 
       toast.success(`Importação iniciada: ${data.length} registros na fila`);
       setIsMinimized(false);
-      
+
       await refreshJobs();
-      
+
       // Iniciar processamento
       if (job) {
         processNextBatch(job.id);
@@ -129,10 +112,7 @@ export function ImportQueueProvider({ children }: { children: ReactNode }) {
   // Cancelar importação
   const cancelImport = async (jobId: string) => {
     try {
-      await supabase
-        .from('import_queue' as any)
-        .update({ status: 'cancelled' })
-        .eq('id', jobId);
+      await api.put<any>(`/sistema/import-queue/${jobId}`, { status: 'cancelled' });
 
       toast.info('Importação cancelada');
       await refreshJobs();
@@ -144,18 +124,14 @@ export function ImportQueueProvider({ children }: { children: ReactNode }) {
   // Processar próximo lote
   const processNextBatch = async (jobId: string) => {
     if (processingJobId === jobId) return;
-    
+
     setProcessingJobId(jobId);
 
     try {
       // Buscar job atual
-      const { data: job, error: fetchError } = await supabase
-        .from('import_queue' as any)
-        .select('*')
-        .eq('id', jobId)
-        .single();
+      const job = await api.get<any>(`/sistema/import-queue/${jobId}`).catch(() => null);
 
-      if (fetchError || !job) {
+      if (!job) {
         setProcessingJobId(null);
         return;
       }
@@ -167,10 +143,10 @@ export function ImportQueueProvider({ children }: { children: ReactNode }) {
 
       // Atualizar status para processing
       if (job.status === 'pending') {
-        await supabase
-          .from('import_queue' as any)
-          .update({ status: 'processing', started_at: new Date().toISOString() })
-          .eq('id', jobId);
+        await api.put<any>(`/sistema/import-queue/${jobId}`, {
+          status: 'processing',
+          started_at: new Date().toISOString(),
+        });
       }
 
       const dataToProcess = job.data as any[];
@@ -217,29 +193,26 @@ export function ImportQueueProvider({ children }: { children: ReactNode }) {
             instagram: row['Instagram']?.toString().trim() || null,
           };
 
-          const { data: empresaInserida, error: insertError } = await supabase
-            .from('empresas')
-            .insert(empresaData as any)
-            .select('id')
-            .single();
+          // NOTA (migração): não existe POST /empresas no backend — a inserção de
+          // empresas via importação em lote ainda não tem endpoint equivalente.
+          // Degradando: conta como erro de linha até o endpoint ser criado.
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const _empresaData = empresaData;
+          throw new Error('Endpoint POST /empresas ainda não disponível no backend — aguardar implementação');
 
-          if (insertError) throw insertError;
-
-          // Inserir contato se houver
-          const contatoNome = row['Contato - Nome']?.toString().trim();
-          if (contatoNome && empresaInserida?.id) {
-            await supabase
-              .from('empresa_contatos' as any)
-              .insert({
-                empresa_id: empresaInserida.id,
-                nome: contatoNome,
-                cargo: row['Contato - Cargo']?.toString().trim() || null,
-                email: row['Contato - E-mail']?.toString().trim() || null,
-                telefone: row['Contato - Telefone']?.toString().trim() || null,
-                linkedin: row['Contato - LinkedIn']?.toString().trim() || null,
-                principal: true,
-              });
-          }
+          // Inserir contato se houver (mantido para quando o endpoint acima for criado)
+          // const contatoNome = row['Contato - Nome']?.toString().trim();
+          // if (contatoNome && empresaInserida?.id) {
+          //   await api.post<any>('/cadastros/empresa-contatos', {
+          //     empresa_id: empresaInserida.id,
+          //     nome: contatoNome,
+          //     cargo: row['Contato - Cargo']?.toString().trim() || null,
+          //     email: row['Contato - E-mail']?.toString().trim() || null,
+          //     telefone: row['Contato - Telefone']?.toString().trim() || null,
+          //     linkedin: row['Contato - LinkedIn']?.toString().trim() || null,
+          //     principal: true,
+          //   });
+          // }
 
           successCount++;
         } catch (error: any) {
@@ -252,17 +225,14 @@ export function ImportQueueProvider({ children }: { children: ReactNode }) {
       const isComplete = newProcessedRows >= dataToProcess.length;
 
       // Atualizar progresso
-      await supabase
-        .from('import_queue' as any)
-        .update({
-          processed_rows: newProcessedRows,
-          success_count: successCount,
-          error_count: errorCount,
-          errors: errors,
-          status: isComplete ? 'completed' : 'processing',
-          completed_at: isComplete ? new Date().toISOString() : null,
-        })
-        .eq('id', jobId);
+      await api.put<any>(`/sistema/import-queue/${jobId}`, {
+        processed_rows: newProcessedRows,
+        success_count: successCount,
+        error_count: errorCount,
+        errors: errors,
+        status: isComplete ? 'completed' : 'processing',
+        completed_at: isComplete ? new Date().toISOString() : null,
+      });
 
       await refreshJobs();
 
@@ -280,11 +250,8 @@ export function ImportQueueProvider({ children }: { children: ReactNode }) {
     } catch (error: any) {
       console.error('Erro no processamento:', error);
       setProcessingJobId(null);
-      
-      await supabase
-        .from('import_queue' as any)
-        .update({ status: 'failed' })
-        .eq('id', jobId);
+
+      await api.put<any>(`/sistema/import-queue/${jobId}`, { status: 'failed' }).catch(() => {});
     }
   };
 

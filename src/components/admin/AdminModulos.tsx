@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -129,29 +129,21 @@ export function AdminModulos() {
   const { data: modulos, isLoading } = useQuery({
     queryKey: ['modulos'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('modulos')
-        .select('*')
-        .order('nome');
-
-      if (error) throw error;
-      return data as Modulo[];
+      const data = await api.get<any[]>('/white-label/modulos').catch(() => [] as any[]);
+      return (data as Modulo[]).sort((a, b) => a.nome.localeCompare(b.nome));
     },
   });
 
   // Create módulo
+  // NOTA (migração): POST /white-label/modulos não existe — módulos são catálogo global somente leitura no backend.
   const createMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
-      const { error } = await supabase
-        .from('modulos')
-        .insert({
-          nome: data.nome,
-          descricao: data.descricao || null,
-          icone: data.icone,
-          rota: data.rota.startsWith('/') ? data.rota : `/${data.rota}`,
-        });
-
-      if (error) throw error;
+      await api.post<any>('/white-label/modulos', {
+        nome: data.nome,
+        descricao: data.descricao || null,
+        icone: data.icone,
+        rota: data.rota.startsWith('/') ? data.rota : `/${data.rota}`,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['modulos'] });
@@ -165,19 +157,15 @@ export function AdminModulos() {
   });
 
   // Update módulo
+  // NOTA (migração): PUT /white-label/modulos/{id} não existe — módulos são catálogo global somente leitura no backend.
   const updateMutation = useMutation({
     mutationFn: async (data: { id: string } & typeof formData) => {
-      const { error } = await supabase
-        .from('modulos')
-        .update({
-          nome: data.nome,
-          descricao: data.descricao || null,
-          icone: data.icone,
-          rota: data.rota.startsWith('/') ? data.rota : `/${data.rota}`,
-        })
-        .eq('id', data.id);
-
-      if (error) throw error;
+      await api.put<any>(`/white-label/modulos/${data.id}`, {
+        nome: data.nome,
+        descricao: data.descricao || null,
+        icone: data.icone,
+        rota: data.rota.startsWith('/') ? data.rota : `/${data.rota}`,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['modulos'] });
@@ -192,14 +180,10 @@ export function AdminModulos() {
   });
 
   // Delete módulo
+  // NOTA (migração): DELETE /white-label/modulos/{id} não existe — módulos são catálogo global somente leitura no backend.
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('modulos')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await api.del<any>(`/white-label/modulos/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['modulos'] });

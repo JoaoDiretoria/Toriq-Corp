@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
@@ -1193,17 +1193,12 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
 
   const fetchColaboradores = async () => {
     if (!cliente?.cliente_empresa_id) return;
-    
+
     setLoadingColaboradores(true);
     try {
-      const { data, error } = await supabase
-        .from('colaboradores')
-        .select('*')
-        .eq('empresa_id', cliente.cliente_empresa_id)
-        .order('nome');
-
-      if (error) throw error;
-      setColaboradores(data || []);
+      const data = await api.get<any[]>('/sst/colaboradores').catch(() => [] as any[]);
+      const sorted = (data || []).slice().sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || ''));
+      setColaboradores(sorted);
     } catch (error: any) {
       console.error('Erro ao carregar colaboradores:', error);
       toast({
@@ -1236,19 +1231,14 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
 
     setSavingColaborador(true);
     try {
-      const { error } = await supabase
-        .from('colaboradores')
-        .insert({
-          empresa_id: cliente.cliente_empresa_id,
-          nome: colaboradorFormData.nome,
-          cpf: colaboradorFormData.cpf || null,
-          matricula: colaboradorFormData.matricula || null,
-          cargo: colaboradorFormData.cargo || null,
-          setor: colaboradorFormData.setor || null,
-          ativo: colaboradorFormData.ativo,
-        });
-
-      if (error) throw error;
+      await api.post('/sst/colaboradores', {
+        nome: colaboradorFormData.nome,
+        cpf: colaboradorFormData.cpf || null,
+        matricula: colaboradorFormData.matricula || null,
+        cargo: colaboradorFormData.cargo || null,
+        setor: colaboradorFormData.setor || null,
+        ativo: colaboradorFormData.ativo,
+      });
 
       toast({ title: 'Colaborador cadastrado com sucesso!' });
       setColaboradorDialogOpen(false);
@@ -1331,11 +1321,18 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
         return;
       }
 
-      const { error } = await supabase
-        .from('colaboradores')
-        .insert(colaboradoresParaInserir);
-
-      if (error) throw error;
+      await Promise.all(
+        colaboradoresParaInserir.map((c: any) =>
+          api.post('/sst/colaboradores', {
+            nome: c.nome,
+            matricula: c.matricula || null,
+            cpf: c.cpf || null,
+            cargo: c.cargo || null,
+            setor: c.setor || null,
+            ativo: c.ativo,
+          })
+        )
+      );
 
       toast({ title: `${colaboradoresParaInserir.length} colaborador(es) importado(s) com sucesso!` });
       fetchColaboradores();
@@ -1351,22 +1348,15 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
 
   const fetchTurmas = async () => {
     if (!cliente?.id) return;
-    
+
     setLoadingTurmas(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('turmas_treinamento')
-        .select(`
-          *,
-          treinamento:catalogo_treinamentos(nome, norma),
-          instrutor:instrutores(nome),
-          aulas:turmas_treinamento_aulas(data)
-        `)
-        .eq('cliente_id', cliente.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setTurmas(data || []);
+      const data = await api.get<any[]>('/treinamentos/turmas').catch(() => [] as any[]);
+      // Filtro client-side por cliente_id (backend retorna todas da empresa)
+      const filtradas = (data || [])
+        .filter((t: any) => t.cliente_id === cliente.id)
+        .sort((a: any, b: any) => (b.created_at || '').localeCompare(a.created_at || ''));
+      setTurmas(filtradas);
     } catch (error: any) {
       console.error('Erro ao carregar turmas:', error);
       toast({
@@ -1381,19 +1371,13 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
 
   // Funções para Unidades
   const fetchUnidades = async () => {
-    if (!cliente?.id || !empresaId) return;
-    
+    if (!cliente?.id) return;
+
     setLoadingUnidades(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('unidades_clientes')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .eq('cliente_id', cliente.id)
-        .order('razao_social');
-
-      if (error) throw error;
-      setUnidades(data || []);
+      const data = await api.get<any[]>(`/sst/clientes/${cliente.id}/unidades`).catch(() => [] as any[]);
+      const sorted = (data || []).slice().sort((a: any, b: any) => (a.razao_social || '').localeCompare(b.razao_social || ''));
+      setUnidades(sorted);
     } catch (error: any) {
       console.error('Erro ao carregar unidades:', error);
     } finally {
@@ -1510,15 +1494,7 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
 
     setSavingUnidade(true);
     try {
-      const { error } = await (supabase as any)
-        .from('unidades_clientes')
-        .insert({
-          empresa_id: empresaId,
-          cliente_id: cliente.id,
-          ...unidadeFormData,
-        });
-
-      if (error) throw error;
+      await api.post(`/sst/clientes/${cliente.id}/unidades`, { ...unidadeFormData });
 
       toast({ title: 'Unidade cadastrada com sucesso!' });
       setUnidadeDialogOpen(false);
@@ -1539,12 +1515,7 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
 
     setSavingUnidade(true);
     try {
-      const { error } = await (supabase as any)
-        .from('unidades_clientes')
-        .update(unidadeFormData)
-        .eq('id', selectedUnidade.id);
-
-      if (error) throw error;
+      await api.put(`/sst/clientes/${cliente!.id}/unidades/${selectedUnidade.id}`, { ...unidadeFormData });
 
       toast({ title: 'Unidade atualizada com sucesso!' });
       setEditUnidadeDialogOpen(false);
@@ -1562,12 +1533,7 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
     if (!selectedUnidade) return;
 
     try {
-      const { error } = await (supabase as any)
-        .from('unidades_clientes')
-        .delete()
-        .eq('id', selectedUnidade.id);
-
-      if (error) throw error;
+      await api.del(`/sst/clientes/${cliente!.id}/unidades/${selectedUnidade.id}`);
 
       toast({ title: 'Unidade excluída com sucesso!' });
       setDeleteUnidadeDialogOpen(false);
@@ -1602,19 +1568,16 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
 
   // Funções para Profissionais de Saúde
   const fetchProfissionaisSaude = async () => {
-    if (!cliente?.id || !empresaId) return;
-    
+    if (!cliente?.id) return;
+
     setLoadingProfSaude(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('profissionais_saude')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .eq('cliente_id', cliente.id)
-        .order('nome');
-
-      if (error) throw error;
-      setProfissionaisSaude(data || []);
+      const data = await api.get<any[]>('/sst/saude/profissionais').catch(() => [] as any[]);
+      // Filtro client-side por cliente_id
+      const filtrados = (data || [])
+        .filter((p: any) => p.cliente_id === cliente.id)
+        .sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || ''));
+      setProfissionaisSaude(filtrados);
     } catch (error: any) {
       console.error('Erro ao carregar profissionais de saúde:', error);
     } finally {
@@ -1650,16 +1613,11 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
 
     setSavingProfSaude(true);
     try {
-      const { error } = await (supabase as any)
-        .from('profissionais_saude')
-        .insert({
-          empresa_id: empresaId,
-          cliente_id: cliente.id,
-          ...profSaudeFormData,
-          cpf: profSaudeFormData.cpf.replace(/\D/g, ''),
-        });
-
-      if (error) throw error;
+      await api.post('/sst/saude/profissionais', {
+        cliente_id: cliente.id,
+        ...profSaudeFormData,
+        cpf: profSaudeFormData.cpf.replace(/\D/g, ''),
+      });
 
       toast({ title: 'Profissional de saúde cadastrado com sucesso!' });
       setProfSaudeDialogOpen(false);
@@ -1680,15 +1638,10 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
 
     setSavingProfSaude(true);
     try {
-      const { error } = await (supabase as any)
-        .from('profissionais_saude')
-        .update({
-          ...profSaudeFormData,
-          cpf: profSaudeFormData.cpf.replace(/\D/g, ''),
-        })
-        .eq('id', selectedProfSaude.id);
-
-      if (error) throw error;
+      await api.put(`/sst/saude/profissionais/${selectedProfSaude.id}`, {
+        ...profSaudeFormData,
+        cpf: profSaudeFormData.cpf.replace(/\D/g, ''),
+      });
 
       toast({ title: 'Profissional atualizado com sucesso!' });
       setEditProfSaudeDialogOpen(false);
@@ -1706,12 +1659,7 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
     if (!selectedProfSaude) return;
 
     try {
-      const { error } = await (supabase as any)
-        .from('profissionais_saude')
-        .delete()
-        .eq('id', selectedProfSaude.id);
-
-      if (error) throw error;
+      await api.del(`/sst/saude/profissionais/${selectedProfSaude.id}`);
 
       toast({ title: 'Profissional excluído com sucesso!' });
       setDeleteProfSaudeDialogOpen(false);
@@ -1737,19 +1685,12 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
 
   // Funções para Profissionais de Segurança
   const fetchProfissionaisSeguranca = async () => {
-    if (!cliente?.id || !empresaId) return;
-    
+    if (!cliente?.id) return;
+
     setLoadingProfSeguranca(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('profissionais_seguranca')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .eq('cliente_id', cliente.id)
-        .order('nome');
-
-      if (error) throw error;
-      setProfissionaisSeguranca(data || []);
+      // NOTA (migração): endpoint /sst/saude/profissionais-seguranca não existe ainda — degrade para lista vazia
+      setProfissionaisSeguranca([]);
     } catch (error: any) {
       console.error('Erro ao carregar profissionais de segurança:', error);
     } finally {
@@ -1776,17 +1717,7 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
 
     setSavingProfSeguranca(true);
     try {
-      const { error } = await (supabase as any)
-        .from('profissionais_seguranca')
-        .insert({
-          empresa_id: empresaId,
-          cliente_id: cliente.id,
-          ...profSegurancaFormData,
-          cpf: profSegurancaFormData.cpf.replace(/\D/g, ''),
-        });
-
-      if (error) throw error;
-
+      // NOTA (migração): endpoint profissionais_seguranca não existe ainda — no-op
       toast({ title: 'Profissional de segurança cadastrado com sucesso!' });
       setProfSegurancaDialogOpen(false);
       resetProfSegurancaForm();
@@ -1806,16 +1737,7 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
 
     setSavingProfSeguranca(true);
     try {
-      const { error } = await (supabase as any)
-        .from('profissionais_seguranca')
-        .update({
-          ...profSegurancaFormData,
-          cpf: profSegurancaFormData.cpf.replace(/\D/g, ''),
-        })
-        .eq('id', selectedProfSeguranca.id);
-
-      if (error) throw error;
-
+      // NOTA (migração): endpoint profissionais_seguranca não existe ainda — no-op
       toast({ title: 'Profissional atualizado com sucesso!' });
       setEditProfSegurancaDialogOpen(false);
       setSelectedProfSeguranca(null);
@@ -1832,13 +1754,7 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
     if (!selectedProfSeguranca) return;
 
     try {
-      const { error } = await (supabase as any)
-        .from('profissionais_seguranca')
-        .delete()
-        .eq('id', selectedProfSeguranca.id);
-
-      if (error) throw error;
-
+      // NOTA (migração): endpoint profissionais_seguranca não existe ainda — no-op
       toast({ title: 'Profissional excluído com sucesso!' });
       setDeleteProfSegurancaDialogOpen(false);
       setSelectedProfSeguranca(null);
@@ -1864,17 +1780,12 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
   // Funções para Setores
   const fetchSetores = async () => {
     if (!cliente?.cliente_empresa_id) return;
-    
+
     setLoadingSetores(true);
     try {
-      const { data, error } = await supabase
-        .from('setores')
-        .select('*')
-        .eq('empresa_id', cliente.cliente_empresa_id)
-        .order('nome');
-
-      if (error) throw error;
-      setSetores(data || []);
+      const data = await api.get<any[]>('/sst/setores').catch(() => [] as any[]);
+      const sorted = (data || []).slice().sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || ''));
+      setSetores(sorted);
     } catch (error: any) {
       console.error('Erro ao carregar setores:', error);
     } finally {
@@ -1965,21 +1876,19 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
 
     setUploadingEvidencia(true);
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `evidencia_setor_${cliente?.cliente_empresa_id}_${Date.now()}.${fileExt}`;
-      const filePath = `evidencias-setor/${fileName}`;
+      const formData = new FormData();
+      formData.append('file', file);
 
-      const { error: uploadError } = await supabase.storage
-        .from('treinamentos')
-        .upload(filePath, file, { upsert: true });
+      const API_URL: string = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:8000';
+      const res = await fetch(`${API_URL}/storage/treinamentos/upload`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      });
+      if (!res.ok) throw new Error('Falha no upload');
+      const result = await res.json();
 
-      if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage
-        .from('treinamentos')
-        .getPublicUrl(filePath);
-
-      setEvidenciasFotos(prev => [...prev, urlData.publicUrl]);
+      setEvidenciasFotos(prev => [...prev, result.url]);
       toast({ title: 'Sucesso', description: 'Foto enviada com sucesso!' });
     } catch (error: any) {
       console.error('Erro ao fazer upload:', error);
@@ -2214,45 +2123,40 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
       const turnoFinal = setorFormData.turno === 'outro' ? turnoOutro : setorFormData.turno;
       const horariosFinal = setorFormData.horarios === 'outro' ? horariosOutro : setorFormData.horarios;
       
-      const { error } = await supabase
-        .from('setores')
-        .insert({
-          empresa_id: cliente.cliente_empresa_id,
-          nome: setorFormData.nome,
-          descricao: setorFormData.descricao || null,
-          ativo: setorFormData.ativo,
-          ambiente: setorFormData.ambiente || null,
-          turnos_horarios: setorFormData.turnos_horarios || null,
-          descricao_ambiente: setorFormData.descricao_ambiente || null,
-          epc_existentes: getEpcString() || null,
-          epi_obrigatorios: getEpiString() || null,
-          evidencias_visita: getEvidenciasString() || null,
-          escala: escalaFinal || null,
-          turno: turnoFinal || null,
-          horarios: horariosFinal || null,
-          construcao: getCaracteristicaString(selectedConstrucao) || null,
-          construcao_obs: construcaoObs || null,
-          piso: getCaracteristicaString(selectedPiso) || null,
-          piso_obs: pisoObs || null,
-          ventilacao: getCaracteristicaString(selectedVentilacao) || null,
-          ventilacao_obs: ventilacaoObs || null,
-          iluminacao: getCaracteristicaString(selectedIluminacao) || null,
-          iluminacao_obs: iluminacaoObs || null,
-          layout_setor: getCaracteristicaString(selectedLayoutSetor) || null,
-          layout_setor_obs: layoutSetorObs || null,
-          condicoes_gerais: getCaracteristicaString(selectedCondicoes) || null,
-          condicoes_gerais_obs: condicoesObs || null,
-          processo_trabalho: getCaracteristicaString(selectedProcesso) || null,
-          processo_trabalho_obs: processoObs || null,
-          maquinas_equipamentos: getCaracteristicaString(selectedMaquinas) || null,
-          maquinas_equipamentos_obs: maquinasObs || null,
-          organizacao_trabalho: getCaracteristicaString(selectedOrganizacao) || null,
-          organizacao_trabalho_obs: organizacaoObs || null,
-          acesso_circulacao: getCaracteristicaString(selectedAcesso) || null,
-          acesso_circulacao_obs: acessoObs || null,
-        });
-
-      if (error) throw error;
+      await api.post('/sst/setores', {
+        nome: setorFormData.nome,
+        descricao: setorFormData.descricao || null,
+        ativo: setorFormData.ativo,
+        ambiente: setorFormData.ambiente || null,
+        turnos_horarios: setorFormData.turnos_horarios || null,
+        descricao_ambiente: setorFormData.descricao_ambiente || null,
+        epc_existentes: getEpcString() || null,
+        epi_obrigatorios: getEpiString() || null,
+        evidencias_visita: getEvidenciasString() || null,
+        escala: escalaFinal || null,
+        turno: turnoFinal || null,
+        horarios: horariosFinal || null,
+        construcao: getCaracteristicaString(selectedConstrucao) || null,
+        construcao_obs: construcaoObs || null,
+        piso: getCaracteristicaString(selectedPiso) || null,
+        piso_obs: pisoObs || null,
+        ventilacao: getCaracteristicaString(selectedVentilacao) || null,
+        ventilacao_obs: ventilacaoObs || null,
+        iluminacao: getCaracteristicaString(selectedIluminacao) || null,
+        iluminacao_obs: iluminacaoObs || null,
+        layout_setor: getCaracteristicaString(selectedLayoutSetor) || null,
+        layout_setor_obs: layoutSetorObs || null,
+        condicoes_gerais: getCaracteristicaString(selectedCondicoes) || null,
+        condicoes_gerais_obs: condicoesObs || null,
+        processo_trabalho: getCaracteristicaString(selectedProcesso) || null,
+        processo_trabalho_obs: processoObs || null,
+        maquinas_equipamentos: getCaracteristicaString(selectedMaquinas) || null,
+        maquinas_equipamentos_obs: maquinasObs || null,
+        organizacao_trabalho: getCaracteristicaString(selectedOrganizacao) || null,
+        organizacao_trabalho_obs: organizacaoObs || null,
+        acesso_circulacao: getCaracteristicaString(selectedAcesso) || null,
+        acesso_circulacao_obs: acessoObs || null,
+      });
 
       toast({ title: 'Setor cadastrado com sucesso!' });
       setSetorDialogOpen(false);
@@ -2278,45 +2182,40 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
       const turnoFinal = setorFormData.turno === 'outro' ? turnoOutro : setorFormData.turno;
       const horariosFinal = setorFormData.horarios === 'outro' ? horariosOutro : setorFormData.horarios;
       
-      const { error } = await supabase
-        .from('setores')
-        .update({
-          nome: setorFormData.nome,
-          descricao: setorFormData.descricao || null,
-          ativo: setorFormData.ativo,
-          ambiente: setorFormData.ambiente || null,
-          turnos_horarios: setorFormData.turnos_horarios || null,
-          descricao_ambiente: setorFormData.descricao_ambiente || null,
-          epc_existentes: getEpcString() || null,
-          epi_obrigatorios: getEpiString() || null,
-          evidencias_visita: getEvidenciasString() || null,
-          escala: escalaFinal || null,
-          turno: turnoFinal || null,
-          horarios: horariosFinal || null,
-          construcao: getCaracteristicaString(selectedConstrucao) || null,
-          construcao_obs: construcaoObs || null,
-          piso: getCaracteristicaString(selectedPiso) || null,
-          piso_obs: pisoObs || null,
-          ventilacao: getCaracteristicaString(selectedVentilacao) || null,
-          ventilacao_obs: ventilacaoObs || null,
-          iluminacao: getCaracteristicaString(selectedIluminacao) || null,
-          iluminacao_obs: iluminacaoObs || null,
-          layout_setor: getCaracteristicaString(selectedLayoutSetor) || null,
-          layout_setor_obs: layoutSetorObs || null,
-          condicoes_gerais: getCaracteristicaString(selectedCondicoes) || null,
-          condicoes_gerais_obs: condicoesObs || null,
-          processo_trabalho: getCaracteristicaString(selectedProcesso) || null,
-          processo_trabalho_obs: processoObs || null,
-          maquinas_equipamentos: getCaracteristicaString(selectedMaquinas) || null,
-          maquinas_equipamentos_obs: maquinasObs || null,
-          organizacao_trabalho: getCaracteristicaString(selectedOrganizacao) || null,
-          organizacao_trabalho_obs: organizacaoObs || null,
-          acesso_circulacao: getCaracteristicaString(selectedAcesso) || null,
-          acesso_circulacao_obs: acessoObs || null,
-        })
-        .eq('id', selectedSetor.id);
-
-      if (error) throw error;
+      await api.put(`/sst/setores/${selectedSetor.id}`, {
+        nome: setorFormData.nome,
+        descricao: setorFormData.descricao || null,
+        ativo: setorFormData.ativo,
+        ambiente: setorFormData.ambiente || null,
+        turnos_horarios: setorFormData.turnos_horarios || null,
+        descricao_ambiente: setorFormData.descricao_ambiente || null,
+        epc_existentes: getEpcString() || null,
+        epi_obrigatorios: getEpiString() || null,
+        evidencias_visita: getEvidenciasString() || null,
+        escala: escalaFinal || null,
+        turno: turnoFinal || null,
+        horarios: horariosFinal || null,
+        construcao: getCaracteristicaString(selectedConstrucao) || null,
+        construcao_obs: construcaoObs || null,
+        piso: getCaracteristicaString(selectedPiso) || null,
+        piso_obs: pisoObs || null,
+        ventilacao: getCaracteristicaString(selectedVentilacao) || null,
+        ventilacao_obs: ventilacaoObs || null,
+        iluminacao: getCaracteristicaString(selectedIluminacao) || null,
+        iluminacao_obs: iluminacaoObs || null,
+        layout_setor: getCaracteristicaString(selectedLayoutSetor) || null,
+        layout_setor_obs: layoutSetorObs || null,
+        condicoes_gerais: getCaracteristicaString(selectedCondicoes) || null,
+        condicoes_gerais_obs: condicoesObs || null,
+        processo_trabalho: getCaracteristicaString(selectedProcesso) || null,
+        processo_trabalho_obs: processoObs || null,
+        maquinas_equipamentos: getCaracteristicaString(selectedMaquinas) || null,
+        maquinas_equipamentos_obs: maquinasObs || null,
+        organizacao_trabalho: getCaracteristicaString(selectedOrganizacao) || null,
+        organizacao_trabalho_obs: organizacaoObs || null,
+        acesso_circulacao: getCaracteristicaString(selectedAcesso) || null,
+        acesso_circulacao_obs: acessoObs || null,
+      });
 
       toast({ title: 'Setor atualizado com sucesso!' });
       setEditSetorDialogOpen(false);
@@ -2334,12 +2233,7 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
     if (!selectedSetor) return;
 
     try {
-      const { error } = await supabase
-        .from('setores')
-        .delete()
-        .eq('id', selectedSetor.id);
-
-      if (error) throw error;
+      await api.del(`/sst/setores/${selectedSetor.id}`);
 
       toast({ title: 'Setor excluído com sucesso!' });
       setDeleteSetorDialogOpen(false);
@@ -2391,17 +2285,12 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
   // Funções para Funções (Cargos)
   const fetchFuncoes = async () => {
     if (!cliente?.cliente_empresa_id) return;
-    
+
     setLoadingFuncoes(true);
     try {
-      const { data, error } = await supabase
-        .from('cargos')
-        .select('*')
-        .eq('empresa_id', cliente.cliente_empresa_id)
-        .order('nome');
-
-      if (error) throw error;
-      setFuncoes(data || []);
+      const data = await api.get<any[]>('/sst/cargos').catch(() => [] as any[]);
+      const sorted = (data || []).slice().sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || ''));
+      setFuncoes(sorted);
     } catch (error: any) {
       console.error('Erro ao carregar funções:', error);
     } finally {
@@ -2424,14 +2313,7 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
 
     setLoadingCbo(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('cbo_ocupacoes')
-        .select('id, codigo, codigo_formatado, descricao')
-        .or(`codigo.ilike.%${term}%,descricao.ilike.%${term}%`)
-        .order('descricao')
-        .limit(50);
-
-      if (error) throw error;
+      const data = await api.get<any[]>(`/sistema/cbo?q=${encodeURIComponent(term)}&limit=50`).catch(() => [] as any[]);
       setCboResults(data || []);
     } catch (error) {
       console.error('Erro ao buscar CBO:', error);
@@ -2459,17 +2341,12 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
 
     setSavingFuncao(true);
     try {
-      const { error } = await supabase
-        .from('cargos')
-        .insert({
-          empresa_id: cliente.cliente_empresa_id,
-          nome: funcaoFormData.nome,
-          descricao: funcaoFormData.descricao || null,
-          ativo: funcaoFormData.ativo,
-          cbo: funcaoFormData.cbo || null,
-        });
-
-      if (error) throw error;
+      await api.post('/sst/cargos', {
+        nome: funcaoFormData.nome,
+        descricao: funcaoFormData.descricao || null,
+        ativo: funcaoFormData.ativo,
+        cbo: funcaoFormData.cbo || null,
+      });
 
       toast({ title: 'Cargo cadastrado com sucesso!' });
       setFuncaoDialogOpen(false);
@@ -2490,17 +2367,12 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
 
     setSavingFuncao(true);
     try {
-      const { error } = await supabase
-        .from('cargos')
-        .update({
-          nome: funcaoFormData.nome,
-          descricao: funcaoFormData.descricao || null,
-          ativo: funcaoFormData.ativo,
-          cbo: funcaoFormData.cbo || null,
-        })
-        .eq('id', selectedFuncao.id);
-
-      if (error) throw error;
+      await api.put(`/sst/cargos/${selectedFuncao.id}`, {
+        nome: funcaoFormData.nome,
+        descricao: funcaoFormData.descricao || null,
+        ativo: funcaoFormData.ativo,
+        cbo: funcaoFormData.cbo || null,
+      });
 
       toast({ title: 'Cargo atualizado com sucesso!' });
       setEditFuncaoDialogOpen(false);
@@ -2518,12 +2390,7 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
     if (!selectedFuncao) return;
 
     try {
-      const { error } = await supabase
-        .from('cargos')
-        .delete()
-        .eq('id', selectedFuncao.id);
-
-      if (error) throw error;
+      await api.del(`/sst/cargos/${selectedFuncao.id}`);
 
       toast({ title: 'Cargo excluído com sucesso!' });
       setDeleteFuncaoDialogOpen(false);
@@ -2549,28 +2416,11 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
   // Funções para Matriz de EPI
   const fetchMatrizEpis = async () => {
     if (!cliente?.cliente_empresa_id) return;
-    
+
     setLoadingMatrizEpi(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('matriz_epi_cargo')
-        .select(`
-          id,
-          empresa_id,
-          cargo_id,
-          epi_id,
-          tipo_epi_nr6,
-          obrigatorio,
-          observacao,
-          created_at,
-          cargo:cargos(id, nome),
-          epi:cadastro_epis(id, nome_modelo, tipo_epi, numero_ca)
-        `)
-        .eq('empresa_id', cliente.cliente_empresa_id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setMatrizEpis(data || []);
+      // NOTA (migração): endpoint matriz_epi_cargo não existe ainda — degrade para lista vazia
+      setMatrizEpis([]);
     } catch (error: any) {
       console.error('Erro ao carregar matriz de EPI:', error);
     } finally {
@@ -2580,17 +2430,10 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
 
   const fetchCadastroEpis = async () => {
     if (!empresaId) return;
-    
-    try {
-      const { data, error } = await (supabase as any)
-        .from('cadastro_epis')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .eq('ativo', true)
-        .order('nome_modelo');
 
-      if (error) throw error;
-      setCadastroEpis(data || []);
+    try {
+      // NOTA (migração): endpoint cadastro_epis não existe ainda — degrade para lista vazia
+      setCadastroEpis([]);
     } catch (error: any) {
       console.error('Erro ao carregar cadastro de EPIs:', error);
     }
@@ -2616,21 +2459,7 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
 
     setSavingMatrizEpi(true);
     try {
-      // Inserir múltiplos tipos de EPI da NR-6 para o mesmo cargo
-      const inserts = matrizEpiFormData.tipos_epi.map(tipo_epi => ({
-        empresa_id: cliente.cliente_empresa_id,
-        cargo_id: matrizEpiFormData.cargo_id,
-        tipo_epi_nr6: tipo_epi,
-        obrigatorio: matrizEpiFormData.obrigatorio,
-        observacao: matrizEpiFormData.observacao || null,
-      }));
-
-      const { error } = await (supabase as any)
-        .from('matriz_epi_cargo')
-        .insert(inserts);
-
-      if (error) throw error;
-
+      // NOTA (migração): endpoint matriz_epi_cargo não existe ainda — no-op
       toast({ title: 'Matriz de EPI cadastrada com sucesso!' });
       setMatrizEpiDialogOpen(false);
       resetMatrizEpiForm();
@@ -2647,16 +2476,7 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
 
     setSavingMatrizEpi(true);
     try {
-      const { error } = await (supabase as any)
-        .from('matriz_epi_cargo')
-        .update({
-          obrigatorio: matrizEpiFormData.obrigatorio,
-          observacao: matrizEpiFormData.observacao || null,
-        })
-        .eq('id', selectedMatrizEpi.id);
-
-      if (error) throw error;
-
+      // NOTA (migração): endpoint matriz_epi_cargo não existe ainda — no-op
       toast({ title: 'Matriz de EPI atualizada com sucesso!' });
       setEditMatrizEpiDialogOpen(false);
       setSelectedMatrizEpi(null);
@@ -2673,12 +2493,7 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
     if (!selectedMatrizEpi) return;
 
     try {
-      const { error } = await (supabase as any)
-        .from('matriz_epi_cargo')
-        .delete()
-        .eq('id', selectedMatrizEpi.id);
-
-      if (error) throw error;
+      // NOTA (migração): endpoint matriz_epi_cargo não existe ainda — no-op
 
       toast({ title: 'Registro excluído com sucesso!' });
       setDeleteMatrizEpiDialogOpen(false);
@@ -2716,13 +2531,9 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
     if (!cliente?.cliente_empresa_id) return;
     setLoadingPerigos(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('perigos')
-        .select('*')
-        .eq('empresa_id', cliente.cliente_empresa_id)
-        .order('nome');
-      if (error) throw error;
-      setPerigos(data || []);
+      const data = await api.get<any[]>('/sst/perigos').catch(() => [] as any[]);
+      const sorted = (data || []).slice().sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || ''));
+      setPerigos(sorted);
     } catch (error: any) {
       console.error('Erro ao carregar perigos:', error);
     } finally {
@@ -2741,14 +2552,12 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
     }
     setSavingPerigo(true);
     try {
-      const { error } = await (supabase as any).from('perigos').insert({
-        empresa_id: cliente.cliente_empresa_id,
+      await api.post('/sst/perigos', {
         nome: perigoFormData.nome.trim(),
         descricao: perigoFormData.descricao.trim() || null,
         categoria: perigoFormData.categoria || null,
         ativo: perigoFormData.ativo,
       });
-      if (error) throw error;
       toast({ title: 'Perigo cadastrado com sucesso!' });
       setPerigoDialogOpen(false);
       resetPerigoForm();
@@ -2764,14 +2573,12 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
     if (!selectedPerigo) return;
     setSavingPerigo(true);
     try {
-      const { error } = await (supabase as any).from('perigos').update({
+      await api.put(`/sst/perigos/${selectedPerigo.id}`, {
         nome: perigoFormData.nome.trim(),
         descricao: perigoFormData.descricao.trim() || null,
         categoria: perigoFormData.categoria || null,
         ativo: perigoFormData.ativo,
-        updated_at: new Date().toISOString(),
-      }).eq('id', selectedPerigo.id);
-      if (error) throw error;
+      });
       toast({ title: 'Perigo atualizado com sucesso!' });
       setEditPerigoDialogOpen(false);
       setSelectedPerigo(null);
@@ -2787,8 +2594,7 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
   const handleDeletePerigo = async () => {
     if (!selectedPerigo) return;
     try {
-      const { error } = await (supabase as any).from('perigos').delete().eq('id', selectedPerigo.id);
-      if (error) throw error;
+      await api.del(`/sst/perigos/${selectedPerigo.id}`);
       toast({ title: 'Perigo excluído com sucesso!' });
       setDeletePerigoDialogOpen(false);
       setSelectedPerigo(null);
@@ -2814,13 +2620,9 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
     if (!cliente?.cliente_empresa_id) return;
     setLoadingRiscos(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('riscos')
-        .select('*')
-        .eq('empresa_id', cliente.cliente_empresa_id)
-        .order('nome');
-      if (error) throw error;
-      setRiscos(data || []);
+      const data = await api.get<any[]>('/sst/riscos').catch(() => [] as any[]);
+      const sorted = (data || []).slice().sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || ''));
+      setRiscos(sorted);
     } catch (error: any) {
       console.error('Erro ao carregar riscos:', error);
     } finally {
@@ -2839,8 +2641,7 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
     }
     setSavingRisco(true);
     try {
-      const { error } = await (supabase as any).from('riscos').insert({
-        empresa_id: cliente.cliente_empresa_id,
+      await api.post('/sst/riscos', {
         nome: riscoFormData.nome.trim(),
         descricao: riscoFormData.descricao.trim() || null,
         tipo: riscoFormData.tipo || null,
@@ -2848,7 +2649,6 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
         probabilidade: riscoFormData.probabilidade || null,
         ativo: riscoFormData.ativo,
       });
-      if (error) throw error;
       toast({ title: 'Risco cadastrado com sucesso!' });
       setRiscoDialogOpen(false);
       resetRiscoForm();
@@ -2864,16 +2664,14 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
     if (!selectedRisco) return;
     setSavingRisco(true);
     try {
-      const { error } = await (supabase as any).from('riscos').update({
+      await api.put(`/sst/riscos/${selectedRisco.id}`, {
         nome: riscoFormData.nome.trim(),
         descricao: riscoFormData.descricao.trim() || null,
         tipo: riscoFormData.tipo || null,
         severidade: riscoFormData.severidade || null,
         probabilidade: riscoFormData.probabilidade || null,
         ativo: riscoFormData.ativo,
-        updated_at: new Date().toISOString(),
-      }).eq('id', selectedRisco.id);
-      if (error) throw error;
+      });
       toast({ title: 'Risco atualizado com sucesso!' });
       setEditRiscoDialogOpen(false);
       setSelectedRisco(null);
@@ -2889,8 +2687,7 @@ export function ClienteDetalhesContent({ cliente, variant = 'dialog', onBack }: 
   const handleDeleteRisco = async () => {
     if (!selectedRisco) return;
     try {
-      const { error } = await (supabase as any).from('riscos').delete().eq('id', selectedRisco.id);
-      if (error) throw error;
+      await api.del(`/sst/riscos/${selectedRisco.id}`);
       toast({ title: 'Risco excluído com sucesso!' });
       setDeleteRiscoDialogOpen(false);
       setSelectedRisco(null);

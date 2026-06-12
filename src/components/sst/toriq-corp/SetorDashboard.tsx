@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
 import { usePermissoes } from '@/hooks/usePermissoes';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -141,66 +141,46 @@ export function SetorDashboard({
       setLoading(true);
 
       // Buscar ou criar setor
-      let { data: setor, error: setorError } = await (supabase as any)
-        .from('setores')
-        .select('id')
-        .eq('empresa_id', empresaId)
-        .ilike('nome', setorNome)
-        .single();
+      const todosSetores = await api.get<any[]>('/sst/setores').catch(() => [] as any[]);
+      const nomeNorm = setorNome.toLowerCase();
+      let setor = todosSetores.find((s: any) => s.nome?.toLowerCase() === nomeNorm);
 
-      if (setorError && setorError.code === 'PGRST116') {
+      if (!setor) {
         // Setor não existe, criar
-        const { data: novoSetor, error: createError } = await (supabase as any)
-          .from('setores')
-          .insert({
-            empresa_id: empresaId,
-            nome: setorNome,
-            descricao: `Setor ${setorNome}`,
-            ativo: true,
-          })
-          .select('id')
-          .single();
-
-        if (createError) throw createError;
-        setor = novoSetor;
-      } else if (setorError) {
-        throw setorError;
+        setor = await api.post<any>('/sst/setores', {
+          nome: setorNome,
+          descricao: `Setor ${setorNome}`,
+          ativo: true,
+        });
       }
 
       setSetorId(setor.id);
 
-      // Buscar funis do setor
-      const { data: funisData, error: funisError } = await (supabase as any)
-        .from('funis')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .eq('setor_id', setor.id)
-        .eq('ativo', true)
-        .order('created_at', { ascending: false });
-
-      if (funisError) throw funisError;
+      // Buscar funis do setor (filtro de setor_id e ativo replicado no cliente)
+      const todosFunis = await api.get<any[]>('/funil/funis').catch(() => [] as any[]);
+      const funisData = todosFunis
+        .filter((f: any) => f.setor_id === setor.id && f.ativo === true)
+        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
       // Buscar contagens para cada funil
       const funisComContagem = await Promise.all(
-        (funisData || []).map(async (funil: Funil) => {
-          // Contar cards
-          const { count: cardsCount } = await (supabase as any)
-            .from('funil_cards')
-            .select('*', { count: 'exact', head: true })
-            .eq('funil_id', funil.id)
-            .eq('ativo', true);
+        funisData.map(async (funil: Funil) => {
+          // Contar cards (filtro ativo replicado no cliente)
+          const cardsDoFunil = await api
+            .get<any[]>(`/funil/cards?funil_id=${funil.id}`)
+            .catch(() => [] as any[]);
+          const cardsAtivos = cardsDoFunil.filter((c: any) => c.ativo !== false);
+          const cardsCount = cardsAtivos.length;
 
-          // Contar atividades
-          const { count: atividadesCount } = await (supabase as any)
-            .from('funil_card_atividades')
-            .select('*, funil_cards!inner(funil_id)', { count: 'exact', head: true })
-            .eq('funil_cards.funil_id', funil.id);
+          // NOTA (migração): contagem de atividades por funil não tem endpoint direto;
+          // degradando para 0 para evitar N+1 requests (um GET por card).
+          const atividadesCount = 0;
 
           return {
             ...funil,
             _count: {
-              cards: cardsCount || 0,
-              atividades: atividadesCount || 0,
+              cards: cardsCount,
+              atividades: atividadesCount,
             },
           };
         })
@@ -252,21 +232,14 @@ export function SetorDashboard({
     setCriandoFunil(true);
     try {
       // Criar funil
-      const { data, error } = await (supabase as any)
-        .from('funis')
-        .insert({
-          empresa_id: empresaId,
-          setor_id: setorId,
-          nome: novoFunil.nome.trim(),
-          descricao: novoFunil.descricao.trim() || null,
-          tipo: novoFunil.tipo,
-          ativo: true,
-          ordem: funis.length + 1,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
+      const data = await api.post<any>('/funil/funis', {
+        setor_id: setorId,
+        nome: novoFunil.nome.trim(),
+        descricao: novoFunil.descricao.trim() || null,
+        tipo: novoFunil.tipo,
+        ativo: true,
+        ordem: funis.length + 1,
+      });
 
       // Etapas serão criadas manualmente pelo usuário nas configurações do funil
 
@@ -301,59 +274,12 @@ export function SetorDashboard({
 
     setApagandoFunil(true);
     try {
-      // 1. Buscar todos os cards do funil
-      const { data: cards } = await (supabase as any)
-        .from('funil_cards')
-        .select('id')
-        .eq('funil_id', funilParaApagar.id);
-
-      const cardIds = cards?.map((c: any) => c.id) || [];
-
-      if (cardIds.length > 0) {
-        // 2. Deletar atividades dos cards
-        await (supabase as any)
-          .from('funil_card_atividades')
-          .delete()
-          .in('card_id', cardIds);
-
-        // 3. Deletar anexos dos cards
-        await (supabase as any)
-          .from('funil_card_anexos')
-          .delete()
-          .in('card_id', cardIds);
-
-        // 4. Deletar automações de execução relacionadas
-        await (supabase as any)
-          .from('automacoes_execucoes')
-          .delete()
-          .in('card_id', cardIds);
-
-        // 5. Deletar cards
-        await (supabase as any)
-          .from('funil_cards')
-          .delete()
-          .eq('funil_id', funilParaApagar.id);
-      }
-
-      // 6. Deletar etapas do funil
-      await (supabase as any)
-        .from('funil_etapas')
-        .delete()
-        .eq('funil_id', funilParaApagar.id);
-
-      // 7. Deletar automações do funil
-      await (supabase as any)
-        .from('automacoes')
-        .delete()
-        .eq('funil_id', funilParaApagar.id);
-
-      // 8. Deletar o funil
-      const { error } = await (supabase as any)
-        .from('funis')
-        .delete()
-        .eq('id', funilParaApagar.id);
-
-      if (error) throw error;
+      // NOTA (migração): a limpeza em cascata (cards, atividades, anexos, automacoes,
+      // automacoes_execucoes, etapas) era feita client-side via Supabase.
+      // No backend Python, o DELETE /funil/funis/{id} delega a cascade ao banco (FK ON DELETE CASCADE).
+      // Endpoints para automacoes_execucoes, funil_card_anexos e automacoes não existem no REST —
+      // confiamos na cascade do banco para limpá-los.
+      await api.del(`/funil/funis/${funilParaApagar.id}`);
 
       toast({
         title: 'Funil apagado',

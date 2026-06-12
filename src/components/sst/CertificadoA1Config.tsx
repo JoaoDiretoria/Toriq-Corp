@@ -8,9 +8,6 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
-
-const db = supabase as any;
 import { 
   Shield, 
   Upload, 
@@ -76,34 +73,14 @@ export function CertificadoA1Config({ empresaId }: CertificadoA1ConfigProps) {
 
   const carregarCertificado = useCallback(async () => {
     if (!empresaId) return;
-    
+
     setLoading(true);
     try {
-      const { data, error } = await db
-        .from('empresas')
-        .select('certificado_a1_cn, certificado_a1_emissor, certificado_a1_validade, certificado_a1_serial')
-        .eq('id', empresaId)
-        .single();
-      
-      if (error) throw error;
-      
-      if (data?.certificado_a1_cn) {
-        setCertificadoConfigurado(true);
-        const validade = data.certificado_a1_validade ? parseISO(data.certificado_a1_validade) : null;
-        const expirado = validade ? validade < new Date() : false;
-        
-        setCertificadoInfo({
-          cn: data.certificado_a1_cn,
-          serialNumber: data.certificado_a1_serial || '',
-          validoAte: data.certificado_a1_validade || '',
-          validoDe: '',
-          emissor: data.certificado_a1_emissor || '',
-          expirado,
-        });
-      } else {
-        setCertificadoConfigurado(false);
-        setCertificadoInfo(null);
-      }
+      // NOTA (migracao): endpoint GET /empresas/{id} nao expoe campos certificado_a1_*
+      // (omitidos intencionalmente no EmpresaOut por seguranca). Degrada para estado
+      // "sem certificado configurado" ate que um endpoint dedicado seja implementado.
+      setCertificadoConfigurado(false);
+      setCertificadoInfo(null);
     } catch (error: any) {
       console.error('Erro ao carregar certificado:', error);
       toast({
@@ -300,40 +277,14 @@ export function CertificadoA1Config({ empresaId }: CertificadoA1ConfigProps) {
     
     setSaving(true);
     try {
-      const arrayBuffer = await arquivoPfx.arrayBuffer();
-      const base64 = btoa(
-        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-      );
-      
-      const cert = validacaoResultado.certificado;
-      
-      const { error } = await db
-        .from('empresas')
-        .update({
-          certificado_a1_base64: base64,
-          certificado_a1_senha: senhaCertificado,
-          certificado_a1_cn: cert.cn,
-          certificado_a1_emissor: cert.emissor,
-          certificado_a1_validade: cert.validoAte,
-          certificado_a1_serial: cert.serialNumber,
-          certificado_a1_atualizado_em: new Date().toISOString(),
-        })
-        .eq('id', empresaId);
-      
-      if (error) throw error;
-      
+      // NOTA (migracao): PUT /empresas/{id} nao aceita campos certificado_a1_*
+      // (excluidos do EmpresaUpdate por seguranca). Operacao degradada — exibe
+      // mensagem orientando o usuario ate que um endpoint dedicado seja criado.
       toast({
-        title: 'Certificado salvo!',
-        description: 'Certificado A1 configurado com sucesso',
+        title: 'Funcionalidade indisponivel',
+        description: 'O salvamento do certificado A1 ainda nao esta disponivel nesta versao. Entre em contato com o suporte.',
+        variant: 'destructive',
       });
-      
-      setArquivoPfx(null);
-      setSenhaCertificado('');
-      setValidacaoResultado(null);
-      setModoEdicao(false);
-      
-      await carregarCertificado();
-      
     } catch (error: any) {
       console.error('Erro ao salvar certificado:', error);
       toast({
@@ -353,29 +304,14 @@ export function CertificadoA1Config({ empresaId }: CertificadoA1ConfigProps) {
     
     setRemoving(true);
     try {
-      const { error } = await db
-        .from('empresas')
-        .update({
-          certificado_a1_base64: null,
-          certificado_a1_senha: null,
-          certificado_a1_cn: null,
-          certificado_a1_emissor: null,
-          certificado_a1_validade: null,
-          certificado_a1_serial: null,
-          certificado_a1_atualizado_em: null,
-        })
-        .eq('id', empresaId);
-      
-      if (error) throw error;
-      
+      // NOTA (migracao): PUT /empresas/{id} nao aceita campos certificado_a1_*
+      // (excluidos do EmpresaUpdate por seguranca). Operacao degradada — exibe
+      // mensagem orientando o usuario ate que um endpoint dedicado seja criado.
       toast({
-        title: 'Certificado removido',
-        description: 'Certificado A1 foi removido com sucesso',
+        title: 'Funcionalidade indisponivel',
+        description: 'A remocao do certificado A1 ainda nao esta disponivel nesta versao. Entre em contato com o suporte.',
+        variant: 'destructive',
       });
-      
-      setCertificadoConfigurado(false);
-      setCertificadoInfo(null);
-      
     } catch (error: any) {
       console.error('Erro ao remover certificado:', error);
       toast({

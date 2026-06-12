@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -87,39 +87,51 @@ export default function BlogPost() {
   const fetchBlog = async () => {
     setLoading(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('blogs')
-        .select(`
-          *,
-          autor:blog_autores(nome, sobrenome, cargo, bio, avatar_url, linkedin_url),
-          categoria:blog_categorias(nome, slug, cor)
-        `)
-        .eq('slug', slug)
-        .eq('status', 'publicado')
-        .single();
+      // GET /blog retorna todos os posts publicados; filtramos por slug no cliente
+      const posts = await api.get<any[]>('/blog').catch(() => [] as any[]);
+      const data = posts.find((p: any) => p.slug === slug) ?? null;
 
-      if (error) throw error;
+      if (!data) throw new Error('post não encontrado');
 
-      setBlog(data);
+      // Enriquece com autor e categoria via endpoints individuais
+      const [autores, categorias] = await Promise.all([
+        api.get<any[]>('/blog/autores').catch(() => [] as any[]),
+        api.get<any[]>('/blog/categorias').catch(() => [] as any[]),
+      ]);
 
-      // Incrementar visualizações no campo da tabela blogs
-      await (supabase as any)
-        .from('blogs')
-        .update({ visualizacoes: (data.visualizacoes || 0) + 1 })
-        .eq('id', data.id);
+      const autor = data.autor_id
+        ? (autores.find((a: any) => a.id === data.autor_id) ?? null)
+        : null;
+      const categoria = data.categoria_id
+        ? (categorias.find((c: any) => c.id === data.categoria_id) ?? null)
+        : null;
 
-      // Buscar posts relacionados
+      setBlog({ ...data, autor, categoria });
+
+      // Buscar posts relacionados (mesma categoria, excluindo o atual, últimos 3)
       if (data.categoria_id) {
-        const { data: related } = await (supabase as any)
-          .from('blogs')
-          .select('id, titulo, slug, descricao, imagem_capa_url, publicado_em')
-          .eq('status', 'publicado')
-          .eq('categoria_id', data.categoria_id)
-          .neq('id', data.id)
-          .order('publicado_em', { ascending: false })
-          .limit(3);
+        const related = posts
+          .filter(
+            (p: any) =>
+              p.status === 'publicado' &&
+              p.categoria_id === data.categoria_id &&
+              p.id !== data.id,
+          )
+          .sort(
+            (a: any, b: any) =>
+              new Date(b.publicado_em).getTime() - new Date(a.publicado_em).getTime(),
+          )
+          .slice(0, 3)
+          .map((p: any) => ({
+            id: p.id,
+            titulo: p.titulo,
+            slug: p.slug,
+            descricao: p.descricao,
+            imagem_capa_url: p.imagem_capa_url,
+            publicado_em: p.publicado_em,
+          }));
 
-        setRelatedBlogs(related || []);
+        setRelatedBlogs(related);
       }
     } catch (error) {
       console.error('Erro ao buscar blog:', error);

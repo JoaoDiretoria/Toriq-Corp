@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Building2, Users, UsersRound, Package, Calendar, Mail, Phone, MapPin } from 'lucide-react';
@@ -42,38 +42,23 @@ export function SSTPerfilEmpresa() {
 
       try {
         // Buscar informações da empresa
-        const { data: empresaData, error: empresaError } = await supabase
-          .from('empresas')
-          .select('*')
-          .eq('id', empresaId)
-          .single();
-
-        if (empresaError) throw empresaError;
+        const empresaData = await api.get<any>(`/empresas/${empresaId}`);
         setEmpresaInfo(empresaData);
 
         // Buscar total de usuários
-        const { count: usuariosCount } = await supabase
-          .from('profiles')
-          .select('*', { count: 'exact', head: true })
-          .eq('empresa_id', empresaId);
+        const usuariosList = await api.get<any[]>(`/admin/users?empresa_id=${empresaId}`).catch(() => [] as any[]);
 
         // Buscar total de clientes
-        const { count: clientesCount } = await supabase
-          .from('clientes_sst')
-          .select('*', { count: 'exact', head: true })
-          .eq('empresa_sst_id', empresaId);
+        const clientesList = await api.get<any[]>('/sst/clientes').catch(() => [] as any[]);
 
-        // Buscar total de módulos ativos
-        const { count: modulosCount } = await supabase
-          .from('empresas_modulos')
-          .select('*', { count: 'exact', head: true })
-          .eq('empresa_id', empresaId)
-          .eq('ativo', true);
+        // Buscar total de módulos ativos (filtra ativo=true no cliente)
+        const modulosList = await api.get<any[]>('/white-label/empresa-modulos').catch(() => [] as any[]);
+        const modulosAtivos = modulosList.filter((m: any) => m.ativo === true);
 
         setStats({
-          totalUsuarios: usuariosCount || 0,
-          totalClientes: clientesCount || 0,
-          totalModulosAtivos: modulosCount || 0,
+          totalUsuarios: usuariosList.length,
+          totalClientes: clientesList.length,
+          totalModulosAtivos: modulosAtivos.length,
         });
       } catch (error) {
         console.error('Erro ao buscar informações da empresa:', error);

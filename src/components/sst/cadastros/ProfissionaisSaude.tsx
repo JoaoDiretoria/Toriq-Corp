@@ -43,7 +43,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 
 interface ProfissionalSaude {
   id: string;
@@ -117,14 +117,11 @@ export function ProfissionaisSaude() {
     if (!empresaId) return;
     setLoading(true);
     try {
-      const { data, error } = await (supabase as any)
-        .from('profissionais_saude')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('nome');
-
-      if (error) throw error;
-      setProfissionais(data || []);
+      const data = await api.get<any[]>('/sst/saude/profissionais').catch(() => [] as any[]);
+      const sorted = (data || []).slice().sort((a: any, b: any) =>
+        (a.nome || '').localeCompare(b.nome || '')
+      );
+      setProfissionais(sorted);
     } catch (error) {
       console.error('Erro ao carregar profissionais:', error);
     } finally {
@@ -160,40 +157,32 @@ export function ProfissionaisSaude() {
 
     setSaving(true);
     try {
-      let certificadoUrl = null;
+      let certificadoUrl: string | null = null;
 
       if (certificadoFile) {
-        const fileExt = certificadoFile.name.split('.').pop();
-        const fileName = `${empresaId}/profissionais-saude/${Date.now()}.${fileExt}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('certificados')
-          .upload(fileName, certificadoFile);
-
-        if (uploadError) throw uploadError;
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('certificados')
-          .getPublicUrl(fileName);
-
-        certificadoUrl = publicUrl;
+        const formDataUpload = new FormData();
+        formDataUpload.append('file', certificadoFile);
+        const apiUrl = (import.meta as any).env.VITE_API_URL ?? 'http://localhost:8000';
+        const uploadRes = await fetch(`${apiUrl}/storage/certificados/upload`, {
+          method: 'POST',
+          credentials: 'include',
+          body: formDataUpload,
+        });
+        if (!uploadRes.ok) throw new Error('Erro no upload do certificado');
+        const uploadData = await uploadRes.json();
+        certificadoUrl = uploadData.url;
       }
 
-      const { error } = await (supabase as any)
-        .from('profissionais_saude')
-        .insert({
-          empresa_id: empresaId,
-          especialidade: formData.especialidade,
-          nome: formData.nome,
-          cpf: formData.cpf.replace(/\D/g, ''),
-          conselho: formData.conselho,
-          nr_conselho: formData.nr_conselho,
-          uf_conselho: formData.uf_conselho,
-          certificado_digital_url: certificadoUrl,
-          senha_certificado: formData.senha_certificado || null,
-        });
-
-      if (error) throw error;
+      await api.post<any>('/sst/saude/profissionais', {
+        especialidade: formData.especialidade,
+        nome: formData.nome,
+        cpf: formData.cpf.replace(/\D/g, ''),
+        conselho: formData.conselho,
+        nr_conselho: formData.nr_conselho,
+        uf_conselho: formData.uf_conselho,
+        certificado_digital_url: certificadoUrl,
+        senha_certificado: formData.senha_certificado || null,
+      });
 
       toast({
         title: "Profissional cadastrado",
@@ -221,40 +210,32 @@ export function ProfissionaisSaude() {
 
     setSaving(true);
     try {
-      let certificadoUrl = selectedProfissional.certificado_digital_url;
+      let certificadoUrl: string | null = selectedProfissional.certificado_digital_url;
 
       if (certificadoFile) {
-        const fileExt = certificadoFile.name.split('.').pop();
-        const fileName = `${empresaId}/profissionais-saude/${Date.now()}.${fileExt}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('certificados')
-          .upload(fileName, certificadoFile);
-
-        if (uploadError) throw uploadError;
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('certificados')
-          .getPublicUrl(fileName);
-
-        certificadoUrl = publicUrl;
+        const formDataUpload = new FormData();
+        formDataUpload.append('file', certificadoFile);
+        const apiUrl = (import.meta as any).env.VITE_API_URL ?? 'http://localhost:8000';
+        const uploadRes = await fetch(`${apiUrl}/storage/certificados/upload`, {
+          method: 'POST',
+          credentials: 'include',
+          body: formDataUpload,
+        });
+        if (!uploadRes.ok) throw new Error('Erro no upload do certificado');
+        const uploadData = await uploadRes.json();
+        certificadoUrl = uploadData.url;
       }
 
-      const { error } = await (supabase as any)
-        .from('profissionais_saude')
-        .update({
-          especialidade: formData.especialidade,
-          nome: formData.nome,
-          cpf: formData.cpf.replace(/\D/g, ''),
-          conselho: formData.conselho,
-          nr_conselho: formData.nr_conselho,
-          uf_conselho: formData.uf_conselho,
-          certificado_digital_url: certificadoUrl,
-          senha_certificado: formData.senha_certificado || null,
-        })
-        .eq('id', selectedProfissional.id);
-
-      if (error) throw error;
+      await api.put<any>(`/sst/saude/profissionais/${selectedProfissional.id}`, {
+        especialidade: formData.especialidade,
+        nome: formData.nome,
+        cpf: formData.cpf.replace(/\D/g, ''),
+        conselho: formData.conselho,
+        nr_conselho: formData.nr_conselho,
+        uf_conselho: formData.uf_conselho,
+        certificado_digital_url: certificadoUrl,
+        senha_certificado: formData.senha_certificado || null,
+      });
 
       toast({
         title: "Profissional atualizado",
@@ -281,12 +262,7 @@ export function ProfissionaisSaude() {
     if (!selectedProfissional) return;
 
     try {
-      const { error } = await (supabase as any)
-        .from('profissionais_saude')
-        .delete()
-        .eq('id', selectedProfissional.id);
-
-      if (error) throw error;
+      await api.del<any>(`/sst/saude/profissionais/${selectedProfissional.id}`);
 
       toast({
         title: "Profissional excluído",
@@ -466,24 +442,22 @@ export function ProfissionaisSaude() {
       const response = await fetch(dataUrl);
       const blob = await response.blob();
       
-      const fileName = `${empresaId}/rubricas/${selectedProfissional.id}_${Date.now()}.png`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('certificados')
-        .upload(fileName, blob, { contentType: 'image/png', upsert: true });
+      const rubricaFile = new File([blob], `rubrica_${selectedProfissional.id}_${Date.now()}.png`, { type: 'image/png' });
+      const formDataUpload = new FormData();
+      formDataUpload.append('file', rubricaFile);
+      const apiUrl = (import.meta as any).env.VITE_API_URL ?? 'http://localhost:8000';
+      const uploadRes = await fetch(`${apiUrl}/storage/certificados/upload`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formDataUpload,
+      });
+      if (!uploadRes.ok) throw new Error('Erro no upload da rubrica');
+      const uploadData = await uploadRes.json();
+      const publicUrl = uploadData.url;
 
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('certificados')
-        .getPublicUrl(fileName);
-
-      const { error } = await (supabase as any)
-        .from('profissionais_saude')
-        .update({ rubrica_url: publicUrl })
-        .eq('id', selectedProfissional.id);
-
-      if (error) throw error;
+      await api.put<any>(`/sst/saude/profissionais/${selectedProfissional.id}`, {
+        rubrica_url: publicUrl,
+      });
 
       toast({
         title: "Rubrica salva",

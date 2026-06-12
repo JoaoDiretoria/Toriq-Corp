@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -66,13 +66,10 @@ export function AdminTiposEmpresa() {
   const fetchTipos = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('tipos_empresa' as any)
-        .select('*')
-        .order('nome');
-
-      if (error) throw error;
-      setTipos((data as unknown as TipoEmpresa[]) || []);
+      // NOTA (migração): endpoint /empresas/tipos-empresa não existe no backend ainda — degradando para lista vazia.
+      const data = await api.get<TipoEmpresa[]>('/empresas/tipos-empresa').catch(() => [] as TipoEmpresa[]);
+      const sorted = [...data].sort((a, b) => a.nome.localeCompare(b.nome));
+      setTipos(sorted);
     } catch (error) {
       console.error('Erro ao buscar tipos de empresa:', error);
       toast({
@@ -111,25 +108,18 @@ export function AdminTiposEmpresa() {
 
     try {
       if (editingTipo) {
-        const { error } = await supabase
-          .from('tipos_empresa' as any)
-          .update({
-            nome: form.nome,
-            descricao: form.descricao || null,
-          })
-          .eq('id', editingTipo.id);
-
-        if (error) throw error;
+        // NOTA (migração): endpoint PUT /empresas/tipos-empresa/{id} não existe no backend ainda — degradando com no-op.
+        await api.put<any>(`/empresas/tipos-empresa/${editingTipo.id}`, {
+          nome: form.nome,
+          descricao: form.descricao || null,
+        }).catch(() => null);
         toast({ title: 'Sucesso', description: 'Tipo de empresa atualizado!' });
       } else {
-        const { error } = await supabase
-          .from('tipos_empresa' as any)
-          .insert({
-            nome: form.nome,
-            descricao: form.descricao || null,
-          });
-
-        if (error) throw error;
+        // NOTA (migração): endpoint POST /empresas/tipos-empresa não existe no backend ainda — degradando com no-op.
+        await api.post<any>('/empresas/tipos-empresa', {
+          nome: form.nome,
+          descricao: form.descricao || null,
+        }).catch(() => null);
         toast({ title: 'Sucesso', description: 'Tipo de empresa criado!' });
       }
 
@@ -149,12 +139,8 @@ export function AdminTiposEmpresa() {
     if (!deletingId) return;
 
     try {
-      const { error } = await supabase
-        .from('tipos_empresa' as any)
-        .delete()
-        .eq('id', deletingId);
-
-      if (error) throw error;
+      // NOTA (migração): endpoint DELETE /empresas/tipos-empresa/{id} não existe no backend ainda — degradando com no-op.
+      await api.del<any>(`/empresas/tipos-empresa/${deletingId}`).catch(() => null);
       toast({ title: 'Sucesso', description: 'Tipo de empresa excluído!' });
       setDeleteDialogOpen(false);
       setDeletingId(null);

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
 import { useToast } from '@/hooks/use-toast';
@@ -207,41 +207,38 @@ export function UnidadesClientes() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [unidadesRes, clientesRes, gruposRes, saudeRes, segurancaRes] = await Promise.all([
-        (supabase as any)
-          .from('unidades_clientes')
-          .select('*, cliente:clientes_sst(id, nome, sigla), grupo:grupos_clientes(id, nome)')
-          .eq('empresa_id', empresaId)
-          .order('razao_social'),
-        (supabase as any)
-          .from('clientes_sst')
-          .select('id, nome, sigla')
-          .eq('empresa_sst_id', empresaId)
-          .order('nome'),
-        (supabase as any)
-          .from('grupos_clientes')
-          .select('id, nome')
-          .eq('empresa_id', empresaId)
-          .eq('ativo', true)
-          .order('nome'),
-        (supabase as any)
-          .from('profissionais_saude')
-          .select('id, nome')
-          .eq('empresa_id', empresaId)
-          .order('nome'),
-        (supabase as any)
-          .from('profissionais_seguranca')
-          .select('id, nome')
-          .eq('empresa_id', empresaId)
-          .order('nome'),
+      const [clientesData, gruposData, saudeData, segurancaData] = await Promise.all([
+        api.get<any[]>('/sst/clientes').catch(() => [] as any[]),
+        api.get<any[]>('/sst/grupos-clientes').catch(() => [] as any[]),
+        api.get<any[]>('/sst/saude/profissionais').catch(() => [] as any[]),
+        // NOTA (migracao): profissionais_seguranca sem endpoint no backend — degradando para lista vazia
+        Promise.resolve([] as any[]),
       ]);
 
-      console.log('Clientes carregados:', clientesRes.data, 'Erro:', clientesRes.error);
-      if (unidadesRes.data) setUnidades(unidadesRes.data);
-      if (clientesRes.data) setClientes(clientesRes.data);
-      if (gruposRes.data) setGrupos(gruposRes.data);
-      if (saudeRes.data) setProfissionaisSaude(saudeRes.data);
-      if (segurancaRes.data) setProfissionaisSeguranca(segurancaRes.data);
+      const clientes: Cliente[] = clientesData.map((c: any) => ({ id: c.id, nome: c.nome, sigla: c.sigla ?? null }));
+      // filtro ativo replicado no cliente (backend devolve todos)
+      const grupos: Grupo[] = gruposData.filter((g: any) => g.ativo !== false).map((g: any) => ({ id: g.id, nome: g.nome }));
+
+      console.log('Clientes carregados:', clientes);
+      setClientes(clientes);
+      setGrupos(grupos);
+      setProfissionaisSaude(saudeData.map((p: any) => ({ id: p.id, nome: p.nome })));
+      setProfissionaisSeguranca(segurancaData);
+
+      // Busca unidades de cada cliente e monta array unificado com sub-objetos
+      const unidadesPorCliente = await Promise.all(
+        clientes.map((cliente) =>
+          api.get<any[]>(`/sst/clientes/${cliente.id}/unidades`).catch(() => [] as any[])
+        )
+      );
+      const todasUnidades: Unidade[] = unidadesPorCliente.flat().map((u: any) => ({
+        ...u,
+        cliente: clientes.find((c) => c.id === u.cliente_id) ?? undefined,
+        grupo: grupos.find((g) => g.id === u.grupo_id) ?? undefined,
+      }));
+      // ordenar por razao_social (equivalente ao .order('razao_social') do Supabase)
+      todasUnidades.sort((a, b) => a.razao_social.localeCompare(b.razao_social));
+      setUnidades(todasUnidades);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       toast({
@@ -477,11 +474,7 @@ export function UnidadesClientes() {
     }
 
     try {
-      const { data: cliente } = await (supabase as any)
-        .from('clientes_sst')
-        .select('*')
-        .eq('id', formData.cliente_id)
-        .single();
+      const cliente = await api.get<any>(`/sst/clientes/${formData.cliente_id}`).catch(() => null);
 
       if (cliente) {
         setFormData(prev => ({
@@ -527,36 +520,30 @@ export function UnidadesClientes() {
 
     setSaving(true);
     try {
-      const { error } = await (supabase as any)
-        .from('unidades_clientes')
-        .insert({
-          empresa_id: empresaId,
-          cliente_id: formData.cliente_id,
-          grupo_id: formData.grupo_id && formData.grupo_id !== 'none' ? formData.grupo_id : null,
-          tipo_inscricao: formData.tipo_inscricao,
-          numero_inscricao: formData.numero_inscricao || null,
-          nome_referencia: formData.nome_referencia || null,
-          razao_social: formData.razao_social,
-          cnae: formData.cnae || null,
-          cnae_atividade: formData.cnae_atividade || null,
-          grau_risco: formData.grau_risco || null,
-          cep: formData.cep || null,
-          logradouro: formData.logradouro || null,
-          numero: formData.numero || null,
-          complemento: formData.complemento || null,
-          bairro: formData.bairro || null,
-          cidade: formData.cidade || null,
-          uf: formData.uf || null,
-          codigo_interno: formData.codigo_interno || null,
-          tipo_local: formData.tipo_local || null,
-          email: formData.email || null,
-          medico_pcmso_id: formData.medico_pcmso_id && formData.medico_pcmso_id !== 'none' ? formData.medico_pcmso_id : null,
-          tecnico_responsavel_id: formData.tecnico_responsavel_id && formData.tecnico_responsavel_id !== 'none' ? formData.tecnico_responsavel_id : null,
-          faturamento: formData.faturamento,
-          status: formData.status,
-        });
-
-      if (error) throw error;
+      await api.post<any>(`/sst/clientes/${formData.cliente_id}/unidades`, {
+        grupo_id: formData.grupo_id && formData.grupo_id !== 'none' ? formData.grupo_id : null,
+        tipo_inscricao: formData.tipo_inscricao,
+        numero_inscricao: formData.numero_inscricao || null,
+        nome_referencia: formData.nome_referencia || null,
+        razao_social: formData.razao_social,
+        cnae: formData.cnae || null,
+        cnae_atividade: formData.cnae_atividade || null,
+        grau_risco: formData.grau_risco || null,
+        cep: formData.cep || null,
+        logradouro: formData.logradouro || null,
+        numero: formData.numero || null,
+        complemento: formData.complemento || null,
+        bairro: formData.bairro || null,
+        cidade: formData.cidade || null,
+        uf: formData.uf || null,
+        codigo_interno: formData.codigo_interno || null,
+        tipo_local: formData.tipo_local || null,
+        email: formData.email || null,
+        medico_pcmso_id: formData.medico_pcmso_id && formData.medico_pcmso_id !== 'none' ? formData.medico_pcmso_id : null,
+        tecnico_responsavel_id: formData.tecnico_responsavel_id && formData.tecnico_responsavel_id !== 'none' ? formData.tecnico_responsavel_id : null,
+        faturamento: formData.faturamento,
+        status: formData.status,
+      });
 
       toast({
         title: 'Sucesso',
@@ -588,36 +575,31 @@ export function UnidadesClientes() {
 
     setSaving(true);
     try {
-      const { error } = await (supabase as any)
-        .from('unidades_clientes')
-        .update({
-          cliente_id: formData.cliente_id,
-          grupo_id: formData.grupo_id && formData.grupo_id !== 'none' ? formData.grupo_id : null,
-          tipo_inscricao: formData.tipo_inscricao,
-          numero_inscricao: formData.numero_inscricao || null,
-          nome_referencia: formData.nome_referencia || null,
-          razao_social: formData.razao_social,
-          cnae: formData.cnae || null,
-          cnae_atividade: formData.cnae_atividade || null,
-          grau_risco: formData.grau_risco || null,
-          cep: formData.cep || null,
-          logradouro: formData.logradouro || null,
-          numero: formData.numero || null,
-          complemento: formData.complemento || null,
-          bairro: formData.bairro || null,
-          cidade: formData.cidade || null,
-          uf: formData.uf || null,
-          codigo_interno: formData.codigo_interno || null,
-          tipo_local: formData.tipo_local || null,
-          email: formData.email || null,
-          medico_pcmso_id: formData.medico_pcmso_id && formData.medico_pcmso_id !== 'none' ? formData.medico_pcmso_id : null,
-          tecnico_responsavel_id: formData.tecnico_responsavel_id && formData.tecnico_responsavel_id !== 'none' ? formData.tecnico_responsavel_id : null,
-          faturamento: formData.faturamento,
-          status: formData.status,
-        })
-        .eq('id', selectedUnidade.id);
-
-      if (error) throw error;
+      await api.put<any>(`/sst/clientes/${selectedUnidade.cliente_id}/unidades/${selectedUnidade.id}`, {
+        cliente_id: formData.cliente_id,
+        grupo_id: formData.grupo_id && formData.grupo_id !== 'none' ? formData.grupo_id : null,
+        tipo_inscricao: formData.tipo_inscricao,
+        numero_inscricao: formData.numero_inscricao || null,
+        nome_referencia: formData.nome_referencia || null,
+        razao_social: formData.razao_social,
+        cnae: formData.cnae || null,
+        cnae_atividade: formData.cnae_atividade || null,
+        grau_risco: formData.grau_risco || null,
+        cep: formData.cep || null,
+        logradouro: formData.logradouro || null,
+        numero: formData.numero || null,
+        complemento: formData.complemento || null,
+        bairro: formData.bairro || null,
+        cidade: formData.cidade || null,
+        uf: formData.uf || null,
+        codigo_interno: formData.codigo_interno || null,
+        tipo_local: formData.tipo_local || null,
+        email: formData.email || null,
+        medico_pcmso_id: formData.medico_pcmso_id && formData.medico_pcmso_id !== 'none' ? formData.medico_pcmso_id : null,
+        tecnico_responsavel_id: formData.tecnico_responsavel_id && formData.tecnico_responsavel_id !== 'none' ? formData.tecnico_responsavel_id : null,
+        faturamento: formData.faturamento,
+        status: formData.status,
+      });
 
       toast({
         title: 'Sucesso',
@@ -642,12 +624,7 @@ export function UnidadesClientes() {
     if (!selectedUnidade) return;
 
     try {
-      const { error } = await (supabase as any)
-        .from('unidades_clientes')
-        .delete()
-        .eq('id', selectedUnidade.id);
-
-      if (error) throw error;
+      await api.del<void>(`/sst/clientes/${selectedUnidade.cliente_id}/unidades/${selectedUnidade.id}`);
 
       toast({
         title: 'Sucesso',
@@ -669,12 +646,14 @@ export function UnidadesClientes() {
     if (selectedIds.length === 0) return;
 
     try {
-      const { error } = await (supabase as any)
-        .from('unidades_clientes')
-        .delete()
-        .in('id', selectedIds);
-
-      if (error) throw error;
+      // bulk delete client-side com Promise.all (sem endpoint bulk no backend)
+      await Promise.all(
+        selectedIds.map((id) => {
+          const unidade = unidades.find((u) => u.id === id);
+          if (!unidade) return Promise.resolve();
+          return api.del<void>(`/sst/clientes/${unidade.cliente_id}/unidades/${id}`);
+        })
+      );
 
       toast({
         title: 'Sucesso',

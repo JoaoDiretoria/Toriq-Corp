@@ -8,7 +8,7 @@
  * - Converter entre formatos DB (snake_case) e Frontend (camelCase)
  */
 
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { hexToHSL, formatHSL } from '@/utils/colorUtils';
 import type { WhiteLabelConfig, WhiteLabelDBRecord } from '@/types/whiteLabel';
 import { CSS_VARIABLES, STORAGE_KEYS } from '@/types/whiteLabel';
@@ -258,8 +258,8 @@ export function loadAndApplyFromCache(): boolean {
  * @param userRole - Role do usuário (opcional, para verificar se é admin_vertical)
  */
 export async function loadAndApplyFromDB(
-  empresaId: string, 
-  userId?: string, 
+  empresaId: string,
+  userId?: string,
   userRole?: string
 ): Promise<boolean> {
   try {
@@ -273,45 +273,14 @@ export async function loadAndApplyFromDB(
       return false;
     }
 
-    let empresaSstId: string | null = null;
+    // GET /white-label/me resolve internamente a empresa SST pai e devolve a config
+    // (substitui as RPCs get_empresa_sst_pai_by_user e get_empresa_sst_pai + busca direta)
+    const result = await api.get<any>('/white-label/me').catch(() => null);
 
-    // Para instrutores, a empresa_id do profile já aponta para a SST
-    // Então podemos usar diretamente
-    if (userRole === 'instrutor' && empresaId) {
-      empresaSstId = empresaId;
-      log('Instrutor detectado, usando empresa_id diretamente:', empresaSstId);
-    }
-    // Para cliente_torq, ela mesma é a SST
-    else if (userRole === 'cliente_torq' && empresaId) {
-      empresaSstId = empresaId;
-      log('Empresa SST detectada, usando empresa_id diretamente:', empresaSstId);
-    }
-    // Para outros roles, buscar via função RPC
-    else if (userId) {
-      log('Buscando empresa SST via user_id:', userId);
-      const { data: empresaSstByUser, error: userError } = await (supabase as any)
-        .rpc('get_empresa_sst_pai_by_user', { p_user_id: userId });
+    log('Resultado /white-label/me:', result);
 
-      log('Resultado get_empresa_sst_pai_by_user:', { data: empresaSstByUser, error: userError });
-
-      if (!userError && empresaSstByUser) {
-        empresaSstId = empresaSstByUser;
-        log('Empresa SST encontrada via user_id:', empresaSstId);
-      } else if (userError) {
-        log('Erro ao buscar empresa SST via user_id:', userError);
-      }
-    }
-
-    // Fallback: buscar pela empresa_id se não encontrou via user
-    if (!empresaSstId && empresaId) {
-      const { data: empresaSstByEmpresa, error: empresaError } = await (supabase as any)
-        .rpc('get_empresa_sst_pai', { p_empresa_id: empresaId });
-
-      if (!empresaError && empresaSstByEmpresa) {
-        empresaSstId = empresaSstByEmpresa;
-        log('Empresa SST encontrada via empresa_id:', empresaSstId);
-      }
-    }
+    const empresaSstId: string | null = result?.empresa_sst_id ?? null;
+    const data: any | null = result?.config ?? null;
 
     // Se não tem empresa SST pai (ex: vertical_on), usa tema padrão
     if (!empresaSstId) {
@@ -321,34 +290,19 @@ export async function loadAndApplyFromDB(
       return false;
     }
 
-    // Buscar configuração white label da empresa SST pai
-    log('Buscando white_label_config para empresa_id:', empresaSstId);
-    const { data, error } = await (supabase as any)
-      .from('white_label_config')
-      .select('*')
-      .eq('empresa_id', empresaSstId)
-      .single();
-
-    log('Resultado busca white_label_config:', { data, error });
-
-    if (error && error.code !== 'PGRST116') {
-      log('Erro ao carregar white label config:', error);
-      return false;
-    }
-
     if (data) {
-      log('Config encontrada, aplicando:', { 
-        bgColor: data.bg_color, 
+      log('Config encontrada, aplicando:', {
+        bgColor: data.bg_color,
         primaryColor: data.primary_color,
-        surfaceColor: data.surface_color 
+        surfaceColor: data.surface_color
       });
-      
+
       const config = dbToFrontend(data as WhiteLabelDBRecord);
-      
+
       // Salvar no cache e aplicar
-      cacheConfig(config, empresaSstId);
+      cacheConfig(config, String(empresaSstId));
       applyWhiteLabelConfig(config);
-      
+
       return true;
     } else {
       log('Sem config encontrada para empresa SST:', empresaSstId);

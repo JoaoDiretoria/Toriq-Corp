@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -141,57 +141,77 @@ export default function BlogList() {
   const fetchBlogs = async () => {
     setLoading(true);
     try {
-      let query = (supabase as any)
-        .from('blogs')
-        .select(`
-          id, titulo, slug, descricao, imagem_capa_url, publicado_em, tempo_leitura, visualizacoes,
-          autor:blog_autores(id, nome, sobrenome, cargo),
-          categoria:blog_categorias(id, nome, slug, cor)
-        `, { count: 'exact' })
-        .eq('status', 'publicado')
-        .order('publicado_em', { ascending: false })
-        .range((page - 1) * itemsPerPage, page * itemsPerPage - 1);
+      // GET /blog retorna apenas posts publicados com autor_id/categoria_id planos;
+      // enriquecemos com autor e categoria para manter compatibilidade com o JSX.
+      const [rawPosts, allAutores, allCategorias] = await Promise.all([
+        api.get<any[]>('/blog').catch(() => [] as any[]),
+        api.get<any[]>('/blog/autores').catch(() => [] as any[]),
+        api.get<any[]>('/blog/categorias').catch(() => [] as any[]),
+      ]);
+
+      const autoresMap = Object.fromEntries(allAutores.map((a: any) => [String(a.id), a]));
+      const categoriasMap = Object.fromEntries(allCategorias.map((c: any) => [String(c.id), c]));
+
+      let allData = rawPosts.map((b: any) => ({
+        ...b,
+        autor: b.autor_id ? (autoresMap[String(b.autor_id)] ?? null) : null,
+        categoria: b.categoria_id ? (categoriasMap[String(b.categoria_id)] ?? null) : null,
+      }));
 
       // Filtro de busca
       if (search) {
-        query = query.or(`titulo.ilike.%${search}%,descricao.ilike.%${search}%`);
+        const q = search.toLowerCase();
+        allData = allData.filter(
+          (b) =>
+            b.titulo?.toLowerCase().includes(q) ||
+            b.descricao?.toLowerCase().includes(q)
+        );
       }
 
       // Filtro de categoria
       if (categoriaFilter) {
-        query = query.eq('categoria_id', categoriaFilter);
+        allData = allData.filter((b) => b.categoria_id === categoriaFilter);
       }
 
       // Filtro de autor
       if (autorFilter) {
-        query = query.eq('autor_id', autorFilter);
+        allData = allData.filter((b) => b.autor_id === autorFilter);
       }
 
       // Filtro de tempo de leitura
       if (tempoLeituraFilter) {
-        const [min, max] = tempoLeituraFilter.split('-').map(Number);
+        const [minStr, maxStr] = tempoLeituraFilter.split('-');
+        const min = Number(minStr);
+        const max = maxStr ? Number(maxStr) : undefined;
         if (max) {
-          query = query.gte('tempo_leitura', min).lte('tempo_leitura', max);
+          allData = allData.filter((b) => b.tempo_leitura >= min && b.tempo_leitura <= max);
         } else {
-          query = query.gte('tempo_leitura', min);
+          allData = allData.filter((b) => b.tempo_leitura >= min);
         }
       }
 
       // Filtro de data
       if (dataInicio) {
-        query = query.gte('publicado_em', format(dataInicio, 'yyyy-MM-dd'));
+        const de = format(dataInicio, 'yyyy-MM-dd');
+        allData = allData.filter((b) => b.publicado_em >= de);
       }
       if (dataFim) {
-        query = query.lte('publicado_em', format(dataFim, 'yyyy-MM-dd') + 'T23:59:59');
+        const ate = format(dataFim, 'yyyy-MM-dd') + 'T23:59:59';
+        allData = allData.filter((b) => b.publicado_em <= ate);
       }
 
-      const { data, error, count } = await query;
+      // Ordenação: mais recentes primeiro
+      allData = allData.sort(
+        (a, b) =>
+          new Date(b.publicado_em).getTime() - new Date(a.publicado_em).getTime()
+      );
 
-      if (error) throw error;
+      const count = allData.length;
+      const paginated = allData.slice((page - 1) * itemsPerPage, page * itemsPerPage);
 
-      setBlogs(data || []);
-      setTotalCount(count || 0);
-      setTotalPages(Math.ceil((count || 0) / itemsPerPage));
+      setBlogs(paginated);
+      setTotalCount(count);
+      setTotalPages(Math.ceil(count / itemsPerPage));
     } catch (error) {
       console.error('Erro ao buscar blogs:', error);
     } finally {
@@ -201,13 +221,9 @@ export default function BlogList() {
 
   const fetchCategorias = async () => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('blog_categorias')
-        .select('*')
-        .order('nome');
-
-      if (error) throw error;
-      setCategorias(data || []);
+      const data = await api.get<any[]>('/blog/categorias').catch(() => [] as any[]);
+      const sorted = [...data].sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+      setCategorias(sorted);
     } catch (error) {
       console.error('Erro ao buscar categorias:', error);
     }
@@ -215,13 +231,9 @@ export default function BlogList() {
 
   const fetchAutores = async () => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('blog_autores')
-        .select('id, nome, sobrenome')
-        .order('nome');
-
-      if (error) throw error;
-      setAutores(data || []);
+      const data = await api.get<any[]>('/blog/autores').catch(() => [] as any[]);
+      const sorted = [...data].sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+      setAutores(sorted);
     } catch (error) {
       console.error('Erro ao buscar autores:', error);
     }

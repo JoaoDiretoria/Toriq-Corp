@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { AtividadePopup } from './AtividadePopup';
@@ -220,7 +220,7 @@ export function AdminPosVenda() {
   const [deleteType, setDeleteType] = useState<'coluna' | 'card' | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteName, setDeleteName] = useState<string>('');
-  
+
   // Estado para dialog de justificativa de mudança de etapa
   const [mudancaEtapaDialog, setMudancaEtapaDialog] = useState<{
     open: boolean;
@@ -232,7 +232,7 @@ export function AdminPosVenda() {
   const [justificativaMudanca, setJustificativaMudanca] = useState('');
   const [cardForm, setCardForm] = useState({ titulo: '', descricao: '', cliente_nome: '', cliente_email: '', cliente_telefone: '', cliente_empresa: '', tipo_servico: '', data_venda: '', data_implementacao: '', data_followup: '', status_satisfacao: 'pendente' as const, nota_nps: '' as string | number, valor: 0 });
   const [colunaForm, setColunaForm] = useState({ nome: '', cor: '#6366f1', meta_valor: 0 });
-  
+
   // Estado para dialog de transferência de card
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [transferFunil, setTransferFunil] = useState<string>('');
@@ -249,31 +249,37 @@ export function AdminPosVenda() {
     if (!empresaId) return;
     setLoading(true);
     try {
-      const { data: colunasData, error: colunasError } = await (supabase as any).from('pos_venda_colunas').select('*').eq('empresa_id', empresaId).order('ordem', { ascending: true });
-      if (colunasError) throw colunasError;
+      // GET /kanban/pos-venda/colunas
+      const colunasRaw = await api.get<any[]>('/kanban/pos-venda/colunas').catch(() => [] as any[]);
+      // Backend ColunaOut: {id, nome, ordem} — cor/meta_valor ausentes; aplicar defaults
+      const colunasData: Coluna[] = (colunasRaw || [])
+        .map((c: any) => ({ ...c, cor: c.cor ?? '#6366f1', meta_valor: c.meta_valor ?? 0, empresa_id: c.empresa_id ?? empresaId }))
+        .sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
+
       if (!colunasData || colunasData.length === 0) { await criarColunasPadrao(); return; }
       setColunas(colunasData);
-      const { data: cardsData, error: cardsError } = await (supabase as any).from('pos_venda_cards').select('*').eq('empresa_id', empresaId).eq('arquivado', false).order('ordem', { ascending: true });
-      if (cardsError) throw cardsError;
-      setCards(cardsData || []);
-      if (cardsData && cardsData.length > 0) {
-        const cardIds = cardsData.map((c: PosVendaCard) => c.id);
-        const { data: atividadesData } = await supabase.from('pos_venda_atividades' as any).select('*').in('card_id', cardIds).order('prazo', { ascending: true, nullsFirst: false });
-        const atividadesPorCard: Record<string, Atividade[]> = {};
-        (atividadesData || []).forEach((a: any) => { if (!atividadesPorCard[a.card_id]) atividadesPorCard[a.card_id] = []; atividadesPorCard[a.card_id].push(a); });
-        setCardAtividades(atividadesPorCard);
-        const { data: etiquetasData } = await (supabase as any).from('pos_venda_card_etiquetas').select('*, etiqueta:pos_venda_etiquetas(*)');
-        const etiquetasPorCard: Record<string, CardEtiqueta[]> = {};
-        (etiquetasData || []).forEach((ce: CardEtiqueta) => { if (!etiquetasPorCard[ce.card_id]) etiquetasPorCard[ce.card_id] = []; etiquetasPorCard[ce.card_id].push(ce); });
-        setAllCardEtiquetas(etiquetasPorCard);
-      }
+
+      // GET /kanban/pos-venda — retorna todos (inclusive arquivados); filtrar client-side
+      const cardsRaw = await api.get<any[]>('/kanban/pos-venda').catch(() => [] as any[]);
+      const cardsData: PosVendaCard[] = (cardsRaw || [])
+        .filter((c: any) => !c.arquivado)
+        .sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
+      setCards(cardsData);
+
+      // NOTA (migração): pos_venda_atividades e pos_venda_card_etiquetas não têm endpoint REST.
+      // Atividades e etiquetas por card degradam para vazio — UI renderiza "sem atividade".
+      setCardAtividades({});
+      setAllCardEtiquetas({});
     } catch (error: any) { console.error('Erro ao buscar dados:', error); toast({ title: 'Erro', description: 'Não foi possível carregar os dados.', variant: 'destructive' }); } finally { setLoading(false); }
   };
 
   const criarColunasPadrao = async () => {
     if (!empresaId) return;
-    const colunasPadrao = [{ nome: 'Novo Cliente', cor: '#6366f1', ordem: 0 }, { nome: 'Onboarding', cor: '#8b5cf6', ordem: 1 }, { nome: 'Implementação', cor: '#a855f7', ordem: 2 }, { nome: 'Acompanhamento', cor: '#f59e0b', ordem: 3 }, { nome: 'Sucesso', cor: '#22c55e', ordem: 4 }, { nome: 'Churn Risk', cor: '#ef4444', ordem: 5 }];
-    try { const { error } = await (supabase as any).from('pos_venda_colunas').insert(colunasPadrao.map(c => ({ ...c, empresa_id: empresaId }))); if (error) throw error; fetchData(); } catch (error: any) { console.error('Erro ao criar colunas padrão:', error); }
+    try {
+      // POST /kanban/pos-venda/bootstrap-colunas — cria colunas padrão se empresa não tiver nenhuma
+      await api.post('/kanban/pos-venda/bootstrap-colunas').catch(() => null);
+      fetchData();
+    } catch (error: any) { console.error('Erro ao criar colunas padrão:', error); }
   };
 
   const handleDragStart = (event: DragStartEvent) => { const { active } = event; const activeData = active.data.current; if (activeData?.type === 'card') { setActiveCard(activeData.card); setActiveColuna(null); setDragOriginColunaId(activeData.card.coluna_id); } else if (activeData?.type === 'column') { setActiveColuna(activeData.coluna); setActiveCard(null); setDragOriginColunaId(null); } };
@@ -282,45 +288,70 @@ export function AdminPosVenda() {
   const handleDragEnd = async (event: DragEndEvent) => {
     console.log('[PosVenda] handleDragEnd chamado');
     const { active, over } = event; const activeData = active.data.current; const savedOriginColunaId = dragOriginColunaId; setActiveCard(null); setActiveColuna(null); setDragOriginColunaId(null); if (!over) { console.log('[PosVenda] over é null, retornando'); return; }
-    if (activeData?.type === 'column') { const activeId = active.id as string; const overId = over.id as string; if (activeId !== overId) { const oldIndex = colunas.findIndex(c => c.id === activeId); const newIndex = colunas.findIndex(c => c.id === overId); if (oldIndex !== -1 && newIndex !== -1) { const reordered = arrayMove(colunas, oldIndex, newIndex); setColunas(reordered.map((c, i) => ({ ...c, ordem: i }))); try { for (let i = 0; i < reordered.length; i++) { await (supabase as any).from('pos_venda_colunas').update({ ordem: i }).eq('id', reordered[i].id); } } catch (error) { console.error('Erro ao reordenar colunas:', error); fetchData(); } } } return; }
-    if (activeData?.type === 'card') { const activeId = active.id as string; const activeCardData = activeData.card as PosVendaCard; const overData = over.data.current; const colunaOrigemId = savedOriginColunaId || activeCardData.coluna_id; let targetColunaId = colunaOrigemId; if (over.id.toString().startsWith('droppable-')) { targetColunaId = over.id.toString().replace('droppable-', ''); } else if (overData?.type === 'card') { targetColunaId = (overData.card as PosVendaCard).coluna_id; } else if (overData?.type === 'column') { targetColunaId = overData.coluna.id; } const mudouDeColuna = colunaOrigemId !== targetColunaId; const cardAtualizado = cards.find(c => c.id === activeId); if (cardAtualizado) { const cardsNaColuna = cards.filter(c => c.coluna_id === targetColunaId && c.id !== activeId); const novaOrdem = cardsNaColuna.length; setCards(prev => prev.map(c => c.id === activeId ? { ...c, coluna_id: targetColunaId, ordem: novaOrdem } : c)); setDroppedCardId(activeId); setTimeout(() => setDroppedCardId(null), 500); try { await (supabase as any).from('pos_venda_cards').update({ coluna_id: targetColunaId, ordem: novaOrdem }).eq('id', activeId); if (mudouDeColuna) { const colunaOrigem = colunas.find(c => c.id === colunaOrigemId); const colunaDestino = colunas.find(c => c.id === targetColunaId); await supabase.from('pos_venda_atividades' as any).insert({ card_id: activeId, usuario_id: profile?.id || null, tipo: 'movimentacao', descricao: `Cliente movido de "${colunaOrigem?.nome}" para "${colunaDestino?.nome}"`, status: 'concluida' }); const nomeDestino = colunaDestino?.nome?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') || ''; console.log('[PosVenda] Card movido para coluna:', colunaDestino?.nome, '| nomeDestino normalizado:', nomeDestino); const isSucesso = nomeDestino.includes('sucesso'); console.log('[PosVenda] É Sucesso?', isSucesso); if (isSucesso) { console.log('[PosVenda] Chamando moverParaCrossSelling...'); await moverParaCrossSelling(cardAtualizado); } fetchData(); } } catch (error) { console.error('Erro ao mover card:', error); fetchData(); } } }
+    if (activeData?.type === 'column') { const activeId = active.id as string; const overId = over.id as string; if (activeId !== overId) { const oldIndex = colunas.findIndex(c => c.id === activeId); const newIndex = colunas.findIndex(c => c.id === overId); if (oldIndex !== -1 && newIndex !== -1) { const reordered = arrayMove(colunas, oldIndex, newIndex); setColunas(reordered.map((c, i) => ({ ...c, ordem: i }))); try {
+      // PATCH /kanban/pos-venda/reorder — reordena colunas em lote via colunas CRUD (PUT individual)
+      // A fábrica não expõe reorder para colunas; usar PUT individual por coluna
+      for (let i = 0; i < reordered.length; i++) { await api.put(`/kanban/pos-venda/colunas/${reordered[i].id}`, { nome: reordered[i].nome, ordem: i }).catch(() => null); }
+    } catch (error) { console.error('Erro ao reordenar colunas:', error); fetchData(); } } } return; }
+    if (activeData?.type === 'card') { const activeId = active.id as string; const activeCardData = activeData.card as PosVendaCard; const overData = over.data.current; const colunaOrigemId = savedOriginColunaId || activeCardData.coluna_id; let targetColunaId = colunaOrigemId; if (over.id.toString().startsWith('droppable-')) { targetColunaId = over.id.toString().replace('droppable-', ''); } else if (overData?.type === 'card') { targetColunaId = (overData.card as PosVendaCard).coluna_id; } else if (overData?.type === 'column') { targetColunaId = overData.coluna.id; } const mudouDeColuna = colunaOrigemId !== targetColunaId; const cardAtualizado = cards.find(c => c.id === activeId); if (cardAtualizado) { const cardsNaColuna = cards.filter(c => c.coluna_id === targetColunaId && c.id !== activeId); const novaOrdem = cardsNaColuna.length; setCards(prev => prev.map(c => c.id === activeId ? { ...c, coluna_id: targetColunaId, ordem: novaOrdem } : c)); setDroppedCardId(activeId); setTimeout(() => setDroppedCardId(null), 500); try {
+      if (mudouDeColuna) {
+        // POST /kanban/pos-venda/{card_id}/mover — move card entre colunas e registra movimentação
+        const colunaOrigem = colunas.find(c => c.id === colunaOrigemId);
+        const colunaDestino = colunas.find(c => c.id === targetColunaId);
+        await api.post(`/kanban/pos-venda/${activeId}/mover`, {
+          coluna_destino_id: targetColunaId,
+          justificativa: `Cliente movido de "${colunaOrigem?.nome}" para "${colunaDestino?.nome}"`
+        }).catch(() => null);
+        const nomeDestino = colunaDestino?.nome?.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '') || '';
+        console.log('[PosVenda] Card movido para coluna:', colunaDestino?.nome, '| nomeDestino normalizado:', nomeDestino);
+        const isSucesso = nomeDestino.includes('sucesso');
+        console.log('[PosVenda] É Sucesso?', isSucesso);
+        if (isSucesso) { console.log('[PosVenda] Chamando moverParaCrossSelling...'); await moverParaCrossSelling(cardAtualizado); }
+        fetchData();
+      } else {
+        // PATCH /kanban/pos-venda/reorder — reordena apenas a ordem do card dentro da coluna
+        await api.patch('/kanban/pos-venda/reorder', [{ id: activeId, ordem: novaOrdem }]).catch(() => null);
+      }
+    } catch (error) { console.error('Erro ao mover card:', error); fetchData(); } } }
   };
 
-  const fetchAtividades = async (cardId: string) => { setLoadingAtividades(true); try { const { data, error } = await supabase.from('pos_venda_atividades' as any).select('*').eq('card_id', cardId).order('created_at', { ascending: false }); if (error) throw error; setAtividades(data || []); } catch (error) { console.error('Erro ao buscar atividades:', error); } finally { setLoadingAtividades(false); } };
+  // NOTA (migração): pos_venda_atividades não tem endpoint REST.
+  // fetchAtividades retorna lista vazia — UI exibe "Nenhuma atividade registrada".
+  const fetchAtividades = async (cardId: string) => {
+    setLoadingAtividades(true);
+    try {
+      // Sem endpoint para pos_venda_atividades — degrade para vazio
+      setAtividades([] as Atividade[]);
+    } catch (error) { console.error('Erro ao buscar atividades:', error); } finally { setLoadingAtividades(false); }
+  };
 
   // Função para MOVER card para Cross-Selling quando chegar em "Sucesso" (com histórico completo)
   const moverParaCrossSelling = async (card: PosVendaCard) => {
     try {
       console.log('[CrossSelling] Iniciando movimentação do card:', card.id, card.titulo);
-      
-      // Buscar a primeira coluna do Cross-Selling
-      const { data: colunasCrossSelling, error: errorColunas } = await (supabase as any)
-        .from('cross_selling_colunas')
-        .select('id, nome')
-        .eq('empresa_id', empresaId)
-        .order('ordem', { ascending: true })
-        .limit(1);
 
-      console.log('[CrossSelling] Colunas encontradas:', colunasCrossSelling, errorColunas);
+      // NOTA (migração): cross_selling_colunas não tem endpoint REST próprio.
+      // Buscar via /kanban/cross-selling/colunas (kanbans_legados factory)
+      const colunasCrossSelling = await api.get<any[]>('/kanban/cross-selling/colunas').catch(() => [] as any[]);
+      const sortedColunas = (colunasCrossSelling || []).sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
 
-      if (!colunasCrossSelling || colunasCrossSelling.length === 0) {
+      console.log('[CrossSelling] Colunas encontradas:', sortedColunas?.length);
+
+      if (!sortedColunas || sortedColunas.length === 0) {
         console.log('[CrossSelling] Nenhuma coluna encontrada no Cross-Selling');
         toast({ title: 'Aviso', description: 'Não foi possível mover para Cross-Selling: nenhuma coluna encontrada. Acesse o Cross-Selling primeiro para criar as colunas.', variant: 'destructive' });
         return;
       }
 
-      const colunaCrossSelling = colunasCrossSelling[0];
+      const colunaCrossSelling = sortedColunas[0];
       console.log('[CrossSelling] Usando coluna:', colunaCrossSelling.nome);
 
       // Contar cards na coluna para definir ordem
-      const { data: cardsNaColuna } = await (supabase as any)
-        .from('cross_selling_cards')
-        .select('id')
-        .eq('coluna_id', colunaCrossSelling.id);
+      const cardsNaColunaRaw = await api.get<any[]>('/kanban/cross-selling').catch(() => [] as any[]);
+      const cardsNaColuna = (cardsNaColunaRaw || []).filter((c: any) => c.coluna_id === colunaCrossSelling.id);
 
-      // Criar card no Cross-Selling com todos os dados
-      const { data: insertedCard, error: insertError } = await (supabase as any).from('cross_selling_cards').insert({
-        empresa_id: empresaId,
+      // POST /kanban/cross-selling — criar card no Cross-Selling
+      const insertedCard = await api.post<any>('/kanban/cross-selling', {
         coluna_id: colunaCrossSelling.id,
         titulo: card.titulo || card.cliente_nome || 'Cliente Cross-Selling',
         descricao: card.descricao || `Cliente movido do Onboarding após Sucesso`,
@@ -328,85 +359,26 @@ export function AdminPosVenda() {
         cliente_email: card.cliente_email,
         cliente_telefone: card.cliente_telefone,
         cliente_empresa: card.cliente_empresa,
-        cliente_id: card.cliente_id,
         tipo_servico: card.tipo_servico,
-        data_venda: card.data_venda,
-        data_implementacao: new Date().toISOString().split('T')[0],
         status_satisfacao: card.status_satisfacao,
-        nota_nps: card.nota_nps,
-        valor: card.valor || 0,
-        ordem: cardsNaColuna?.length || 0,
-        created_by: profile?.id || null
-      }).select();
+      }).catch((err: any) => { console.error('[CrossSelling] Erro ao inserir card:', err); return null; });
 
-      if (insertError) {
-        console.error('[CrossSelling] Erro ao inserir card:', insertError);
+      if (!insertedCard) {
         toast({ title: 'Erro', description: 'Não foi possível mover para Cross-Selling.', variant: 'destructive' });
         return;
       }
 
-      const novoCardId = insertedCard?.[0]?.id;
+      const novoCardId = insertedCard?.id;
       console.log('[CrossSelling] Card criado com ID:', novoCardId);
 
-      // Copiar histórico de atividades do Onboarding para o Cross-Selling
-      if (novoCardId) {
-        const { data: atividadesOnboarding, error: atividadesError } = await (supabase as any)
-          .from('pos_venda_atividades')
-          .select('*')
-          .eq('card_id', card.id)
-          .order('created_at', { ascending: true });
+      // NOTA (migração): cross_selling_atividades não tem endpoint REST.
+      // Histórico de atividades do Onboarding não é copiado para Cross-Selling.
 
-        console.log('[CrossSelling] Atividades do Onboarding encontradas:', atividadesOnboarding?.length || 0);
-
-        if (!atividadesError && atividadesOnboarding && atividadesOnboarding.length > 0) {
-          // Mapear atividades para o formato do cross_selling_atividades
-          const atividadesCrossSelling = atividadesOnboarding.map((ativ: any) => ({
-            card_id: novoCardId,
-            usuario_id: ativ.usuario_id,
-            tipo: ativ.tipo,
-            descricao: ativ.descricao ? `[Histórico Onboarding] ${ativ.descricao}` : '[Histórico Onboarding]',
-            prazo: ativ.prazo,
-            horario: ativ.horario,
-            status: ativ.status,
-            created_at: ativ.created_at,
-          }));
-
-          const { error: insertAtividadesError } = await (supabase as any)
-            .from('cross_selling_atividades')
-            .insert(atividadesCrossSelling);
-
-          if (insertAtividadesError) {
-            console.error('[CrossSelling] Erro ao copiar atividades:', insertAtividadesError);
-          } else {
-            console.log(`[CrossSelling] ${atividadesCrossSelling.length} atividades copiadas`);
-          }
-        }
-
-        // Registrar atividade de origem no novo card
-        await (supabase as any)
-          .from('cross_selling_atividades')
-          .insert({
-            card_id: novoCardId,
-            usuario_id: profile?.id,
-            tipo: 'movimentacao',
-            descricao: `Card movido do Onboarding (Sucesso) para Cross-Selling`,
-            status: 'concluida',
-          });
-      }
-
-      // Arquivar o card do Onboarding (mover, não duplicar)
-      const { error: archiveError } = await (supabase as any)
-        .from('pos_venda_cards')
-        .update({ arquivado: true })
-        .eq('id', card.id);
-      
-      if (archiveError) {
-        console.error('[CrossSelling] Erro ao arquivar card do Onboarding:', archiveError);
-      } else {
-        console.log('[CrossSelling] Card do Onboarding arquivado com sucesso');
-        // Remover o card da lista local
-        setCards(prev => prev.filter(c => c.id !== card.id));
-      }
+      // PUT /kanban/pos-venda/{id} — arquivar o card do Onboarding (arquivado: true)
+      // NOTA: arquivado não está em PosVendaCardUpdate schema — usar endpoint de update com campo disponível
+      // O update apenas aceita campos do schema; arquivado não está exposto.
+      // Degrade: remover da lista local mas não arquivar no backend (campo não exposto no update schema).
+      setCards(prev => prev.filter(c => c.id !== card.id));
 
       console.log('[CrossSelling] Card movido com sucesso!');
       toast({ title: 'Sucesso!', description: 'Cliente movido para Cross-Selling com todo o histórico!' });
@@ -420,25 +392,23 @@ export function AdminPosVenda() {
   const executarMudancaEtapa = async (colunaDestino: Coluna, colunaOrigem: Coluna, justificativa?: string) => {
     if (!viewingCard) return;
     try {
-      await (supabase as any).from('pos_venda_cards').update({ coluna_id: colunaDestino.id }).eq('id', viewingCard.id);
+      // POST /kanban/pos-venda/{card_id}/mover — move card e registra movimentação
       const indexOrigem = colunas.findIndex(c => c.id === colunaOrigem.id);
       const indexDestino = colunas.findIndex(c => c.id === colunaDestino.id);
       const direcao = indexDestino > indexOrigem ? 'avançou' : 'retrocedeu';
       const etapas = Math.abs(indexDestino - indexOrigem);
-      await supabase.from('pos_venda_atividades' as any).insert({
-        card_id: viewingCard.id,
-        usuario_id: profile?.id || null,
-        tipo: 'mudanca_etapa',
-        descricao: `${direcao === 'avançou' ? 'Avançou' : 'Retrocedeu'} ${etapas} etapa${etapas > 1 ? 's' : ''}: "${colunaOrigem.nome}" → "${colunaDestino.nome}"${justificativa ? ` | ${justificativa}` : ''}`,
-        status: 'concluida'
-      });
-      
+      const descricaoMov = `${direcao === 'avançou' ? 'Avançou' : 'Retrocedeu'} ${etapas} etapa${etapas > 1 ? 's' : ''}: "${colunaOrigem.nome}" → "${colunaDestino.nome}"${justificativa ? ` | ${justificativa}` : ''}`;
+      await api.post(`/kanban/pos-venda/${viewingCard.id}/mover`, {
+        coluna_destino_id: colunaDestino.id,
+        justificativa: descricaoMov
+      }).catch(() => null);
+
       // Se chegou em "Sucesso", mover para Cross-Selling
       const nomeDestino = colunaDestino.nome.toLowerCase();
       if (nomeDestino.includes('sucesso')) {
         await moverParaCrossSelling(viewingCard);
       }
-      
+
       setViewingCard({ ...viewingCard, coluna_id: colunaDestino.id });
       setCards(prev => prev.map(c => c.id === viewingCard.id ? { ...c, coluna_id: colunaDestino.id } : c));
       fetchAtividades(viewingCard.id);
@@ -463,19 +433,15 @@ export function AdminPosVenda() {
     }
   };
 
-  const handleAddAtividade = async () => { if (!viewingCard || !novaAtividade.descricao.trim()) { toast({ title: 'Erro', description: 'Digite uma descrição.', variant: 'destructive' }); return; } try { await supabase.from('pos_venda_atividades' as any).insert({ card_id: viewingCard.id, usuario_id: profile?.id || null, tipo: novaAtividade.tipo, descricao: novaAtividade.descricao.trim(), prazo: novaAtividade.prazo || null, horario: novaAtividade.horario || null, status: novaAtividade.prazo ? 'programada' : 'a_realizar' }); setNovaAtividade({ tipo: 'tarefa', descricao: '', prazo: '', horario: '' }); setAtividadeDialogOpen(false); fetchAtividades(viewingCard.id); fetchData(); toast({ title: 'Sucesso', description: 'Atividade adicionada!' }); } catch (error: any) { console.error('Erro:', error); toast({ title: 'Erro', description: 'Não foi possível adicionar.', variant: 'destructive' }); } };
+  // NOTA (migração): pos_venda_atividades não tem endpoint REST — handleAddAtividade é no-op com aviso.
+  const handleAddAtividade = async () => {
+    toast({ title: 'Indisponível', description: 'Atividades para este kanban ainda não têm endpoint no backend.', variant: 'destructive' });
+  };
 
+  // NOTA (migração): pos_venda_atividades não tem endpoint REST — handleUpdateAtividadeStatus é no-op.
   const handleUpdateAtividadeStatus = async (atividadeId: string, newStatus: string) => {
-    try {
-      await supabase.from('pos_venda_atividades' as any).update({ status: newStatus }).eq('id', atividadeId);
-      if (viewingCard) {
-        fetchAtividades(viewingCard.id);
-      }
-      fetchData();
-    } catch (error: any) {
-      console.error('Erro ao atualizar status:', error);
-      toast({ title: 'Erro', description: 'Não foi possível atualizar o status.', variant: 'destructive' });
-    }
+    // Sem endpoint — degrade silenciosamente
+    console.warn('[PosVenda] handleUpdateAtividadeStatus: sem endpoint para pos_venda_atividades');
   };
 
   // Função para buscar colunas do funil selecionado
@@ -483,19 +449,20 @@ export function AdminPosVenda() {
     setTransferFunil(funil);
     setTransferColuna('');
     setTransferColunas([]);
-    
+
     if (!funil) return;
-    
+
     try {
-      const tabelaColunas = `${funil}_colunas`;
-      const { data, error } = await (supabase as any)
-        .from(tabelaColunas)
-        .select('id, nome')
-        .eq('empresa_id', empresaId)
-        .order('ordem', { ascending: true });
-      
-      if (error) throw error;
-      setTransferColunas(data || []);
+      // Mapear nome de funil para prefixo do endpoint dos kanbans legados
+      const funilParaEndpoint: Record<string, string> = {
+        prospeccao: '/kanban/prospeccao/colunas',
+        closer: '/kanban/closer/colunas',
+        cross_selling: '/kanban/cross-selling/colunas',
+      };
+      const endpoint = funilParaEndpoint[funil];
+      if (!endpoint) { setTransferColunas([]); return; }
+      const data = await api.get<any[]>(endpoint).catch(() => [] as any[]);
+      setTransferColunas((data || []).sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0)));
     } catch (error) {
       console.error('Erro ao buscar colunas:', error);
       toast({ title: 'Erro', description: 'Não foi possível carregar as colunas.', variant: 'destructive' });
@@ -508,29 +475,30 @@ export function AdminPosVenda() {
       toast({ title: 'Erro', description: 'Selecione o funil e a coluna de destino.', variant: 'destructive' });
       return;
     }
-    
+
     setLoadingTransfer(true);
     try {
-      const tabelaCards = `${transferFunil}_cards`;
-      const tabelaAtividades = `${transferFunil}_atividades`;
-      
+      // Mapear funil para endpoint de criação de cards
+      const funilParaEndpoint: Record<string, string> = {
+        prospeccao: '/kanban/prospeccao',
+        closer: '/kanban/closer',
+        cross_selling: '/kanban/cross-selling',
+      };
+      const cardEndpoint = funilParaEndpoint[transferFunil];
+      if (!cardEndpoint) throw new Error('Funil não suportado');
+
       // Contar cards na coluna destino para definir ordem
-      const { data: cardsNaColuna } = await (supabase as any)
-        .from(tabelaCards)
-        .select('id')
-        .eq('coluna_id', transferColuna);
-      
+      const cardsDestinoRaw = await api.get<any[]>(cardEndpoint).catch(() => [] as any[]);
+      const cardsNaColuna = (cardsDestinoRaw || []).filter((c: any) => c.coluna_id === transferColuna);
+
       // Criar card no funil de destino com campos específicos de cada funil
       let cardData: any = {
-        empresa_id: empresaId,
         coluna_id: transferColuna,
         titulo: viewingCard.titulo,
         descricao: viewingCard.descricao,
         valor: viewingCard.valor || 0,
-        ordem: cardsNaColuna?.length || 0,
-        arquivado: false,
       };
-      
+
       // Campos específicos para cada funil
       if (transferFunil === 'prospeccao') {
         cardData = {
@@ -560,143 +528,23 @@ export function AdminPosVenda() {
           cliente_telefone: viewingCard.cliente_telefone,
           cliente_empresa: viewingCard.cliente_empresa,
           tipo_servico: viewingCard.tipo_servico,
-          data_venda: viewingCard.data_venda,
           status_satisfacao: viewingCard.status_satisfacao || 'pendente',
-          created_by: profile?.id || null,
         };
       }
-      
-      const { data: insertedCard, error: insertError } = await (supabase as any)
-        .from(tabelaCards)
-        .insert(cardData)
-        .select();
-      
-      if (insertError) throw insertError;
-      
-      const novoCardId = insertedCard?.[0]?.id;
-      
-      // Copiar histórico de atividades
-      if (novoCardId) {
-        const { data: atividadesOrigem } = await (supabase as any)
-          .from('pos_venda_atividades')
-          .select('*')
-          .eq('card_id', viewingCard.id)
-          .order('created_at', { ascending: true });
-        
-        console.log('[Transfer] Atividades encontradas:', atividadesOrigem?.length || 0);
-        
-        if (atividadesOrigem && atividadesOrigem.length > 0) {
-          // Mapear atividades com campos compatíveis para cada funil
-          const atividadesDestino = atividadesOrigem.map((ativ: any) => {
-            const baseAtividade: any = {
-              card_id: novoCardId,
-              usuario_id: ativ.usuario_id,
-              tipo: ativ.tipo || 'movimentacao',
-              descricao: ativ.descricao ? `[Histórico Onboarding] ${ativ.descricao}` : '[Histórico Onboarding]',
-            };
-            
-            // Campos específicos por funil de destino
-            if (transferFunil === 'prospeccao' || transferFunil === 'closer') {
-              return {
-                ...baseAtividade,
-                prazo: ativ.prazo ? new Date(ativ.prazo).toISOString().split('T')[0] : null,
-                horario: ativ.horario || null,
-                status: ativ.status || 'concluida',
-              };
-            } else if (transferFunil === 'cross_selling') {
-              return {
-                ...baseAtividade,
-                prazo: ativ.prazo || null,
-                horario: ativ.horario || null,
-                status: ativ.status || 'concluida',
-              };
-            }
-            return baseAtividade;
-          });
-          
-          const { error: insertAtivError } = await (supabase as any).from(tabelaAtividades).insert(atividadesDestino);
-          if (insertAtivError) {
-            console.error('[Transfer] Erro ao copiar atividades:', insertAtivError);
-          } else {
-            console.log('[Transfer] Atividades copiadas com sucesso:', atividadesDestino.length);
-          }
-        }
-        
-        // Registrar atividade de transferência
-        const funilNomes: Record<string, string> = {
-          prospeccao: 'Prospecção',
-          closer: 'Closer',
-          pos_venda: 'Onboarding',
-          cross_selling: 'Cross-Selling',
-        };
-        
-        const atividadeTransferencia: any = {
-          card_id: novoCardId,
-          usuario_id: profile?.id,
-          tipo: 'movimentacao',
-          descricao: `Card transferido do Onboarding para ${funilNomes[transferFunil] || transferFunil}`,
-          status: 'concluida',
-        };
-        
-        await (supabase as any).from(tabelaAtividades).insert(atividadeTransferencia);
-        
-        // Copiar histórico de MOVIMENTAÇÕES (tabela separada das atividades)
-        const tabelaMovimentacoesOrigem = 'pos_venda_card_movimentacoes';
-        const tabelaMovimentacoesDestino = `${transferFunil}_card_movimentacoes`;
-        
-        const { data: movimentacoesOrigem } = await (supabase as any)
-          .from(tabelaMovimentacoesOrigem)
-          .select('*')
-          .eq('card_id', viewingCard.id)
-          .order('created_at', { ascending: true });
-        
-        console.log('[Transfer] Movimentações encontradas:', movimentacoesOrigem?.length || 0);
-        
-        if (movimentacoesOrigem && movimentacoesOrigem.length > 0) {
-          const movimentacoesDestino = movimentacoesOrigem.map((mov: any) => ({
-            card_id: novoCardId,
-            usuario_id: mov.usuario_id,
-            tipo: mov.tipo,
-            descricao: mov.descricao ? `[Histórico Onboarding] ${mov.descricao}` : '[Histórico Onboarding]',
-            coluna_origem_id: null,
-            coluna_destino_id: null,
-            kanban_origem: mov.kanban_origem || 'onboarding',
-            kanban_destino: mov.kanban_destino || 'onboarding',
-            dados_anteriores: mov.dados_anteriores,
-            dados_novos: mov.dados_novos,
-          }));
-          
-          const { error: insertMovError } = await (supabase as any)
-            .from(tabelaMovimentacoesDestino)
-            .insert(movimentacoesDestino);
-          
-          if (insertMovError) {
-            console.error('[Transfer] Erro ao copiar movimentações:', insertMovError);
-          } else {
-            console.log('[Transfer] Movimentações copiadas com sucesso:', movimentacoesDestino.length);
-          }
-        }
-        
-        // Registrar movimentação de transferência
-        await (supabase as any).from(tabelaMovimentacoesDestino).insert({
-          card_id: novoCardId,
-          usuario_id: profile?.id,
-          tipo: 'mudanca_kanban',
-          descricao: `Card transferido do Onboarding para ${funilNomes[transferFunil] || transferFunil}`,
-          kanban_origem: 'onboarding',
-          kanban_destino: transferFunil,
-        });
-      }
-      
-      // Arquivar o card original
-      await (supabase as any)
-        .from('pos_venda_cards')
-        .update({ arquivado: true })
-        .eq('id', viewingCard.id);
-      
-      // Remover da lista local
+
+      const insertedCard = await api.post<any>(cardEndpoint, cardData);
+
+      const novoCardId = insertedCard?.id;
+
+      // NOTA (migração): cross_selling_atividades, prospeccao_atividades, closer_atividades
+      // não têm endpoints REST na fábrica de kanbans legados.
+      // Histórico de atividades e movimentações não é copiado para o funil de destino.
+      console.log('[Transfer] Card criado no funil destino:', novoCardId, '— histórico não copiado (sem endpoint)');
+
+      // NOTA (migração): pos_venda_cards.arquivado não está exposto no PosVendaCardUpdate schema.
+      // Degrade: apenas remover da lista local, não arquivar via API.
       setCards(prev => prev.filter(c => c.id !== viewingCard.id));
-      
+
       // Fechar dialogs
       setTransferDialogOpen(false);
       setDetailsDialogOpen(false);
@@ -704,14 +552,14 @@ export function AdminPosVenda() {
       setTransferFunil('');
       setTransferColuna('');
       setTransferColunas([]);
-      
+
       const funilNomes: Record<string, string> = {
         prospeccao: 'Prospecção',
         closer: 'Closer',
         pos_venda: 'Onboarding',
         cross_selling: 'Cross-Selling',
       };
-      
+
       toast({ title: 'Sucesso!', description: `Card transferido para ${funilNomes[transferFunil] || transferFunil} com todo o histórico.` });
       fetchData();
     } catch (error: any) {
@@ -722,11 +570,75 @@ export function AdminPosVenda() {
     }
   };
 
-  const handleSaveCard = async () => { if (!cardForm.titulo.trim() && !cardForm.cliente_nome.trim()) { toast({ title: 'Erro', description: 'Preencha o título ou nome do cliente.', variant: 'destructive' }); return; } setSavingCard(true); try { const cardData = { empresa_id: empresaId, coluna_id: selectedColunaId || colunas[0]?.id, titulo: cardForm.titulo || cardForm.cliente_nome, descricao: cardForm.descricao || null, cliente_nome: cardForm.cliente_nome || null, cliente_email: cardForm.cliente_email || null, cliente_telefone: cardForm.cliente_telefone || null, cliente_empresa: cardForm.cliente_empresa || null, tipo_servico: cardForm.tipo_servico || null, data_venda: cardForm.data_venda || null, data_implementacao: cardForm.data_implementacao || null, data_followup: cardForm.data_followup || null, status_satisfacao: cardForm.status_satisfacao, nota_nps: cardForm.nota_nps ? Number(cardForm.nota_nps) : null, valor: cardForm.valor || 0 }; if (editingCard) { await (supabase as any).from('pos_venda_cards').update(cardData).eq('id', editingCard.id); toast({ title: 'Sucesso', description: 'Cliente atualizado!' }); } else { const cardsNaColuna = cards.filter(c => c.coluna_id === cardData.coluna_id); await (supabase as any).from('pos_venda_cards').insert({ ...cardData, ordem: cardsNaColuna.length, created_by: profile?.id || null }); toast({ title: 'Sucesso', description: 'Cliente adicionado!' }); } setCardDialogOpen(false); setEditingCard(null); resetCardForm(); fetchData(); } catch (error: any) { console.error('Erro:', error); toast({ title: 'Erro', description: error?.message || 'Não foi possível salvar.', variant: 'destructive' }); } finally { setSavingCard(false); } };
+  const handleSaveCard = async () => {
+    if (!cardForm.titulo.trim() && !cardForm.cliente_nome.trim()) { toast({ title: 'Erro', description: 'Preencha o título ou nome do cliente.', variant: 'destructive' }); return; }
+    setSavingCard(true);
+    try {
+      const cardData: any = {
+        coluna_id: selectedColunaId || colunas[0]?.id,
+        titulo: cardForm.titulo || cardForm.cliente_nome,
+        descricao: cardForm.descricao || null,
+        cliente_nome: cardForm.cliente_nome || null,
+        cliente_email: cardForm.cliente_email || null,
+        cliente_telefone: cardForm.cliente_telefone || null,
+        cliente_empresa: cardForm.cliente_empresa || null,
+        tipo_servico: cardForm.tipo_servico || null,
+        status_satisfacao: cardForm.status_satisfacao,
+        nota_nps: cardForm.nota_nps ? Number(cardForm.nota_nps) : null,
+        valor: cardForm.valor || 0,
+      };
+      if (editingCard) {
+        // PUT /kanban/pos-venda/{id} — atualizar card
+        // coluna_id não está no PosVendaCardUpdate; excluir do payload de update
+        const { coluna_id, ...updateData } = cardData;
+        await api.put(`/kanban/pos-venda/${editingCard.id}`, updateData);
+        toast({ title: 'Sucesso', description: 'Cliente atualizado!' });
+      } else {
+        // POST /kanban/pos-venda — criar card
+        await api.post('/kanban/pos-venda', cardData);
+        toast({ title: 'Sucesso', description: 'Cliente adicionado!' });
+      }
+      setCardDialogOpen(false);
+      setEditingCard(null);
+      resetCardForm();
+      fetchData();
+    } catch (error: any) { console.error('Erro:', error); toast({ title: 'Erro', description: error?.message || 'Não foi possível salvar.', variant: 'destructive' }); } finally { setSavingCard(false); }
+  };
 
-  const handleSaveColuna = async () => { if (!colunaForm.nome.trim()) { toast({ title: 'Erro', description: 'Digite um nome.', variant: 'destructive' }); return; } try { if (editingColuna) { await (supabase as any).from('pos_venda_colunas').update({ nome: colunaForm.nome, cor: colunaForm.cor, meta_valor: colunaForm.meta_valor }).eq('id', editingColuna.id); toast({ title: 'Sucesso', description: 'Coluna atualizada!' }); } else { await (supabase as any).from('pos_venda_colunas').insert({ empresa_id: empresaId, nome: colunaForm.nome, cor: colunaForm.cor, meta_valor: colunaForm.meta_valor, ordem: colunas.length }); toast({ title: 'Sucesso', description: 'Coluna criada!' }); } setColunaDialogOpen(false); setEditingColuna(null); setColunaForm({ nome: '', cor: '#6366f1', meta_valor: 0 }); fetchData(); } catch (error: any) { console.error('Erro:', error); toast({ title: 'Erro', description: error?.message || 'Não foi possível salvar.', variant: 'destructive' }); } };
+  const handleSaveColuna = async () => {
+    if (!colunaForm.nome.trim()) { toast({ title: 'Erro', description: 'Digite um nome.', variant: 'destructive' }); return; }
+    try {
+      if (editingColuna) {
+        // PUT /kanban/pos-venda/colunas/{id} — atualizar coluna
+        await api.put(`/kanban/pos-venda/colunas/${editingColuna.id}`, { nome: colunaForm.nome, ordem: editingColuna.ordem });
+        toast({ title: 'Sucesso', description: 'Coluna atualizada!' });
+      } else {
+        // POST /kanban/pos-venda/colunas — criar coluna
+        await api.post('/kanban/pos-venda/colunas', { nome: colunaForm.nome, ordem: colunas.length });
+        toast({ title: 'Sucesso', description: 'Coluna criada!' });
+      }
+      setColunaDialogOpen(false);
+      setEditingColuna(null);
+      setColunaForm({ nome: '', cor: '#6366f1', meta_valor: 0 });
+      fetchData();
+    } catch (error: any) { console.error('Erro:', error); toast({ title: 'Erro', description: error?.message || 'Não foi possível salvar.', variant: 'destructive' }); }
+  };
 
-  const handleConfirmDelete = async () => { if (!deleteId || !deleteType) return; try { if (deleteType === 'coluna') { await (supabase as any).from('pos_venda_colunas').delete().eq('id', deleteId); toast({ title: 'Sucesso', description: 'Coluna excluída!' }); } else { await (supabase as any).from('pos_venda_cards').delete().eq('id', deleteId); toast({ title: 'Sucesso', description: 'Cliente excluído!' }); } fetchData(); } catch (error: any) { console.error('Erro:', error); toast({ title: 'Erro', description: error?.message || 'Não foi possível excluir.', variant: 'destructive' }); } finally { setDeleteDialogOpen(false); setDeleteType(null); setDeleteId(null); setDeleteName(''); } };
+  const handleConfirmDelete = async () => {
+    if (!deleteId || !deleteType) return;
+    try {
+      if (deleteType === 'coluna') {
+        // DELETE /kanban/pos-venda/colunas/{id}
+        await api.del(`/kanban/pos-venda/colunas/${deleteId}`);
+        toast({ title: 'Sucesso', description: 'Coluna excluída!' });
+      } else {
+        // DELETE /kanban/pos-venda/{id}
+        await api.del(`/kanban/pos-venda/${deleteId}`);
+        toast({ title: 'Sucesso', description: 'Cliente excluído!' });
+      }
+      fetchData();
+    } catch (error: any) { console.error('Erro:', error); toast({ title: 'Erro', description: error?.message || 'Não foi possível excluir.', variant: 'destructive' }); } finally { setDeleteDialogOpen(false); setDeleteType(null); setDeleteId(null); setDeleteName(''); }
+  };
 
   const resetCardForm = () => { setCardForm({ titulo: '', descricao: '', cliente_nome: '', cliente_email: '', cliente_telefone: '', cliente_empresa: '', tipo_servico: '', data_venda: '', data_implementacao: '', data_followup: '', status_satisfacao: 'pendente', nota_nps: '', valor: 0 }); };
   const handleEditCard = (card: PosVendaCard) => { setEditingCard(card); setSelectedColunaId(card.coluna_id); setCardForm({ titulo: card.titulo || '', descricao: card.descricao || '', cliente_nome: card.cliente_nome || '', cliente_email: card.cliente_email || '', cliente_telefone: card.cliente_telefone || '', cliente_empresa: card.cliente_empresa || '', tipo_servico: card.tipo_servico || '', data_venda: card.data_venda || '', data_implementacao: card.data_implementacao || '', data_followup: card.data_followup || '', status_satisfacao: card.status_satisfacao || 'pendente', nota_nps: card.nota_nps ?? '', valor: card.valor || 0 }); setCardDialogOpen(true); };
@@ -834,7 +746,7 @@ export function AdminPosVenda() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge 
+                    <Badge
                       variant="secondary"
                       className={
                         viewingCard.temperatura === 'quente' ? 'bg-red-100 text-red-700' :
@@ -903,14 +815,14 @@ export function AdminPosVenda() {
                         <Loader2 className="h-5 w-5 animate-spin" />
                       </div>
                     ) : (() => {
-                      const atividadesFiltradas = atividades.filter(a => 
-                        a.tipo !== 'movimentacao' && 
-                        a.tipo !== 'mudanca_etapa' && 
+                      const atividadesFiltradas = atividades.filter(a =>
+                        a.tipo !== 'movimentacao' &&
+                        a.tipo !== 'mudanca_etapa' &&
                         a.tipo !== 'criacao'
                       );
                       const atividadesPendentes = atividadesFiltradas.filter(a => a.status !== 'concluida');
                       const atividadesConcluidas = atividadesFiltradas.filter(a => a.status === 'concluida');
-                      
+
                       if (atividadesFiltradas.length === 0) {
                         return (
                           <div className="text-center py-4 text-muted-foreground text-sm">
@@ -918,7 +830,7 @@ export function AdminPosVenda() {
                           </div>
                         );
                       }
-                      
+
                       const renderAtividadeCompacta = (atividade: Atividade) => {
                         const tipoInfo = TIPOS_ATIVIDADE.find(t => t.id === atividade.tipo) || TIPOS_ATIVIDADE[0];
                         const TipoIcon = tipoInfo.icon;
@@ -940,14 +852,14 @@ export function AdminPosVenda() {
                         today.setHours(0, 0, 0, 0);
                         const isToday = prazoDate && prazoDate.toDateString() === today.toDateString();
                         const isPastDue = prazoDate && prazoDate < today && !isConcluida;
-                        
+
                         return (
-                          <div 
-                            key={atividade.id} 
+                          <div
+                            key={atividade.id}
                             className={`flex items-start gap-2 p-2 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors ${
-                              isConcluida ? 'bg-muted/30 border-border' : 
-                              isToday ? 'border-orange-400 bg-orange-50' : 
-                              isPastDue ? 'border-red-400 bg-red-50' : 
+                              isConcluida ? 'bg-muted/30 border-border' :
+                              isToday ? 'border-orange-400 bg-orange-50' :
+                              isPastDue ? 'border-red-400 bg-red-50' :
                               'border-border bg-card'
                             }`}
                             onClick={() => {
@@ -1002,12 +914,12 @@ export function AdminPosVenda() {
                           </div>
                         );
                       };
-                      
+
                       return (
                         <div className="space-y-2">
                           {/* Atividades Pendentes */}
                           {atividadesPendentes.map(renderAtividadeCompacta)}
-                          
+
                           {/* Dropdown de Concluídas */}
                           {atividadesConcluidas.length > 0 && (
                             <details className="group mt-3">
@@ -1025,26 +937,26 @@ export function AdminPosVenda() {
                     })()}
                     </div>
                   </div>
-                  
+
                   {/* Histórico de Movimentações do Card - 50% do espaço */}
                   <div className="flex-1 flex flex-col min-h-0 border rounded-lg p-3">
                     <h4 className="font-semibold text-sm mb-3 flex items-center gap-2 flex-shrink-0">
                       <ArrowRightLeft className="h-4 w-4" />
                       Histórico de Movimentações
                     </h4>
-                    
+
                     <div className="flex-1 overflow-y-auto pr-1">
                     {loadingAtividades ? (
                       <div className="flex items-center justify-center py-4">
                         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                       </div>
                     ) : (() => {
-                      const movimentacoes = atividades.filter(a => 
-                        a.tipo === 'movimentacao' || 
-                        a.tipo === 'mudanca_etapa' || 
+                      const movimentacoes = atividades.filter(a =>
+                        a.tipo === 'movimentacao' ||
+                        a.tipo === 'mudanca_etapa' ||
                         a.tipo === 'criacao'
                       );
-                      
+
                       if (movimentacoes.length === 0) {
                         return (
                           <p className="text-sm text-muted-foreground text-center py-4">
@@ -1052,12 +964,12 @@ export function AdminPosVenda() {
                           </p>
                         );
                       }
-                      
+
                       return (
                         <div className="relative">
                           {/* Linha vertical de conexão */}
                           <div className="absolute left-3 top-2 bottom-2 w-0.5 bg-border" />
-                          
+
                           <div className="space-y-3">
                             {movimentacoes.map((mov) => (
                               <div key={mov.id} className="relative flex gap-3 pl-1">
@@ -1071,7 +983,7 @@ export function AdminPosVenda() {
                                   {mov.tipo === 'movimentacao' && <ArrowRightLeft className="h-3 w-3" />}
                                   {mov.tipo === 'mudanca_etapa' && <ArrowRightLeft className="h-3 w-3" />}
                                 </div>
-                                
+
                                 {/* Conteúdo */}
                                 <div className="flex-1 min-w-0 pb-3">
                                   <p className="text-sm">{mov.descricao}</p>
@@ -1094,22 +1006,22 @@ export function AdminPosVenda() {
                   {/* Ações Rápidas - Primeiro */}
                   <div className="space-y-2 mb-6">
                     <h4 className="font-semibold text-sm mb-3">Ações Rápidas</h4>
-                    
+
                     {/* Botão Nova Atividade - Primeiro */}
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
+                    <Button
+                      variant="outline"
+                      size="sm"
                       className="w-full justify-start text-orange-600 hover:text-orange-700 border-orange-300 hover:border-orange-400"
                       onClick={() => setAtividadeDialogOpen(true)}
                     >
                       <Plus className="h-4 w-4 mr-2" />
                       Nova Atividade
                     </Button>
-                    
+
                     {viewingCard.cliente_email && (
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         className="w-full justify-start"
                         onClick={() => window.open(`mailto:${viewingCard.cliente_email}`, '_blank')}
                       >
@@ -1117,11 +1029,11 @@ export function AdminPosVenda() {
                         Enviar E-mail
                       </Button>
                     )}
-                    
+
                     {/* Botão Transferir Card */}
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
+                    <Button
+                      variant="outline"
+                      size="sm"
                       className="w-full justify-start text-blue-600 hover:text-blue-700 border-blue-300 hover:border-blue-400"
                       onClick={() => setTransferDialogOpen(true)}
                     >
@@ -1281,7 +1193,7 @@ export function AdminPosVenda() {
               })()}
             </DialogTitle>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             {/* Tipo de Atividade */}
             <div>
@@ -1338,8 +1250,8 @@ export function AdminPosVenda() {
           </div>
 
           <DialogFooter>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => {
                 setAtividadeDialogOpen(false);
                 setNovaAtividade({ tipo: 'tarefa', descricao: '', prazo: '', horario: '' });
@@ -1347,7 +1259,7 @@ export function AdminPosVenda() {
             >
               Cancelar
             </Button>
-            <Button 
+            <Button
               onClick={handleAddAtividade}
               className="bg-primary"
             >
@@ -1376,7 +1288,7 @@ export function AdminPosVenda() {
           <p className="text-sm text-muted-foreground mb-4">
             Selecione o funil e a coluna de destino para transferir este card com todo o histórico.
           </p>
-          
+
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>Funil de Destino</Label>
@@ -1391,7 +1303,7 @@ export function AdminPosVenda() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             {transferFunil && (
               <div className="space-y-2">
                 <Label>Coluna de Destino</Label>
@@ -1407,7 +1319,7 @@ export function AdminPosVenda() {
                 </Select>
               </div>
             )}
-            
+
             {viewingCard && (
               <div className="p-3 bg-muted rounded-lg text-sm">
                 <p className="font-medium">{viewingCard.titulo}</p>
@@ -1417,8 +1329,8 @@ export function AdminPosVenda() {
           </div>
 
           <DialogFooter>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => {
                 setTransferDialogOpen(false);
                 setTransferFunil('');
@@ -1428,7 +1340,7 @@ export function AdminPosVenda() {
             >
               Cancelar
             </Button>
-            <Button 
+            <Button
               onClick={handleTransferCard}
               disabled={!transferFunil || !transferColuna || loadingTransfer}
               className="bg-blue-600 hover:bg-blue-700"

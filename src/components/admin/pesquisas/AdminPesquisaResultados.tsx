@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -49,11 +49,7 @@ export function AdminPesquisaResultados({ pesquisa, onBack }: AdminPesquisaResul
     setLoading(true);
     try {
       // Buscar opções com votos
-      const { data: opcoesData } = await (supabase as any)
-        .from('pesquisas_opcoes')
-        .select('*')
-        .eq('pesquisa_id', pesquisa.id)
-        .order('ordem');
+      const opcoesData = await api.get<any[]>(`/pesquisas/${pesquisa.id}/opcoes`).catch(() => [] as any[]);
 
       if (opcoesData) {
         setOpcoes(opcoesData);

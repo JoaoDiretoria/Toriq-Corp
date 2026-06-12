@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -118,34 +118,49 @@ export function AdminBlogList() {
   const fetchBlogs = async () => {
     setLoading(true);
     try {
-      let query = (supabase as any)
-        .from('blogs')
-        .select(`
-          *,
-          autor:blog_autores(id, nome, sobrenome),
-          categoria:blog_categorias(id, nome, cor)
-        `, { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .range((page - 1) * itemsPerPage, page * itemsPerPage - 1);
+      const [rawBlogs, rawAutores, rawCategorias] = await Promise.all([
+        api.get<any[]>('/blog/admin/posts').catch(() => [] as any[]),
+        api.get<any[]>('/blog/autores').catch(() => [] as any[]),
+        api.get<any[]>('/blog/categorias').catch(() => [] as any[]),
+      ]);
 
+      // Join autor and categoria client-side (backend returns flat autor_id / categoria_id)
+      let enriched: Blog[] = (rawBlogs || []).map((b: any) => ({
+        ...b,
+        autor: rawAutores.find((a: any) => a.id === b.autor_id) ?? null,
+        categoria: rawCategorias.find((c: any) => c.id === b.categoria_id) ?? null,
+      }));
+
+      // Client-side filters (backend returns all records, no server-side filtering)
       if (search) {
-        query = query.or(`titulo.ilike.%${search}%,descricao.ilike.%${search}%`);
+        const term = search.toLowerCase();
+        enriched = enriched.filter(
+          (b) =>
+            b.titulo?.toLowerCase().includes(term) ||
+            b.descricao?.toLowerCase().includes(term)
+        );
       }
 
       if (statusFilter !== 'all') {
-        query = query.eq('status', statusFilter);
+        enriched = enriched.filter((b) => b.status === statusFilter);
       }
 
       if (categoriaFilter !== 'all') {
-        query = query.eq('categoria_id', categoriaFilter);
+        enriched = enriched.filter((b) => (b as any).categoria_id === categoriaFilter);
       }
 
-      const { data, error, count } = await query;
+      // Client-side sort: created_at descending
+      enriched.sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
 
-      if (error) throw error;
+      const total = enriched.length;
+      setTotalPages(Math.ceil(total / itemsPerPage));
 
-      setBlogs(data || []);
-      setTotalPages(Math.ceil((count || 0) / itemsPerPage));
+      // Client-side pagination
+      const start = (page - 1) * itemsPerPage;
+      setBlogs(enriched.slice(start, start + itemsPerPage));
     } catch (error) {
       console.error('Erro ao buscar blogs:', error);
       toast.error('Erro ao carregar blogs');
@@ -156,13 +171,11 @@ export function AdminBlogList() {
 
   const fetchCategorias = async () => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('blog_categorias')
-        .select('*')
-        .order('nome');
-
-      if (error) throw error;
-      setCategorias(data || []);
+      const data = await api.get<any[]>('/blog/categorias').catch(() => [] as any[]);
+      const sorted = (data || []).sort((a: any, b: any) =>
+        (a.nome ?? '').localeCompare(b.nome ?? '')
+      );
+      setCategorias(sorted);
     } catch (error) {
       console.error('Erro ao buscar categorias:', error);
     }
@@ -170,13 +183,11 @@ export function AdminBlogList() {
 
   const fetchAutores = async () => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('blog_autores')
-        .select('*')
-        .order('nome');
-
-      if (error) throw error;
-      setAutores(data || []);
+      const data = await api.get<any[]>('/blog/autores').catch(() => [] as any[]);
+      const sorted = (data || []).sort((a: any, b: any) =>
+        (a.nome ?? '').localeCompare(b.nome ?? '')
+      );
+      setAutores(sorted);
     } catch (error) {
       console.error('Erro ao buscar autores:', error);
     }
@@ -186,13 +197,7 @@ export function AdminBlogList() {
     if (!confirm('Tem certeza que deseja excluir este blog?')) return;
 
     try {
-      const { error } = await (supabase as any)
-        .from('blogs')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-
+      await api.del(`/blog/admin/posts/${id}`);
       toast.success('Blog excluído com sucesso');
       fetchBlogs();
     } catch (error) {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -39,35 +39,18 @@ const ResetPassword = () => {
   useEffect(() => {
     // Verificar se há uma sessão válida de recuperação de senha
     const checkSession = async () => {
-      // Primeiro, verificar se há um hash na URL (token de recuperação)
-      const hashParams = new URLSearchParams(window.location.hash.substring(1));
-      const accessToken = hashParams.get('access_token');
-      const refreshToken = hashParams.get('refresh_token');
-      const type = hashParams.get('type');
-      
-      // Se há tokens na URL, definir a sessão
-      if (accessToken && type === 'recovery') {
-        const { error } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken || '',
-        });
-        
-        if (!error) {
-          setIsValidSession(true);
-          // Limpar o hash da URL para segurança
-          window.history.replaceState(null, '', window.location.pathname);
-        } else {
-          toast.error('Link de recuperação inválido ou expirado.');
-        }
-      } else {
-        // Verificar se já há uma sessão existente
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session) {
-          setIsValidSession(true);
-        } else {
-          toast.error('Link de recuperação inválido ou expirado.');
-        }
+      // NOTA (migração): o fluxo de recovery via hash (#access_token=...&type=recovery)
+      // era específico do Supabase Auth e não tem equivalente no backend Python.
+      // Links de recuperação por e-mail gerados pelo Supabase não funcionam mais.
+      // O reset de senha agora ocorre via senha temporária (primeiro acesso) ou
+      // por admin em /admin/users/{id}/reset-password.
+
+      // Verificar se já há uma sessão existente via /auth/me
+      try {
+        await api.get('/auth/me');
+        setIsValidSession(true);
+      } catch {
+        toast.error('Link de recuperação inválido ou expirado.');
       }
       setCheckingSession(false);
     };
@@ -91,36 +74,19 @@ const ResetPassword = () => {
     }
 
     setIsLoading(true);
-    
+
     try {
-      // 1. Atualizar senha no Supabase Auth
-      const { data: userData, error } = await supabase.auth.updateUser({
-        password: formData.password,
+      // Atualizar senha via /auth/first-access-password (não exige senha atual —
+      // equivalente ao updateUser do Supabase no contexto de recuperação de senha).
+      // O backend já atualiza senha_alterada = true internamente.
+      await api.post('/auth/first-access-password', {
+        new_password: formData.password,
       });
 
-      if (error) {
-        toast.error('Erro ao atualizar senha. Tente novamente.');
-        setIsLoading(false);
-        return;
-      }
-
-      // 2. Atualizar senha_alterada = TRUE no profile
-      if (userData?.user?.id) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({ senha_alterada: true })
-          .eq('id', userData.user.id);
-
-        if (profileError) {
-          console.error('Erro ao atualizar profile:', profileError);
-          // Não bloquear - senha já foi alterada
-        }
-      }
-
       toast.success('Senha atualizada com sucesso!');
-      
+
       // Fazer logout para forçar novo login com a nova senha
-      await supabase.auth.signOut();
+      await api.post('/auth/logout').catch(() => null);
       navigate('/auth');
     } catch (err) {
       console.error('Erro ao alterar senha:', err);

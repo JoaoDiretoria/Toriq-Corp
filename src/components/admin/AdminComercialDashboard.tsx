@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
+import { api } from '@/integrations/api/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -51,8 +50,6 @@ import {
 } from 'lucide-react';
 import { format, subDays, startOfMonth, endOfMonth, startOfYear, endOfYear, isWithinInterval, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-
-const TORIQ_EMPRESA_ID = '11111111-1111-1111-1111-111111111111';
 
 // Tipos
 interface Coluna {
@@ -239,7 +236,6 @@ function MetricCard({
 }
 
 export function AdminComercialDashboard() {
-  const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [activeMenu, setActiveMenu] = useState('visao-geral');
   
@@ -317,8 +313,6 @@ export function AdminComercialDashboard() {
     return meses;
   }, []);
 
-  const empresaId = TORIQ_EMPRESA_ID;
-
   useEffect(() => {
     fetchAllData();
   }, []);
@@ -327,43 +321,49 @@ export function AdminComercialDashboard() {
     setLoading(true);
     try {
       // Buscar dados do Closer
-      const [closerColunasRes, closerCardsRes, closerAtividadesRes] = await Promise.all([
-        (supabase as any).from('closer_colunas').select('*').eq('empresa_id', empresaId).order('ordem'),
-        (supabase as any).from('closer_cards').select('*').eq('empresa_id', empresaId).eq('arquivado', false),
-        (supabase as any).from('closer_atividades').select('*').order('created_at', { ascending: false }).limit(100),
+      const [closerColunasData, closerCardsAll, closerAtividadesData] = await Promise.all([
+        api.get<any[]>('/kanban/closer/colunas').catch(() => [] as any[]),
+        api.get<any[]>('/kanban/closer').catch(() => [] as any[]),
+        // NOTA (migração): closer_atividades não possui endpoint REST equivalente — degradando para lista vazia
+        Promise.resolve([] as any[]),
       ]);
 
-      if (closerColunasRes.data) setCloserColunas(closerColunasRes.data);
-      if (closerCardsRes.data) setCloserCards(closerCardsRes.data);
-      if (closerAtividadesRes.data) setCloserAtividades(closerAtividadesRes.data);
+      // Ordenar colunas por ordem (o backend não garante ordenação)
+      const closerColunasSorted = [...closerColunasData].sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
+      setCloserColunas(closerColunasSorted);
+      // Filtrar cards não arquivados no cliente (o endpoint retorna todos)
+      setCloserCards(closerCardsAll.filter((c: any) => !c.arquivado));
+      setCloserAtividades(closerAtividadesData);
 
       // Buscar dados da Prospecção
-      const [prospeccaoColunasRes, prospeccaoCardsRes] = await Promise.all([
-        (supabase as any).from('prospeccao_colunas').select('*').eq('empresa_id', empresaId).order('ordem'),
-        (supabase as any).from('prospeccao_cards').select('*').eq('empresa_id', empresaId),
+      const [prospeccaoColunasData, prospeccaoCardsData] = await Promise.all([
+        api.get<any[]>('/kanban/prospeccao/colunas').catch(() => [] as any[]),
+        api.get<any[]>('/kanban/prospeccao').catch(() => [] as any[]),
       ]);
 
-      if (prospeccaoColunasRes.data) setProspeccaoColunas(prospeccaoColunasRes.data);
-      if (prospeccaoCardsRes.data) setProspeccaoCards(prospeccaoCardsRes.data);
+      // Ordenar colunas por ordem no cliente
+      const prospeccaoColunasSorted = [...prospeccaoColunasData].sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
+      setProspeccaoColunas(prospeccaoColunasSorted);
+      setProspeccaoCards(prospeccaoCardsData);
 
       // Buscar dados do Pós Venda
-      const [posVendaColunasRes, posVendaCardsRes] = await Promise.all([
-        (supabase as any).from('pos_venda_colunas').select('*').eq('empresa_id', empresaId).order('ordem'),
-        (supabase as any).from('pos_venda_cards').select('*').eq('empresa_id', empresaId),
+      const [posVendaColunasData, posVendaCardsData] = await Promise.all([
+        api.get<any[]>('/kanban/pos-venda/colunas').catch(() => [] as any[]),
+        api.get<any[]>('/kanban/pos-venda').catch(() => [] as any[]),
       ]);
 
-      if (posVendaColunasRes.data) setPosVendaColunas(posVendaColunasRes.data);
-      if (posVendaCardsRes.data) setPosVendaCards(posVendaCardsRes.data);
+      // Ordenar colunas por ordem no cliente
+      const posVendaColunasSorted = [...posVendaColunasData].sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
+      setPosVendaColunas(posVendaColunasSorted);
+      setPosVendaCards(posVendaCardsData);
 
       // Buscar colaboradores do setor comercial com comissão
-      const { data: colaboradoresData } = await supabase
-        .from('colaboradores')
-        .select('id, nome, comissao')
-        .eq('empresa_id', empresaId)
-        .eq('setor', 'Comercial')
-        .eq('ativo', true);
-      
-      if (colaboradoresData) setColaboradoresComerciais(colaboradoresData as any);
+      // O backend escopa por empresa_id do token; filtros de setor e ativo aplicados no cliente
+      const todosColaboradores = await api.get<any[]>('/sst/colaboradores').catch(() => [] as any[]);
+      const colaboradoresComerciais = todosColaboradores.filter(
+        (c: any) => c.setor === 'Comercial' && c.ativo === true
+      );
+      setColaboradoresComerciais(colaboradoresComerciais);
 
     } catch (error) {
       console.error('Erro ao buscar dados:', error);

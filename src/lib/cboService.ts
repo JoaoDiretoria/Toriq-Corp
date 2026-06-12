@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/integrations/api/client';
 
 export interface CBOOcupacao {
   id: number;
@@ -15,37 +15,24 @@ export async function searchCBO(searchTerm: string, limit: number = 50): Promise
     return [];
   }
 
-  const { data, error } = await (supabase as any)
-    .from('cbo_ocupacoes')
-    .select('id, codigo, codigo_formatado, descricao, grande_grupo, desc_grande_grupo')
-    .or(`codigo.ilike.%${searchTerm}%,descricao.ilike.%${searchTerm}%`)
-    .order('descricao')
-    .limit(limit);
+  const data = await api.get<CBOOcupacao[]>(
+    `/sistema/cbo?q=${encodeURIComponent(searchTerm)}&limit=${limit}`
+  ).catch(() => [] as CBOOcupacao[]);
 
-  if (error) {
-    console.error('Erro ao buscar CBO:', error);
-    return [];
-  }
-
-  return data || [];
+  // reaplica ordenação por descricao (backend ordena por codigo)
+  return (data || []).slice().sort((a, b) => a.descricao.localeCompare(b.descricao));
 }
 
 // Buscar uma ocupação CBO específica pelo código
 export async function getCBOByCodigo(codigo: string): Promise<CBOOcupacao | null> {
   if (!codigo) return null;
 
-  const { data, error } = await (supabase as any)
-    .from('cbo_ocupacoes')
-    .select('id, codigo, codigo_formatado, descricao, grande_grupo, desc_grande_grupo')
-    .eq('codigo', codigo)
-    .single();
+  const data = await api.get<CBOOcupacao[]>(
+    `/sistema/cbo?q=${encodeURIComponent(codigo)}&limit=50`
+  ).catch(() => [] as CBOOcupacao[]);
 
-  if (error) {
-    console.error('Erro ao buscar CBO por código:', error);
-    return null;
-  }
-
-  return data;
+  // filtra pelo código exato (equivalente ao .eq('codigo', codigo).single())
+  return (data || []).find((o) => o.codigo === codigo) ?? null;
 }
 
 // Dados CBO mais comuns para pré-carregar (ocupações frequentes em SST)
