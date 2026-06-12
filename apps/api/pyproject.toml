@@ -16,6 +16,7 @@ dependencies = [
     "pydantic[email]>=2.13.4",
     "apscheduler>=3.11.2",
     "tzdata>=2026.2",
+    "boto3>=1.43.28",
 ]
 
 [dependency-groups]

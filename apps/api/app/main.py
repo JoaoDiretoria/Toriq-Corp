@@ -67,6 +67,8 @@ from app.api.admin_users import (
     router as admin_users_router,
     password_router as change_password_router,
 )
+# Subsistema de storage (RustFS / S3) — substitui supabase.storage
+from app.api.storage import router as storage_router
 from app.api.health import router as health_router
 from app.api.kanbans_legados import router as kanbans_legados_router
 from app.jobs.scheduler import build_scheduler
@@ -160,6 +162,7 @@ def create_app() -> FastAPI:
     # Gestão de usuários (admin) + troca de senha
     app.include_router(admin_users_router)
     app.include_router(change_password_router)
+    app.include_router(storage_router)
     return app
 
 
