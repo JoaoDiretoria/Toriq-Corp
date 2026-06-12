@@ -1,5 +1,8 @@
-"""Fábrica de routers de kanban: cards CRUD + colunas CRUD + mover + reorder + bootstrap."""
+"""Fábrica de routers de kanban: cards CRUD + colunas CRUD + mover + reorder +
+bootstrap + (opcional) atividades, etiquetas e vínculos card↔etiqueta."""
+import datetime
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -23,6 +26,54 @@ class _ReorderItem(BaseModel):
     ordem: int
 
 
+# ── Schemas genéricos para sub-recursos (iguais entre os kanbans) ─────────────
+
+class _EtiquetaIn(BaseModel):
+    nome: str
+    cor: str | None = None
+
+
+class _EtiquetaOut(BaseModel):
+    id: uuid.UUID
+    empresa_id: uuid.UUID
+    nome: str
+    cor: str | None = None
+    created_at: datetime.datetime | None = None
+    model_config = {"from_attributes": True}
+
+
+class _CardEtiquetaIn(BaseModel):
+    etiqueta_id: uuid.UUID
+
+
+class _AtividadeIn(BaseModel):
+    """Superset tipado dos campos de *_atividades. A fábrica filtra, na escrita,
+    apenas as colunas que o modelo do kanban realmente possui (variam entre eles).
+    Tipos corretos (date/time/uuid) para o driver aceitar."""
+    tipo: str | None = None
+    descricao: str | None = None
+    usuario_id: uuid.UUID | None = None
+    responsavel_id: uuid.UUID | None = None
+    prazo: datetime.date | None = None
+    horario: datetime.time | None = None
+    concluida: bool | None = None
+    data_conclusao: datetime.datetime | None = None
+    status: str | None = None
+    membros_ids: list[uuid.UUID] | None = None
+    checklist_items: Any | None = None
+    anexos: Any | None = None
+    anexo_url: str | None = None
+    anexo_nome: str | None = None
+    dados_anteriores: Any | None = None
+    dados_novos: Any | None = None
+    model_config = {"extra": "ignore"}
+
+
+def _row_to_dict(obj) -> dict:
+    """Serializa uma linha ORM para dict (sub-recursos não têm response_model fixo)."""
+    return {c.key: getattr(obj, c.key) for c in obj.__table__.columns}
+
+
 def make_kanban_router(
     *,
     card_model,
@@ -36,6 +87,9 @@ def make_kanban_router(
     prefix: str,
     tags: list[str],
     default_colunas: list[str],
+    atividade_model=None,
+    etiqueta_model=None,
+    card_etiqueta_model=None,
 ):
     """Cria um APIRouter completo de kanban.
 
@@ -90,6 +144,183 @@ def make_kanban_router(
             tags=tags,
         )
     )
+
+    # ── Etiquetas (defs de tag, tenant-scoped por empresa_id) ─────────────────
+    # Registrado antes de /{id_} para não ser capturado como card.
+    if etiqueta_model is not None:
+        router.include_router(
+            make_crud_router(
+                model=etiqueta_model,
+                create_schema=_EtiquetaIn,
+                update_schema=_EtiquetaIn,
+                read_schema=_EtiquetaOut,
+                prefix="/etiquetas",
+                tags=tags,
+            )
+        )
+
+    async def _assert_card(r: "_CardRepo", card_id: uuid.UUID) -> None:
+        """Garante que o card pertence à empresa do usuário (tenant-scoped)."""
+        if await r.get(card_id) is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "card não encontrado")
+
+    # ── Atividades do card (scoped via card → empresa) ────────────────────────
+    if atividade_model is not None:
+        _ativ_cols = {c.key for c in atividade_model.__table__.columns}
+        _ativ_settable = _ativ_cols - {"id", "card_id", "created_at", "updated_at"}
+        _tipo_required = (
+            "tipo" in _ativ_cols and not atividade_model.__table__.c.tipo.nullable
+        )
+
+        @router.get("/{card_id}/atividades")
+        async def listar_atividades(
+            card_id: uuid.UUID,
+            r: _CardRepo = Depends(_repo),
+            db: AsyncSession = Depends(get_db),
+        ):
+            await _assert_card(r, card_id)
+            rows = await db.scalars(
+                select(atividade_model).where(atividade_model.card_id == card_id)
+            )
+            return [_row_to_dict(x) for x in rows]
+
+        @router.post("/{card_id}/atividades", status_code=status.HTTP_201_CREATED)
+        async def criar_atividade(
+            card_id: uuid.UUID,
+            payload: _AtividadeIn,
+            r: _CardRepo = Depends(_repo),
+            db: AsyncSession = Depends(get_db),
+        ):
+            await _assert_card(r, card_id)
+            fields = {
+                k: v
+                for k, v in payload.model_dump(exclude_unset=True).items()
+                if k in _ativ_settable
+            }
+            if _tipo_required and not fields.get("tipo"):
+                fields["tipo"] = "nota"
+            obj = atividade_model(id=uuid.uuid4(), card_id=card_id, **fields)
+            db.add(obj)
+            await db.commit()
+            await db.refresh(obj)
+            return _row_to_dict(obj)
+
+        @router.put("/{card_id}/atividades/{atividade_id}")
+        async def atualizar_atividade(
+            card_id: uuid.UUID,
+            atividade_id: uuid.UUID,
+            payload: _AtividadeIn,
+            r: _CardRepo = Depends(_repo),
+            db: AsyncSession = Depends(get_db),
+        ):
+            await _assert_card(r, card_id)
+            obj = await db.scalar(
+                select(atividade_model).where(
+                    atividade_model.id == atividade_id,
+                    atividade_model.card_id == card_id,
+                )
+            )
+            if obj is None:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "atividade não encontrada")
+            for k, v in payload.model_dump(exclude_unset=True).items():
+                if k in _ativ_settable:
+                    setattr(obj, k, v)
+            await db.commit()
+            await db.refresh(obj)
+            return _row_to_dict(obj)
+
+        @router.delete(
+            "/{card_id}/atividades/{atividade_id}",
+            status_code=status.HTTP_204_NO_CONTENT,
+        )
+        async def remover_atividade(
+            card_id: uuid.UUID,
+            atividade_id: uuid.UUID,
+            r: _CardRepo = Depends(_repo),
+            db: AsyncSession = Depends(get_db),
+        ):
+            await _assert_card(r, card_id)
+            obj = await db.scalar(
+                select(atividade_model).where(
+                    atividade_model.id == atividade_id,
+                    atividade_model.card_id == card_id,
+                )
+            )
+            if obj is None:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "atividade não encontrada")
+            await db.delete(obj)
+            await db.commit()
+
+    # ── Vínculos card↔etiqueta ────────────────────────────────────────────────
+    if card_etiqueta_model is not None and etiqueta_model is not None:
+
+        @router.get("/{card_id}/etiquetas")
+        async def listar_card_etiquetas(
+            card_id: uuid.UUID,
+            r: _CardRepo = Depends(_repo),
+            db: AsyncSession = Depends(get_db),
+        ):
+            await _assert_card(r, card_id)
+            rows = await db.scalars(
+                select(card_etiqueta_model).where(
+                    card_etiqueta_model.card_id == card_id
+                )
+            )
+            return [_row_to_dict(x) for x in rows]
+
+        @router.post("/{card_id}/etiquetas", status_code=status.HTTP_201_CREATED)
+        async def vincular_etiqueta(
+            card_id: uuid.UUID,
+            payload: _CardEtiquetaIn,
+            r: _CardRepo = Depends(_repo),
+            db: AsyncSession = Depends(get_db),
+        ):
+            await _assert_card(r, card_id)
+            et = await db.scalar(
+                select(etiqueta_model).where(
+                    etiqueta_model.id == payload.etiqueta_id,
+                    etiqueta_model.empresa_id == r.empresa_id,
+                )
+            )
+            if et is None:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "etiqueta não encontrada")
+            existing = await db.scalar(
+                select(card_etiqueta_model).where(
+                    card_etiqueta_model.card_id == card_id,
+                    card_etiqueta_model.etiqueta_id == payload.etiqueta_id,
+                )
+            )
+            if existing is not None:
+                return _row_to_dict(existing)
+            obj = card_etiqueta_model(
+                id=uuid.uuid4(), card_id=card_id, etiqueta_id=payload.etiqueta_id
+            )
+            db.add(obj)
+            await db.commit()
+            await db.refresh(obj)
+            return _row_to_dict(obj)
+
+        @router.delete(
+            "/{card_id}/etiquetas/{etiqueta_id}",
+            status_code=status.HTTP_204_NO_CONTENT,
+        )
+        async def desvincular_etiqueta(
+            card_id: uuid.UUID,
+            etiqueta_id: uuid.UUID,
+            r: _CardRepo = Depends(_repo),
+            db: AsyncSession = Depends(get_db),
+        ):
+            await _assert_card(r, card_id)
+            obj = await db.scalar(
+                select(card_etiqueta_model).where(
+                    card_etiqueta_model.card_id == card_id,
+                    card_etiqueta_model.etiqueta_id == etiqueta_id,
+                )
+            )
+            if obj is None:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "vínculo não encontrado")
+            await db.delete(obj)
+            await db.commit()
 
     # ── Bootstrap de colunas ──────────────────────────────────────────────────
     @router.post("/bootstrap-colunas", status_code=status.HTTP_201_CREATED)

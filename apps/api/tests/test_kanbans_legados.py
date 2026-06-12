@@ -140,6 +140,65 @@ async def test_cross_selling_kanban(client, db_session):
     assert moved.json()["coluna_id"] == cols[1]["id"]
 
 
+# ── Atividades / Etiquetas / vínculos card↔etiqueta ───────────────────────────
+
+async def test_closer_atividades_etiquetas(client, db_session):
+    await login_as(client, db_session, email="ativ@test.com")
+    await client.post("/kanban/closer/bootstrap-colunas")
+    cols = (await client.get("/kanban/closer/colunas")).json()
+    card = (
+        await client.post(
+            "/kanban/closer", json={"titulo": "Card A", "coluna_id": cols[0]["id"]}
+        )
+    ).json()
+    cid = card["id"]
+
+    # Atividades: criar (com prazo date), listar, atualizar, deletar
+    a = await client.post(
+        f"/kanban/closer/{cid}/atividades",
+        json={"tipo": "ligacao", "descricao": "Ligar", "prazo": "2026-12-31"},
+    )
+    assert a.status_code == 201, a.text
+    aid = a.json()["id"]
+    assert a.json()["card_id"] == cid and a.json()["tipo"] == "ligacao"
+
+    lst = await client.get(f"/kanban/closer/{cid}/atividades")
+    assert lst.status_code == 200 and any(x["id"] == aid for x in lst.json())
+
+    upd = await client.put(
+        f"/kanban/closer/{cid}/atividades/{aid}", json={"concluida": True}
+    )
+    assert upd.status_code == 200 and upd.json()["concluida"] is True
+    assert (await client.delete(f"/kanban/closer/{cid}/atividades/{aid}")).status_code == 204
+
+    # Etiquetas (defs) + vínculo card↔etiqueta
+    et = await client.post("/kanban/closer/etiquetas", json={"nome": "Quente", "cor": "#f00"})
+    assert et.status_code == 201, et.text
+    eid = et.json()["id"]
+    assert any(x["id"] == eid for x in (await client.get("/kanban/closer/etiquetas")).json())
+
+    link = await client.post(f"/kanban/closer/{cid}/etiquetas", json={"etiqueta_id": eid})
+    assert link.status_code == 201, link.text
+    # idempotente: relinkar não duplica
+    assert (await client.post(f"/kanban/closer/{cid}/etiquetas", json={"etiqueta_id": eid})).status_code == 201
+    links = (await client.get(f"/kanban/closer/{cid}/etiquetas")).json()
+    assert len(links) == 1 and links[0]["etiqueta_id"] == eid
+
+    assert (await client.delete(f"/kanban/closer/{cid}/etiquetas/{eid}")).status_code == 204
+    assert (await client.get(f"/kanban/closer/{cid}/etiquetas")).json() == []
+
+
+async def test_atividades_cross_tenant_404(client, db_session):
+    """Card de outra empresa → 404 ao listar/criar atividades."""
+    import uuid as _uuid
+    await login_as(client, db_session, email="ativ_b@test.com", role="cliente_torq")
+    fake_card = _uuid.uuid4()
+    assert (await client.get(f"/kanban/closer/{fake_card}/atividades")).status_code == 404
+    assert (
+        await client.post(f"/kanban/closer/{fake_card}/atividades", json={"tipo": "nota"})
+    ).status_code == 404
+
+
 # ── Isolamento cross-empresa ──────────────────────────────────────────────────
 
 async def test_closer_isolamento_cross_empresa(client, db_session):

@@ -25,6 +25,9 @@ router.include_router(
         card_out=s.CloserCardOut,
         coluna_in=s.ColunaIn,
         coluna_out=s.ColunaOut,
+        atividade_model=m.CloserAtividades,
+        etiqueta_model=m.CloserEtiquetas,
+        card_etiqueta_model=m.CloserCardEtiquetas,
         prefix="/closer",
         tags=["closer"],
         default_colunas=["Novo", "Em Negociação", "Proposta", "Ganho", "Perdido"],
@@ -42,6 +45,9 @@ router.include_router(
         card_out=s.ProspeccaoCardOut,
         coluna_in=s.ColunaIn,
         coluna_out=s.ColunaOut,
+        atividade_model=m.ProspeccaoAtividades,
+        etiqueta_model=m.ProspeccaoEtiquetas,
+        card_etiqueta_model=m.ProspeccaoCardEtiquetas,
         prefix="/prospeccao",
         tags=["prospeccao"],
         default_colunas=[
@@ -65,6 +71,9 @@ router.include_router(
         card_out=s.PosVendaCardOut,
         coluna_in=s.ColunaIn,
         coluna_out=s.ColunaOut,
+        atividade_model=m.PosVendaAtividades,
+        etiqueta_model=m.PosVendaEtiquetas,
+        card_etiqueta_model=m.PosVendaCardEtiquetas,
         prefix="/pos-venda",
         tags=["pos-venda"],
         default_colunas=[
@@ -88,6 +97,8 @@ router.include_router(
         card_out=s.CrossSellingCardOut,
         coluna_in=s.ColunaIn,
         coluna_out=s.ColunaOut,
+        atividade_model=m.CrossSellingAtividades,
+        etiqueta_model=m.CrossSellingEtiquetas,
         prefix="/cross-selling",
         tags=["cross-selling"],
         default_colunas=[
