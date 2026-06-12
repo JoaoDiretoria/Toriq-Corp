@@ -648,6 +648,29 @@ export function AdminEmpresas() {
   }, []);
 
   // CREATE
+  // Sincroniza os contatos do formulário com /empresas/{id}/contatos:
+  // remove os marcados, atualiza os existentes (com id) e cria os novos.
+  const syncContatos = async (empresaId: string) => {
+    for (const id of contatosToDelete) {
+      await api.del(`/empresas/${empresaId}/contatos/${id}`).catch(() => null);
+    }
+    for (const c of contatos) {
+      const payload = {
+        nome: c.nome,
+        cargo: c.cargo || null,
+        email: c.email || null,
+        telefone: c.telefone || null,
+        linkedin: c.linkedin || null,
+        principal: !!c.principal,
+      };
+      if (c.id) {
+        await api.put(`/empresas/${empresaId}/contatos/${c.id}`, payload).catch(() => null);
+      } else if (c.nome) {
+        await api.post(`/empresas/${empresaId}/contatos`, payload).catch(() => null);
+      }
+    }
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.nome || !formData.tipo) {
@@ -676,16 +699,55 @@ export function AdminEmpresas() {
         'empresa_parceira': 'empresa_parceira',
       };
 
-      // NOTA (migração): POST /empresas não existe no backend — degrade gracioso.
-      // O backend só expõe GET/PUT para empresas. Criação de empresa requer
-      // endpoint futuro. Por ora, a operação retorna erro amigável.
-      // TODO: implementar POST /empresas no router empresas.py
-      throw new Error('Criação de empresa ainda não disponível no novo backend. Aguarde atualização.');
+      // POST /empresas — cria a empresa. O backend valida o tipo por papel
+      // (admin_vertical: qualquer; cliente_torq: só sub-tenants).
+      const nova = await api.post<{ id: string }>('/empresas', {
+        nome: formData.nome,
+        tipo: formData.tipo,
+        cnpj: formData.cnpj || null,
+        razao_social: formData.razao_social || null,
+        nome_fantasia: formData.nome_fantasia || null,
+        cep: formData.cep || null,
+        endereco: formData.endereco || null,
+        numero: formData.numero || null,
+        complemento: formData.complemento || null,
+        bairro: formData.bairro || null,
+        cidade: formData.cidade || null,
+        estado: formData.estado || null,
+        telefone: formData.telefone || null,
+        email: formData.email || null,
+        porte: formData.porte || null,
+        site: formData.site || null,
+        linkedin: formData.linkedin || null,
+        instagram: formData.instagram || null,
+      });
 
-      // eslint-disable-next-line no-unreachable
-      void roleMap;
+      // Contatos informados no formulário
+      await syncContatos(nova.id);
+
+      // Admin opcional (POST /admin/users)
+      if (criarAdmin) {
+        try {
+          await api.post('/admin/users', {
+            email: adminData.email,
+            password: adminData.password,
+            nome: adminData.nome,
+            role: roleMap[formData.tipo] || 'cliente_final',
+            empresa_id: nova.id,
+          });
+          toast.success('Empresa e administrador criados com sucesso!');
+        } catch (err: any) {
+          toast.warning(`Empresa criada, mas erro ao criar admin: ${err?.detail || err?.message || 'Erro desconhecido'}`);
+        }
+      } else {
+        toast.success('Empresa criada com sucesso!');
+      }
+
+      setCreateDialogOpen(false);
+      resetForm();
+      fetchEmpresas();
     } catch (error: any) {
-      toast.error(error.message || 'Erro ao cadastrar empresa');
+      toast.error(error?.detail || error?.message || 'Erro ao cadastrar empresa');
     }
 
     setSaving(false);
@@ -722,9 +784,22 @@ export function AdminEmpresas() {
     setEditDialogOpen(true);
     setContatosToDelete([]);
     
-    // NOTA (migração): empresa_contatos sem endpoint REST — degrade para lista vazia.
-    // TODO: implementar GET /empresas/{id}/contatos no backend.
-    setContatos([] as EmpresaContato[]);
+    // Carrega os contatos da empresa (GET /empresas/{id}/contatos)
+    const contatosData = await api
+      .get<any[]>(`/empresas/${empresa.id}/contatos`)
+      .catch(() => [] as any[]);
+    setContatos(
+      (Array.isArray(contatosData) ? contatosData : []).map((c: any) => ({
+        id: c.id,
+        empresa_id: c.empresa_id,
+        nome: c.nome || '',
+        cargo: c.cargo || '',
+        email: c.email || '',
+        telefone: c.telefone || '',
+        linkedin: c.linkedin || '',
+        principal: !!c.principal,
+      })),
+    );
 
     // Check if empresa already has admin via GET /admin/users?empresa_id={id}
     const admins = await api.get<any[]>(`/admin/users?empresa_id=${empresa.id}`).catch(() => [] as any[]);
@@ -781,9 +856,8 @@ export function AdminEmpresas() {
       return;
     }
 
-    // NOTA (migração): empresa_contatos sem endpoint REST — operações de contatos
-    // (delete/update/insert) são ignoradas silenciosamente até implementação.
-    // TODO: implementar /empresas/{id}/contatos no backend.
+    // Sincroniza contatos (delete/update/insert) via /empresas/{id}/contatos
+    await syncContatos(selectedEmpresa.id);
 
     // Create admin if requested
     if (criarAdminEdit) {
@@ -843,9 +917,18 @@ export function AdminEmpresas() {
       return;
     }
 
-    // NOTA (migração): DELETE /empresas/{id} não existe no backend — degrade.
-    // TODO: implementar DELETE /empresas/{id} no router empresas.py
-    toast.error('Exclusão de empresa ainda não disponível no novo backend. Aguarde atualização.');
+    // DELETE /empresas/{id} (restrito a admin_vertical; 409 se houver vínculos)
+    try {
+      await api.del(`/empresas/${empresaToDelete.id}`);
+      toast.success('Empresa excluída com sucesso!');
+      fetchEmpresas();
+    } catch (err: any) {
+      const msg =
+        err?.status === 409
+          ? 'Não é possível excluir: empresa possui registros vinculados.'
+          : err?.detail || err?.message || 'Erro ao excluir empresa';
+      toast.error(msg);
+    }
 
     setDeleting(false);
     setDeleteDialogOpen(false);

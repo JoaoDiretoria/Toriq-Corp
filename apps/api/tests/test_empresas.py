@@ -74,3 +74,89 @@ async def test_admin_atualiza_propria_empresa(client, db_session):
     await db_session.commit()
     bad = await client.put(f"/empresas/{outra}", json={"nome": "Hack"})
     assert bad.status_code == 403, bad.text
+
+
+# ── POST / DELETE /empresas ────────────────────────────────────────────────────
+
+async def test_admin_vertical_cria_qualquer_tipo(client, db_session):
+    await login_as(client, db_session, email="advc@e.com", role="admin_vertical")
+    r = await client.post("/empresas", json={"nome": "Nova SST", "tipo": "sst"})
+    assert r.status_code == 201, r.text
+    assert r.json()["nome"] == "Nova SST"
+    assert r.json()["tipo"] == "sst"
+
+
+async def test_cliente_torq_cria_subtenant_mas_nao_peer(client, db_session):
+    await login_as(client, db_session, email="ctc@e.com", role="cliente_torq")
+    # sub-tenant permitido
+    ok = await client.post("/empresas", json={"nome": "Cliente X", "tipo": "cliente_final"})
+    assert ok.status_code == 201, ok.text
+    # peer sst proibido
+    bad = await client.post("/empresas", json={"nome": "Peer", "tipo": "sst"})
+    assert bad.status_code == 403, bad.text
+
+
+async def test_cria_tipo_invalido_422(client, db_session):
+    await login_as(client, db_session, email="inv@e.com", role="admin_vertical")
+    r = await client.post("/empresas", json={"nome": "X", "tipo": "inexistente"})
+    assert r.status_code == 422, r.text
+
+
+async def test_delete_empresa_admin_e_403_para_comum(client, db_session):
+    # admin cria e deleta uma empresa sem dependências
+    await login_as(client, db_session, email="del@e.com", role="admin_vertical")
+    criada = await client.post("/empresas", json={"nome": "Descartável", "tipo": "lead"})
+    eid = criada.json()["id"]
+    d = await client.delete(f"/empresas/{eid}")
+    assert d.status_code == 204, d.text
+    # sumiu
+    assert (await client.get(f"/empresas/{eid}")).status_code == 404
+
+    # usuário comum não deleta
+    await login_as(client, db_session, email="comumd@e.com", role="cliente_torq")
+    outra = uuid.uuid4()
+    from app.models.generated import Empresas
+    db_session.add(Empresas(id=outra, nome="O", tipo="sst"))
+    await db_session.commit()
+    assert (await client.delete(f"/empresas/{outra}")).status_code == 403
+
+
+# ── Contatos da empresa ─────────────────────────────────────────────────────────
+
+async def test_contatos_crud_e_isolamento(client, db_session):
+    empresa_a = await login_as(client, db_session, email="contA@e.com", role="cliente_torq")
+
+    # cria contato na própria empresa
+    c = await client.post(
+        f"/empresas/{empresa_a}/contatos",
+        json={"nome": "João", "cargo": "Gerente", "principal": True},
+    )
+    assert c.status_code == 201, c.text
+    contato_id = c.json()["id"]
+    assert c.json()["empresa_id"] == str(empresa_a)
+
+    # lista
+    lst = await client.get(f"/empresas/{empresa_a}/contatos")
+    assert lst.status_code == 200
+    assert any(x["id"] == contato_id for x in lst.json())
+
+    # atualiza
+    u = await client.put(
+        f"/empresas/{empresa_a}/contatos/{contato_id}", json={"cargo": "Diretor"}
+    )
+    assert u.status_code == 200 and u.json()["cargo"] == "Diretor"
+
+    # isolamento: contatos de outra empresa → 404
+    outra = uuid.uuid4()
+    from app.models.generated import Empresas
+    db_session.add(Empresas(id=outra, nome="B", tipo="sst"))
+    await db_session.commit()
+    assert (await client.get(f"/empresas/{outra}/contatos")).status_code == 404
+    assert (
+        await client.post(f"/empresas/{outra}/contatos", json={"nome": "X"})
+    ).status_code == 404
+
+    # deleta
+    d = await client.delete(f"/empresas/{empresa_a}/contatos/{contato_id}")
+    assert d.status_code == 204
+    assert (await client.get(f"/empresas/{empresa_a}/contatos")).json() == []
