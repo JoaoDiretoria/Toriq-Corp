@@ -41,6 +41,10 @@ class VendasLeads(Base):
             ["empresa_id"], ["public.empresas.id"],
             ondelete="CASCADE", name="vendas_leads_empresa_id_fkey",
         ),
+        ForeignKeyConstraint(
+            ["job_id"], ["public.vendas_jobs.id"],
+            ondelete="SET NULL", name="vendas_leads_job_id_fkey",
+        ),
         PrimaryKeyConstraint("id", name="vendas_leads_pkey"),
         Index("idx_vendas_leads_empresa_id", "empresa_id"),
         UniqueConstraint(
@@ -68,6 +72,9 @@ class VendasLeads(Base):
         Boolean, server_default=text("false")
     )
     dedupe_key: Mapped[Optional[str]] = mapped_column(Text)
+    # Origem do lead quando veio de prospecção (Apify) — FK para vendas_jobs.
+    # Adicionada na Fase 1 (migration f7a8b9c0d1e2). SET NULL ao apagar o job.
+    job_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime(True), server_default=text("now()")
     )

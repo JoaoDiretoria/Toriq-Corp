@@ -78,6 +78,7 @@ from app.api.health import router as health_router
 from app.api.kanbans_legados import router as kanbans_legados_router
 from app.api.esocial import router as esocial_router
 from app.api.vendas import router as vendas_router
+from app.api.vendas_prospeccao import router as vendas_prospeccao_router
 from app.jobs.scheduler import build_scheduler
 
 
@@ -137,6 +138,8 @@ def create_app() -> FastAPI:
     app.include_router(esocial_router)
     # Toriq Vendas Fase 0 — leads, tags, segmentação (escopado por empresa)
     app.include_router(vendas_router)
+    # Toriq Vendas Fase 1 — prospecção via Apify (config, scraping, jobs)
+    app.include_router(vendas_prospeccao_router)
     # Frota — veículos, motoristas, manutenções, checklists, custos, documentos, ocorrências
     app.include_router(frota_router)
     # Catálogo, notificações, suporte, agenda
