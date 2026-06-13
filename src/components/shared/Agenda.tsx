@@ -392,12 +392,23 @@ export function Agenda({ modoAdmin = false }: AgendaProps) {
     }
   }, [empresa?.id, toast, agendaSelecionada]);
 
+  // Carregamento principal — keyed nos PRIMITIVOS (não nas callbacks). Depender
+  // das callbacks causava loop infinito: carregarUsuarios faz setUsuarios (nova
+  // referência), carregarPermissoes depende de `usuarios` → muda de identidade →
+  // o efeito re-disparava → re-fetch sem fim (tela presa em "Carregando agenda...").
   useEffect(() => {
     carregarEventos();
     carregarUsuarios();
     carregarClientes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empresa?.id, user?.id, agendaSelecionada]);
+
+  // Permissões dependem de `usuarios` já carregados — efeito separado. Só LÊ
+  // `usuarios` (nunca seta), então não realimenta o ciclo acima.
+  useEffect(() => {
     carregarPermissoes();
-  }, [carregarEventos, carregarUsuarios, carregarClientes, carregarPermissoes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empresa?.id, user?.id, usuarios]);
 
   // ── Filtrar Eventos ───────────────────────────────────────────────────────
   const eventosFiltrados = eventos.filter(ev => {
