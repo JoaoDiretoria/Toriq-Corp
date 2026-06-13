@@ -65,7 +65,6 @@ Toriq corp/
 │
 ├── src/                          # FRONTEND React/Vite (na raiz, legado em migração)
 │   ├── integrations/api/         # 🟢 client novo: client.ts, auth.ts, schema.d.ts (gerado)
-│   ├── integrations/supabase/    # legado (sai no cutover)
 │   ├── hooks/useAuth.tsx         # 🟢 auth migrado para o backend novo
 │   ├── components/ · pages/      # telas (em migração)
 │   └── lib/accessLog.ts          # 🟢 migrado
@@ -292,8 +291,9 @@ A migração é **invisível** (mesma UI; só troca `supabase.from()` → client
 **Estado (2026-06-12): essencialmente concluída.** Os hooks-keystone (`useAuth`,
 `useModulosAtivos`, `usePermissoes`, `useEmpresaMode`, `useHierarquia`,
 `useNotificacoes`) e as ~127 telas restantes foram migrados — **zero chamadas
-`supabase.` de código** no `src/` (só sobra o arquivo `integrations/supabase/client.ts`,
-removido no cutover). Guia/contrato da esteira em `docs/migracao-front-esteira.md`.
+`supabase.` de código** no `src/`. O diretório `integrations/supabase/` e a
+dependência `@supabase/supabase-js` foram **removidos** na limpeza pós-cutover
+(`864515a`). Guia/contrato da esteira em `docs/migracao-front-esteira.md`.
 
 **Degradações conhecidas (sem endpoint equivalente — degradam graciosamente):**
 - **Realtime** (notificações, kanban, tickets) → **polling**/recarga nos GETs (sem push no backend novo).
@@ -307,7 +307,7 @@ removido no cutover). Guia/contrato da esteira em `docs/migracao-front-esteira.m
 
 ## O que falta para terminar o desenvolvimento
 
-> Atualizado em **2026-06-12**. Decisão do produto: o banco novo começa **vazio**
+> Atualizado em **2026-06-13**. Decisão do produto: o banco novo começa **vazio**
 > (cria do zero) — **não há backfill** de dados do Supabase. Isso remove a etapa
 > mais cara (e a migração de credenciais) do caminho.
 
@@ -323,12 +323,21 @@ removido no cutover). Guia/contrato da esteira em `docs/migracao-front-esteira.m
   ✅ **CUTOVER FEITO (2026-06-12):** o front em produção (`toriqcorp.com.br`) já roda
   o build migrado falando com o backend Python; bundle sem Supabase (tree-shaken).
   CORS/cookies cross-subdomínio validados. 1º admin via `app.seed_admin`.
-- [ ] **Validar paridade** tela-a-tela em produção (monitorar erros reais agora que está no ar).
-- [ ] **Auth avançado:** reset de senha por **email** (precisa SMTP) + validação de **captcha** Turnstile no backend.
-- [ ] **Fatia 4 — eSocial em Python:** reescrever `backend-esocial` (assinatura digital, SOAP gov.br).
+- [x] **Validar paridade** tela-a-tela em produção — ✅ sweep das **25 telas admin** via
+  navegador (Playwright) logado como admin. Achados/corrigidos: filtro de tipo escondendo
+  empresas (`c41fa67`), tela branca em Estatísticas / `created_at` ausente em `/admin/users`
+  (`07a96b0`), loop infinito de carregamento na Agenda (`106f9c4`). Demais telas OK.
+- [x] **Captcha** Turnstile no backend — ✅ validado no `/auth/login` (fail-closed quando
+  `TURNSTILE_SECRET_KEY` setada). Falta só o **reset de senha por email** (precisa SMTP).
+- [ ] **Auth avançado (resta email):** reset de senha por **email** + envio de newsletter —
+  ambos dependem de **provedor SMTP** (host/user/senha). Código pode ser feito config-driven.
+- [ ] **Fatia 4 — eSocial em Python:** reescrever `backend-esocial` (assinatura digital, SOAP
+  gov.br). 📄 **Plano detalhado:** `docs/superpowers/plans/2026-06-13-fatia4-esocial-python.md`
+  (bloqueado em: fonte do backend-esocial atual + certificado A1 de teste).
 - [ ] **Rotação de senha do banco + TLS/exposição** (decisão: deixado para o fim do projeto).
-- [ ] **Limpeza pós-cutover:** desligar/arquivar o Supabase, remover `integrations/supabase/`,
-  mover o front para `apps/web`.
+- [~] **Limpeza pós-cutover:** ✅ **código** feito — removido `src/integrations/supabase/` +
+  dependência `@supabase/supabase-js` + chunk `supabase-vendor` (`864515a`; build sem Supabase).
+  Resta: desligar/arquivar o projeto Supabase (infra) e mover o front para `apps/web`.
 
 ### Lacunas de backend descobertas pela esteira (backlog)
 
