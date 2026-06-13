@@ -36,10 +36,18 @@ class Settings(BaseSettings):
     # Base pública opcional (CDN/proxy). Sem ela, a URL pública usa o endpoint.
     s3_public_base_url: str | None = None
 
-    # Chave-mestra para criptografar segredos de integração (eSocial / gov.br).
-    # Derivada para uma chave Fernet em app.core.esocial_crypto. Sem ela, qualquer
-    # tentativa de criptografar/descriptografar segredos levanta erro claro no uso.
+    # Chave-mestra para criptografar segredos de integração (eSocial / gov.br /
+    # Toriq Vendas). Derivada para uma chave Fernet em app.core.esocial_crypto.
+    # Sem ela, criptografar/descriptografar segredos levanta erro claro no uso.
     integration_encryption_key: str | None = None
+
+    # Redis (cache + filas). URL no formato redis://default:senha@host:6379.
+    # OPCIONAL: sem ela o cache fica desligado (recalcula sempre) e a fila roda
+    # inline/no scheduler — a aplicação NUNCA quebra por falta de Redis.
+    redis_url: str | None = None
+    # TTL padrão do cache (segundos) e prefixo das chaves (namespacing).
+    cache_ttl_seconds: int = 60
+    cache_prefix: str = "toriq"
 
     @property
     def cors_origins_list(self) -> list[str]:

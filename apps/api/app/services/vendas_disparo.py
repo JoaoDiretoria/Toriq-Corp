@@ -366,6 +366,18 @@ async def enviar_campanha(
         campanha.status = "concluida"
         campanha.finished_at = _now()
 
+    # Medição de uso (Fase 5): mensagens efetivamente enviadas nesta rodada.
+    if enviados:
+        from app.services.vendas_uso import registrar_uso
+
+        await registrar_uso(
+            db,
+            empresa_id=empresa_id,
+            metrica="whatsapp_enviados" if eh_whatsapp else "emails_enviados",
+            quantidade=enviados,
+            referencia=str(campanha.id),
+        )
+
     await db.commit()
 
     return {

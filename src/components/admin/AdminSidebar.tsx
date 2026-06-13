@@ -21,7 +21,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
-type AdminSection = 'dashboard' | 'empresas' | 'usuarios' | 'colaboradores' | 'servicos' | 'modulos' | 'tarefas' | 'agenda' | 'comercial-dashboard' | 'comercial' | 'comercial-prospeccao' | 'comercial-pos-venda' | 'comercial-cross-selling' | 'financeiro' | 'financeiro-dashboard' | 'financeiro-cadastros' | 'financeiro-contas-receber' | 'financeiro-contas-pagar' | 'financeiro-fluxo-caixa' | 'financeiro-dre' | 'estatisticas' | 'suporte' | 'conteudo-blogs' | 'conteudo-pesquisas' | 'conteudo-newsletter' | 'conteudo-vagas' | 'vendas-prospeccao' | 'vendas-leads' | 'vendas-segmentacao' | 'vendas-tags' | 'vendas-disparo' | 'vendas-sdr';
+type AdminSection = 'dashboard' | 'empresas' | 'usuarios' | 'colaboradores' | 'servicos' | 'modulos' | 'tarefas' | 'agenda' | 'comercial-dashboard' | 'comercial' | 'comercial-prospeccao' | 'comercial-pos-venda' | 'comercial-cross-selling' | 'financeiro' | 'financeiro-dashboard' | 'financeiro-cadastros' | 'financeiro-contas-receber' | 'financeiro-contas-pagar' | 'financeiro-fluxo-caixa' | 'financeiro-dre' | 'estatisticas' | 'suporte' | 'conteudo-blogs' | 'conteudo-pesquisas' | 'conteudo-newsletter' | 'conteudo-vagas' | 'vendas-prospeccao' | 'vendas-leads' | 'vendas-segmentacao' | 'vendas-tags' | 'vendas-disparo' | 'vendas-sdr' | 'vendas-uso';
 
 interface AdminSidebarProps {
   activeSection: AdminSection;
@@ -65,6 +65,7 @@ const vendasSubItems = [
   { id: 'vendas-sdr' as const, label: 'SDR Inteligente', icon: Bot },
   { id: 'vendas-segmentacao' as const, label: 'Segmentação', icon: Layers },
   { id: 'vendas-tags' as const, label: 'Tags', icon: Tags },
+  { id: 'vendas-uso' as const, label: 'Uso & Contratação', icon: BarChart3 },
 ];
 
 const conteudoSubItems = [

@@ -223,6 +223,12 @@ async def scraping_start(
         status=map_apify_status(run.get("status", "")),
     )
     db.add(job)
+    # Medição de uso (Fase 5): cada disparo de actor conta como 1 run Apify.
+    from app.services.vendas_uso import registrar_uso
+
+    await registrar_uso(
+        db, empresa_id=empresa_id, metrica="apify_runs", referencia=str(job.id)
+    )
     await db.commit()
     await db.refresh(job)
     return job
@@ -349,6 +355,18 @@ async def scraping_results(
     job.total_duplicados = (job.total_duplicados or 0) + duplicados
     job.status = "imported"
     job.finished_at = _now()
+
+    # Medição de uso (Fase 5): leads efetivamente captados nesta importação.
+    if inseridos:
+        from app.services.vendas_uso import registrar_uso
+
+        await registrar_uso(
+            db,
+            empresa_id=empresa_id,
+            metrica="leads_captados",
+            quantidade=inseridos,
+            referencia=str(job.id),
+        )
 
     await db.commit()
     return s.ScrapingResultsOut(inseridos=inseridos, duplicados=duplicados, total=total)

@@ -192,6 +192,13 @@ async def qualificar_lead(
         )
     )
 
+    # Medição de uso (Fase 5): 1 qualificação SDR.
+    from app.services.vendas_uso import registrar_uso
+
+    await registrar_uso(
+        db, empresa_id=empresa_id, metrica="sdr_qualificacoes", referencia=str(lead.id)
+    )
+
     await db.commit()
     return {
         "lead_id": lead.id,
@@ -354,6 +361,13 @@ async def gerar_resposta(
             conteudo=resposta,
             meta=None,
         )
+    )
+
+    # Medição de uso (Fase 5): 1 conversa SDR (resposta gerada pela IA).
+    from app.services.vendas_uso import registrar_uso
+
+    await registrar_uso(
+        db, empresa_id=empresa_id, metrica="sdr_conversas", referencia=str(lead.id)
     )
 
     await db.commit()
