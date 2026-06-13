@@ -31,9 +31,12 @@ import { AdminPesquisasList } from '@/components/admin/pesquisas';
 import { AdminNewsletterList } from '@/components/admin/newsletter';
 import { AdminVagas } from '@/components/admin/vagas';
 import { Agenda } from '@/components/shared/Agenda';
+import { LeadsCaptados } from '@/components/admin/vendas/LeadsCaptados';
+import { Segmentacao } from '@/components/admin/vendas/Segmentacao';
+import { TagsManager } from '@/components/admin/vendas/TagsManager';
 import { useState } from 'react';
 
-type AdminSection = 'dashboard' | 'empresas' | 'usuarios' | 'colaboradores' | 'servicos' | 'modulos' | 'tarefas' | 'agenda' | 'comercial-dashboard' | 'comercial' | 'comercial-prospeccao' | 'comercial-pos-venda' | 'comercial-cross-selling' | 'financeiro' | 'financeiro-dashboard' | 'financeiro-cadastros' | 'financeiro-contas-receber' | 'financeiro-contas-pagar' | 'financeiro-fluxo-caixa' | 'financeiro-dre' | 'estatisticas' | 'suporte' | 'conteudo-blogs' | 'conteudo-pesquisas' | 'conteudo-newsletter' | 'conteudo-vagas';
+type AdminSection = 'dashboard' | 'empresas' | 'usuarios' | 'colaboradores' | 'servicos' | 'modulos' | 'tarefas' | 'agenda' | 'comercial-dashboard' | 'comercial' | 'comercial-prospeccao' | 'comercial-pos-venda' | 'comercial-cross-selling' | 'financeiro' | 'financeiro-dashboard' | 'financeiro-cadastros' | 'financeiro-contas-receber' | 'financeiro-contas-pagar' | 'financeiro-fluxo-caixa' | 'financeiro-dre' | 'estatisticas' | 'suporte' | 'conteudo-blogs' | 'conteudo-pesquisas' | 'conteudo-newsletter' | 'conteudo-vagas' | 'vendas-leads' | 'vendas-segmentacao' | 'vendas-tags';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -128,6 +131,12 @@ const AdminDashboard = () => {
         return <AdminNewsletterList />;
       case 'conteudo-vagas':
         return <AdminVagas />;
+      case 'vendas-leads':
+        return <LeadsCaptados />;
+      case 'vendas-segmentacao':
+        return <Segmentacao />;
+      case 'vendas-tags':
+        return <TagsManager />;
       default:
         return <AdminDashboardHome onNavigate={(section) => setActiveSection(section as AdminSection)} />;
     }
@@ -161,6 +170,9 @@ const AdminDashboard = () => {
       'conteudo-pesquisas': 'Pesquisas de Opinião',
       'conteudo-newsletter': 'Newsletter',
       'conteudo-vagas': 'Vagas',
+      'vendas-leads': 'Toriq Vendas — Leads Captados',
+      'vendas-segmentacao': 'Toriq Vendas — Segmentação',
+      'vendas-tags': 'Toriq Vendas — Tags',
     };
     return titles[activeSection] || 'Dashboard';
   };

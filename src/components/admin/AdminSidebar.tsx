@@ -14,14 +14,14 @@ import {
   SidebarFooter,
 } from '@/components/ui/sidebar';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Building2, Users, TrendingUp, DollarSign, LogOut, Shield, Package, ChevronDown, UserSearch, Zap, LayoutDashboard, UserCog, HeartHandshake, ClipboardList, Receipt, CreditCard, FileBarChart, Wallet, CheckSquare, BarChart3, Database, Headphones, PenTool, FileText, Mail, Briefcase, CalendarDays } from 'lucide-react';
+import { Building2, Users, TrendingUp, DollarSign, LogOut, Shield, Package, ChevronDown, UserSearch, Zap, LayoutDashboard, UserCog, HeartHandshake, ClipboardList, Receipt, CreditCard, FileBarChart, Wallet, CheckSquare, BarChart3, Database, Headphones, PenTool, FileText, Mail, Briefcase, CalendarDays, Megaphone, Layers, Tags } from 'lucide-react';
 import { NotificationPopover } from '@/components/shared/notifications';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
-type AdminSection = 'dashboard' | 'empresas' | 'usuarios' | 'colaboradores' | 'servicos' | 'modulos' | 'tarefas' | 'agenda' | 'comercial-dashboard' | 'comercial' | 'comercial-prospeccao' | 'comercial-pos-venda' | 'comercial-cross-selling' | 'financeiro' | 'financeiro-dashboard' | 'financeiro-cadastros' | 'financeiro-contas-receber' | 'financeiro-contas-pagar' | 'financeiro-fluxo-caixa' | 'financeiro-dre' | 'estatisticas' | 'suporte' | 'conteudo-blogs' | 'conteudo-pesquisas' | 'conteudo-newsletter' | 'conteudo-vagas';
+type AdminSection = 'dashboard' | 'empresas' | 'usuarios' | 'colaboradores' | 'servicos' | 'modulos' | 'tarefas' | 'agenda' | 'comercial-dashboard' | 'comercial' | 'comercial-prospeccao' | 'comercial-pos-venda' | 'comercial-cross-selling' | 'financeiro' | 'financeiro-dashboard' | 'financeiro-cadastros' | 'financeiro-contas-receber' | 'financeiro-contas-pagar' | 'financeiro-fluxo-caixa' | 'financeiro-dre' | 'estatisticas' | 'suporte' | 'conteudo-blogs' | 'conteudo-pesquisas' | 'conteudo-newsletter' | 'conteudo-vagas' | 'vendas-leads' | 'vendas-segmentacao' | 'vendas-tags';
 
 interface AdminSidebarProps {
   activeSection: AdminSection;
@@ -56,6 +56,12 @@ const financeiroSubItems = [
   { id: 'financeiro-contas-pagar' as const, label: 'Contas a Pagar', icon: CreditCard },
   { id: 'financeiro-fluxo-caixa' as const, label: 'Fluxo de Caixa', icon: Wallet },
   { id: 'financeiro-dre' as const, label: 'DRE', icon: FileBarChart },
+];
+
+const vendasSubItems = [
+  { id: 'vendas-leads' as const, label: 'Leads Captados', icon: Users },
+  { id: 'vendas-segmentacao' as const, label: 'Segmentação', icon: Layers },
+  { id: 'vendas-tags' as const, label: 'Tags', icon: Tags },
 ];
 
 const conteudoSubItems = [
@@ -201,6 +207,35 @@ export function AdminSidebar({ activeSection, onSectionChange }: AdminSidebarPro
                           <CollapsibleContent>
                             <SidebarMenuSub className="ml-4 border-l pl-2">
                               {comercialSubItems.map((subItem) => (
+                                <SidebarMenuSubItem key={subItem.id}>
+                                  <SidebarMenuSubButton
+                                    onClick={() => onSectionChange(subItem.id)}
+                                    isActive={activeSection === subItem.id}
+                                    className="cursor-pointer text-xs"
+                                  >
+                                    <subItem.icon className="h-3 w-3" />
+                                    <span>{subItem.label}</span>
+                                  </SidebarMenuSubButton>
+                                </SidebarMenuSubItem>
+                              ))}
+                            </SidebarMenuSub>
+                          </CollapsibleContent>
+                        </SidebarMenuSubItem>
+                      </Collapsible>
+
+                      {/* Toriq Vendas com submenu */}
+                      <Collapsible defaultOpen className="group/vendas">
+                        <SidebarMenuSubItem>
+                          <CollapsibleTrigger asChild>
+                            <SidebarMenuSubButton className="cursor-pointer">
+                              <Megaphone className="h-4 w-4" />
+                              <span>Toriq Vendas</span>
+                              <ChevronDown className="ml-auto h-3 w-3 transition-transform group-data-[state=open]/vendas:rotate-180" />
+                            </SidebarMenuSubButton>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <SidebarMenuSub className="ml-4 border-l pl-2">
+                              {vendasSubItems.map((subItem) => (
                                 <SidebarMenuSubItem key={subItem.id}>
                                   <SidebarMenuSubButton
                                     onClick={() => onSectionChange(subItem.id)}
