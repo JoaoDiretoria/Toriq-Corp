@@ -85,8 +85,10 @@ const tiposEmpresa = [
   { value: 'lead', label: 'Lead' },
 ];
 
-// Tipos visíveis para o admin Toriq (exclui cliente_final e empresa_parceira)
-const TIPOS_VISIVEIS = ['cliente_final', 'lead'];
+// Tipos visíveis para o admin Toriq — devem casar com os valores criáveis em
+// `tiposEmpresa` (sst = "Cliente Toriq", lead). Exclui cliente_final/empresa_parceira
+// (sub-tenants, geridos por outra tela) e vertical_on (a própria Toriq).
+const TIPOS_VISIVEIS = ['sst', 'lead'];
 
 const estados = [
   'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG',
