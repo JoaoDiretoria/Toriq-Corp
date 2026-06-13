@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.security import hash_password, verify_password
+from app.core.turnstile import verify_turnstile
 from app.core.tokens import TokenError, create_token, decode_token
 from app.api.deps import get_current_user, get_optional_user
 from app.models.user import User, UserRole
@@ -99,6 +100,9 @@ async def me(
 @router.post("/login", response_model=UserOut)
 async def login(payload: LoginIn, response: Response,
                 db: AsyncSession = Depends(get_db)) -> User:
+    # Captcha (Turnstile): validado só quando TURNSTILE_SECRET_KEY está configurada.
+    if not await verify_turnstile(payload.captcha_token):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "captcha inválido")
     user = await db.scalar(select(User).where(User.email == payload.email))
     if not user or not verify_password(payload.password, user.senha_hash):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "credenciais inválidas")

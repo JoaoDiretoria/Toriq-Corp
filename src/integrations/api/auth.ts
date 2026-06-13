@@ -11,9 +11,10 @@ export type EmpresaOut = components["schemas"]["EmpresaOut"];
 export type MeOut = components["schemas"]["MeOut"];
 
 export const authApi = {
-  /** Faz login; o backend grava os cookies httpOnly (access + refresh). */
-  login: (email: string, password: string) =>
-    api.post<UserOut>("/auth/login", { email, password }),
+  /** Faz login; o backend grava os cookies httpOnly (access + refresh).
+   * captchaToken: token do Turnstile (validado no backend quando configurado). */
+  login: (email: string, password: string, captchaToken?: string | null) =>
+    api.post<UserOut>("/auth/login", { email, password, captcha_token: captchaToken ?? null }),
 
   /** Encerra a sessão (limpa os cookies no backend). */
   logout: () => api.post<void>("/auth/logout"),

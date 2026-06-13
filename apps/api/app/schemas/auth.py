@@ -16,6 +16,9 @@ class RegisterIn(BaseModel):
 class LoginIn(BaseModel):
     email: EmailStr
     password: str
+    # Token do Cloudflare Turnstile. Validado quando TURNSTILE_SECRET_KEY está
+    # configurada no backend; ignorado caso contrário (captcha desligado).
+    captcha_token: str | None = None
 
 
 class UserOut(BaseModel):

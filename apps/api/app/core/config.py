@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     # Ligue (OPEN_REGISTER=true) só em cenários de teste/bootstrap controlado.
     open_register: bool = False
 
+    # Cloudflare Turnstile (captcha). Secret key validada no /auth/login. Quando
+    # VAZIA (default), a validação é PULADA — o captcha fica desligado de ponta a
+    # ponta (o front também só mostra o widget quando tem a site key). Defina
+    # TURNSTILE_SECRET_KEY para LIGAR a validação.
+    turnstile_secret_key: str | None = None
+
     # Storage S3-compatível (RustFS) — substitui o supabase.storage. Opcionais:
     # sem credenciais o StorageService levanta 503 ao ser usado.
     s3_endpoint_url: str | None = None

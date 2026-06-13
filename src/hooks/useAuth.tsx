@@ -159,13 +159,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = async (
     email: string,
     password: string,
-    _captchaToken?: string,
+    captchaToken?: string,
     _forceLogin?: boolean,
   ): Promise<{ error: Error | null; sessionConflict?: boolean }> => {
-    // captchaToken/forceLogin: aceitos para compatibilidade. Captcha é validado
-    // só no widget (front); sessão única foi adiada → nunca há sessionConflict.
+    // captchaToken é enviado ao backend (validado quando TURNSTILE_SECRET_KEY
+    // estiver configurada). forceLogin: aceito para compatibilidade — sessão
+    // única foi adiada → nunca há sessionConflict.
     try {
-      await authApi.login(email, password);
+      await authApi.login(email, password, captchaToken);
       const ok = await loadSession();
       if (!ok) {
         return { error: new Error('Não foi possível carregar a sessão.') };
@@ -176,7 +177,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: new Error('Credenciais inválidas.') };
       }
       if (err instanceof ApiError && err.status === 403) {
-        return { error: new Error('Usuário inativo.') };
+        // 403 pode ser "usuário inativo" ou "captcha inválido" — usa a mensagem do backend.
+        return { error: new Error(err.message || 'Acesso negado.') };
       }
       return { error: err instanceof Error ? err : new Error('Erro ao fazer login.') };
     }
