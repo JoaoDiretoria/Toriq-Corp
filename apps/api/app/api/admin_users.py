@@ -50,6 +50,8 @@ def _merge_user_profile(user: User, profile: Profiles | None) -> AdminUserOut:
         "role": user.role,
         "empresa_id": user.empresa_id,
         "ativo": user.ativo,
+        "created_at": getattr(user, "created_at", None)
+        or (getattr(profile, "created_at", None) if profile is not None else None),
     }
     if profile is not None:
         for field in _PROFILE_EXTENDED_FIELDS:

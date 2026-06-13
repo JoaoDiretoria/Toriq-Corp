@@ -25,6 +25,17 @@ import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
+/**
+ * Formata uma data de forma defensiva: retorna '-' quando o valor é nulo,
+ * ausente ou inválido (ex.: created_at não preenchido pelo backend). Sem isso,
+ * `format(new Date(invalid), ...)` lança RangeError e derruba a tela inteira.
+ */
+function formatDataSegura(value: string | null | undefined, fmt: string): string {
+  if (!value) return '-';
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? '-' : format(d, fmt, { locale: ptBR });
+}
+
 interface EstatisticasGerais {
   totalEmpresas: number;
   empresasSST: number;
@@ -644,7 +655,7 @@ export function AdminEstatisticas() {
                         <TableCell>{acesso.pagina}</TableCell>
                         <TableCell>{acesso.acao}</TableCell>
                         <TableCell className="text-right text-sm text-muted-foreground">
-                          {format(new Date(acesso.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                          {formatDataSegura(acesso.created_at, "dd/MM/yyyy HH:mm")}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -691,7 +702,7 @@ export function AdminEstatisticas() {
                         <TableCell>{getRoleBadge(usuario.role)}</TableCell>
                         <TableCell>{usuario.empresa_nome || '-'}</TableCell>
                         <TableCell className="text-right text-sm text-muted-foreground">
-                          {format(new Date(usuario.created_at), "dd/MM/yyyy", { locale: ptBR })}
+                          {formatDataSegura(usuario.created_at, "dd/MM/yyyy")}
                         </TableCell>
                       </TableRow>
                     ))

@@ -1,3 +1,4 @@
+import datetime
 import uuid
 
 from pydantic import BaseModel, EmailStr, Field
@@ -86,6 +87,7 @@ class AdminUserOut(BaseModel):
     grupo_acesso: str | None = None
     gestor_id: uuid.UUID | None = None
     lider_setor: bool | None = None
+    created_at: datetime.datetime | None = None
 
     model_config = {"from_attributes": True}
 
