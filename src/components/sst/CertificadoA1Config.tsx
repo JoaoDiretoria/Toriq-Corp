@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { api, ApiError } from '@/integrations/api/client';
 
 interface CertificadoInfo {
   cn: string;
@@ -45,6 +46,41 @@ interface CertificadoInfo {
 interface CertificadoA1ConfigProps {
   empresaId: string;
 }
+
+// Visão pública do certificado retornada por GET /esocial/config (snake_case).
+interface EsocialConfigView {
+  empresa_id: string | null;
+  has_esocial_cert: boolean;
+  has_esocial_cert_password: boolean;
+  certificado_alias: string | null;
+  certificado_cn: string | null;
+  certificado_valido_ate: string | null;
+  updated_at: string | null;
+}
+
+// Certificado retornado por POST /esocial/validate-certificate (snake_case).
+interface CertificadoBackend {
+  cn: string;
+  ou?: string | null;
+  o?: string | null;
+  serial_number: string;
+  valido_de: string;
+  valido_ate: string;
+  emissor: string;
+  expirado?: boolean;
+}
+
+// Converte o certificado snake_case do backend para o shape camelCase usado na UI.
+const mapCertificado = (cert: CertificadoBackend): CertificadoInfo => ({
+  cn: cert.cn,
+  ou: cert.ou ?? undefined,
+  o: cert.o ?? undefined,
+  serialNumber: cert.serial_number,
+  validoDe: cert.valido_de,
+  validoAte: cert.valido_ate,
+  emissor: cert.emissor,
+  expirado: cert.expirado,
+});
 
 export function CertificadoA1Config({ empresaId }: CertificadoA1ConfigProps) {
   const { toast } = useToast();
@@ -76,13 +112,30 @@ export function CertificadoA1Config({ empresaId }: CertificadoA1ConfigProps) {
 
     setLoading(true);
     try {
-      // NOTA (migracao): endpoint GET /empresas/{id} nao expoe campos certificado_a1_*
-      // (omitidos intencionalmente no EmpresaOut por seguranca). Degrada para estado
-      // "sem certificado configurado" ate que um endpoint dedicado seja implementado.
-      setCertificadoConfigurado(false);
-      setCertificadoInfo(null);
+      const config = await api.get<EsocialConfigView>('/esocial/config');
+
+      if (config?.has_esocial_cert) {
+        const validoAte = config.certificado_valido_ate || '';
+        const expirado = validoAte
+          ? differenceInDays(parseISO(validoAte), new Date()) < 0
+          : false;
+        setCertificadoConfigurado(true);
+        setCertificadoInfo({
+          cn: config.certificado_cn || config.certificado_alias || 'Certificado configurado',
+          serialNumber: '',
+          validoDe: '',
+          validoAte,
+          emissor: '',
+          expirado,
+        });
+      } else {
+        setCertificadoConfigurado(false);
+        setCertificadoInfo(null);
+      }
     } catch (error: any) {
       console.error('Erro ao carregar certificado:', error);
+      setCertificadoConfigurado(false);
+      setCertificadoInfo(null);
       toast({
         title: 'Erro',
         description: 'Nao foi possivel carregar informacoes do certificado',
@@ -192,62 +245,47 @@ export function CertificadoA1Config({ empresaId }: CertificadoA1ConfigProps) {
         new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
       );
       
-      const esocialBackendUrl = import.meta.env.VITE_ESOCIAL_BACKEND_URL;
-      if (!esocialBackendUrl || esocialBackendUrl.includes('seu-backend-esocial')) {
-        toast({
-          title: 'Backend nao configurado',
-          description: 'URL do backend eSocial nao esta configurada',
-          variant: 'destructive',
-        });
-        return;
-      }
-      
-      const response = await fetch(`${esocialBackendUrl}/api/pdf/validate-certificate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pfxBase64: base64,
-          senha: senhaCertificado,
-        }),
+      const resultado = await api.post<{
+        success: boolean;
+        valido: boolean;
+        mensagem: string;
+        certificado: CertificadoBackend | null;
+      }>('/esocial/validate-certificate', {
+        pfx_base64: base64,
+        senha: senhaCertificado,
       });
-      
-      const resultado = await response.json();
-      
-      if (resultado.success) {
+
+      if (resultado.success && resultado.valido && resultado.certificado) {
+        const certificado = mapCertificado(resultado.certificado);
         setValidacaoResultado({
-          valido: resultado.valido,
+          valido: true,
           mensagem: resultado.mensagem,
-          certificado: resultado.certificado,
+          certificado,
         });
-        
-        if (resultado.valido) {
-          toast({
-            title: 'Certificado valido!',
-            description: `CN: ${resultado.certificado.cn}`,
-          });
-        } else {
-          toast({
-            title: 'Certificado invalido',
-            description: resultado.mensagem,
-            variant: 'destructive',
-          });
-        }
+        toast({
+          title: 'Certificado valido!',
+          description: `CN: ${certificado.cn}`,
+        });
       } else {
-        const erroTraduzido = traduzirErroCertificado(resultado.error || '');
+        const erroTraduzido = traduzirErroCertificado(resultado.mensagem || '');
         setValidacaoResultado({
           valido: false,
-          mensagem: erroTraduzido.descricao,
+          mensagem: resultado.mensagem || erroTraduzido.descricao,
           dica: erroTraduzido.dica,
         });
         toast({
           title: erroTraduzido.titulo,
-          description: erroTraduzido.descricao,
+          description: resultado.mensagem || erroTraduzido.descricao,
           variant: 'destructive',
         });
       }
     } catch (error: any) {
       console.error('Erro ao validar certificado:', error);
-      const erroTraduzido = traduzirErroCertificado(error?.message || 'conexao');
+      const mensagemErro =
+        error instanceof ApiError
+          ? (typeof error.detail === 'string' ? error.detail : error.message)
+          : error?.message || 'conexao';
+      const erroTraduzido = traduzirErroCertificado(mensagemErro);
       setValidacaoResultado({
         valido: false,
         mensagem: erroTraduzido.descricao,
@@ -274,22 +312,39 @@ export function CertificadoA1Config({ empresaId }: CertificadoA1ConfigProps) {
     }
     
     if (!arquivoPfx || !senhaCertificado) return;
-    
+
     setSaving(true);
     try {
-      // NOTA (migracao): PUT /empresas/{id} nao aceita campos certificado_a1_*
-      // (excluidos do EmpresaUpdate por seguranca). Operacao degradada — exibe
-      // mensagem orientando o usuario ate que um endpoint dedicado seja criado.
-      toast({
-        title: 'Funcionalidade indisponivel',
-        description: 'O salvamento do certificado A1 ainda nao esta disponivel nesta versao. Entre em contato com o suporte.',
-        variant: 'destructive',
+      const arrayBuffer = await arquivoPfx.arrayBuffer();
+      const base64 = btoa(
+        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
+
+      await api.put('/esocial/config', {
+        esocial_cert_base64: base64,
+        esocial_cert_password: senhaCertificado,
+        certificado_alias: validacaoResultado.certificado.cn || null,
       });
+
+      toast({
+        title: 'Certificado salvo',
+        description: 'O certificado digital foi salvo com sucesso.',
+      });
+
+      setArquivoPfx(null);
+      setSenhaCertificado('');
+      setValidacaoResultado(null);
+      setModoEdicao(false);
+      await carregarCertificado();
     } catch (error: any) {
       console.error('Erro ao salvar certificado:', error);
+      const descricao =
+        error instanceof ApiError
+          ? (typeof error.detail === 'string' ? error.detail : error.message)
+          : error?.message || 'Nao foi possivel salvar o certificado';
       toast({
         title: 'Erro',
-        description: 'Nao foi possivel salvar o certificado',
+        description: descricao,
         variant: 'destructive',
       });
     } finally {
@@ -304,19 +359,23 @@ export function CertificadoA1Config({ empresaId }: CertificadoA1ConfigProps) {
     
     setRemoving(true);
     try {
-      // NOTA (migracao): PUT /empresas/{id} nao aceita campos certificado_a1_*
-      // (excluidos do EmpresaUpdate por seguranca). Operacao degradada — exibe
-      // mensagem orientando o usuario ate que um endpoint dedicado seja criado.
+      await api.del('/esocial/config/certificado');
       toast({
-        title: 'Funcionalidade indisponivel',
-        description: 'A remocao do certificado A1 ainda nao esta disponivel nesta versao. Entre em contato com o suporte.',
-        variant: 'destructive',
+        title: 'Certificado removido',
+        description: 'O certificado digital foi removido com sucesso.',
       });
+      setModoEdicao(false);
+      setValidacaoResultado(null);
+      await carregarCertificado();
     } catch (error: any) {
       console.error('Erro ao remover certificado:', error);
+      const descricao =
+        error instanceof ApiError
+          ? (typeof error.detail === 'string' ? error.detail : error.message)
+          : error?.message || 'Nao foi possivel remover o certificado';
       toast({
         title: 'Erro',
-        description: 'Nao foi possivel remover o certificado',
+        description: descricao,
         variant: 'destructive',
       });
     } finally {

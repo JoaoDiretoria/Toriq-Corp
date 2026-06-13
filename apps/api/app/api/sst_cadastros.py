@@ -23,6 +23,7 @@ from app.api.crud_factory import make_crud_router
 from app.api.deps import get_current_user
 from app.core.db import get_db
 from app.models import generated as m
+from app.models.normas import NormasRegulamentadoras
 from app.models.user import User
 from app.repositories.base import TenantRepository
 from app.schemas import sst_cadastros as s
@@ -118,6 +119,17 @@ router.include_router(make_crud_router(
     read_schema=s.CategoriaClienteEmpresaOut,
     prefix="/categorias-clientes-empresa",
     tags=["sst-categorias-clientes-empresa"],
+))
+
+# ── NormasRegulamentadoras (tenant-scoped) ────────────────────────────────────
+# Model vive em app.models.normas (não em generated); reusamos o make_crud_router.
+router.include_router(make_crud_router(
+    model=NormasRegulamentadoras,
+    create_schema=s.NormaRegulamentadoraIn,
+    update_schema=s.NormaRegulamentadoraUpdate,
+    read_schema=s.NormaRegulamentadoraOut,
+    prefix="/normas-regulamentadoras",
+    tags=["sst-normas-regulamentadoras"],
 ))
 
 # ── CategoriasClientes — global, somente leitura ──────────────────────────────

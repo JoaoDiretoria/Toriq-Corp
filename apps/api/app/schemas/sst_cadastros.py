@@ -419,3 +419,25 @@ class CategoriaClienteEmpresaOut(BaseModel):
     created_at: Optional[datetime.datetime] = None
     updated_at: Optional[datetime.datetime] = None
     model_config = {"from_attributes": True}
+
+
+# ── NormasRegulamentadoras (tenant-scoped) ────────────────────────────────────
+
+class NormaRegulamentadoraIn(BaseModel):
+    nr: str
+    descricao: Optional[str] = None
+
+
+class NormaRegulamentadoraUpdate(BaseModel):
+    nr: Optional[str] = None
+    descricao: Optional[str] = None
+
+
+class NormaRegulamentadoraOut(BaseModel):
+    id: uuid.UUID
+    empresa_id: uuid.UUID
+    nr: str
+    descricao: Optional[str] = None
+    created_at: Optional[datetime.datetime] = None
+    updated_at: Optional[datetime.datetime] = None
+    model_config = {"from_attributes": True}

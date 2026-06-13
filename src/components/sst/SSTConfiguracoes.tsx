@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
-import { api } from '@/integrations/api/client';
+import { api, ApiError } from '@/integrations/api/client';
 import { useAccessLog } from '@/hooks/useAccessLog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -165,6 +165,44 @@ interface EmpresaIntegracaoPublicView {
   certificadoValidoAte: string | null;
   updatedAt: string | null;
 }
+
+// Visão pública snake_case retornada por GET/PUT /esocial/config.
+interface EmpresaIntegracaoConfigResponse {
+  empresa_id: string | null;
+  govbr_client_id: string | null;
+  govbr_environment: GovbrEnvironment | null;
+  govbr_redirect_uri?: string | null;
+  has_govbr_client_secret: boolean;
+  has_esocial_cert: boolean;
+  has_esocial_cert_password: boolean;
+  esocial_tipo_inscricao: EsocialTipoInscricao | null;
+  esocial_nr_inscricao: string | null;
+  esocial_ambiente: EsocialAmbiente | null;
+  certificado_alias: string | null;
+  certificado_cn?: string | null;
+  certificado_valido_ate: string | null;
+  updated_at: string | null;
+}
+
+// Converte a resposta snake_case do backend para a visão camelCase usada na UI.
+const mapEsocialConfig = (
+  config: EmpresaIntegracaoConfigResponse,
+): EmpresaIntegracaoPublicView => ({
+  empresaId: config.empresa_id || '',
+  govbrClientId: config.govbr_client_id ?? null,
+  govbrRedirectUri: config.govbr_redirect_uri ?? null,
+  govbrEnvironment: config.govbr_environment || 'staging',
+  hasGovbrClientSecret: !!config.has_govbr_client_secret,
+  govbrClientSecretMasked: null,
+  hasEsocialCert: !!config.has_esocial_cert,
+  hasEsocialCertPassword: !!config.has_esocial_cert_password,
+  esocialTipoInscricao: config.esocial_tipo_inscricao || '1',
+  esocialNrInscricao: config.esocial_nr_inscricao ?? null,
+  esocialAmbiente: config.esocial_ambiente || '2',
+  certificadoAlias: config.certificado_alias ?? null,
+  certificadoValidoAte: config.certificado_valido_ate ?? null,
+  updatedAt: config.updated_at ?? null,
+});
 
 interface IntegracaoEsocialFormState {
   govbrClientId: string;
@@ -534,9 +572,7 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
   
   // Empresa ID efetivo
   const empresaId = isInEmpresaMode && empresaMode ? empresaMode.empresaId : empresa?.id;
-  const esocialBackendBaseUrl = (import.meta.env.VITE_ESOCIAL_BACKEND_URL || '').replace(/\/+$/, '');
-  const esocialConfigApiKey = import.meta.env.VITE_ESOCIAL_CONFIG_API_KEY || '';
-  
+
   // Estados para configurações gerais
   const [nomeFantasia, setNomeFantasia] = useState('');
   const [idioma, setIdioma] = useState('pt-BR');
@@ -794,99 +830,13 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
     }
   };
 
-  const getIntegracaoConfigEndpoint = (): string => {
-    if (!esocialBackendBaseUrl) return '/api/esocial/config';
-    return `${esocialBackendBaseUrl}/api/esocial/config`;
-  };
-
-  const isPlaceholderEsocialBackendUrl = (): boolean => {
-    return /seu-backend-esocial/i.test(esocialBackendBaseUrl);
-  };
-
-  const buildIntegracaoHeaders = (): Record<string, string> => {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'X-Empresa-ID': empresaId || '',
-    };
-
-    if (esocialConfigApiKey) {
-      headers['X-API-Key'] = esocialConfigApiKey;
-    }
-
-    return headers;
-  };
-
-  const parseBackendErrorMessage = async (response: Response): Promise<string> => {
-    let raw = '';
-
-    try {
-      raw = await response.text();
-    } catch {
-      return `Erro HTTP ${response.status}`;
-    }
-
-    if (!raw) return `Erro HTTP ${response.status}`;
-
-    try {
-      const payload = JSON.parse(raw);
-      return payload?.error || payload?.message || `Erro HTTP ${response.status}`;
-    } catch {
-      if (raw.trim().startsWith('<')) {
-        // Erro silencioso - provavelmente problema de CORS ou proxy
-        throw new Error('Failed to fetch');
-      }
-      return `Erro HTTP ${response.status}`;
-    }
-  };
-
-  const parseSuccessJson = async (response: Response): Promise<any> => {
-    const raw = await response.text();
-
-    if (!raw) return null;
-
-    try {
-      return JSON.parse(raw);
-    } catch {
-      if (raw.trim().startsWith('<')) {
-        // Erro silencioso - provavelmente problema de CORS ou proxy
-        throw new Error('Failed to fetch');
-      }
-      throw new Error('Resposta inválida do backend de integração.');
-    }
-  };
-
   const loadIntegracaoEsocial = async () => {
     if (!empresaId) return;
-    if (!esocialBackendBaseUrl || isPlaceholderEsocialBackendUrl()) return;
 
     setLoadingIntegracaoEsocial(true);
     try {
-
-      const response = await fetch(getIntegracaoConfigEndpoint(), {
-        method: 'GET',
-        headers: buildIntegracaoHeaders(),
-      });
-
-      if (response.status === 404) {
-        setIntegracaoEsocialPublicView(null);
-        setIntegracaoEsocialForm(DEFAULT_INTEGRACAO_ESOCIAL_FORM);
-        setCertificadoArquivoSelecionado('');
-        return;
-      }
-
-      if (!response.ok) {
-        throw new Error(await parseBackendErrorMessage(response));
-      }
-
-      const payload = await parseSuccessJson(response);
-      const config = payload?.config as EmpresaIntegracaoPublicView;
-
-      if (!config) {
-        setIntegracaoEsocialPublicView(null);
-        setIntegracaoEsocialForm(DEFAULT_INTEGRACAO_ESOCIAL_FORM);
-        setCertificadoArquivoSelecionado('');
-        return;
-      }
+      const response = await api.get<EmpresaIntegracaoConfigResponse>('/esocial/config');
+      const config = mapEsocialConfig(response);
 
       setIntegracaoEsocialPublicView(config);
       setIntegracaoEsocialForm({
@@ -908,18 +858,23 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
       setCertificadoArquivoSelecionado('');
     } catch (e: any) {
       console.error('Erro ao carregar integração eSocial:', e);
-      // Só mostrar toast se não for erro de CORS/conexão (evita spam de erros)
-      const mensagem = e?.message || '';
-      const isErroConexao = mensagem.includes('Failed to fetch') || 
-                            mensagem.includes('CORS') || 
-                            mensagem.includes('NetworkError');
-      if (!isErroConexao) {
-        toast({
-          title: 'Erro ao carregar integração',
-          description: mensagem || 'Falha ao carregar configuração eSocial/gov.br',
-          variant: 'destructive',
-        });
+      // Backend retorna objeto com nulls quando não há config; 404 não é esperado,
+      // mas se ocorrer tratamos como "sem configuração".
+      if (e instanceof ApiError && e.status === 404) {
+        setIntegracaoEsocialPublicView(null);
+        setIntegracaoEsocialForm(DEFAULT_INTEGRACAO_ESOCIAL_FORM);
+        setCertificadoArquivoSelecionado('');
+        return;
       }
+      const mensagem =
+        e instanceof ApiError
+          ? (typeof e.detail === 'string' ? e.detail : e.message)
+          : e?.message || '';
+      toast({
+        title: 'Erro ao carregar integração',
+        description: mensagem || 'Falha ao carregar configuração eSocial/gov.br',
+        variant: 'destructive',
+      });
     } finally {
       setLoadingIntegracaoEsocial(false);
     }
@@ -1004,46 +959,49 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
 
     setValidandoCertificado(true);
     try {
-      const esocialBackendUrl = import.meta.env.VITE_ESOCIAL_BACKEND_URL;
-      if (!esocialBackendUrl || esocialBackendUrl.includes('seu-backend-esocial')) {
-        throw new Error('Backend não configurado');
-      }
-
-      const response = await fetch(`${esocialBackendUrl}/api/pdf/validate-certificate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pfxBase64: integracaoEsocialForm.esocialCertBase64,
-          senha: integracaoEsocialForm.esocialCertPassword,
-        }),
+      const resultado = await api.post<{
+        success: boolean;
+        valido: boolean;
+        mensagem: string;
+        certificado: {
+          cn: string;
+          valido_ate: string;
+          emissor?: string;
+          serial_number?: string;
+        } | null;
+      }>('/esocial/validate-certificate', {
+        pfx_base64: integracaoEsocialForm.esocialCertBase64,
+        senha: integracaoEsocialForm.esocialCertPassword,
       });
 
-      const resultado = await response.json();
-
-      if (resultado.success && resultado.valido) {
+      if (resultado.success && resultado.valido && resultado.certificado) {
         // Extrair CN como alias e validade
         const cert = resultado.certificado;
         setIntegracaoEsocialForm(prev => ({
           ...prev,
           certificadoAlias: cert.cn || prev.certificadoAlias,
-          certificadoValidoAte: cert.validoAte ? cert.validoAte.split('T')[0] : prev.certificadoValidoAte,
+          certificadoValidoAte: cert.valido_ate ? cert.valido_ate.split('T')[0] : prev.certificadoValidoAte,
         }));
         toast({
           title: 'Certificado válido!',
-          description: `Titular: ${cert.cn} | Válido até: ${cert.validoAte ? new Date(cert.validoAte).toLocaleDateString('pt-BR') : 'N/A'}`,
+          description: `Titular: ${cert.cn} | Válido até: ${cert.valido_ate ? new Date(cert.valido_ate).toLocaleDateString('pt-BR') : 'N/A'}`,
         });
       } else {
         toast({
           title: 'Certificado inválido',
-          description: resultado.mensagem || resultado.error || 'Senha incorreta ou certificado corrompido',
+          description: resultado.mensagem || 'Senha incorreta ou certificado corrompido',
           variant: 'destructive',
         });
       }
     } catch (e: any) {
       console.error('Erro ao validar certificado:', e);
+      const mensagem =
+        e instanceof ApiError
+          ? (typeof e.detail === 'string' ? e.detail : e.message)
+          : e?.message || 'Não foi possível validar o certificado';
       toast({
         title: 'Erro ao validar',
-        description: e?.message || 'Não foi possível validar o certificado',
+        description: mensagem,
         variant: 'destructive',
       });
     } finally {
@@ -1056,45 +1014,32 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
 
     setSavingIntegracaoEsocial(true);
     try {
-      if (isPlaceholderEsocialBackendUrl()) {
-        throw new Error('VITE_ESOCIAL_BACKEND_URL está com valor de exemplo. Configure a URL real do backend eSocial na VPS.');
-      }
-
       const payload: Record<string, unknown> = {
-        govbrClientId: integracaoEsocialForm.govbrClientId.trim() || null,
-        govbrRedirectUri: integracaoEsocialForm.govbrRedirectUri.trim() || null,
-        govbrEnvironment: integracaoEsocialForm.govbrEnvironment,
-        esocialTipoInscricao: integracaoEsocialForm.esocialTipoInscricao,
-        esocialNrInscricao: integracaoEsocialForm.esocialNrInscricao.trim() || null,
-        esocialAmbiente: integracaoEsocialForm.esocialAmbiente,
-        certificadoAlias: integracaoEsocialForm.certificadoAlias.trim() || null,
-        certificadoValidoAte: integracaoEsocialForm.certificadoValidoAte || null,
-        clearGovbrClientSecret: integracaoEsocialForm.clearGovbrClientSecret,
-        clearEsocialCert: integracaoEsocialForm.clearEsocialCert,
-        clearEsocialCertPassword: integracaoEsocialForm.clearEsocialCertPassword,
+        govbr_client_id: integracaoEsocialForm.govbrClientId.trim() || null,
+        govbr_redirect_uri: integracaoEsocialForm.govbrRedirectUri.trim() || null,
+        govbr_environment: integracaoEsocialForm.govbrEnvironment,
+        esocial_tipo_inscricao: integracaoEsocialForm.esocialTipoInscricao,
+        esocial_nr_inscricao: integracaoEsocialForm.esocialNrInscricao.trim() || null,
+        esocial_ambiente: integracaoEsocialForm.esocialAmbiente,
+        certificado_alias: integracaoEsocialForm.certificadoAlias.trim() || null,
+        clear_govbr_client_secret: integracaoEsocialForm.clearGovbrClientSecret,
+        clear_esocial_cert: integracaoEsocialForm.clearEsocialCert,
+        clear_esocial_cert_password: integracaoEsocialForm.clearEsocialCertPassword,
       };
 
       if (integracaoEsocialForm.govbrClientSecret.trim()) {
-        payload.govbrClientSecret = integracaoEsocialForm.govbrClientSecret.trim();
+        payload.govbr_client_secret = integracaoEsocialForm.govbrClientSecret.trim();
       }
 
       if (integracaoEsocialForm.esocialCertBase64.trim()) {
-        payload.esocialCertBase64 = integracaoEsocialForm.esocialCertBase64.trim();
+        payload.esocial_cert_base64 = integracaoEsocialForm.esocialCertBase64.trim();
       }
 
       if (integracaoEsocialForm.esocialCertPassword.trim()) {
-        payload.esocialCertPassword = integracaoEsocialForm.esocialCertPassword.trim();
+        payload.esocial_cert_password = integracaoEsocialForm.esocialCertPassword.trim();
       }
 
-      const response = await fetch(getIntegracaoConfigEndpoint(), {
-        method: 'PUT',
-        headers: buildIntegracaoHeaders(),
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        throw new Error(await parseBackendErrorMessage(response));
-      }
+      await api.put('/esocial/config', payload);
 
       toast({
         title: 'Integração atualizada',
@@ -1117,9 +1062,13 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
       await loadIntegracaoEsocial();
     } catch (e: any) {
       console.error('Erro ao salvar integração eSocial:', e);
+      const mensagem =
+        e instanceof ApiError
+          ? (typeof e.detail === 'string' ? e.detail : e.message)
+          : e?.message || 'Não foi possível salvar os dados da integração.';
       toast({
         title: 'Erro ao salvar integração',
-        description: e?.message || 'Não foi possível salvar os dados da integração.',
+        description: mensagem,
         variant: 'destructive',
       });
     } finally {
@@ -2451,13 +2400,8 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
                     Configure as credenciais por empresa para envio de eventos SST e assinatura digital.
                   </p>
                   <p className="text-xs text-muted-foreground mt-2">
-                    Endpoint: {esocialBackendBaseUrl || 'mesma origem do frontend'} /api/esocial/config
+                    Endpoint: /esocial/config
                   </p>
-                  {!esocialConfigApiKey && (
-                    <p className="text-xs text-amber-600 mt-1">
-                      VITE_ESOCIAL_CONFIG_API_KEY não definida. Se o backend exigir API key, configure no ambiente do frontend.
-                    </p>
-                  )}
                 </div>
                 <Button
                   variant="outline"

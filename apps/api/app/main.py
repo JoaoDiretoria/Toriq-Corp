@@ -76,6 +76,7 @@ from app.api.storage import router as storage_router
 from app.api.rpcs import router as rpcs_router
 from app.api.health import router as health_router
 from app.api.kanbans_legados import router as kanbans_legados_router
+from app.api.esocial import router as esocial_router
 from app.jobs.scheduler import build_scheduler
 
 
@@ -131,6 +132,8 @@ def create_app() -> FastAPI:
     app.include_router(sst_epi_router)
     # Sinistros (tipos global + sinistros/fotos escopados via turma→empresa)
     app.include_router(sinistros_router)
+    # eSocial Fase A — config + certificado A1 (escopado por empresa)
+    app.include_router(esocial_router)
     # Frota — veículos, motoristas, manutenções, checklists, custos, documentos, ocorrências
     app.include_router(frota_router)
     # Catálogo, notificações, suporte, agenda

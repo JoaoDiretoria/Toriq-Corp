@@ -1179,6 +1179,10 @@ class EmpresaIntegracoesEsocial(Base):
     esocial_nr_inscricao: Mapped[Optional[str]] = mapped_column(String(50))
     certificado_alias: Mapped[Optional[str]] = mapped_column(String(255))
     certificado_valido_ate: Mapped[Optional[datetime.date]] = mapped_column(Date)
+    # Metadados do certificado A1 para exibição (migration d4e5f6a7b8c9).
+    certificado_cn: Mapped[Optional[str]] = mapped_column(Text)
+    certificado_serial: Mapped[Optional[str]] = mapped_column(Text)
+    certificado_emissor: Mapped[Optional[str]] = mapped_column(Text)
 
     empresa: Mapped['Empresas'] = relationship('Empresas', back_populates='empresa_integracoes_esocial')
 

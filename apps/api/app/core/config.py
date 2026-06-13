@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     # Base pública opcional (CDN/proxy). Sem ela, a URL pública usa o endpoint.
     s3_public_base_url: str | None = None
 
+    # Chave-mestra para criptografar segredos de integração (eSocial / gov.br).
+    # Derivada para uma chave Fernet em app.core.esocial_crypto. Sem ela, qualquer
+    # tentativa de criptografar/descriptografar segredos levanta erro claro no uso.
+    integration_encryption_key: str | None = None
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

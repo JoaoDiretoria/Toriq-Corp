@@ -236,11 +236,15 @@ function NormasTab({ empresaId }: { empresaId: string }) {
     descricao: '',
   });
 
-  // NOTA (migração): normas_regulamentadoras não tem endpoint no backend ainda — degrada para lista vazia.
+  // Backend escopa por empresa_id do token. Ordena client-side por nr.
   const fetchNormas = async () => {
     if (!empresaId) return;
     setLoading(true);
-    setNormas([]);
+    const data = await api
+      .get<NormaRegulamentadora[]>('/sst/normas-regulamentadoras')
+      .catch(() => [] as NormaRegulamentadora[]);
+    const sorted = (data || []).sort((a, b) => a.nr.localeCompare(b.nr));
+    setNormas(sorted);
     setLoading(false);
   };
 
@@ -248,38 +252,64 @@ function NormasTab({ empresaId }: { empresaId: string }) {
     fetchNormas();
   }, [empresaId]);
 
-  // NOTA (migração): normas_regulamentadoras sem endpoint — mutações são no-op até o endpoint existir.
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast({
-      title: "Funcionalidade indisponível",
-      description: "O cadastro de normas ainda não está disponível no novo backend.",
-      variant: "destructive",
-    });
-    setDialogOpen(false);
-    resetForm();
+    if (!empresaId) return;
+    try {
+      await api.post<NormaRegulamentadora>('/sst/normas-regulamentadoras', {
+        nr: formData.nr,
+        descricao: formData.descricao || null,
+      });
+      toast({ title: 'NR cadastrada com sucesso' });
+      setDialogOpen(false);
+      resetForm();
+      await fetchNormas();
+    } catch (err) {
+      toast({
+        title: 'Erro ao cadastrar NR',
+        description: err instanceof Error ? err.message : undefined,
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleEdit = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast({
-      title: "Funcionalidade indisponível",
-      description: "A edição de normas ainda não está disponível no novo backend.",
-      variant: "destructive",
-    });
-    setEditDialogOpen(false);
-    setSelectedNorma(null);
-    resetForm();
+    if (!selectedNorma) return;
+    try {
+      await api.put<NormaRegulamentadora>(`/sst/normas-regulamentadoras/${selectedNorma.id}`, {
+        nr: formData.nr,
+        descricao: formData.descricao || null,
+      });
+      toast({ title: 'NR atualizada com sucesso' });
+      setEditDialogOpen(false);
+      setSelectedNorma(null);
+      resetForm();
+      await fetchNormas();
+    } catch (err) {
+      toast({
+        title: 'Erro ao atualizar NR',
+        description: err instanceof Error ? err.message : undefined,
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleDelete = async () => {
-    toast({
-      title: "Funcionalidade indisponível",
-      description: "A exclusão de normas ainda não está disponível no novo backend.",
-      variant: "destructive",
-    });
-    setDeleteDialogOpen(false);
-    setSelectedNorma(null);
+    if (!selectedNorma) return;
+    try {
+      await api.del<void>(`/sst/normas-regulamentadoras/${selectedNorma.id}`);
+      toast({ title: 'NR excluída com sucesso' });
+      setDeleteDialogOpen(false);
+      setSelectedNorma(null);
+      await fetchNormas();
+    } catch (err) {
+      toast({
+        title: 'Erro ao excluir NR',
+        description: err instanceof Error ? err.message : undefined,
+        variant: 'destructive',
+      });
+    }
   };
 
   const openEditDialog = (norma: NormaRegulamentadora) => {
@@ -518,8 +548,11 @@ function TreinamentosTab({ empresaId }: { empresaId: string }) {
     const sorted = (treinamentosData || []).sort((a: any, b: any) => a.nome.localeCompare(b.nome));
     setTreinamentos(sorted);
 
-    // NOTA (migração): normas_regulamentadoras sem endpoint — lista de normas fica vazia.
-    setNormas([]);
+    // Buscar normas regulamentadoras — backend escopa por empresa_id do token
+    const normasData = await api
+      .get<NormaRegulamentadora[]>('/sst/normas-regulamentadoras')
+      .catch(() => [] as NormaRegulamentadora[]);
+    setNormas((normasData || []).sort((a, b) => a.nr.localeCompare(b.nr)));
 
     setLoading(false);
   };
