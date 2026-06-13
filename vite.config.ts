@@ -43,7 +43,6 @@ export default defineConfig(({ mode }) => {
               '@radix-ui/react-label',
               '@radix-ui/react-slot',
             ],
-            'supabase-vendor': ['@supabase/supabase-js'],
             'query-vendor': ['@tanstack/react-query'],
             'chart-vendor': ['recharts'],
             'form-vendor': ['react-hook-form', '@hookform/resolvers', 'zod'],
