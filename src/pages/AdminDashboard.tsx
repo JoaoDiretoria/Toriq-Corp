@@ -33,12 +33,13 @@ import { AdminVagas } from '@/components/admin/vagas';
 import { Agenda } from '@/components/shared/Agenda';
 import { Prospeccao } from '@/components/admin/vendas/prospeccao/Prospeccao';
 import { Disparo } from '@/components/admin/vendas/disparo/Disparo';
+import { SdrInteligente } from '@/components/admin/vendas/sdr/SdrInteligente';
 import { LeadsCaptados } from '@/components/admin/vendas/LeadsCaptados';
 import { Segmentacao } from '@/components/admin/vendas/Segmentacao';
 import { TagsManager } from '@/components/admin/vendas/TagsManager';
 import { useState } from 'react';
 
-type AdminSection = 'dashboard' | 'empresas' | 'usuarios' | 'colaboradores' | 'servicos' | 'modulos' | 'tarefas' | 'agenda' | 'comercial-dashboard' | 'comercial' | 'comercial-prospeccao' | 'comercial-pos-venda' | 'comercial-cross-selling' | 'financeiro' | 'financeiro-dashboard' | 'financeiro-cadastros' | 'financeiro-contas-receber' | 'financeiro-contas-pagar' | 'financeiro-fluxo-caixa' | 'financeiro-dre' | 'estatisticas' | 'suporte' | 'conteudo-blogs' | 'conteudo-pesquisas' | 'conteudo-newsletter' | 'conteudo-vagas' | 'vendas-prospeccao' | 'vendas-leads' | 'vendas-segmentacao' | 'vendas-tags' | 'vendas-disparo';
+type AdminSection = 'dashboard' | 'empresas' | 'usuarios' | 'colaboradores' | 'servicos' | 'modulos' | 'tarefas' | 'agenda' | 'comercial-dashboard' | 'comercial' | 'comercial-prospeccao' | 'comercial-pos-venda' | 'comercial-cross-selling' | 'financeiro' | 'financeiro-dashboard' | 'financeiro-cadastros' | 'financeiro-contas-receber' | 'financeiro-contas-pagar' | 'financeiro-fluxo-caixa' | 'financeiro-dre' | 'estatisticas' | 'suporte' | 'conteudo-blogs' | 'conteudo-pesquisas' | 'conteudo-newsletter' | 'conteudo-vagas' | 'vendas-prospeccao' | 'vendas-leads' | 'vendas-segmentacao' | 'vendas-tags' | 'vendas-disparo' | 'vendas-sdr';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -143,6 +144,8 @@ const AdminDashboard = () => {
         return <TagsManager />;
       case 'vendas-disparo':
         return <Disparo />;
+      case 'vendas-sdr':
+        return <SdrInteligente />;
       default:
         return <AdminDashboardHome onNavigate={(section) => setActiveSection(section as AdminSection)} />;
     }
@@ -181,6 +184,7 @@ const AdminDashboard = () => {
       'vendas-segmentacao': 'Toriq Vendas — Segmentação',
       'vendas-tags': 'Toriq Vendas — Tags',
       'vendas-disparo': 'Toriq Vendas — Disparo em Massa',
+      'vendas-sdr': 'Toriq Vendas — SDR Inteligente',
     };
     return titles[activeSection] || 'Dashboard';
   };

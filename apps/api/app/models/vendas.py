@@ -21,6 +21,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKeyConstraint,
     Index,
+    Integer,
     Numeric,
     PrimaryKeyConstraint,
     Text,
@@ -75,6 +76,13 @@ class VendasLeads(Base):
     # Origem do lead quando veio de prospecção (Apify) — FK para vendas_jobs.
     # Adicionada na Fase 1 (migration f7a8b9c0d1e2). SET NULL ao apagar o job.
     job_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
+    # SDR Inteligente (Fase 4 — migration b0d1e2f3a4b5). Qualificação por IA.
+    sdr_status: Mapped[Optional[str]] = mapped_column(Text)
+    sdr_score: Mapped[Optional[int]] = mapped_column(Integer)
+    sdr_notas: Mapped[Optional[str]] = mapped_column(Text)
+    sdr_proximo_followup: Mapped[Optional[datetime.datetime]] = mapped_column(
+        DateTime(True)
+    )
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime(True), server_default=text("now()")
     )
