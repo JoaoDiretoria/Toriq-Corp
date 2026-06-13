@@ -318,7 +318,8 @@ dependência `@supabase/supabase-js` foram **removidos** na limpeza pós-cutover
   + seed do 1º admin (`python -m app.seed_admin`).
 - [x] **Realtime → push:** ✅ resolvido com **polling**/recarga (era opcional).
 - [ ] **Fechar as lacunas de backend** descobertas pela esteira (ver abaixo) — para
-  as telas parciais voltarem a 100%. **10 de ~13 já fechadas.**
+  as telas parciais voltarem a 100%. **11 de ~13 já fechadas** (normas_regulamentadoras
+  fechada). Restam: `send-newsletter` (SMTP) e kanbans pontuais.
 - [x] **Apontar o serviço de front** (`VITE_API_URL` → `https://api.toriqcorp.com.br`) —
   ✅ **CUTOVER FEITO (2026-06-12):** o front em produção (`toriqcorp.com.br`) já roda
   o build migrado falando com o backend Python; bundle sem Supabase (tree-shaken).
@@ -331,9 +332,14 @@ dependência `@supabase/supabase-js` foram **removidos** na limpeza pós-cutover
   `TURNSTILE_SECRET_KEY` setada). Falta só o **reset de senha por email** (precisa SMTP).
 - [ ] **Auth avançado (resta email):** reset de senha por **email** + envio de newsletter —
   ambos dependem de **provedor SMTP** (host/user/senha). Código pode ser feito config-driven.
-- [ ] **Fatia 4 — eSocial em Python:** reescrever `backend-esocial` (assinatura digital, SOAP
-  gov.br). 📄 **Plano detalhado:** `docs/superpowers/plans/2026-06-13-fatia4-esocial-python.md`
-  (bloqueado em: fonte do backend-esocial atual + certificado A1 de teste).
+- [~] **Fatia 4 — eSocial em Python:** reescrevendo o `backend-esocial` (Node descartado;
+  fonte preservada em `docs/legacy-esocial-reference/`). 📄 Plano:
+  `docs/superpowers/plans/2026-06-13-fatia4-esocial-python.md`.
+  - [x] **Fase A** ✅ config + **certificado A1** (`/esocial/*`: validate-certificate,
+    GET/PUT /config, DELETE /config/certificado; segredos criptografados; front religado).
+    Migration aplicada (`d4e5f6a7b8c9`). 15 testes verdes.
+  - [ ] Fase B (assinatura PDF/PAdES), Fase C+ (eventos S-2210/2220/2240 SOAP gov.br +
+    assinatura gov.br na nuvem) — exigem o **certificado A1 real** p/ transmitir em homologação.
 - [ ] **Rotação de senha do banco + TLS/exposição** (decisão: deixado para o fim do projeto).
 - [~] **Limpeza pós-cutover:** ✅ **código** feito — removido `src/integrations/supabase/` +
   dependência `@supabase/supabase-js` + chunk `supabase-vendor` (`864515a`; build sem Supabase).
@@ -363,9 +369,10 @@ não existem. Para fechá-las, criar no backend (`apps/api`):
   `/blog/preferences/{sid}`, público) — useBlogAnalytics.
 - ~~**Importação de empresas em lote**~~ (religada ao `POST /empresas` +
   `/empresas/{id}/contatos`) — EmpresasImportExport, useImportQueue.
+- ~~**`normas_regulamentadoras`**~~ (`/sst/normas-regulamentadoras`, tabela criada na migration
+  `c3d4e5f6a7b8`) — AdminCadastrosSST (NormasTab + dropdown de NRs).
 
-**🔴 Restantes (3):**
-- **`normas_regulamentadoras`** — precisa criar tabela + migration (não é só endpoint) — AdminCadastrosSST.
+**🔴 Restantes (2):**
 - **`send-newsletter`** — precisa infra de email/SMTP (parte do "Auth avançado") — newsletter.
 - **Degradações pontuais dos kanbans:** movimentações/modelos de prospecção, cópia
   de atividades entre funis (sem endpoint de histórico).
