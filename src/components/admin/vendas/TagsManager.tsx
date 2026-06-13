@@ -69,7 +69,7 @@ export function TagsManager() {
       list.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
       setTags(list);
     } catch (err: any) {
-      toast.error(err?.detail || err?.message || 'Erro ao carregar tags');
+      toast.error(err?.message || 'Erro ao carregar tags');
     } finally {
       setLoading(false);
       setInitialLoading(false);
@@ -104,7 +104,7 @@ export function TagsManager() {
       resetCreateForm();
       fetchTags();
     } catch (err: any) {
-      toast.error(err?.detail || err?.message || 'Erro ao criar tag');
+      toast.error(err?.message || 'Erro ao criar tag');
     } finally {
       setSaving(false);
     }
@@ -119,7 +119,7 @@ export function TagsManager() {
       setTagToDelete(null);
       fetchTags();
     } catch (err: any) {
-      toast.error(err?.detail || err?.message || 'Erro ao excluir tag');
+      toast.error(err?.message || 'Erro ao excluir tag');
     } finally {
       setDeleting(false);
     }

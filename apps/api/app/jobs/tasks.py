@@ -24,3 +24,14 @@ async def job_automacoes_negocio_parado() -> None:
     async with SessionLocal() as db:
         await processar_negocio_parado(db)
         await db.commit()
+
+
+async def job_disparo_campanhas() -> None:
+    """Processa campanhas de disparo (enviando + agendadas vencidas) (~1min).
+
+    O serviço faz commit próprio por campanha; aqui só abrimos a sessão.
+    """
+    from app.core.db import SessionLocal
+    from app.services.vendas_disparo import processar_campanhas_pendentes
+    async with SessionLocal() as db:
+        await processar_campanhas_pendentes(db)

@@ -92,7 +92,7 @@ export function ConfigDialog({ open, onOpenChange, onSaved }: ConfigDialogProps)
       onSaved?.();
     } catch (error: any) {
       console.error('[ConfigDialog] erro ao remover token:', error);
-      toast.error(error?.detail || error?.message || 'Erro ao remover token');
+      toast.error(error?.message || 'Erro ao remover token');
     } finally {
       setSaving(false);
     }
@@ -132,7 +132,7 @@ export function ConfigDialog({ open, onOpenChange, onSaved }: ConfigDialogProps)
       onOpenChange(false);
     } catch (error: any) {
       console.error('[ConfigDialog] erro ao salvar:', error);
-      toast.error(error?.detail || error?.message || 'Erro ao salvar configuração');
+      toast.error(error?.message || 'Erro ao salvar configuração');
     } finally {
       setSaving(false);
     }

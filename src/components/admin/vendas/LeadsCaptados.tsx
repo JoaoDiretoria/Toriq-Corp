@@ -376,7 +376,7 @@ export function LeadsCaptados() {
       setSelectedIds(new Set());
       fetchLeads();
     } catch (err: any) {
-      toast.error(err?.detail || err?.message || 'Erro ao atualizar leads');
+      toast.error(err?.message || 'Erro ao atualizar leads');
     } finally {
       setActionRunning(false);
     }
@@ -391,7 +391,7 @@ export function LeadsCaptados() {
       setSelectedIds(new Set());
       fetchLeads();
     } catch (err: any) {
-      toast.error(err?.detail || err?.message || 'Erro ao aplicar tag');
+      toast.error(err?.message || 'Erro ao aplicar tag');
     } finally {
       setActionRunning(false);
     }
@@ -412,7 +412,7 @@ export function LeadsCaptados() {
         fetchLeads();
       }
     } catch (err: any) {
-      toast.error(err?.detail || err?.message || 'Erro ao excluir leads');
+      toast.error(err?.message || 'Erro ao excluir leads');
     } finally {
       setActionRunning(false);
     }
@@ -1161,7 +1161,7 @@ function CreateLeadDialog({
       if (err?.status === 409) {
         toast.error('Lead duplicado: já existe um lead com esse telefone/e-mail.');
       } else {
-        toast.error(err?.detail || err?.message || 'Erro ao criar lead');
+        toast.error(err?.message || 'Erro ao criar lead');
       }
     } finally {
       setSaving(false);
@@ -1390,7 +1390,7 @@ function ImportLeadsDialog({
         toast.success(`${res.inseridos} lead(s) importado(s)`);
       }
     } catch (err: any) {
-      toast.error(err?.detail || err?.message || 'Erro ao importar leads');
+      toast.error(err?.message || 'Erro ao importar leads');
       setStep('preview');
     } finally {
       setImporting(false);

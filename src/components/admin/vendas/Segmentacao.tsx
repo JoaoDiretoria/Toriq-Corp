@@ -162,7 +162,7 @@ export function Segmentacao() {
       list.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
       setSegmentos(list);
     } catch (err: any) {
-      toast.error(err?.detail || err?.message || 'Erro ao carregar segmentos');
+      toast.error(err?.message || 'Erro ao carregar segmentos');
     } finally {
       setLoading(false);
       setInitialLoading(false);
@@ -181,7 +181,7 @@ export function Segmentacao() {
       setLeads((res?.items as Lead[]) || []);
       setTotalLeads(res?.total || 0);
     } catch (err: any) {
-      toast.error(err?.detail || err?.message || 'Erro ao carregar leads do segmento');
+      toast.error(err?.message || 'Erro ao carregar leads do segmento');
       setLeads([]);
       setTotalLeads(0);
     } finally {
@@ -243,7 +243,7 @@ export function Segmentacao() {
         fetchSegmentoLeads(editing.id, 0);
       }
     } catch (err: any) {
-      toast.error(err?.detail || err?.message || 'Erro ao salvar segmento');
+      toast.error(err?.message || 'Erro ao salvar segmento');
     } finally {
       setSaving(false);
     }
@@ -262,7 +262,7 @@ export function Segmentacao() {
       setSegmentoToDelete(null);
       fetchSegmentos();
     } catch (err: any) {
-      toast.error(err?.detail || err?.message || 'Erro ao excluir segmento');
+      toast.error(err?.message || 'Erro ao excluir segmento');
     } finally {
       setDeleting(false);
     }

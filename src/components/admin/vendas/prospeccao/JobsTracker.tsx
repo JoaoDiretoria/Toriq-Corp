@@ -157,7 +157,7 @@ export const JobsTracker = forwardRef<JobsTrackerHandle, JobsTrackerProps>(
         fetchJobs();
       } catch (error: any) {
         console.error('[JobsTracker] erro ao importar resultados:', error);
-        toast.error(error?.detail || error?.message || 'Erro ao importar resultados');
+        toast.error(error?.message || 'Erro ao importar resultados');
       } finally {
         setImporting(null);
       }
@@ -179,7 +179,7 @@ export const JobsTracker = forwardRef<JobsTrackerHandle, JobsTrackerProps>(
         fetchJobs();
       } catch (error: any) {
         console.error('[JobsTracker] erro ao verificar status:', error);
-        toast.error(error?.detail || error?.message || 'Erro ao verificar status');
+        toast.error(error?.message || 'Erro ao verificar status');
       } finally {
         setChecking(null);
       }
@@ -194,7 +194,7 @@ export const JobsTracker = forwardRef<JobsTrackerHandle, JobsTrackerProps>(
         fetchJobs();
       } catch (error: any) {
         console.error('[JobsTracker] erro ao cancelar:', error);
-        toast.error(error?.detail || error?.message || 'Erro ao cancelar captação');
+        toast.error(error?.message || 'Erro ao cancelar captação');
       } finally {
         setCancelling(null);
       }

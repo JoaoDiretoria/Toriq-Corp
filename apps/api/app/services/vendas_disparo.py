@@ -1,0 +1,386 @@
+"""Toriq Vendas — FASE 2 (Disparo em Massa por Email): serviço de envio.
+
+Resolve destinatários de uma campanha (lead_ids explícitos OU filtros de
+segmento), materializa uma mensagem por destinatário (idempotente) e envia
+respeitando SUPRESSÃO (opt-out LGPD) e rate limit, com link de descadastro e
+pixel de rastreio injetados no corpo.
+
+Convenções:
+- Tenant SEMPRE por empresa_id (toda query é escopada).
+- O envio real (SMTP) é delegado a app.integrations.email_provider.enviar_email,
+  que roda em asyncio.to_thread (não bloqueia o loop). Nos testes esse envio é
+  mockado por monkeypatch nesta mesma referência (enviar_email).
+- Estilo de sessão (SessionLocal) seguindo app/services/automacoes_engine.py e
+  app/jobs/tasks.py — funções recebem ``db`` e NÃO commitam, EXCETO enviar_campanha
+  e processar_campanhas_pendentes, que são os pontos de entrada (commit próprio).
+"""
+from __future__ import annotations
+
+import datetime
+import uuid
+from typing import Optional
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.esocial_crypto import decrypt_secret
+from app.integrations.email_provider import (
+    EmailError,
+    enviar_email,
+    normalizar_supressao,
+    render_template,
+)
+from app.models.vendas import VendasLeads, VendasSegmentos
+from app.models.vendas_disparo import (
+    VendasCampanhas,
+    VendasDisparoConfig,
+    VendasMensagens,
+    VendasSupressao,
+    VendasTemplates,
+)
+
+
+def _now() -> datetime.datetime:
+    return datetime.datetime.now(datetime.timezone.utc)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Resolução de destinatários
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def resolver_destinatarios(
+    db: AsyncSession, campanha: VendasCampanhas
+) -> list[VendasLeads]:
+    """Retorna os leads-alvo da campanha (somente com email não-nulo).
+
+    - Se ``campanha.lead_ids`` tiver itens → busca esses leads (escopados por
+      empresa).
+    - Senão, se ``segmento_id`` → carrega o segmento e aplica os filtros salvos
+      (reusa ``_aplicar_filtros_segmento`` de app/api/vendas.py).
+    - Senão → [] (campanha sem alvo).
+
+    Canal email: só entram leads com email preenchido.
+    """
+    empresa_id = campanha.empresa_id
+    conds_extra = None
+
+    if campanha.lead_ids:
+        # lead_ids pode vir como list[str] (JSONB) — normaliza para UUID.
+        ids: list[uuid.UUID] = []
+        for raw in campanha.lead_ids:
+            try:
+                ids.append(uuid.UUID(str(raw)))
+            except (ValueError, TypeError):
+                continue
+        if not ids:
+            return []
+        stmt = select(VendasLeads).where(
+            VendasLeads.empresa_id == empresa_id,
+            VendasLeads.id.in_(ids),
+            VendasLeads.email.isnot(None),
+        )
+        result = await db.scalars(stmt)
+        return list(result)
+
+    if campanha.segmento_id is not None:
+        # Import local para evitar ciclo de import (api → services → api).
+        from app.api.vendas import _aplicar_filtros_segmento
+
+        seg = await db.scalar(
+            select(VendasSegmentos).where(
+                VendasSegmentos.id == campanha.segmento_id,
+                VendasSegmentos.empresa_id == empresa_id,
+            )
+        )
+        if seg is None:
+            return []
+        where = _aplicar_filtros_segmento(empresa_id, seg.filtros)
+        result = await db.scalars(
+            select(VendasLeads).where(where, VendasLeads.email.isnot(None))
+        )
+        return list(result)
+
+    return []
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Materialização das mensagens (idempotente)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def materializar_mensagens(db: AsyncSession, campanha: VendasCampanhas) -> int:
+    """Cria 1 ``VendasMensagens`` (status='pendente') por destinatário que ainda
+    não tem mensagem nessa campanha. Atualiza ``total_destinatarios``.
+
+    Retorna a quantidade criada. Idempotente: não duplica destinatários.
+    """
+    destinatarios = await resolver_destinatarios(db, campanha)
+
+    # lead_ids que já têm mensagem nessa campanha (anti-duplicação).
+    existentes = await db.scalars(
+        select(VendasMensagens.lead_id).where(
+            VendasMensagens.campanha_id == campanha.id
+        )
+    )
+    ja_tem: set[uuid.UUID] = {lid for lid in existentes if lid is not None}
+
+    criadas = 0
+    for lead in destinatarios:
+        if lead.id in ja_tem:
+            continue
+        db.add(
+            VendasMensagens(
+                id=uuid.uuid4(),
+                empresa_id=campanha.empresa_id,
+                campanha_id=campanha.id,
+                lead_id=lead.id,
+                canal=campanha.canal,
+                destinatario=lead.email,
+                status="pendente",
+            )
+        )
+        ja_tem.add(lead.id)
+        criadas += 1
+
+    # total_destinatarios = total já materializado para a campanha.
+    campanha.total_destinatarios = len(ja_tem)
+    await db.flush()
+    return criadas
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Envio de uma campanha (uma rodada, respeitando rate limit)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _variaveis_do_lead(lead: Optional[VendasLeads]) -> dict:
+    """Variáveis disponíveis para render do template (assunto + corpo)."""
+    if lead is None:
+        return {}
+    return {
+        "nome": lead.nome or "",
+        "empresa_nome": lead.empresa_nome or "",
+        "email": lead.email or "",
+        "telefone": lead.telefone or "",
+        "cidade": lead.cidade or "",
+        "estado": lead.estado or "",
+    }
+
+
+def _injetar_rastreio_descadastro(html: str, mensagem_id: uuid.UUID) -> str:
+    """Anexa pixel de rastreio + link de descadastro ao fim do HTML.
+
+    URLs relativas (placeholder) — o host é resolvido pelo front/infra:
+    - rastreio:    /vendas/rastrear/{mensagem_id}.png
+    - descadastro: /vendas/descadastro/{mensagem_id}
+    """
+    pixel = (
+        f'<img src="/vendas/rastrear/{mensagem_id}.png" '
+        f'width="1" height="1" alt="" style="display:none" />'
+    )
+    descadastro = (
+        f'<p style="font-size:12px;color:#888;margin-top:24px">'
+        f'Não deseja mais receber estes emails? '
+        f'<a href="/vendas/descadastro/{mensagem_id}">Descadastrar</a>.'
+        f"</p>"
+    )
+    return f"{html or ''}{descadastro}{pixel}"
+
+
+async def enviar_campanha(
+    db: AsyncSession,
+    *,
+    campanha_id: uuid.UUID,
+    empresa_id: uuid.UUID,
+    limite: Optional[int] = None,
+) -> dict:
+    """Envia uma rodada da campanha (até ``limite`` ou ``email_rate_limit``).
+
+    Fluxo:
+    1. Carrega a campanha (empresa-scoped). Não achou → ValueError.
+    2. Carrega a config; sem config/sem smtp_host → ValueError("configure o email").
+    3. Se status 'rascunho'/'agendada' → materializa mensagens, status='enviando',
+       started_at=now.
+    4. Para cada mensagem 'pendente' (até o limite): supressão → 'suprimido';
+       senão renderiza assunto/corpo, injeta descadastro+rastreio, envia.
+       Sucesso → 'enviado'; EmailError → 'erro'.
+    5. Se não restam pendentes → status='concluida', finished_at=now.
+
+    Retorna o resumo {campanha_id, status, total_destinatarios, enviados,
+    suprimidos, erros}. Commita ao final.
+    """
+    campanha = await db.scalar(
+        select(VendasCampanhas).where(
+            VendasCampanhas.id == campanha_id,
+            VendasCampanhas.empresa_id == empresa_id,
+        )
+    )
+    if campanha is None:
+        raise ValueError("campanha não encontrada")
+
+    config = await db.scalar(
+        select(VendasDisparoConfig).where(
+            VendasDisparoConfig.empresa_id == empresa_id
+        )
+    )
+    if config is None or not config.smtp_host:
+        raise ValueError("configure o email")
+
+    agora = _now()
+    if campanha.status in ("rascunho", "agendada"):
+        await materializar_mensagens(db, campanha)
+        campanha.status = "enviando"
+        if campanha.started_at is None:
+            campanha.started_at = agora
+
+    # Carrega o template (se houver) — assunto/corpo.
+    template: Optional[VendasTemplates] = None
+    if campanha.template_id is not None:
+        template = await db.scalar(
+            select(VendasTemplates).where(
+                VendasTemplates.id == campanha.template_id,
+                VendasTemplates.empresa_id == empresa_id,
+            )
+        )
+
+    rate = limite if limite is not None else (config.email_rate_limit or 100)
+    pendentes = (
+        await db.scalars(
+            select(VendasMensagens)
+            .where(
+                VendasMensagens.campanha_id == campanha.id,
+                VendasMensagens.status == "pendente",
+            )
+            .order_by(VendasMensagens.created_at)
+            .limit(rate)
+        )
+    ).all()
+
+    # Segredo SMTP descriptografado uma única vez.
+    smtp_password = (
+        decrypt_secret(config.smtp_password_enc)
+        if config.smtp_password_enc
+        else None
+    )
+
+    enviados = 0
+    suprimidos = 0
+    erros = 0
+
+    for msg in pendentes:
+        destinatario = msg.destinatario or ""
+        normalizado = normalizar_supressao("email", destinatario)
+
+        # Supressão (opt-out LGPD): não envia.
+        suprimido = await db.scalar(
+            select(VendasSupressao.id).where(
+                VendasSupressao.empresa_id == empresa_id,
+                VendasSupressao.tipo == "email",
+                VendasSupressao.valor == normalizado,
+            )
+        )
+        if suprimido is not None:
+            msg.status = "suprimido"
+            suprimidos += 1
+            continue
+
+        # Lead p/ variáveis de render.
+        lead: Optional[VendasLeads] = None
+        if msg.lead_id is not None:
+            lead = await db.scalar(
+                select(VendasLeads).where(VendasLeads.id == msg.lead_id)
+            )
+        variaveis = _variaveis_do_lead(lead)
+
+        assunto = render_template(template.assunto if template else None, variaveis)
+        corpo = render_template(template.conteudo if template else None, variaveis)
+        html = _injetar_rastreio_descadastro(corpo, msg.id)
+
+        try:
+            provider_id = await enviar_email(
+                smtp_host=config.smtp_host,
+                smtp_port=config.smtp_port,
+                smtp_user=config.smtp_user,
+                smtp_password=smtp_password,
+                use_tls=bool(config.smtp_use_tls),
+                remetente=config.email_remetente,
+                remetente_nome=config.email_remetente_nome,
+                to=destinatario,
+                assunto=assunto,
+                html=html,
+            )
+            msg.status = "enviado"
+            msg.provider_id = provider_id
+            msg.enviado_em = _now()
+            enviados += 1
+        except EmailError as exc:
+            msg.status = "erro"
+            msg.erro = str(exc)
+            erros += 1
+
+    campanha.total_enviados = (campanha.total_enviados or 0) + enviados
+    campanha.total_erros = (campanha.total_erros or 0) + erros
+
+    # Se não restam pendentes → concluída.
+    restantes = await db.scalar(
+        select(VendasMensagens.id)
+        .where(
+            VendasMensagens.campanha_id == campanha.id,
+            VendasMensagens.status == "pendente",
+        )
+        .limit(1)
+    )
+    if restantes is None:
+        campanha.status = "concluida"
+        campanha.finished_at = _now()
+
+    await db.commit()
+
+    return {
+        "campanha_id": campanha.id,
+        "status": campanha.status,
+        "total_destinatarios": campanha.total_destinatarios or 0,
+        "enviados": enviados,
+        "suprimidos": suprimidos,
+        "erros": erros,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# JOB (~1min): processa campanhas em andamento / agendadas vencidas
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def processar_campanhas_pendentes(db: AsyncSession) -> None:
+    """Processa (uma rodada) as campanhas que devem rodar agora.
+
+    Pega campanhas com status='enviando' OU (status='agendada' E
+    agendada_para <= now) e chama ``enviar_campanha`` para cada, respeitando o
+    rate limit (uma rodada por ciclo). Usado pelo scheduler (o integrador
+    registra a task com IntervalTrigger ~1min).
+    """
+    from sqlalchemy import and_, or_
+
+    agora = _now()
+    campanhas = (
+        await db.scalars(
+            select(VendasCampanhas).where(
+                or_(
+                    VendasCampanhas.status == "enviando",
+                    and_(
+                        VendasCampanhas.status == "agendada",
+                        VendasCampanhas.agendada_para.isnot(None),
+                        VendasCampanhas.agendada_para <= agora,
+                    ),
+                )
+            )
+        )
+    ).all()
+
+    for campanha in campanhas:
+        try:
+            await enviar_campanha(
+                db,
+                campanha_id=campanha.id,
+                empresa_id=campanha.empresa_id,
+            )
+        except ValueError:
+            # Sem config de email (ou campanha sumiu) — pula, não derruba o ciclo.
+            continue

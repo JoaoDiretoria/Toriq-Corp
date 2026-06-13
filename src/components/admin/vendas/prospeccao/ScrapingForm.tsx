@@ -229,7 +229,7 @@ export function ScrapingForm({ open, onOpenChange, onJobStarted }: ScrapingFormP
       resetForm();
     } catch (error: any) {
       console.error('[ScrapingForm] erro ao iniciar:', error);
-      toast.error(error?.detail || error?.message || 'Erro ao iniciar captação');
+      toast.error(error?.message || 'Erro ao iniciar captação');
     } finally {
       setLoading(false);
     }
