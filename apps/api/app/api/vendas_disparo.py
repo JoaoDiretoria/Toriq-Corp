@@ -78,6 +78,9 @@ def _config_public(obj: Optional[VendasDisparoConfig]) -> s.DisparoConfigPublic:
     masked = None
     if obj.smtp_password_enc:
         masked = mask_secret(decrypt_secret(obj.smtp_password_enc))
+    wa_masked = None
+    if obj.whatsapp_token_enc:
+        wa_masked = mask_secret(decrypt_secret(obj.whatsapp_token_enc))
     return s.DisparoConfigPublic(
         email_provider=obj.email_provider,
         email_remetente=obj.email_remetente,
@@ -89,6 +92,13 @@ def _config_public(obj: Optional[VendasDisparoConfig]) -> s.DisparoConfigPublic:
         email_rate_limit=obj.email_rate_limit,
         smtp_password_set=bool(obj.smtp_password_enc),
         smtp_password_masked=masked,
+        whatsapp_phone_id=obj.whatsapp_phone_id,
+        whatsapp_waba_id=obj.whatsapp_waba_id,
+        whatsapp_verify_token=obj.whatsapp_verify_token,
+        whatsapp_rate_limit=obj.whatsapp_rate_limit,
+        whatsapp_token_set=bool(obj.whatsapp_token_enc),
+        whatsapp_token_masked=wa_masked,
+        whatsapp_app_secret_set=bool(obj.whatsapp_app_secret_enc),
     )
 
 
@@ -132,16 +142,33 @@ async def put_disparo_config(
         "smtp_user",
         "smtp_use_tls",
         "email_rate_limit",
+        # WhatsApp (Fase 3) — campos simples (não-segredos).
+        "whatsapp_phone_id",
+        "whatsapp_waba_id",
+        "whatsapp_verify_token",
+        "whatsapp_rate_limit",
     ):
         valor = getattr(payload, campo)
         if valor is not None:
             setattr(obj, campo, valor)
 
-    # Senha (segredo): clear tem precedência; senão grava se veio não-nula.
+    # Senha SMTP (segredo): clear tem precedência; senão grava se veio não-nula.
     if payload.clear_smtp_password:
         obj.smtp_password_enc = None
     elif payload.smtp_password is not None:
         obj.smtp_password_enc = encrypt_secret(payload.smtp_password)
+
+    # Token do WhatsApp (segredo).
+    if payload.clear_whatsapp_token:
+        obj.whatsapp_token_enc = None
+    elif payload.whatsapp_token is not None:
+        obj.whatsapp_token_enc = encrypt_secret(payload.whatsapp_token)
+
+    # App secret do WhatsApp (segredo — usado p/ validar assinatura do webhook).
+    if payload.clear_whatsapp_app_secret:
+        obj.whatsapp_app_secret_enc = None
+    elif payload.whatsapp_app_secret is not None:
+        obj.whatsapp_app_secret_enc = encrypt_secret(payload.whatsapp_app_secret)
 
     obj.updated_at = _now()
 

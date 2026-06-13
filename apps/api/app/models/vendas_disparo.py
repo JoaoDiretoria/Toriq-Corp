@@ -64,6 +64,15 @@ class VendasDisparoConfig(Base):
     email_rate_limit: Mapped[Optional[int]] = mapped_column(
         Integer, server_default=text("100")
     )
+    # WhatsApp (Fase 3 — Meta Cloud API). Token e app_secret criptografados.
+    whatsapp_phone_id: Mapped[Optional[str]] = mapped_column(Text)
+    whatsapp_waba_id: Mapped[Optional[str]] = mapped_column(Text)
+    whatsapp_token_enc: Mapped[Optional[str]] = mapped_column(Text)
+    whatsapp_app_secret_enc: Mapped[Optional[str]] = mapped_column(Text)
+    whatsapp_verify_token: Mapped[Optional[str]] = mapped_column(Text)
+    whatsapp_rate_limit: Mapped[Optional[int]] = mapped_column(
+        Integer, server_default=text("80")
+    )
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime(True), server_default=text("now()")
     )

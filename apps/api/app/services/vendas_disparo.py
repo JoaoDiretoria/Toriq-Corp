@@ -44,6 +44,15 @@ def _now() -> datetime.datetime:
     return datetime.datetime.now(datetime.timezone.utc)
 
 
+def _campo_destino(campanha: "VendasCampanhas"):
+    """Coluna do lead usada como destinatário conforme o canal da campanha."""
+    return VendasLeads.telefone if campanha.canal == "whatsapp" else VendasLeads.email
+
+
+def _valor_destino(campanha: "VendasCampanhas", lead: VendasLeads) -> Optional[str]:
+    return lead.telefone if campanha.canal == "whatsapp" else lead.email
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Resolução de destinatários
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -77,7 +86,7 @@ async def resolver_destinatarios(
         stmt = select(VendasLeads).where(
             VendasLeads.empresa_id == empresa_id,
             VendasLeads.id.in_(ids),
-            VendasLeads.email.isnot(None),
+            _campo_destino(campanha).isnot(None),
         )
         result = await db.scalars(stmt)
         return list(result)
@@ -96,7 +105,7 @@ async def resolver_destinatarios(
             return []
         where = _aplicar_filtros_segmento(empresa_id, seg.filtros)
         result = await db.scalars(
-            select(VendasLeads).where(where, VendasLeads.email.isnot(None))
+            select(VendasLeads).where(where, _campo_destino(campanha).isnot(None))
         )
         return list(result)
 
@@ -134,7 +143,7 @@ async def materializar_mensagens(db: AsyncSession, campanha: VendasCampanhas) ->
                 campanha_id=campanha.id,
                 lead_id=lead.id,
                 canal=campanha.canal,
-                destinatario=lead.email,
+                destinatario=_valor_destino(campanha, lead),
                 status="pendente",
             )
         )
@@ -221,8 +230,12 @@ async def enviar_campanha(
             VendasDisparoConfig.empresa_id == empresa_id
         )
     )
-    if config is None or not config.smtp_host:
-        raise ValueError("configure o email")
+    if campanha.canal == "whatsapp":
+        if config is None or not config.whatsapp_phone_id:
+            raise ValueError("configure o WhatsApp")
+    else:
+        if config is None or not config.smtp_host:
+            raise ValueError("configure o email")
 
     agora = _now()
     if campanha.status in ("rascunho", "agendada"):
@@ -265,15 +278,18 @@ async def enviar_campanha(
     suprimidos = 0
     erros = 0
 
+    eh_whatsapp = campanha.canal == "whatsapp"
+    tipo_supressao = "telefone" if eh_whatsapp else "email"
+
     for msg in pendentes:
         destinatario = msg.destinatario or ""
-        normalizado = normalizar_supressao("email", destinatario)
+        normalizado = normalizar_supressao(tipo_supressao, destinatario)
 
         # Supressão (opt-out LGPD): não envia.
         suprimido = await db.scalar(
             select(VendasSupressao.id).where(
                 VendasSupressao.empresa_id == empresa_id,
-                VendasSupressao.tipo == "email",
+                VendasSupressao.tipo == tipo_supressao,
                 VendasSupressao.valor == normalizado,
             )
         )
@@ -282,7 +298,25 @@ async def enviar_campanha(
             suprimidos += 1
             continue
 
-        # Lead p/ variáveis de render.
+        if eh_whatsapp:
+            # Canal WhatsApp: envio delegado ao serviço dedicado, que seta
+            # msg.status/provider_id/enviado_em (ou status='erro'/erro).
+            from app.services.vendas_whatsapp import enviar_mensagem_whatsapp
+
+            await enviar_mensagem_whatsapp(
+                db,
+                config=config,
+                mensagem=msg,
+                campanha=campanha,
+                template=template,
+            )
+            if msg.status == "enviado":
+                enviados += 1
+            elif msg.status == "erro":
+                erros += 1
+            continue
+
+        # Canal email: render + injeção de descadastro/rastreio + SMTP.
         lead: Optional[VendasLeads] = None
         if msg.lead_id is not None:
             lead = await db.scalar(

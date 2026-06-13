@@ -80,6 +80,7 @@ from app.api.esocial import router as esocial_router
 from app.api.vendas import router as vendas_router
 from app.api.vendas_prospeccao import router as vendas_prospeccao_router
 from app.api.vendas_disparo import router as vendas_disparo_router
+from app.api.vendas_whatsapp import router as vendas_whatsapp_router
 from app.jobs.scheduler import build_scheduler
 
 
@@ -143,6 +144,8 @@ def create_app() -> FastAPI:
     app.include_router(vendas_prospeccao_router)
     # Toriq Vendas Fase 2 — disparo em massa email (config, templates, campanhas, supressão)
     app.include_router(vendas_disparo_router)
+    # Toriq Vendas Fase 3 — WhatsApp (Meta Cloud API): webhook verify/inbound/status
+    app.include_router(vendas_whatsapp_router)
     # Frota — veículos, motoristas, manutenções, checklists, custos, documentos, ocorrências
     app.include_router(frota_router)
     # Catálogo, notificações, suporte, agenda

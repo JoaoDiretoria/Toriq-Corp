@@ -42,12 +42,14 @@ import { TemplatesManager } from './TemplatesManager';
 import { DisparoConfig } from './DisparoConfig';
 import { CampanhaCriar } from './CampanhaCriar';
 import { CampanhaDetalhe } from './CampanhaDetalhe';
+import { WhatsAppConfig } from './WhatsAppConfig';
 import { toast } from 'sonner';
 import {
   Send,
   FileText,
   Settings2,
   ShieldBan,
+  MessageCircle,
   Mail,
   AlertTriangle,
   Loader2,
@@ -179,7 +181,11 @@ export function Disparo() {
           </TabsTrigger>
           <TabsTrigger value="config" className="gap-2">
             <Settings2 className="h-4 w-4" />
-            Configuração
+            E-mail (SMTP)
+          </TabsTrigger>
+          <TabsTrigger value="whatsapp" className="gap-2">
+            <MessageCircle className="h-4 w-4" />
+            WhatsApp
           </TabsTrigger>
           <TabsTrigger value="supressao" className="gap-2">
             <ShieldBan className="h-4 w-4" />
@@ -200,6 +206,10 @@ export function Disparo() {
 
         <TabsContent value="config" className="mt-4">
           <DisparoConfig onSaved={fetchConfig} />
+        </TabsContent>
+
+        <TabsContent value="whatsapp" className="mt-4">
+          <WhatsAppConfig />
         </TabsContent>
 
         <TabsContent value="supressao" className="mt-4">

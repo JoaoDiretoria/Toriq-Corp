@@ -24,6 +24,15 @@ class DisparoConfigUpdate(BaseModel):
     smtp_use_tls: Optional[bool] = None
     email_rate_limit: Optional[int] = None
     clear_smtp_password: Optional[bool] = None
+    # WhatsApp (Fase 3 — Meta Cloud API)
+    whatsapp_phone_id: Optional[str] = None
+    whatsapp_waba_id: Optional[str] = None
+    whatsapp_token: Optional[str] = None
+    whatsapp_app_secret: Optional[str] = None
+    whatsapp_verify_token: Optional[str] = None
+    whatsapp_rate_limit: Optional[int] = None
+    clear_whatsapp_token: Optional[bool] = None
+    clear_whatsapp_app_secret: Optional[bool] = None
 
 
 class DisparoConfigPublic(BaseModel):
@@ -37,6 +46,14 @@ class DisparoConfigPublic(BaseModel):
     email_rate_limit: Optional[int] = None
     smtp_password_set: bool = False
     smtp_password_masked: Optional[str] = None
+    # WhatsApp (Fase 3) — segredos nunca retornam em claro
+    whatsapp_phone_id: Optional[str] = None
+    whatsapp_waba_id: Optional[str] = None
+    whatsapp_verify_token: Optional[str] = None
+    whatsapp_rate_limit: Optional[int] = None
+    whatsapp_token_set: bool = False
+    whatsapp_token_masked: Optional[str] = None
+    whatsapp_app_secret_set: bool = False
     model_config = ConfigDict(from_attributes=True)
 
 
