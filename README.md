@@ -69,7 +69,7 @@ Toriq corp/
 │   ├── components/ · pages/      # telas (em migração)
 │   └── lib/accessLog.ts          # 🟢 migrado
 │
-├── backend-esocial/              # backend Node/TS do eSocial (a reescrever em Python — Fatia 4)
+├── docs/legacy-esocial-reference/ # 📚 fonte TS do antigo backend-esocial (referência p/ reescrever — Fatia 4)
 ├── docs/superpowers/             # specs, planos, mapas da migração
 ├── Dockerfile                    # build do FRONT (Vite → nginx)
 ├── package.json                  # deps do front

@@ -1,8 +1,12 @@
 # Fatia 4 — eSocial em Python (plano detalhado)
 
-> **Status:** PLANEJAMENTO (não iniciar implementação antes de resolver os bloqueios da seção 4).
+> **Status:** EM IMPLEMENTAÇÃO — decisão do produto (2026-06-13): **descartar** o `backend-esocial`
+> Node e **reescrever do zero** em Python (FastAPI), dentro do `apps/api`. Não há dados a migrar
+> (sistema vazio). A fonte TS antiga foi **preservada como referência** em
+> `docs/legacy-esocial-reference/` (ela funcionava — usar como spec dos leiautes/SOAP).
 > **Atualizado:** 2026-06-13
-> **Objetivo:** reescrever o serviço externo `backend-esocial` (hoje Node, acessado via `VITE_ESOCIAL_BACKEND_URL`) dentro do backend Python (FastAPI), cobrindo (A) assinatura digital com certificado A1 ICP-Brasil e (B) transmissão de eventos SST ao eSocial (SOAP gov.br).
+> **Objetivo:** integração eSocial nativa em Python cobrindo (A) configuração + certificado A1
+> ICP-Brasil, (B) assinatura (A1 local **e** gov.br na nuvem), (C) eventos SST ao eSocial (SOAP gov.br).
 
 ---
 
@@ -15,7 +19,24 @@ O front (telas `CertificadoA1Config.tsx` e `SSTConfiguracoes.tsx`) ainda fala co
 
 Hoje, no app migrado, essas funções estão **degradadas** (a tela de certificado A1 mostra "Funcionalidade indisponível"; a config eSocial só funciona se a URL externa estiver setada). A Fatia 4 traz isso para dentro do Python e religa as telas.
 
-## 2. Contrato atual (engenharia reversa do front)
+> **Referência fiel:** `docs/legacy-esocial-reference/` contém o `API_DOCS.md` e a fonte TS
+> (`src/services/esocialService.ts`, `govbrSignatureService.ts`, `pdfSignatureService.ts`,
+> `groupConfigService.ts`, `utils/crypto.ts`). A reescrita Python deve seguir esse contrato.
+> Modelo legado: tabela `empresa_integracoes_esocial` (gov.br + A1, tudo `*_enc` criptografado);
+> chave de cripto via env `INTEGRATION_ENCRYPTION_KEY`. Multi-tenant era por header `X-Empresa-ID`
+> → no Python vira o `empresa_id` do JWT (mais seguro). `esocial_tipo_inscricao` vai de 1 a 6.
+
+## 2. Contrato atual (engenharia reversa do front + API_DOCS legado)
+
+**Dois caminhos de assinatura** (o plano antigo cobria ambos):
+- **gov.br na nuvem** (`/api/signature`): OAuth2 + PKCE (`/auth-url`, `/callback`), `/certificate`,
+  `/sign`, `/sign-batch`. Exige conta gov.br nível **Prata/Ouro** (403 se não tiver).
+- **Certificado A1** (.pfx): armazenado criptografado, usado p/ assinar XML dos eventos eSocial.
+
+**Eventos eSocial** (`/api/esocial`): `/evento/s2210` (CAT), `/evento/s2220` (ASO),
+`/evento/s2240` (condições ambientais/fatores de risco), `/lote` (até 50 eventos),
+`/consulta/:protocolo`.
+
 
 Endpoints que o front espera do `backend-esocial`:
 
@@ -60,8 +81,11 @@ Fluxo por evento: montar XML do leiaute → **assinar XML (XMLDSig enveloped, RS
 
 Sem isso, não dá para implementar (não é questão de esforço, é dependência externa):
 
-1. **Código-fonte do `backend-esocial` atual (Node)** — existe num repo? Se sim, me dá acesso: porto 1:1 (muito mais seguro que reinventar os leiautes). Se não existe/foi perdido, eu reconstruo a partir dos leiautes oficiais do eSocial (mais lento e arriscado).
-2. **Certificado A1 de teste** (.pfx + senha) de um CNPJ — para validar assinatura e transmissão em **produção restrita**. Idealmente um cert que possa ser usado em homologação.
+1. ~~**Código-fonte do `backend-esocial` atual**~~ ✅ RESOLVIDO — preservado em
+   `docs/legacy-esocial-reference/`. Decisão: **reescrever do zero** seguindo esse contrato.
+2. **Certificado A1 de teste** (.pfx + senha) de um CNPJ — para validar assinatura e transmissão em
+   **produção restrita**. *(Para os testes unitários das Fases A/B eu gero um .pfx self-signed; o A1
+   real ICP-Brasil só é necessário p/ validar cadeia ICP e transmitir ao gov.br nas Fases C+.)*
 3. **Decisão de armazenamento do A1**: o .pfx é dado sensível. Opções: (a) coluna criptografada no Postgres (chave via env/KMS), (b) cofre de segredos. Recomendo (a) com criptografia simétrica (Fernet) e a chave fora do banco.
 4. **Arquitetura**: dobrar dentro do `apps/api` (um router `/esocial/*`) **ou** manter microserviço Python separado? Recomendo **dentro do apps/api** (menos infra, reusa auth/tenant), salvo se o volume de XML/SOAP justificar isolar.
 5. **Quais eventos entram no MVP**: sugiro começar só por **S-2220 (ASO)** e **S-2210 (CAT)** + a base S-1000/S-1005, que é o core de uma consultoria SST. S-2240 depois.
