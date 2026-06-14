@@ -134,3 +134,20 @@ class OpsEmpresaUpdateIn(BaseModel):
 class OpsResetSenhaOut(BaseModel):
     ok: bool
     temp_password: str | None = None
+
+
+class AuditRegistro(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    actor_id: uuid.UUID
+    actor_nome: str | None = None
+    action: str
+    target_user_id: uuid.UUID | None = None
+    details: dict | None = None
+    ip: str | None = None
+    created_at: datetime.datetime
+
+
+class AuditListOut(BaseModel):
+    registros: list[AuditRegistro]
+    total: int

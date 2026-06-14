@@ -16,6 +16,8 @@ from app.models.generated import Profiles
 from app.models.user import User, UserRole
 from app.models.user import User as UserModel
 from app.schemas.ops import (
+    AuditListOut,
+    AuditRegistro,
     DatabaseOut,
     HealthOut,
     OpsEmpresaUpdateIn,
@@ -258,3 +260,15 @@ async def reset_senha(
     )
     await db.commit()
     return OpsResetSenhaOut(ok=True, temp_password=temp)
+
+
+@router.get("/audit", response_model=AuditListOut)
+async def audit(
+    limit: int = 200,
+    _: User = Depends(require_ops),
+    db: AsyncSession = Depends(get_db),
+) -> AuditListOut:
+    rows = await ops_service.listar_auditoria(db, min(limit, 1000))
+    return AuditListOut(
+        registros=[AuditRegistro.model_validate(r) for r in rows], total=len(rows)
+    )

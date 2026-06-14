@@ -239,6 +239,11 @@ async def _sync_profile(db: AsyncSession, target: User) -> None:
         profile.empresa_id = target.empresa_id
 
 
+async def listar_auditoria(db: AsyncSession, limite: int = 200) -> list[OpsAuditLog]:
+    stmt = select(OpsAuditLog).order_by(OpsAuditLog.created_at.desc()).limit(limite)
+    return list((await db.scalars(stmt)).all())
+
+
 async def montar_health(db: AsyncSession) -> dict:
     db_ok, db_detalhe = await _db_ok(db)
     redis_ok, redis_detalhe = await _redis_ok()

@@ -105,6 +105,22 @@ async def test_ops_lista_usuarios_global(client):
     assert "alvo@toriq.com" in emails
 
 
+async def test_ops_edita_usuario_e_audita(client):
+    await _register_login(client, "alvo2@toriq.com", "cliente_final")
+    me = (await client.get("/auth/me")).json()
+    alvo_id = me["user"]["id"]
+    await client.post("/auth/logout")
+
+    await _register_login(client, "sup10@toriq.com", "suporte")
+    r = await client.patch(f"/ops/users/{alvo_id}", json={"nome": "Nome Editado"})
+    assert r.status_code == 200
+    assert r.json()["nome"] == "Nome Editado"
+
+    # a edição gerou registro de auditoria
+    audit = (await client.get("/ops/audit")).json()
+    assert any(a["action"] == "update_user" for a in audit["registros"])
+
+
 async def test_suporte_nao_promove_para_admin(client):
     await _register_login(client, "alvo3@toriq.com", "cliente_final")
     alvo_id = (await client.get("/auth/me")).json()["user"]["id"]
