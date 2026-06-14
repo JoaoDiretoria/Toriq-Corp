@@ -1,6 +1,6 @@
 # Contexto Ativo
 
-**Última atualização:** 05/03/2026 23:30
+**Última atualização:** 14/06/2026 16:45
 **Projeto Supabase:** `bsvtgdtsbrjdwdnpirzb` (Torq Corp - us-east-2 - ACTIVE_HEALTHY)
 
 ## Stack Técnico
@@ -126,9 +126,10 @@
 - `empresa` — todos da empresa veem
 - Admin (`empresa_sst`, `admin_vertical`, `cliente_final` sem setor) vê todos os eventos da empresa
 
-### Correções da sessão (15/03/2026)
+### Correções da sessão (14/06/2026)
 | Arquivo/Banco | Correção | Status |
 |---------------|----------|--------|
+| `src/components/admin/AdminSentryPanel.tsx` | Corrigidos erros de sintaxe JSX que quebravam o build (tags fechadas incorretamente, como `</CardTitle>CardTitle>`) | ✅ |
 | `profiles` RLS | Policy `profiles_update_own` — authenticated atualiza próprio perfil | ✅ |
 | `empresas` RLS | Policy `empresas_select_all_authenticated` — usuário vê empresa do próprio profile | ✅ |
 | `src/pages/Auth.tsx` | `cliente_final` redireciona para `/sst` ao invés de `/cliente` | ✅ |
