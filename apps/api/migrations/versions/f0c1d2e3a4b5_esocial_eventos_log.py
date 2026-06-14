@@ -4,8 +4,11 @@ Registra cada envio de evento (S-2210/2220/2240) com o protocolo; a consulta de
 lote atualiza status/recibo. Aditiva.
 
 Revision ID: f0c1d2e3a4b5
-Revises: e9b0c1d2f3a4
+Revises: f0c1a2b3c4d5
 Create Date: 2026-06-14 18:00:00.000000
+
+NOTA: encadeada após f0c1a2b3c4d5 (role 'suporte', frente paralela) para
+linearizar o histórico — as duas migrations eram irmãs de e9b0c1d2f3a4.
 
 """
 from typing import Sequence, Union
@@ -14,7 +17,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision: str = 'f0c1d2e3a4b5'
-down_revision: Union[str, None] = 'e9b0c1d2f3a4'
+down_revision: Union[str, None] = 'f0c1a2b3c4d5'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
