@@ -222,4 +222,25 @@ async def processar_inbound_webhook(
         msg.status = "respondeu"
         processadas += 1
 
+        # SDR autônomo (Fase 6): se o agente estiver ligado com auto-resposta,
+        # enfileira o processamento da IA (qualifica + responde + handoff) fora
+        # do request. Sem Redis, o enqueue roda inline (webhook mais lento, mas ok).
+        from app.models.vendas_sdr import VendasSdrConfig
+
+        sdr = await db.scalar(
+            select(VendasSdrConfig).where(VendasSdrConfig.empresa_id == empresa_id)
+        )
+        if sdr is not None and sdr.ativo and sdr.auto_responder and sdr.api_key_enc:
+            from app.core.queue import queue
+
+            await db.commit()  # garante o inbound persistido antes do job assíncrono
+            await queue.enqueue(
+                "sdr_inbound",
+                {
+                    "empresa_id": str(empresa_id),
+                    "lead_id": str(lead.id),
+                    "mensagem": inbound.get("texto") or "",
+                },
+            )
+
     return processadas

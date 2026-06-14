@@ -69,6 +69,8 @@ def _config_public(obj: Optional[VendasSdrConfig]) -> s.SdrConfigPublic:
         persona=obj.persona,
         objetivo=obj.objetivo,
         ativo=bool(obj.ativo),
+        auto_responder=bool(obj.auto_responder),
+        notificar_telefones=obj.notificar_telefones,
         api_key_set=bool(obj.api_key_enc),
         api_key_masked=masked,
     )
@@ -111,6 +113,8 @@ async def put_sdr_config(
         "persona",
         "objetivo",
         "ativo",
+        "auto_responder",
+        "notificar_telefones",
     ):
         valor = getattr(payload, campo)
         if valor is not None:

@@ -420,3 +420,247 @@ async def stats(db: AsyncSession, *, empresa_id: uuid.UUID) -> dict:
         "score_medio": float(score_medio) if score_medio is not None else None,
         "followups_pendentes": followups_pendentes or 0,
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SDR AUTÔNOMO (Fase 6): inbound → raciocínio CoT → resposta + handoff
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Mapa da decisão do agente para o sdr_status do lead.
+_DECISAO_PARA_STATUS = {
+    "qualified": "quente",
+    "em_contato": "morno",
+    "desqualified": "desqualificado",
+}
+
+
+async def _cot_decisao(
+    config: VendasSdrConfig, system: str | None, contexto_user: str
+) -> tuple[str, dict | None]:
+    """Raciocínio em 2 fases (Chain-of-Thought): primeiro o modelo "pensa" a
+    conversa em texto livre; depois decide em JSON usando o próprio raciocínio
+    como contexto. Melhora a qualidade vs. um único prompt."""
+    api_key = decrypt_secret(config.api_key_enc)
+    modelo = config.modelo or "claude-sonnet-4-6"
+    temp = float(config.temperatura) if config.temperatura is not None else 0.7
+
+    pensamento = await chamar_claude(
+        api_key=api_key,
+        modelo=modelo,
+        system=system,
+        mensagens=[
+            {
+                "role": "user",
+                "content": contexto_user
+                + "\n\nAnalise a conversa internamente (interesse, objeções, "
+                "estágio, próximo passo ideal). Ainda NÃO responda em JSON.",
+            }
+        ],
+        temperatura=temp,
+        max_tokens=600,
+    )
+
+    formato = (
+        "Com base na sua análise, responda APENAS um JSON válido: "
+        '{"is_final": true|false, '
+        '"decision": "qualified|em_contato|desqualified", '
+        '"next_message": "mensagem curta para enviar ao lead (ou vazio)", '
+        '"summary": "resumo da conversa e situação", '
+        '"reason": "motivo objetivo da decisão", "score": 0-100}'
+    )
+    texto = await chamar_claude(
+        api_key=api_key,
+        modelo=modelo,
+        system="Você responde SOMENTE com JSON válido, sem texto fora do objeto.",
+        mensagens=[
+            {"role": "user", "content": contexto_user},
+            {"role": "assistant", "content": pensamento},
+            {"role": "user", "content": formato},
+        ],
+        temperatura=0.3,
+        max_tokens=800,
+    )
+    return texto, extrair_json(texto)
+
+
+def _telefones_notificacao(config: VendasSdrConfig) -> list[str]:
+    raw = (config.notificar_telefones or "").replace(";", ",")
+    return [t.strip() for t in raw.split(",") if t.strip()]
+
+
+async def _enviar_whatsapp_sdr(
+    db: AsyncSession, *, empresa_id: uuid.UUID, to: str, texto: str
+) -> bool:
+    """Envia um texto livre por WhatsApp (janela 24h) usando a config de disparo.
+    Retorna True se enviou. Tolerante a falhas (nunca levanta)."""
+    import re
+
+    from app.integrations.whatsapp_meta import WhatsAppError, send_text
+    from app.models.vendas_disparo import VendasDisparoConfig
+
+    dconf = await db.scalar(
+        select(VendasDisparoConfig).where(VendasDisparoConfig.empresa_id == empresa_id)
+    )
+    destino = re.sub(r"\D", "", to or "")
+    if (
+        dconf is None
+        or not dconf.whatsapp_phone_id
+        or not dconf.whatsapp_token_enc
+        or not destino
+    ):
+        return False
+    try:
+        await send_text(
+            phone_id=dconf.whatsapp_phone_id,
+            token=decrypt_secret(dconf.whatsapp_token_enc),
+            to=destino,
+            body=texto,
+        )
+        return True
+    except WhatsAppError:
+        return False
+
+
+async def processar_inbound_sdr(
+    db: AsyncSession, *, empresa_id: uuid.UUID, lead_id: uuid.UUID, mensagem: str
+) -> None:
+    """SDR autônomo: processa uma mensagem recebida (inbound) de um lead.
+
+    Só roda se o agente estiver ATIVO e com chave de API. Registra o inbound,
+    raciocina (CoT 2 fases), atualiza o lead (status/score/notas), e — se houver
+    next_message — RESPONDE automaticamente por WhatsApp (janela 24h). Se o lead
+    for qualificado (quente), faz HANDOFF: alerta os telefones de notificação.
+
+    É o handler da fila 'sdr_inbound'. Commita ao final. Nunca propaga LLMError.
+    """
+    config = await db.scalar(
+        select(VendasSdrConfig).where(VendasSdrConfig.empresa_id == empresa_id)
+    )
+    if config is None or not config.ativo or not config.api_key_enc:
+        return  # SDR desligado/sem chave — não faz nada.
+
+    lead = await db.scalar(
+        select(VendasLeads).where(
+            VendasLeads.id == lead_id, VendasLeads.empresa_id == empresa_id
+        )
+    )
+    if lead is None:
+        return
+
+    # 1) Registra a mensagem recebida.
+    db.add(
+        VendasSdrInteracoes(
+            id=uuid.uuid4(),
+            empresa_id=empresa_id,
+            lead_id=lead.id,
+            papel="usuario",
+            tipo="mensagem",
+            conteudo=mensagem,
+        )
+    )
+    await db.flush()
+
+    # 2) Histórico de mensagens (para contexto da conversa).
+    historico = (
+        await db.scalars(
+            select(VendasSdrInteracoes)
+            .where(
+                VendasSdrInteracoes.empresa_id == empresa_id,
+                VendasSdrInteracoes.lead_id == lead.id,
+                VendasSdrInteracoes.tipo == "mensagem",
+            )
+            .order_by(VendasSdrInteracoes.created_at)
+        )
+    ).all()
+    conversa = "\n".join(
+        f"{'Lead' if i.papel == 'usuario' else 'SDR'}: {i.conteudo}"
+        for i in historico
+        if i.conteudo
+    )
+    system = _system_conversa(config, lead)
+    contexto_user = (
+        f"Conversa até agora:\n{conversa}\n\nÚltima mensagem do lead: {mensagem}"
+    )
+
+    # 3) Raciocínio CoT → decisão.
+    try:
+        texto, parsed = await _cot_decisao(config, system, contexto_user)
+    except LLMError:
+        await db.commit()  # mantém o inbound registrado, sem resposta.
+        return
+
+    parsed = parsed or {}
+    decisao = parsed.get("decision")
+    next_msg = (parsed.get("next_message") or "").strip()
+    summary = parsed.get("summary")
+    score = parsed.get("score")
+
+    # 4) Atualiza o lead.
+    if isinstance(score, (int, float)):
+        lead.sdr_score = int(score)
+    if decisao in _DECISAO_PARA_STATUS:
+        lead.sdr_status = _DECISAO_PARA_STATUS[decisao]
+    if summary:
+        lead.sdr_notas = summary
+
+    # 5) Responde automaticamente (se houver next_message e telefone).
+    if next_msg:
+        enviou = await _enviar_whatsapp_sdr(
+            db, empresa_id=empresa_id, to=lead.telefone or "", texto=next_msg
+        )
+        db.add(
+            VendasSdrInteracoes(
+                id=uuid.uuid4(),
+                empresa_id=empresa_id,
+                lead_id=lead.id,
+                papel="assistente",
+                tipo="mensagem",
+                conteudo=next_msg,
+                meta={"enviado": enviou, "decision": decisao},
+            )
+        )
+        from app.services.vendas_uso import registrar_uso
+
+        await registrar_uso(
+            db, empresa_id=empresa_id, metrica="sdr_conversas", referencia=str(lead.id)
+        )
+    else:
+        # Sem resposta: registra o raciocínio/decisão.
+        db.add(
+            VendasSdrInteracoes(
+                id=uuid.uuid4(),
+                empresa_id=empresa_id,
+                lead_id=lead.id,
+                papel="assistente",
+                tipo="qualificacao",
+                conteudo=texto,
+                meta=parsed,
+            )
+        )
+
+    # 6) Handoff humano se o lead esquentou (qualified).
+    if decisao == "qualified":
+        telefones = _telefones_notificacao(config)
+        alerta = (
+            f"🔥 Lead qualificado pelo SDR: "
+            f"{lead.nome or lead.empresa_nome or lead.telefone or 'lead'}\n"
+            f"Telefone: {lead.telefone or '-'}\n"
+            f"Resumo: {summary or parsed.get('reason') or '-'}"
+        )
+        notificados = 0
+        for tel in telefones:
+            if await _enviar_whatsapp_sdr(db, empresa_id=empresa_id, to=tel, texto=alerta):
+                notificados += 1
+        db.add(
+            VendasSdrInteracoes(
+                id=uuid.uuid4(),
+                empresa_id=empresa_id,
+                lead_id=lead.id,
+                papel="evento",
+                tipo="escalonamento",
+                conteudo=f"Handoff: lead quente — {notificados}/{len(telefones)} notificado(s).",
+                meta={"telefones": len(telefones), "notificados": notificados},
+            )
+        )
+
+    await db.commit()

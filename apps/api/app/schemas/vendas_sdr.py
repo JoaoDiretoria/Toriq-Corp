@@ -25,6 +25,8 @@ class SdrConfigUpdate(BaseModel):
     persona: Optional[str] = None
     objetivo: Optional[str] = None
     ativo: Optional[bool] = None
+    auto_responder: Optional[bool] = None
+    notificar_telefones: Optional[str] = None
     clear_api_key: Optional[bool] = None
 
 
@@ -38,6 +40,8 @@ class SdrConfigPublic(BaseModel):
     persona: Optional[str] = None
     objetivo: Optional[str] = None
     ativo: bool = False
+    auto_responder: bool = False
+    notificar_telefones: Optional[str] = None
     api_key_set: bool = False
     api_key_masked: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)

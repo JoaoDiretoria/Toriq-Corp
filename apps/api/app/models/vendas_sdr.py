@@ -66,6 +66,12 @@ class VendasSdrConfig(Base):
     ativo: Mapped[Optional[bool]] = mapped_column(
         Boolean, server_default=text("false")
     )
+    # SDR autônomo (Fase 6): responder automaticamente o inbound de WhatsApp
+    # (dentro da janela 24h) e escalar p/ humano. Telefones de notificação em CSV.
+    auto_responder: Mapped[Optional[bool]] = mapped_column(
+        Boolean, server_default=text("false")
+    )
+    notificar_telefones: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime(True), server_default=text("now()")
     )

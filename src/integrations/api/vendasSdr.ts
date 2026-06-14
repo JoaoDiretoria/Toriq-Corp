@@ -30,6 +30,8 @@ export interface SdrConfigPublic {
   persona: string | null;
   objetivo: string | null;
   ativo: boolean;
+  auto_responder: boolean;
+  notificar_telefones: string | null;
   api_key_set: boolean;
   api_key_masked: string | null;
 }
@@ -46,6 +48,8 @@ export interface SdrConfigUpdate {
   persona?: string | null;
   objetivo?: string | null;
   ativo?: boolean | null;
+  auto_responder?: boolean | null;
+  notificar_telefones?: string | null;
   clear_api_key?: boolean | null;
 }
 

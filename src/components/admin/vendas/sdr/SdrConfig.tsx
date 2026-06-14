@@ -56,6 +56,8 @@ interface FormState {
   prompt_qualificacao: string;
   temperatura: number;
   ativo: boolean;
+  auto_responder: boolean;
+  notificar_telefones: string;
 }
 
 const EMPTY_FORM: FormState = {
@@ -68,6 +70,8 @@ const EMPTY_FORM: FormState = {
   prompt_qualificacao: '',
   temperatura: 0.7,
   ativo: false,
+  auto_responder: false,
+  notificar_telefones: '',
 };
 
 // Modelos sugeridos (o backend aceita texto livre; estes são atalhos comuns).
@@ -104,6 +108,8 @@ export function SdrConfig({ onSaved }: SdrConfigProps) {
         prompt_qualificacao: cfg.prompt_qualificacao ?? '',
         temperatura: cfg.temperatura != null ? Number(cfg.temperatura) : 0.7,
         ativo: cfg.ativo ?? false,
+        auto_responder: cfg.auto_responder ?? false,
+        notificar_telefones: cfg.notificar_telefones ?? '',
       });
       setKeySet(!!cfg.api_key_set);
       setKeyMasked(cfg.api_key_masked ?? null);
@@ -157,6 +163,8 @@ export function SdrConfig({ onSaved }: SdrConfigProps) {
       prompt_qualificacao: form.prompt_qualificacao.trim() || null,
       temperatura: form.temperatura,
       ativo: form.ativo,
+      auto_responder: form.auto_responder,
+      notificar_telefones: form.notificar_telefones.trim() || null,
     };
     // Só envia a chave se o usuário digitou algo (vazio = manter a atual).
     if (keyInput.trim()) payload.api_key = keyInput.trim();
@@ -335,6 +343,39 @@ export function SdrConfig({ onSaved }: SdrConfigProps) {
               checked={form.ativo}
               onCheckedChange={(v) => updateField('ativo', v)}
             />
+          </div>
+
+          {/* SDR autônomo: responder inbound de WhatsApp automaticamente */}
+          <div className="flex items-center justify-between rounded-md border px-3 py-2.5">
+            <div className="space-y-0.5">
+              <Label htmlFor="sdr-auto" className="text-sm">Responder automaticamente (WhatsApp)</Label>
+              <p className="text-xs text-muted-foreground">
+                Quando o lead responde no WhatsApp, o SDR qualifica e responde sozinho
+                (janela de 24h) e escala os quentes para o time.
+              </p>
+            </div>
+            <Switch
+              id="sdr-auto"
+              checked={form.auto_responder}
+              onCheckedChange={(v) => updateField('auto_responder', v)}
+            />
+          </div>
+
+          {/* Telefones de handoff */}
+          <div className="space-y-1.5">
+            <Label htmlFor="sdr-notificar" className="text-sm">
+              Telefones de notificação (handoff)
+            </Label>
+            <Input
+              id="sdr-notificar"
+              value={form.notificar_telefones}
+              onChange={(e) => updateField('notificar_telefones', e.target.value)}
+              placeholder="5547999990000, 5511988887777"
+            />
+            <p className="text-xs text-muted-foreground">
+              Números (com DDI/DDD) que recebem alerta no WhatsApp quando um lead é
+              qualificado como quente. Separe por vírgula.
+            </p>
           </div>
         </CardContent>
       </Card>
