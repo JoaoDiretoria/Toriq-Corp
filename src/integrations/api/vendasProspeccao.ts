@@ -20,12 +20,14 @@ export interface ProspeccaoConfig {
   apify_token_set: boolean;
   apify_token_masked: string | null;
   actors: Record<string, string> | null;
+  cache_dias: number | null;
 }
 
 /** Payload de atualização da config. */
 export interface ProspeccaoConfigUpdate {
   apify_token?: string;
   actors?: Record<string, string>;
+  cache_dias?: number | null;
   clear_apify_token?: boolean;
 }
 
@@ -43,6 +45,7 @@ export interface ProspeccaoJob {
   total_importados: number;
   total_duplicados: number;
   custo: number | null;
+  from_cache: boolean | null;
   erro: string | null;
   created_at: string | null;
   updated_at: string | null;

@@ -14,6 +14,8 @@ Reuso intencional:
 - Cripto via app/core/esocial_crypto.py (encrypt_secret/decrypt_secret/mask_secret).
 """
 import datetime
+import hashlib
+import json
 import re
 import uuid
 from typing import Optional
@@ -73,6 +75,12 @@ def _now() -> datetime.datetime:
     return datetime.datetime.now(datetime.timezone.utc)
 
 
+def _parametros_hash(plataforma: str, parametros: dict) -> str:
+    """Hash estável (plataforma + parâmetros ordenados) para o cache de busca."""
+    base = plataforma + "|" + json.dumps(parametros or {}, sort_keys=True, default=str)
+    return hashlib.sha256(base.encode()).hexdigest()
+
+
 async def _get_config(
     db: AsyncSession, empresa_id: uuid.UUID
 ) -> Optional[VendasConfig]:
@@ -116,6 +124,7 @@ async def get_config(
         apify_token_set=bool(obj.apify_token_enc),
         apify_token_masked=masked,
         actors=obj.actors,
+        cache_dias=obj.cache_dias,
     )
 
 
@@ -140,6 +149,8 @@ async def put_config(
 
     if payload.actors is not None:
         obj.actors = payload.actors
+    if payload.cache_dias is not None:
+        obj.cache_dias = payload.cache_dias
 
     obj.updated_at = _now()
 
@@ -155,6 +166,7 @@ async def put_config(
         apify_token_set=bool(obj.apify_token_enc),
         apify_token_masked=masked,
         actors=obj.actors,
+        cache_dias=obj.cache_dias,
     )
 
 
@@ -201,6 +213,44 @@ async def scraping_start(
             await db.flush()
         tag_id = tag.id
 
+    parametros_hash = _parametros_hash(payload.plataforma, payload.parametros)
+
+    # Cache (Fase 8): reusa um job recente com os MESMOS parâmetros (sem rodar a
+    # Apify de novo, economizando Compute Units). Não conta como run.
+    if config.cache_dias and config.cache_dias > 0:
+        cutoff = _now() - datetime.timedelta(days=config.cache_dias)
+        cached = await db.scalar(
+            select(VendasJobs)
+            .where(
+                VendasJobs.empresa_id == empresa_id,
+                VendasJobs.plataforma == payload.plataforma,
+                VendasJobs.parametros_hash == parametros_hash,
+                VendasJobs.apify_dataset_id.isnot(None),
+                VendasJobs.status.in_(["succeeded", "imported"]),
+                VendasJobs.created_at >= cutoff,
+            )
+            .order_by(VendasJobs.created_at.desc())
+            .limit(1)
+        )
+        if cached is not None:
+            job = VendasJobs(
+                id=uuid.uuid4(),
+                empresa_id=empresa_id,
+                plataforma=payload.plataforma,
+                parametros=payload.parametros,
+                tag_id=tag_id,
+                apify_run_id=None,
+                apify_dataset_id=cached.apify_dataset_id,
+                status="succeeded",
+                parametros_hash=parametros_hash,
+                from_cache=True,
+                total_captados=cached.total_captados,
+            )
+            db.add(job)
+            await db.commit()
+            await db.refresh(job)
+            return job
+
     try:
         run_input = build_actor_input(payload.plataforma, payload.parametros)
     except ValueError as exc:
@@ -221,6 +271,7 @@ async def scraping_start(
         apify_run_id=run.get("id"),
         apify_dataset_id=run.get("defaultDatasetId"),
         status=map_apify_status(run.get("status", "")),
+        parametros_hash=parametros_hash,
     )
     db.add(job)
     # Medição de uso (Fase 5): cada disparo de actor conta como 1 run Apify.
@@ -259,6 +310,13 @@ async def scraping_status(
                 item_count = run.get("itemsCount")
             if item_count is not None:
                 job.total_captados = item_count
+            # Custo/Compute Units (Fase 8): grava o custo em USD reportado pela Apify.
+            usd = run.get("usageTotalUsd")
+            if usd is not None:
+                try:
+                    job.custo = float(usd)
+                except (TypeError, ValueError):
+                    pass
             await db.commit()
             await db.refresh(job)
 

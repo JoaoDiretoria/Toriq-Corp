@@ -270,7 +270,7 @@ export const JobsTracker = forwardRef<JobsTrackerHandle, JobsTrackerProps>(
                   )}
 
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>
+                    <span className="flex items-center gap-1.5">
                       {job.created_at
                         ? new Date(job.created_at).toLocaleString('pt-BR', {
                             day: '2-digit',
@@ -279,6 +279,12 @@ export const JobsTracker = forwardRef<JobsTrackerHandle, JobsTrackerProps>(
                             minute: '2-digit',
                           })
                         : '-'}
+                      {job.from_cache && (
+                        <span className="text-amber-600">· cache</span>
+                      )}
+                      {job.custo != null && (
+                        <span>· US$ {Number(job.custo).toFixed(3)}</span>
+                      )}
                     </span>
                     {job.status === 'succeeded' && (
                       <span className="font-medium text-foreground">

@@ -59,6 +59,7 @@ export function ConfigDialog({ open, onOpenChange, onSaved }: ConfigDialogProps)
   const [tokenInput, setTokenInput] = useState('');
   // Overrides de actors por plataforma.
   const [actors, setActors] = useState<Record<string, string>>({});
+  const [cacheDias, setCacheDias] = useState('0');
 
   const fetchConfig = useCallback(async () => {
     setLoading(true);
@@ -67,6 +68,7 @@ export function ConfigDialog({ open, onOpenChange, onSaved }: ConfigDialogProps)
       setTokenSet(!!cfg.apify_token_set);
       setTokenMasked(cfg.apify_token_masked ?? null);
       setActors(cfg.actors ?? {});
+      setCacheDias(cfg.cache_dias != null ? String(cfg.cache_dias) : '0');
       setTokenInput('');
       setShowToken(false);
     } catch (error) {
@@ -114,6 +116,7 @@ export function ConfigDialog({ open, onOpenChange, onSaved }: ConfigDialogProps)
       if (v && v.trim()) cleanActors[k] = v.trim();
     }
     if (Object.keys(cleanActors).length > 0) payload.actors = cleanActors;
+    payload.cache_dias = cacheDias !== '' ? Number(cacheDias) : 0;
 
     if (Object.keys(payload).length === 0) {
       toast.info('Nenhuma alteração para salvar');
@@ -208,6 +211,26 @@ export function ConfigDialog({ open, onOpenChange, onSaved }: ConfigDialogProps)
               </div>
               <p className="text-xs text-muted-foreground">
                 Encontre seu token em console.apify.com → Settings → Integrations
+              </p>
+            </div>
+
+            {/* Cache de prospecção */}
+            <div className="space-y-1.5">
+              <Label htmlFor="cache-dias" className="text-xs font-medium">
+                Cache de busca (dias)
+              </Label>
+              <Input
+                id="cache-dias"
+                type="number"
+                min={0}
+                max={90}
+                value={cacheDias}
+                onChange={(e) => setCacheDias(e.target.value)}
+                placeholder="0"
+              />
+              <p className="text-xs text-muted-foreground">
+                Reutiliza os resultados de uma busca idêntica feita nos últimos N dias,
+                economizando Compute Units do Apify. 0 = sempre buscar do zero.
               </p>
             </div>
 

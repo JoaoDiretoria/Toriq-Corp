@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict
 class ConfigUpdate(BaseModel):
     apify_token: Optional[str] = None
     actors: Optional[dict] = None
+    cache_dias: Optional[int] = None
     clear_apify_token: Optional[bool] = None
 
 
@@ -23,6 +24,7 @@ class ConfigPublic(BaseModel):
     apify_token_set: bool
     apify_token_masked: Optional[str] = None
     actors: Optional[dict] = None
+    cache_dias: Optional[int] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -70,6 +72,7 @@ class JobOut(BaseModel):
     total_importados: int
     total_duplicados: int
     custo: Optional[float]
+    from_cache: Optional[bool] = False
     erro: Optional[str]
     created_at: Optional[datetime.datetime]
     updated_at: Optional[datetime.datetime]

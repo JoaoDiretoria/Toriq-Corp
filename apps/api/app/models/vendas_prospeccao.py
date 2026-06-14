@@ -13,6 +13,7 @@ import uuid
 from typing import Optional
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     ForeignKeyConstraint,
     Index,
@@ -48,6 +49,8 @@ class VendasConfig(Base):
     empresa_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
     apify_token_enc: Mapped[Optional[str]] = mapped_column(Text)
     actors: Mapped[Optional[dict]] = mapped_column(JSONB)
+    # Cache de prospecção (Fase 8): reusar a mesma busca por N dias (0 = desligado).
+    cache_dias: Mapped[Optional[int]] = mapped_column(Integer, server_default=text("0"))
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime(True), server_default=text("now()")
     )
@@ -81,6 +84,11 @@ class VendasJobs(Base):
     tag_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
     apify_run_id: Mapped[Optional[str]] = mapped_column(Text)
     apify_dataset_id: Mapped[Optional[str]] = mapped_column(Text)
+    # Cache (Fase 8): hash dos parâmetros (p/ reuso) e flag de cache-hit.
+    parametros_hash: Mapped[Optional[str]] = mapped_column(Text)
+    from_cache: Mapped[Optional[bool]] = mapped_column(
+        Boolean, server_default=text("false")
+    )
     status: Mapped[Optional[str]] = mapped_column(
         Text, server_default=text("'pending'")
     )
