@@ -49,3 +49,14 @@ async def test_health_estrutura(client):
     assert "versao" in body and "uptime_segundos" in body
     nomes = {d["nome"] for d in body["dependencias"]}
     assert {"postgres", "redis"} <= nomes
+
+
+async def test_database_tables(client):
+    await _register_login(client, "sup4@toriq.com", "suporte")
+    r = await client.get("/ops/database/tables")
+    assert r.status_code == 200
+    body = r.json()
+    assert "tabelas" in body and isinstance(body["tabelas"], list)
+    # users sempre existe; deve aparecer com contagem >= 0
+    nomes = {t["nome"] for t in body["tabelas"]}
+    assert "users" in nomes

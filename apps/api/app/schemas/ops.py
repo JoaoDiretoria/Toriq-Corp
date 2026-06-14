@@ -20,3 +20,23 @@ class HealthOut(BaseModel):
     dependencias: list[DependenciaStatus]
     fila_profundidade: int | None = None
     scheduler_jobs: int | None = None
+
+
+class TabelaInfo(BaseModel):
+    nome: str
+    schema_: str
+    linhas: int
+    tamanho_bytes: int
+
+
+class PoolInfo(BaseModel):
+    tamanho: int | None = None
+    em_uso: int | None = None
+    disponiveis: int | None = None
+    overflow: int | None = None
+
+
+class DatabaseOut(BaseModel):
+    tabelas: list[TabelaInfo]
+    total_tabelas: int
+    pool: PoolInfo

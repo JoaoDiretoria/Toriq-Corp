@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cache import cache
 from app.core.config import settings
+from app.core.db import engine
 from app.core.queue import queue
 
 
@@ -41,6 +42,48 @@ async def fila_profundidade() -> int | None:
         return int(await client.llen(f"{settings.cache_prefix}:queue"))
     except Exception:  # pragma: no cover
         return None
+
+
+_DB_STATS_SQL = text(
+    """
+    SELECT schemaname AS schema_, relname AS nome,
+           n_live_tup AS linhas,
+           pg_total_relation_size(relid) AS tamanho_bytes
+    FROM pg_stat_user_tables
+    ORDER BY n_live_tup DESC
+    """
+)
+
+
+async def listar_tabelas(db: AsyncSession) -> list[dict]:
+    rows = (await db.execute(_DB_STATS_SQL)).mappings().all()
+    return [
+        {
+            "nome": r["nome"],
+            "schema_": r["schema_"],
+            "linhas": int(r["linhas"] or 0),
+            "tamanho_bytes": int(r["tamanho_bytes"] or 0),
+        }
+        for r in rows
+    ]
+
+
+def pool_info() -> dict:
+    pool = getattr(engine.sync_engine, "pool", None)
+
+    def _safe(attr: str):
+        fn = getattr(pool, attr, None)
+        try:
+            return int(fn()) if callable(fn) else None
+        except Exception:
+            return None
+
+    return {
+        "tamanho": _safe("size"),
+        "em_uso": _safe("checkedout"),
+        "disponiveis": _safe("checkedin"),
+        "overflow": _safe("overflow"),
+    }
 
 
 async def montar_health(db: AsyncSession) -> dict:

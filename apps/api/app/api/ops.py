@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import require_ops
 from app.core.db import get_db
 from app.models.user import User
-from app.schemas.ops import HealthOut
+from app.schemas.ops import DatabaseOut, HealthOut
 from app.services import ops as ops_service
 
 router = APIRouter(prefix="/ops", tags=["ops"])
@@ -41,4 +41,17 @@ async def health(
         dependencias=base["dependencias"],
         fila_profundidade=base["fila_profundidade"],
         scheduler_jobs=jobs,
+    )
+
+
+@router.get("/database/tables", response_model=DatabaseOut)
+async def database_tables(
+    _: User = Depends(require_ops),
+    db: AsyncSession = Depends(get_db),
+) -> DatabaseOut:
+    tabelas = await ops_service.listar_tabelas(db)
+    return DatabaseOut(
+        tabelas=tabelas,
+        total_tabelas=len(tabelas),
+        pool=ops_service.pool_info(),
     )
