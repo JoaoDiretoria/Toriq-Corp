@@ -129,6 +129,7 @@
 ### Correções da sessão (14/06/2026)
 | Arquivo/Banco | Correção | Status |
 |---------------|----------|--------|
+| `apps/api/uv.lock` | Corrigidas dependências duplicadas do `sentry-sdk` que impediam a compilação do backend com `uv sync` | ✅ |
 | `src/components/admin/AdminSentryPanel.tsx` | Corrigidos erros de sintaxe JSX que quebravam o build (tags fechadas incorretamente, como `</CardTitle>CardTitle>`) | ✅ |
 | `profiles` RLS | Policy `profiles_update_own` — authenticated atualiza próprio perfil | ✅ |
 | `empresas` RLS | Policy `empresas_select_all_authenticated` — usuário vê empresa do próprio profile | ✅ |
