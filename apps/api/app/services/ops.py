@@ -86,6 +86,50 @@ def pool_info() -> dict:
     }
 
 
+async def redis_overview() -> dict:
+    client = cache._get_client()
+    if client is None:
+        return {"conectado": False}
+    try:
+        info = await client.info()
+        depth = await fila_profundidade()
+        # Conta chaves do prefixo da app (cap defensivo para não varrer infinito).
+        total = 0
+        async for _ in client.scan_iter(match=f"{settings.cache_prefix}:*", count=500):
+            total += 1
+            if total >= 10000:
+                break
+        return {
+            "conectado": True,
+            "memoria_usada": info.get("used_memory_human"),
+            "clientes_conectados": info.get("connected_clients"),
+            "keyspace_hits": info.get("keyspace_hits"),
+            "keyspace_misses": info.get("keyspace_misses"),
+            "fila_profundidade": depth,
+            "total_chaves_prefixo": total,
+        }
+    except Exception:  # pragma: no cover
+        return {"conectado": False, "memoria_usada": None}
+
+
+async def redis_keys(prefixo: str, limite: int = 200) -> dict:
+    client = cache._get_client()
+    if client is None:
+        return {"prefixo": prefixo, "chaves": [], "truncado": False}
+    chaves: list[dict] = []
+    truncado = False
+    try:
+        async for chave in client.scan_iter(match=f"{prefixo}*", count=200):
+            if len(chaves) >= limite:
+                truncado = True
+                break
+            ttl = await client.ttl(chave)
+            chaves.append({"chave": chave, "ttl": int(ttl)})
+    except Exception:  # pragma: no cover
+        pass
+    return {"prefixo": prefixo, "chaves": chaves, "truncado": truncado}
+
+
 async def montar_health(db: AsyncSession) -> dict:
     db_ok, db_detalhe = await _db_ok(db)
     redis_ok, redis_detalhe = await _redis_ok()

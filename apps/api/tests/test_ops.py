@@ -60,3 +60,19 @@ async def test_database_tables(client):
     # users sempre existe; deve aparecer com contagem >= 0
     nomes = {t["nome"] for t in body["tabelas"]}
     assert "users" in nomes
+
+
+async def test_redis_overview_sem_redis(client):
+    # Em teste não há REDIS_URL: overview reporta desligado, sem quebrar.
+    await _register_login(client, "sup5@toriq.com", "suporte")
+    r = await client.get("/ops/redis/overview")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["conectado"] is False
+
+
+async def test_scheduler_jobs(client):
+    await _register_login(client, "sup6@toriq.com", "suporte")
+    r = await client.get("/ops/scheduler/jobs")
+    assert r.status_code == 200
+    assert isinstance(r.json()["jobs"], list)

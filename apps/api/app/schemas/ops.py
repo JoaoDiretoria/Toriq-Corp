@@ -40,3 +40,35 @@ class DatabaseOut(BaseModel):
     tabelas: list[TabelaInfo]
     total_tabelas: int
     pool: PoolInfo
+
+
+class RedisOverviewOut(BaseModel):
+    conectado: bool
+    memoria_usada: str | None = None
+    clientes_conectados: int | None = None
+    keyspace_hits: int | None = None
+    keyspace_misses: int | None = None
+    fila_profundidade: int | None = None
+    total_chaves_prefixo: int | None = None
+
+
+class RedisChave(BaseModel):
+    chave: str
+    ttl: int  # -1 sem expiração, -2 inexistente
+
+
+class RedisKeysOut(BaseModel):
+    prefixo: str
+    chaves: list[RedisChave]
+    truncado: bool
+
+
+class SchedulerJob(BaseModel):
+    id: str
+    nome: str
+    proximo_run: datetime.datetime | None = None
+
+
+class SchedulerOut(BaseModel):
+    rodando: bool
+    jobs: list[SchedulerJob]

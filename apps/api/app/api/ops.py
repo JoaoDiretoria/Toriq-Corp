@@ -9,7 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import require_ops
 from app.core.db import get_db
 from app.models.user import User
-from app.schemas.ops import DatabaseOut, HealthOut
+from app.core.config import settings
+from app.schemas.ops import (
+    DatabaseOut,
+    HealthOut,
+    RedisKeysOut,
+    RedisOverviewOut,
+    SchedulerOut,
+)
 from app.services import ops as ops_service
 
 router = APIRouter(prefix="/ops", tags=["ops"])
@@ -55,3 +62,32 @@ async def database_tables(
         total_tabelas=len(tabelas),
         pool=ops_service.pool_info(),
     )
+
+
+@router.get("/redis/overview", response_model=RedisOverviewOut)
+async def redis_overview(_: User = Depends(require_ops)) -> RedisOverviewOut:
+    return RedisOverviewOut(**await ops_service.redis_overview())
+
+
+@router.get("/redis/keys", response_model=RedisKeysOut)
+async def redis_keys(
+    prefix: str | None = None,
+    _: User = Depends(require_ops),
+) -> RedisKeysOut:
+    prefixo = prefix or f"{settings.cache_prefix}:"
+    return RedisKeysOut(**await ops_service.redis_keys(prefixo))
+
+
+@router.get("/scheduler/jobs", response_model=SchedulerOut)
+async def scheduler_jobs(
+    request: Request,
+    _: User = Depends(require_ops),
+) -> SchedulerOut:
+    scheduler = getattr(request.app.state, "scheduler", None)
+    if scheduler is None:
+        return SchedulerOut(rodando=False, jobs=[])
+    jobs = [
+        {"id": j.id, "nome": j.name or j.id, "proximo_run": j.next_run_time}
+        for j in scheduler.get_jobs()
+    ]
+    return SchedulerOut(rodando=bool(scheduler.running), jobs=jobs)
