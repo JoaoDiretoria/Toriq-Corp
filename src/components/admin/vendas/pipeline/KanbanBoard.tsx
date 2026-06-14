@@ -180,6 +180,54 @@ export function KanbanBoard({ refreshKey, onOpenLead }: KanbanBoardProps) {
     }
   };
 
+  /**
+   * Nova ordem (lista de ids) da coluna destino, com o lead arrastado inserido
+   * na posição do alvo (`overId`). Se soltar na coluna (não num card), vai pro
+   * fim. Remove o lead da posição antiga antes de inserir.
+   */
+  const computarNovaOrdem = (
+    lead: LeadCardData,
+    destId: string,
+    overId: string,
+  ): string[] => {
+    const atuais = (leadsByStage.get(destId) ?? [])
+      .map((l) => String(l.id))
+      .filter((id) => id !== String(lead.id));
+    let idx = atuais.length;
+    if (!overId.startsWith("stage-")) {
+      const i = atuais.indexOf(overId);
+      if (i >= 0) idx = i;
+    }
+    atuais.splice(idx, 0, String(lead.id));
+    return atuais;
+  };
+
+  const efetivarReordenar = async (
+    lead: LeadCardData,
+    destId: string,
+    novaOrdem: string[],
+  ) => {
+    snapshotRef.current = leads;
+    // Update otimista: reagrupa o lead na coluna destino na ordem calculada.
+    const destSet = new Set(novaOrdem);
+    const leadMap = new Map(leads.map((l) => [String(l.id), l]));
+    const ordenadosDest = novaOrdem
+      .map((id) => leadMap.get(id))
+      .filter((l): l is LeadCardData => !!l)
+      .map((l) => ({ ...l, stage_id: destId }) as LeadCardData);
+    const resto = leads.filter((l) => !destSet.has(String(l.id)));
+    setLeads([...resto, ...ordenadosDest]);
+    try {
+      await vendasPipelineApi.reordenarColuna(destId, novaOrdem);
+      snapshotRef.current = null;
+    } catch (error) {
+      reverter();
+      toast.error("Erro ao reordenar", {
+        description: (error as Error)?.message,
+      });
+    }
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveLead(null);
@@ -192,16 +240,19 @@ export function KanbanBoard({ refreshKey, onOpenLead }: KanbanBoardProps) {
     const destino = resolverStageDestino(String(over.id));
     if (!destino) return;
 
+    const destId = String(destino.id);
     const origemId = lead.stage_id ? String(lead.stage_id) : stageNovoId;
-    if (origemId === String(destino.id)) return; // não mudou de coluna
 
-    if (destino.is_closed) {
-      // Pede valor/motivo antes de efetivar.
+    // Mudou para um estágio de fechamento (Ganho/Perdido): pede valor/motivo.
+    if (origemId !== destId && destino.is_closed) {
       setPendente({ lead, stage: destino });
       return;
     }
 
-    efetivarMover(lead, destino);
+    // Demais casos (reordenar na mesma coluna OU mover entre colunas abertas):
+    // persiste a nova ordem da coluna destino (que também grava o stage_id).
+    const novaOrdem = computarNovaOrdem(lead, destId, String(over.id));
+    efetivarReordenar(lead, destId, novaOrdem);
   };
 
   // ----------------------------------------------------------------------

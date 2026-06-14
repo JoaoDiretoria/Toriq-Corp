@@ -76,6 +76,14 @@ export interface LeadCard {
   last_message_at: string | null;
   last_message_preview: string | null;
   tags: LeadCardTag[];
+  assigned_to: string | null;
+  assigned_to_nome: string | null;
+}
+
+/** Operador (usuário) da empresa — seletor de responsável. */
+export interface Operador {
+  id: string;
+  nome: string;
 }
 
 /** Board completo (estágios + leads). */
@@ -98,6 +106,7 @@ export interface LeadPatchInput {
   valor_estimado?: number | null;
   is_pinned?: boolean | null;
   is_archived?: boolean | null;
+  assigned_to?: string | null;
 }
 
 /** Mensagem de uma conversa (thread). */
@@ -138,6 +147,8 @@ export interface ConversasFilters {
   tag_id?: string;
   temperatura?: string;
   stage_id?: string;
+  assigned_to?: string;
+  minhas?: boolean;
   arquivados?: boolean;
   limit?: number;
   offset?: number;
@@ -157,6 +168,17 @@ export interface Conversao {
   itens: ConversaoItem[];
   total_leads: number;
   valor_total: number;
+}
+
+/** Indicadores de desempenho da pipeline. */
+export interface Analytics {
+  total_leads: number;
+  ganhos: number;
+  perdidos: number;
+  valor_ganho: number;
+  taxa_conversao: number;
+  por_origem: { origem: string; total: number; ganhos: number; valor_ganho: number }[];
+  por_temperatura: { temperatura: string; total: number }[];
 }
 
 /** Evento recebido via SSE (Redis pub/sub). */
@@ -210,12 +232,22 @@ export const vendasPipelineApi = {
   // Board
   getBoard: () => api.get<Board>("/vendas/pipeline/board"),
 
+  // Operadores (responsáveis)
+  listOperadores: () =>
+    api.get<Operador[]>("/vendas/pipeline/operadores"),
+
   // Leads (movimentação / patch)
   moverLead: (id: string, data: MoverLeadInput) =>
     api.post<LeadCard>(`/vendas/pipeline/leads/${id}/mover`, data),
 
   patchLead: (id: string, data: LeadPatchInput) =>
     api.patch<LeadCard>(`/vendas/pipeline/leads/${id}`, data),
+
+  /** Persiste a ordem manual dos cards de um estágio (drag-and-drop). */
+  reordenarColuna: (stageId: string, leadIds: string[]) =>
+    api.post<void>(`/vendas/pipeline/stages/${stageId}/reordenar`, {
+      lead_ids: leadIds,
+    }),
 
   // Conversas (inbox)
   listConversas: (filters: ConversasFilters = {}) =>
@@ -247,6 +279,9 @@ export const vendasPipelineApi = {
 
   // Conversão (dashboard)
   getConversao: () => api.get<Conversao>("/vendas/pipeline/conversao"),
+
+  // Analytics (desempenho)
+  getAnalytics: () => api.get<Analytics>("/vendas/pipeline/analytics"),
 };
 
 // ---------------------------------------------------------------------------

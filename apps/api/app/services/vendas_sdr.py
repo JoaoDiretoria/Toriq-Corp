@@ -433,6 +433,10 @@ _DECISAO_PARA_STATUS = {
     "desqualified": "desqualificado",
 }
 
+# Horas até o follow-up automático quando o lead fica "em_contato" e some.
+# Mantido DENTRO da janela de 24h do WhatsApp para o nudge poder ir como texto.
+FOLLOWUP_HORAS = 6
+
 
 async def _cot_decisao(
     config: VendasSdrConfig, system: str | None, contexto_user: str
@@ -603,6 +607,13 @@ async def processar_inbound_sdr(
     if summary:
         lead.sdr_notas = summary
 
+    # Follow-up automático: se o lead segue em negociação ("em_contato"),
+    # agenda um nudge. Se qualificou ou desqualificou, cancela o follow-up.
+    if decisao == "em_contato":
+        lead.sdr_proximo_followup = _now() + datetime.timedelta(hours=FOLLOWUP_HORAS)
+    elif decisao in ("qualified", "desqualified"):
+        lead.sdr_proximo_followup = None
+
     # 5) Responde automaticamente (se houver next_message e telefone).
     if next_msg:
         enviou = await _enviar_whatsapp_sdr(
@@ -681,3 +692,144 @@ async def processar_inbound_sdr(
         )
 
     await db.commit()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FOLLOW-UP AUTOMÁTICO (Fase pós-pipeline): nudge ao lead que ficou em silêncio
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def _janela_aberta_lead(
+    db: AsyncSession, *, empresa_id: uuid.UUID, lead_id: uuid.UUID
+) -> bool:
+    """A janela de 24h (última msg do lead na thread de conversas) está aberta?"""
+    from app.models.vendas_pipeline import VendasConversas
+
+    ultimo = await db.scalar(
+        select(VendasConversas.created_at)
+        .where(
+            VendasConversas.empresa_id == empresa_id,
+            VendasConversas.lead_id == lead_id,
+            VendasConversas.sender_type == "lead",
+        )
+        .order_by(VendasConversas.created_at.desc())
+        .limit(1)
+    )
+    if ultimo is None:
+        return False
+    return _now() < ultimo + datetime.timedelta(hours=24)
+
+
+async def processar_followup_sdr(
+    db: AsyncSession, *, empresa_id: uuid.UUID, lead_id: uuid.UUID
+) -> None:
+    """Envia UM nudge de reengajamento a um lead com follow-up vencido.
+
+    Só roda com SDR ativo + auto-resposta + chave. Respeita a janela de 24h
+    (fora dela não dá para mandar texto livre → só limpa o agendamento). Gera
+    a mensagem com a IA, envia por WhatsApp, espelha na thread e LIMPA o
+    follow-up (one-shot, evita spam). Commita. Nunca propaga LLMError.
+    """
+    config = await db.scalar(
+        select(VendasSdrConfig).where(VendasSdrConfig.empresa_id == empresa_id)
+    )
+    lead = await db.scalar(
+        select(VendasLeads).where(
+            VendasLeads.id == lead_id, VendasLeads.empresa_id == empresa_id
+        )
+    )
+    if lead is None:
+        return
+    # Desliga o agendamento em qualquer caso que não dê para seguir.
+    if (
+        config is None
+        or not config.ativo
+        or not config.auto_responder
+        or not config.api_key_enc
+        or not await _janela_aberta_lead(db, empresa_id=empresa_id, lead_id=lead_id)
+    ):
+        lead.sdr_proximo_followup = None
+        await db.commit()
+        return
+
+    system = _system_conversa(config, lead)
+    contexto = (
+        "O lead ficou em silêncio após a última interação. Gere UMA mensagem "
+        "curta, gentil e específica de follow-up para reengajar a conversa. "
+        "Responda apenas com a mensagem, sem aspas."
+    )
+    try:
+        texto = await chamar_claude(
+            api_key=decrypt_secret(config.api_key_enc),
+            modelo=config.modelo or "claude-sonnet-4-6",
+            system=system,
+            mensagens=[{"role": "user", "content": contexto}],
+            temperatura=float(config.temperatura) if config.temperatura is not None else 0.7,
+            max_tokens=400,
+        )
+    except LLMError:
+        lead.sdr_proximo_followup = None
+        await db.commit()
+        return
+
+    texto = (texto or "").strip()
+    enviou = False
+    if texto:
+        enviou = await _enviar_whatsapp_sdr(
+            db, empresa_id=empresa_id, to=lead.telefone or "", texto=texto
+        )
+        db.add(
+            VendasSdrInteracoes(
+                id=uuid.uuid4(),
+                empresa_id=empresa_id,
+                lead_id=lead.id,
+                papel="assistente",
+                tipo="mensagem",
+                conteudo=texto,
+                meta={"enviado": enviou, "followup": True},
+            )
+        )
+        # Espelha o follow-up na thread de conversas (inbox em tempo real).
+        try:
+            from app.services.vendas_pipeline import append_mensagem
+
+            await append_mensagem(
+                db,
+                empresa_id=empresa_id,
+                lead_id=lead.id,
+                sender_type="sdr",
+                conteudo=texto,
+                canal="whatsapp",
+                status="enviado" if enviou else "erro",
+            )
+        except Exception:  # pragma: no cover - espelho é best-effort
+            pass
+        from app.services.vendas_uso import registrar_uso
+
+        await registrar_uso(
+            db, empresa_id=empresa_id, metrica="sdr_conversas", referencia=str(lead.id)
+        )
+
+    lead.sdr_proximo_followup = None  # one-shot
+    await db.commit()
+
+
+async def processar_followups_pendentes(db: AsyncSession, *, limite: int = 200) -> int:
+    """Roda os follow-ups vencidos de todas as empresas (chamado pelo scheduler).
+
+    Retorna quantos leads foram processados. Cada lead commita por si em
+    ``processar_followup_sdr`` (tolerante a falhas)."""
+    devidos = (
+        await db.scalars(
+            select(VendasLeads)
+            .where(
+                VendasLeads.sdr_proximo_followup.isnot(None),
+                VendasLeads.sdr_proximo_followup <= _now(),
+            )
+            .limit(limite)
+        )
+    ).all()
+    for lead in devidos:
+        await processar_followup_sdr(
+            db, empresa_id=lead.empresa_id, lead_id=lead.id
+        )
+    return len(devidos)

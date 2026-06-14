@@ -106,6 +106,11 @@ class VendasLeads(Base):
     )
     temperatura: Mapped[Optional[str]] = mapped_column(Text)
     valor_estimado: Mapped[Optional[decimal.Decimal]] = mapped_column(Numeric)
+    # Ordem manual do card dentro do estágio no kanban (migration c7f8a9b0d1e2).
+    board_ordem: Mapped[Optional[int]] = mapped_column(Integer)
+    # Operador responsável pela conversa (assignee estilo Chatwoot). FK users
+    # SET NULL ao apagar o usuário (migration c7f8a9b0d1e2).
+    assigned_to: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime(True), server_default=text("now()")
     )

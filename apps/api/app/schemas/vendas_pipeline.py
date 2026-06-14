@@ -61,6 +61,8 @@ class LeadCardOut(BaseModel):
     last_message_at: Optional[datetime.datetime]
     last_message_preview: Optional[str]
     tags: list[dict]
+    assigned_to: Optional[uuid.UUID] = None
+    assigned_to_nome: Optional[str] = None
 
 
 class BoardOut(BaseModel):
@@ -72,6 +74,11 @@ class MoverLeadIn(BaseModel):
     stage_id: uuid.UUID
     valor_estimado: Optional[float] = None
     motivo: Optional[str] = None
+
+
+class ReordenarColunaIn(BaseModel):
+    """Nova ordem dos cards de um estágio (na sequência = board_ordem)."""
+    lead_ids: list[uuid.UUID]
 
 
 # ── Conversas (inbox / thread) ────────────────────────────────────────────────
@@ -112,6 +119,12 @@ class LeadPatchIn(BaseModel):
     valor_estimado: Optional[float] = None
     is_pinned: Optional[bool] = None
     is_archived: Optional[bool] = None
+    assigned_to: Optional[uuid.UUID] = None
+
+
+class OperadorOut(BaseModel):
+    id: uuid.UUID
+    nome: str
 
 
 # ── Conversão (dashboard) ─────────────────────────────────────────────────────
@@ -120,3 +133,13 @@ class ConversaoOut(BaseModel):
     itens: list[dict]
     total_leads: int
     valor_total: float
+
+
+class AnalyticsOut(BaseModel):
+    total_leads: int
+    ganhos: int
+    perdidos: int
+    valor_ganho: float
+    taxa_conversao: float
+    por_origem: list[dict]
+    por_temperatura: list[dict]

@@ -33,6 +33,15 @@ router = APIRouter(prefix="/vendas", tags=["vendas-pipeline"])
 
 require_admin = require_role(UserRole.admin_vertical, UserRole.cliente_torq)
 
+# Mídia do WhatsApp é conteúdo de terceiro — só liberamos render inline para
+# tipos seguros conhecidos; PDF e afins vão como download; o resto, octet-stream.
+_MIME_INLINE = {
+    "image/jpeg", "image/png", "image/webp", "image/gif",
+    "audio/ogg", "audio/mpeg", "audio/mp4", "audio/aac", "audio/amr",
+    "video/mp4", "video/3gpp",
+}
+_MIME_DOWNLOAD = {"application/pdf"}
+
 
 def _require_empresa(user: User) -> uuid.UUID:
     if user.empresa_id is None:
@@ -168,6 +177,31 @@ async def mover_lead(
     return await svc._card(db, lead)
 
 
+@router.post(
+    "/pipeline/stages/{stage_id}/reordenar",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def reordenar_coluna(
+    stage_id: uuid.UUID,
+    payload: s.ReordenarColunaIn,
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Persiste a ordem manual dos cards de um estágio (drag-and-drop)."""
+    empresa_id = _require_empresa(user)
+    stage = await db.scalar(
+        select(VendasPipelineStages).where(
+            VendasPipelineStages.id == stage_id,
+            VendasPipelineStages.empresa_id == empresa_id,
+        )
+    )
+    if stage is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "estágio não encontrado")
+    await svc.reordenar_coluna(
+        db, empresa_id=empresa_id, stage_id=stage_id, lead_ids=payload.lead_ids
+    )
+
+
 @router.patch("/pipeline/leads/{lead_id}", response_model=s.LeadCardOut)
 async def patch_lead(
     lead_id: uuid.UUID,
@@ -214,12 +248,24 @@ async def patch_lead(
 # Conversas (inbox)
 # ═══════════════════════════════════════════════════════════════════════════════
 
+@router.get("/pipeline/operadores", response_model=list[s.OperadorOut])
+async def listar_operadores(
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Operadores (usuários ativos) da empresa — seletor de responsável."""
+    empresa_id = _require_empresa(user)
+    return await svc.listar_operadores(db, empresa_id)
+
+
 @router.get("/conversas", response_model=list[s.LeadCardOut])
 async def listar_conversas(
     busca: Optional[str] = None,
     tag_id: Optional[uuid.UUID] = None,
     temperatura: Optional[str] = None,
     stage_id: Optional[uuid.UUID] = None,
+    assigned_to: Optional[uuid.UUID] = None,
+    minhas: bool = Query(False),
     arquivados: bool = Query(False),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -227,6 +273,9 @@ async def listar_conversas(
     db: AsyncSession = Depends(get_db),
 ):
     empresa_id = _require_empresa(user)
+    # "minhas" filtra pelo operador logado (atalho do front).
+    if minhas:
+        assigned_to = user.id
     return await svc.listar_conversas(
         db,
         empresa_id=empresa_id,
@@ -234,6 +283,7 @@ async def listar_conversas(
         tag_id=tag_id,
         temperatura=temperatura,
         stage_id=stage_id,
+        assigned_to=assigned_to,
         arquivados=arquivados,
         limit=limit,
         offset=offset,
@@ -298,10 +348,21 @@ async def baixar_media_conversa(
         )
     except WhatsAppError as exc:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc))
+
+    # Os bytes vêm de terceiro (a Meta repassa o que o lead enviou) — tratamos o
+    # Content-Type como NÃO confiável para evitar XSS por content-sniffing:
+    # só renderizamos inline mídia conhecida; o resto vira download (attachment).
+    mime_base = (mime or "").split(";")[0].strip().lower()
+    inline_ok = mime_base in _MIME_INLINE
+    safe_mime = mime_base if (inline_ok or mime_base in _MIME_DOWNLOAD) else "application/octet-stream"
     return Response(
         content=conteudo,
-        media_type=mime,
-        headers={"Cache-Control": "private, max-age=86400"},
+        media_type=safe_mime,
+        headers={
+            "X-Content-Type-Options": "nosniff",
+            "Content-Disposition": "inline" if inline_ok else "attachment",
+            "Cache-Control": "private, max-age=86400",
+        },
     )
 
 
@@ -352,6 +413,16 @@ async def get_conversao(
 ):
     empresa_id = _require_empresa(user)
     return await svc.conversao(db, empresa_id=empresa_id)
+
+
+@router.get("/pipeline/analytics", response_model=s.AnalyticsOut)
+async def get_analytics(
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Indicadores de desempenho: conversão, ganhos/perdidos, por origem/temperatura."""
+    empresa_id = _require_empresa(user)
+    return await svc.analytics(db, empresa_id=empresa_id)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

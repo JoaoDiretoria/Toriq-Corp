@@ -14,6 +14,7 @@ def build_scheduler() -> AsyncIOScheduler:
         job_automacoes_negocio_parado,
         job_contas_recorrentes,
         job_disparo_campanhas,
+        job_sdr_followups,
     )
 
     sched = AsyncIOScheduler(timezone="America/Sao_Paulo")
@@ -41,5 +42,10 @@ def build_scheduler() -> AsyncIOScheduler:
     sched.add_job(
         job_disparo_campanhas, IntervalTrigger(minutes=1),
         id="disparo_campanhas", replace_existing=True,
+    )
+    # A cada 5 min — dispara follow-ups automáticos do SDR que venceram.
+    sched.add_job(
+        job_sdr_followups, IntervalTrigger(minutes=5),
+        id="sdr_followups", replace_existing=True,
     )
     return sched

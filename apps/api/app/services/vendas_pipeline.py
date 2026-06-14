@@ -19,12 +19,13 @@ import re
 import uuid
 from typing import Optional
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, case, func, literal, select
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.esocial_crypto import decrypt_secret
 from app.integrations.whatsapp_meta import WhatsAppError, send_template, send_text
+from app.models.user import User
 from app.models.vendas import VendasLeads, VendasLeadTags, VendasTags
 from app.models.vendas_disparo import VendasDisparoConfig, VendasTemplates
 from app.models.vendas_pipeline import VendasConversas, VendasPipelineStages
@@ -149,17 +150,30 @@ async def _unread_e_preview(
     return int(unread or 0), ultima
 
 
+async def _nomes_responsaveis(
+    db: AsyncSession, user_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, str]:
+    """Mapa user_id -> nome dos operadores responsáveis (assignees)."""
+    ids = [u for u in set(user_ids) if u is not None]
+    if not ids:
+        return {}
+    rows = await db.execute(select(User.id, User.nome).where(User.id.in_(ids)))
+    return {uid: nome for uid, nome in rows.all()}
+
+
 async def _card(
     db: AsyncSession,
     lead: VendasLeads,
     *,
     novo_stage_id: Optional[uuid.UUID] = None,
     tags: Optional[list[dict]] = None,
+    nomes: Optional[dict[uuid.UUID, str]] = None,
 ) -> dict:
     """Serializa um lead no formato LeadCardOut (dict).
 
     ``novo_stage_id`` é usado como fallback quando o lead está sem estágio
-    (cai no estágio "Novo").
+    (cai no estágio "Novo"). ``nomes`` é um cache opcional id->nome dos
+    responsáveis (evita query por card no board/listagem).
     """
     if tags is None:
         tags = (await _tags_dos_leads(db, [lead.id])).get(lead.id, [])
@@ -167,6 +181,10 @@ async def _card(
 
     stage_id = getattr(lead, "stage_id", None) or novo_stage_id
     valor = getattr(lead, "valor_estimado", None)
+    assigned_to = getattr(lead, "assigned_to", None)
+    if assigned_to is not None and nomes is None:
+        nomes = await _nomes_responsaveis(db, [assigned_to])
+    assigned_nome = (nomes or {}).get(assigned_to) if assigned_to else None
     return {
         "id": lead.id,
         "nome": lead.nome,
@@ -186,7 +204,21 @@ async def _card(
         "last_message_at": getattr(lead, "last_message_at", None),
         "last_message_preview": preview,
         "tags": tags,
+        "assigned_to": assigned_to,
+        "assigned_to_nome": assigned_nome,
     }
+
+
+async def listar_operadores(
+    db: AsyncSession, empresa_id: uuid.UUID
+) -> list[dict]:
+    """Operadores (usuários ativos) da empresa — para o seletor de responsável."""
+    rows = await db.execute(
+        select(User.id, User.nome)
+        .where(User.empresa_id == empresa_id, User.ativo.is_(True))
+        .order_by(User.nome)
+    )
+    return [{"id": uid, "nome": nome} for uid, nome in rows.all()]
 
 
 async def _get_lead(
@@ -333,16 +365,46 @@ async def board(
         await db.scalars(
             select(VendasLeads)
             .where(and_(*conds))
-            .order_by(VendasLeads.last_message_at.desc().nullslast())
+            .order_by(
+                VendasLeads.board_ordem.asc().nullslast(),
+                VendasLeads.last_message_at.desc().nullslast(),
+            )
         )
     ).all()
 
     tags_map = await _tags_dos_leads(db, [l.id for l in leads])
+    nomes = await _nomes_responsaveis(db, [l.assigned_to for l in leads])
     cards = [
-        await _card(db, l, novo_stage_id=novo_id, tags=tags_map.get(l.id, []))
+        await _card(
+            db, l, novo_stage_id=novo_id, tags=tags_map.get(l.id, []), nomes=nomes
+        )
         for l in leads
     ]
     return {"stages": list(stages), "leads": cards}
+
+
+async def reordenar_coluna(
+    db: AsyncSession,
+    *,
+    empresa_id: uuid.UUID,
+    stage_id: uuid.UUID,
+    lead_ids: list[uuid.UUID],
+) -> None:
+    """Persiste a ordem manual dos cards de um estágio (board_ordem = posição).
+
+    Também garante que cada lead da lista esteja no estágio informado (move se
+    veio de outra coluna no mesmo gesto de arrastar). Escopado por empresa.
+    """
+    for posicao, lead_id in enumerate(lead_ids):
+        lead = await _get_lead(db, empresa_id, lead_id)
+        if lead is None:
+            continue
+        lead.board_ordem = posicao
+        lead.stage_id = stage_id
+    await db.commit()
+    await _publicar(
+        empresa_id, {"tipo": "lead_movido", "stage_id": str(stage_id)}
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -357,6 +419,7 @@ async def listar_conversas(
     tag_id: Optional[uuid.UUID] = None,
     temperatura: Optional[str] = None,
     stage_id: Optional[uuid.UUID] = None,
+    assigned_to: Optional[uuid.UUID] = None,
     arquivados: bool = False,
     limit: int = 50,
     offset: int = 0,
@@ -371,6 +434,8 @@ async def listar_conversas(
         conds.append(VendasLeads.temperatura == temperatura)
     if stage_id is not None:
         conds.append(VendasLeads.stage_id == stage_id)
+    if assigned_to is not None:
+        conds.append(VendasLeads.assigned_to == assigned_to)
     if busca:
         like = f"%{busca}%"
         conds.append(
@@ -400,7 +465,11 @@ async def listar_conversas(
     ).all()
 
     tags_map = await _tags_dos_leads(db, [l.id for l in leads])
-    return [await _card(db, l, tags=tags_map.get(l.id, [])) for l in leads]
+    nomes = await _nomes_responsaveis(db, [l.assigned_to for l in leads])
+    return [
+        await _card(db, l, tags=tags_map.get(l.id, []), nomes=nomes)
+        for l in leads
+    ]
 
 
 async def _janela_atendimento(
@@ -618,3 +687,107 @@ async def conversao(db: AsyncSession, *, empresa_id: uuid.UUID) -> dict:
             }
         )
     return {"itens": itens, "total_leads": total_leads, "valor_total": valor_total}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Analytics (desempenho)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def analytics(db: AsyncSession, *, empresa_id: uuid.UUID) -> dict:
+    """Indicadores de desempenho da pipeline (sobre leads não-arquivados).
+
+    Resumo (total/ganhos/perdidos/valor ganho/taxa de conversão) + quebra por
+    origem e por temperatura. Não usa histórico de transições (não temos tabela
+    de eventos) — mede o ESTADO atual dos leads."""
+    stages = await garantir_estagios(db, empresa_id)
+    won_ids = {s.id for s in stages if s.is_won}
+    lost_ids = {s.id for s in stages if s.is_closed and not s.is_won}
+
+    base = [VendasLeads.empresa_id == empresa_id, VendasLeads.is_archived.isnot(True)]
+
+    total = int(await db.scalar(
+        select(func.count()).select_from(VendasLeads).where(and_(*base))
+    ) or 0)
+
+    ganhos = 0
+    valor_ganho = 0.0
+    if won_ids:
+        ganhos = int(await db.scalar(
+            select(func.count()).select_from(VendasLeads).where(
+                and_(*base, VendasLeads.stage_id.in_(won_ids))
+            )
+        ) or 0)
+        valor_ganho = float(await db.scalar(
+            select(func.coalesce(func.sum(VendasLeads.valor_estimado), 0)).where(
+                and_(*base, VendasLeads.stage_id.in_(won_ids))
+            )
+        ) or 0)
+    perdidos = 0
+    if lost_ids:
+        perdidos = int(await db.scalar(
+            select(func.count()).select_from(VendasLeads).where(
+                and_(*base, VendasLeads.stage_id.in_(lost_ids))
+            )
+        ) or 0)
+
+    taxa_conversao = (ganhos / total) if total else 0.0
+
+    # Por origem: total + ganhos + valor ganho.
+    if won_ids:
+        ganhos_expr = func.coalesce(
+            func.sum(case((VendasLeads.stage_id.in_(won_ids), 1), else_=0)), 0
+        )
+        valor_expr = func.coalesce(
+            func.sum(
+                case(
+                    (VendasLeads.stage_id.in_(won_ids), VendasLeads.valor_estimado),
+                    else_=0,
+                )
+            ),
+            0,
+        )
+    else:
+        ganhos_expr = literal(0)
+        valor_expr = literal(0)
+
+    por_origem: dict[str, dict] = {}
+    rows = await db.execute(
+        select(
+            VendasLeads.origem,
+            func.count().label("total"),
+            ganhos_expr.label("ganhos"),
+            valor_expr.label("valor_ganho"),
+        )
+        .where(and_(*base))
+        .group_by(VendasLeads.origem)
+    )
+    for origem, tot, gan, val in rows.all():
+        chave = origem or "—"
+        por_origem[chave] = {
+            "origem": chave,
+            "total": int(tot or 0),
+            "ganhos": int(gan or 0),
+            "valor_ganho": float(val or 0),
+        }
+
+    # Por temperatura.
+    por_temperatura: list[dict] = []
+    rows_t = await db.execute(
+        select(VendasLeads.temperatura, func.count())
+        .where(and_(*base))
+        .group_by(VendasLeads.temperatura)
+    )
+    for temp, qtd in rows_t.all():
+        por_temperatura.append(
+            {"temperatura": temp or "—", "total": int(qtd or 0)}
+        )
+
+    return {
+        "total_leads": total,
+        "ganhos": ganhos,
+        "perdidos": perdidos,
+        "valor_ganho": valor_ganho,
+        "taxa_conversao": taxa_conversao,
+        "por_origem": list(por_origem.values()),
+        "por_temperatura": por_temperatura,
+    }

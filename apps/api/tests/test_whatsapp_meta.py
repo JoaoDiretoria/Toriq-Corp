@@ -136,6 +136,7 @@ def test_parse_webhook_mensagens_e_statuses():
             "from": "5511999999999",
             "tipo": "text",
             "texto": "Olá, tenho interesse",
+            "media": None,
             "timestamp": "1700000000",
         }
     ]

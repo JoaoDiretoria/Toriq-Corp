@@ -35,3 +35,14 @@ async def job_disparo_campanhas() -> None:
     from app.services.vendas_disparo import processar_campanhas_pendentes
     async with SessionLocal() as db:
         await processar_campanhas_pendentes(db)
+
+
+async def job_sdr_followups() -> None:
+    """Dispara os follow-ups automáticos do SDR que venceram (~5min).
+
+    O serviço commita por lead; aqui só abrimos a sessão.
+    """
+    from app.core.db import SessionLocal
+    from app.services.vendas_sdr import processar_followups_pendentes
+    async with SessionLocal() as db:
+        await processar_followups_pendentes(db)

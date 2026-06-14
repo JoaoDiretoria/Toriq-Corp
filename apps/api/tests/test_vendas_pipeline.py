@@ -389,3 +389,89 @@ async def test_sem_empresa_403(client, db_session):
 
     r = await client.get("/vendas/pipeline/board")
     assert r.status_code == 403
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# #3 REORDENAR — ordem manual do card no estágio
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.anyio
+async def test_reordenar_coluna_persiste_ordem(client, db_session):
+    await login_as(client, db_session, email="pipe_reorder@torq.com")
+    a = await _criar_lead(client, nome="A", telefone="+55 11 90000-1001")
+    b = await _criar_lead(client, nome="B", telefone="+55 11 90000-1002")
+
+    r = await client.get("/vendas/pipeline/board")
+    novo = next(s for s in r.json()["stages"] if s["nome"] == "Novo")
+
+    # Ordem B, A nesse estágio.
+    r = await client.post(
+        f"/vendas/pipeline/stages/{novo['id']}/reordenar",
+        json={"lead_ids": [b, a]},
+    )
+    assert r.status_code == 204, r.text
+
+    r = await client.get("/vendas/pipeline/board")
+    no_novo = [
+        c["id"]
+        for c in r.json()["leads"]
+        if (c["stage_id"] == novo["id"]) and c["id"] in (a, b)
+    ]
+    assert no_novo == [b, a]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# #6 RESPONSÁVEL — atribuição de conversa a operador
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.anyio
+async def test_atribuir_responsavel_e_filtro_minhas(client, db_session):
+    email = "pipe_assign@torq.com"
+    await login_as(client, db_session, email=email)
+    from app.models.user import User
+
+    uid = await db_session.scalar(select(User.id).where(User.email == email))
+    lead_id = await _criar_lead(client, nome="Assigned")
+
+    # Operadores inclui o próprio usuário logado.
+    r = await client.get("/vendas/pipeline/operadores")
+    assert r.status_code == 200, r.text
+    assert any(o["id"] == str(uid) for o in r.json())
+
+    # Atribui via PATCH.
+    r = await client.patch(
+        f"/vendas/pipeline/leads/{lead_id}", json={"assigned_to": str(uid)}
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["assigned_to"] == str(uid)
+    assert r.json()["assigned_to_nome"]
+
+    # Filtro "minhas" traz o lead; sem filtro também.
+    r = await client.get("/vendas/conversas?minhas=true")
+    assert any(c["id"] == lead_id for c in r.json())
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# #8 ANALYTICS — desempenho da pipeline
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.anyio
+async def test_analytics_conversao_e_ganhos(client, db_session):
+    await login_as(client, db_session, email="pipe_analytics@torq.com")
+    lead_id = await _criar_lead(client, nome="WonLead")
+
+    r = await client.get("/vendas/pipeline/board")
+    ganho = next(s for s in r.json()["stages"] if s["nome"] == "Ganho")
+
+    await client.post(
+        f"/vendas/pipeline/leads/{lead_id}/mover",
+        json={"stage_id": ganho["id"], "valor_estimado": 500.0},
+    )
+
+    r = await client.get("/vendas/pipeline/analytics")
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["total_leads"] == 1
+    assert data["ganhos"] == 1
+    assert data["valor_ganho"] == 500.0
+    assert data["taxa_conversao"] == 1.0

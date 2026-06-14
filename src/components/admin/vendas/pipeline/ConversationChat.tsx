@@ -6,6 +6,7 @@ import {
   type ConversaMensagem,
   type EventoPipeline,
   type TemplateAprovado,
+  type Operador,
 } from '@/integrations/api/vendasPipeline';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -29,6 +30,7 @@ import {
   MessagesSquare,
   FileText,
   Download,
+  UserRound,
 } from 'lucide-react';
 import {
   temperaturaEmoji,
@@ -182,6 +184,9 @@ export function ConversationChat({
   const [janelaAberta, setJanelaAberta] = useState(true);
   const [templates, setTemplates] = useState<TemplateAprovado[]>([]);
   const [templateSel, setTemplateSel] = useState<string>('');
+  const [operadores, setOperadores] = useState<Operador[]>([]);
+
+  const SEM_RESP = '__none__';
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -239,7 +244,25 @@ export function ConversationChat({
       .listTemplatesAprovados()
       .then(setTemplates)
       .catch(() => setTemplates([]));
+    vendasPipelineApi
+      .listOperadores()
+      .then(setOperadores)
+      .catch(() => setOperadores([]));
   }, []);
+
+  const handleAtribuir = async (value: string) => {
+    if (!leadId) return;
+    const assignedTo = value === SEM_RESP ? null : value;
+    try {
+      const atualizado = await vendasPipelineApi.patchLead(leadId, {
+        assigned_to: assignedTo,
+      });
+      setLead(atualizado);
+      onEnviado?.(leadId); // recarrega a lista (badge de responsável)
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao atribuir responsável');
+    }
+  };
 
   // -- Eventos SSE / polling: se o evento é deste lead, refaz a thread (e relê)
   useEffect(() => {
@@ -346,12 +369,32 @@ export function ConversationChat({
             )}
           </div>
         </div>
-        {lead?.pending_reply && (
-          <Badge variant="outline" className="shrink-0 gap-1 text-xs">
-            <MessageSquare className="h-3 w-3" />
-            Aguardando
-          </Badge>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {lead?.pending_reply && (
+            <Badge variant="outline" className="gap-1 text-xs">
+              <MessageSquare className="h-3 w-3" />
+              Aguardando
+            </Badge>
+          )}
+          <Select
+            value={lead?.assigned_to ?? SEM_RESP}
+            onValueChange={handleAtribuir}
+            disabled={!lead}
+          >
+            <SelectTrigger className="h-8 w-[150px] text-xs">
+              <UserRound className="mr-1 h-3.5 w-3.5 shrink-0 opacity-70" />
+              <SelectValue placeholder="Responsável" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={SEM_RESP}>Sem responsável</SelectItem>
+              {operadores.map((o) => (
+                <SelectItem key={o.id} value={o.id}>
+                  {o.nome}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Thread */}

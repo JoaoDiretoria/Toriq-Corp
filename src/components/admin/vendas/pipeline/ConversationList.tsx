@@ -4,7 +4,7 @@ import type { LeadCard } from '@/integrations/api/vendasPipeline';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Pin, MessageSquare, Inbox } from 'lucide-react';
+import { Pin, MessageSquare, Inbox, UserRound } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Helpers compartilhados (temperatura / tempo relativo / iniciais)
@@ -139,6 +139,12 @@ export function ConversationList({
                     <span className="italic text-muted-foreground">Sem mensagens</span>
                   )}
                 </p>
+                {lead.assigned_to_nome && (
+                  <span className="mt-1 inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+                    <UserRound className="h-3 w-3" />
+                    {lead.assigned_to_nome}
+                  </span>
+                )}
                 {(lead.tags?.length ?? 0) > 0 && (
                   <div className="mt-1 flex flex-wrap gap-1">
                     {lead.tags.slice(0, 2).map((t, idx) => (

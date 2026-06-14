@@ -35,6 +35,7 @@ interface FiltersState {
   temperatura: string; // "todas" = sem filtro
   stage_id: string; // "todos" = sem filtro
   arquivados: boolean;
+  minhas: boolean;
 }
 
 const EMPTY_FILTERS: FiltersState = {
@@ -43,6 +44,7 @@ const EMPTY_FILTERS: FiltersState = {
   temperatura: 'todas',
   stage_id: 'todos',
   arquivados: false,
+  minhas: false,
 };
 
 function buildApiFilters(f: FiltersState): ConversasFilters {
@@ -52,6 +54,7 @@ function buildApiFilters(f: FiltersState): ConversasFilters {
   if (f.temperatura !== 'todas') out.temperatura = f.temperatura;
   if (f.stage_id !== 'todos') out.stage_id = f.stage_id;
   if (f.arquivados) out.arquivados = true;
+  if (f.minhas) out.minhas = true;
   return out;
 }
 
@@ -224,6 +227,17 @@ export function ConversasInbox({
           </div>
 
           <div className="flex items-center justify-between pt-1">
+            <Label htmlFor="minhas" className="text-xs">
+              Só minhas conversas
+            </Label>
+            <Switch
+              id="minhas"
+              checked={filters.minhas}
+              onCheckedChange={(v) => updateFilter('minhas', v)}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
             <Label htmlFor="arquivados" className="text-xs">
               Mostrar arquivados
             </Label>
