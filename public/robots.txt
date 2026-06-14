@@ -1,14 +1,24 @@
-User-agent: Googlebot
-Allow: /
-
-User-agent: Bingbot
-Allow: /
-
-User-agent: Twitterbot
-Allow: /
-
-User-agent: facebookexternalhit
-Allow: /
+# robots.txt — TORIQ Corp
+# Público: páginas de marketing, blog e pesquisas. Privado: área logada do app.
 
 User-agent: *
 Allow: /
+# Áreas autenticadas / sem valor de indexação:
+Disallow: /auth
+Disallow: /admin
+Disallow: /toriqcorp
+Disallow: /sst
+Disallow: /cliente
+Disallow: /dashboard
+Disallow: /modulos
+Disallow: /colaborador
+Disallow: /suporte
+Disallow: /proposta
+Disallow: /reset-password
+Disallow: /definir-senha
+Disallow: /esqueci-senha
+Disallow: /alterar-senha
+Disallow: /logout
+Disallow: /sair
+
+Sitemap: https://toriqcorp.com.br/sitemap.xml
