@@ -129,6 +129,7 @@
 ### Correções da sessão (14/06/2026)
 | Arquivo/Banco | Correção | Status |
 |---------------|----------|--------|
+| `apps/api/app/core/config.py` | Corrigido erro de indentação (`IndentationError`) na variável `sentry_api_token` que impedia a API de iniciar | ✅ |
 | `apps/api/uv.lock` | Corrigidas dependências duplicadas do `sentry-sdk` que impediam a compilação do backend com `uv sync` | ✅ |
 | `src/components/admin/AdminSentryPanel.tsx` | Corrigidos erros de sintaxe JSX que quebravam o build (tags fechadas incorretamente, como `</CardTitle>CardTitle>`) | ✅ |
 | `profiles` RLS | Policy `profiles_update_own` — authenticated atualiza próprio perfil | ✅ |

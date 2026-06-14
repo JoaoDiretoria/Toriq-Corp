@@ -67,10 +67,10 @@ class Settings(BaseSettings):
     sentry_dsn: str | None = None
     sentry_environment: str = "production"
     sentry_traces_sample_rate: float = 0.1
-        # Token de API do Sentry (Internal Integration read-only: event:read, project:read, org:read).
-        # Usado pelo endpoint /ops/sentry/issues para buscar issues via REST API.
-        # OPCIONAL: sem ele, /ops/sentry/issues retorna 503.
-        sentry_api_token: str | None = None
+    # Token de API do Sentry (Internal Integration read-only: event:read, project:read, org:read).
+    # Usado pelo endpoint /ops/sentry/issues para buscar issues via REST API.
+    # OPCIONAL: sem ele, /ops/sentry/issues retorna 503.
+    sentry_api_token: str | None = None
 
     # Redis (cache + filas). URL no formato redis://default:senha@host:6379.
     # OPCIONAL: sem ela o cache fica desligado (recalcula sempre) e a fila roda
