@@ -14,7 +14,7 @@ import {
   SidebarFooter,
 } from '@/components/ui/sidebar';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Building2, Users, TrendingUp, DollarSign, LogOut, Shield, Package, ChevronDown, UserSearch, Zap, LayoutDashboard, UserCog, HeartHandshake, ClipboardList, Receipt, CreditCard, FileBarChart, Wallet, CheckSquare, BarChart3, Database, Headphones, PenTool, FileText, Mail, Briefcase, CalendarDays, Megaphone, Layers, Tags, Radar, Send, Bot } from 'lucide-react';
+import { Building2, Users, TrendingUp, DollarSign, LogOut, Shield, Package, ChevronDown, UserSearch, Zap, LayoutDashboard, UserCog, HeartHandshake, ClipboardList, Receipt, CreditCard, FileBarChart, Wallet, CheckSquare, BarChart3, Database, Headphones, PenTool, FileText, Mail, Briefcase, CalendarDays, Megaphone, Layers, Tags, Radar, Send, Bot, KanbanSquare } from 'lucide-react';
 import { NotificationPopover } from '@/components/shared/notifications';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
@@ -61,6 +61,7 @@ const financeiroSubItems = [
 const vendasSubItems = [
   { id: 'vendas-prospeccao' as const, label: 'Prospecção', icon: Radar },
   { id: 'vendas-leads' as const, label: 'Leads Captados', icon: Users },
+  { id: 'vendas-pipeline' as const, label: 'Pipeline & Conversas', icon: KanbanSquare },
   { id: 'vendas-disparo' as const, label: 'Disparo em Massa', icon: Send },
   { id: 'vendas-sdr' as const, label: 'SDR Inteligente', icon: Bot },
   { id: 'vendas-segmentacao' as const, label: 'Segmentação', icon: Layers },

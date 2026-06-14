@@ -624,6 +624,23 @@ async def processar_inbound_sdr(
         await registrar_uso(
             db, empresa_id=empresa_id, metrica="sdr_conversas", referencia=str(lead.id)
         )
+
+        # Pipeline & Conversas (CRM): espelha a resposta do bot na thread do lead
+        # (sender_type='sdr') para aparecer na inbox em tempo real. Best-effort.
+        try:
+            from app.services.vendas_pipeline import append_mensagem
+
+            await append_mensagem(
+                db,
+                empresa_id=empresa_id,
+                lead_id=lead.id,
+                sender_type="sdr",
+                conteudo=next_msg,
+                canal="whatsapp",
+                status="enviado" if enviou else "erro",
+            )
+        except Exception:  # pragma: no cover - tolerante
+            pass
     else:
         # Sem resposta: registra o raciocínio/decisão.
         db.add(

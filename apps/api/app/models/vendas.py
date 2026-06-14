@@ -46,6 +46,10 @@ class VendasLeads(Base):
             ["job_id"], ["public.vendas_jobs.id"],
             ondelete="SET NULL", name="vendas_leads_job_id_fkey",
         ),
+        ForeignKeyConstraint(
+            ["stage_id"], ["public.vendas_pipeline_stages.id"],
+            ondelete="SET NULL", name="vendas_leads_stage_id_fkey",
+        ),
         PrimaryKeyConstraint("id", name="vendas_leads_pkey"),
         Index("idx_vendas_leads_empresa_id", "empresa_id"),
         UniqueConstraint(
@@ -83,6 +87,25 @@ class VendasLeads(Base):
     sdr_proximo_followup: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime(True)
     )
+    # Pipeline & Conversas (CRM estilo Chatwoot — migration b6e7f8a9c0d1).
+    # stage_id: estágio do kanban (FK vendas_pipeline_stages, SET NULL ao apagar);
+    # is_pinned/is_archived: organização da inbox; last_message_at/last_read_at:
+    # ordenação + cálculo de não-lidas; pending_reply: "aguardando resposta";
+    # temperatura: quente|morno|frio; valor_estimado: valor do negócio (R$).
+    stage_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
+    is_pinned: Mapped[Optional[bool]] = mapped_column(
+        Boolean, server_default=text("false")
+    )
+    is_archived: Mapped[Optional[bool]] = mapped_column(
+        Boolean, server_default=text("false")
+    )
+    last_message_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True))
+    last_read_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True))
+    pending_reply: Mapped[Optional[bool]] = mapped_column(
+        Boolean, server_default=text("false")
+    )
+    temperatura: Mapped[Optional[str]] = mapped_column(Text)
+    valor_estimado: Mapped[Optional[decimal.Decimal]] = mapped_column(Numeric)
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime(True), server_default=text("now()")
     )

@@ -35,12 +35,13 @@ import { Prospeccao } from '@/components/admin/vendas/prospeccao/Prospeccao';
 import { Disparo } from '@/components/admin/vendas/disparo/Disparo';
 import { SdrInteligente } from '@/components/admin/vendas/sdr/SdrInteligente';
 import { PainelUso } from '@/components/admin/vendas/uso/PainelUso';
+import { PipelineCRM } from '@/components/admin/vendas/pipeline/PipelineCRM';
 import { LeadsCaptados } from '@/components/admin/vendas/LeadsCaptados';
 import { Segmentacao } from '@/components/admin/vendas/Segmentacao';
 import { TagsManager } from '@/components/admin/vendas/TagsManager';
 import { useState } from 'react';
 
-type AdminSection = 'dashboard' | 'empresas' | 'usuarios' | 'colaboradores' | 'servicos' | 'modulos' | 'tarefas' | 'agenda' | 'comercial-dashboard' | 'comercial' | 'comercial-prospeccao' | 'comercial-pos-venda' | 'comercial-cross-selling' | 'financeiro' | 'financeiro-dashboard' | 'financeiro-cadastros' | 'financeiro-contas-receber' | 'financeiro-contas-pagar' | 'financeiro-fluxo-caixa' | 'financeiro-dre' | 'estatisticas' | 'suporte' | 'conteudo-blogs' | 'conteudo-pesquisas' | 'conteudo-newsletter' | 'conteudo-vagas' | 'vendas-prospeccao' | 'vendas-leads' | 'vendas-segmentacao' | 'vendas-tags' | 'vendas-disparo' | 'vendas-sdr' | 'vendas-uso';
+type AdminSection = 'dashboard' | 'empresas' | 'usuarios' | 'colaboradores' | 'servicos' | 'modulos' | 'tarefas' | 'agenda' | 'comercial-dashboard' | 'comercial' | 'comercial-prospeccao' | 'comercial-pos-venda' | 'comercial-cross-selling' | 'financeiro' | 'financeiro-dashboard' | 'financeiro-cadastros' | 'financeiro-contas-receber' | 'financeiro-contas-pagar' | 'financeiro-fluxo-caixa' | 'financeiro-dre' | 'estatisticas' | 'suporte' | 'conteudo-blogs' | 'conteudo-pesquisas' | 'conteudo-newsletter' | 'conteudo-vagas' | 'vendas-prospeccao' | 'vendas-leads' | 'vendas-pipeline' | 'vendas-segmentacao' | 'vendas-tags' | 'vendas-disparo' | 'vendas-sdr' | 'vendas-uso';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -139,6 +140,8 @@ const AdminDashboard = () => {
         return <Prospeccao />;
       case 'vendas-leads':
         return <LeadsCaptados />;
+      case 'vendas-pipeline':
+        return <PipelineCRM />;
       case 'vendas-segmentacao':
         return <Segmentacao />;
       case 'vendas-tags':
@@ -184,6 +187,7 @@ const AdminDashboard = () => {
       'conteudo-vagas': 'Vagas',
       'vendas-prospeccao': 'Toriq Vendas — Prospecção',
       'vendas-leads': 'Toriq Vendas — Leads Captados',
+      'vendas-pipeline': 'Toriq Vendas — Pipeline & Conversas',
       'vendas-segmentacao': 'Toriq Vendas — Segmentação',
       'vendas-tags': 'Toriq Vendas — Tags',
       'vendas-disparo': 'Toriq Vendas — Disparo em Massa',

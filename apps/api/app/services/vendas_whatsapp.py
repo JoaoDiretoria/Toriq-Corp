@@ -222,6 +222,24 @@ async def processar_inbound_webhook(
         msg.status = "respondeu"
         processadas += 1
 
+        # Pipeline & Conversas (CRM): registra a mensagem recebida na thread do
+        # lead (sender_type='lead'). Isso abre pending_reply, atualiza
+        # last_message_at e publica o evento em tempo real (SSE). Best-effort:
+        # nunca derruba o webhook (que é crítico para os status de entrega).
+        from app.services.vendas_pipeline import append_mensagem
+
+        try:
+            await append_mensagem(
+                db,
+                empresa_id=empresa_id,
+                lead_id=lead.id,
+                sender_type="lead",
+                conteudo=inbound.get("texto") or "",
+                canal="whatsapp",
+            )
+        except Exception:  # pragma: no cover - tolerante a falha de gravação
+            await db.rollback()
+
         # SDR autônomo (Fase 6): se o agente estiver ligado com auto-resposta,
         # enfileira o processamento da IA (qualifica + responde + handoff) fora
         # do request. Sem Redis, o enqueue roda inline (webhook mais lento, mas ok).
