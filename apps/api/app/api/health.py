@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps import require_role
-from app.core.config import settings
+from app.core.sentry import has_valid_sentry_dsn
 from app.models.user import User, UserRole
 
 router = APIRouter(tags=["health"])
@@ -25,6 +25,6 @@ async def sentry_debug(user: User = Depends(_require_admin)) -> None:
     projeto ``toriq-corp-backend``. Sem Sentry configurado, responde 404 genérico
     (não vaza o estado da config).
     """
-    if not settings.sentry_dsn:
+    if not has_valid_sentry_dsn():
         raise HTTPException(status.HTTP_404_NOT_FOUND, "não encontrado")
     _ = 1 / 0  # erro proposital — capturado pelo Sentry

@@ -125,15 +125,7 @@ async def lifespan(app):
 
 
 def create_app() -> FastAPI:
-    # Sentry: só inicializa se houver DSN (degrade gracioso, igual ao Redis).
-    if settings.sentry_dsn:
-        import sentry_sdk
-
-        sentry_sdk.init(
-            dsn=settings.sentry_dsn,
-            environment=settings.sentry_environment,
-            traces_sample_rate=0.0,
-        )
+    # Sentry já foi inicializado acima via init_sentry(), com degrade gracioso.
     app = FastAPI(title="TORIQ API", version="0.1.0", lifespan=lifespan)
     # CORS: o front (Vite :8080) precisa enviar o cookie httpOnly de auth.
     # allow_credentials=True exige origens explícitas (não pode usar "*").

@@ -16,14 +16,35 @@ from app.core.config import settings
 logger = logging.getLogger("toriq.sentry")
 
 
+def get_sentry_dsn() -> str | None:
+    """Retorna o DSN normalizado ou ``None`` quando ausente/vazio."""
+    dsn = (settings.sentry_dsn or "").strip()
+    return dsn or None
+
+
+def has_valid_sentry_dsn() -> bool:
+    """Valida o formato do DSN sem derrubar o processo."""
+    dsn = get_sentry_dsn()
+    if not dsn:
+        return False
+    try:
+        from sentry_sdk.utils import Dsn
+
+        Dsn(dsn)
+        return True
+    except Exception:
+        return False
+
+
 def init_sentry() -> None:
-    if not settings.sentry_dsn:
+    dsn = get_sentry_dsn()
+    if not dsn:
         return
     try:
         import sentry_sdk
 
         sentry_sdk.init(
-            dsn=settings.sentry_dsn,
+            dsn=dsn,
             environment=settings.sentry_environment,
             traces_sample_rate=settings.sentry_traces_sample_rate,
             # Não enviar dados pessoais por padrão (LGPD): sem corpo de request,

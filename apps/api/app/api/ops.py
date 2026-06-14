@@ -14,6 +14,7 @@ from app.api.auth import _set_auth_cookies
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.security import hash_password
+from app.core.sentry import has_valid_sentry_dsn
 from app.models.generated import Profiles
 from app.models.user import User, UserRole
 from app.models.user import User as UserModel
@@ -114,7 +115,7 @@ async def scheduler_jobs(
 
 @router.get("/sentry", response_model=SentryStatusOut)
 async def sentry_status(_: User = Depends(require_ops)) -> SentryStatusOut:
-    configurado = bool(settings.sentry_dsn)
+    configurado = has_valid_sentry_dsn()
     url: str | None = None
     if settings.sentry_org and settings.sentry_project:
         url = f"https://{settings.sentry_org}.sentry.io/projects/{settings.sentry_project}/"
