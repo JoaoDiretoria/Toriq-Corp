@@ -18,6 +18,7 @@ def create_token(
     token_type: TokenType,
     empresa_id: str | None,
     role: str,
+    imp_by: str | None = None,
 ) -> str:
     ttl = (
         settings.jwt_access_ttl_seconds
@@ -33,6 +34,8 @@ def create_token(
         "iat": now,
         "exp": now + timedelta(seconds=ttl),
     }
+    if imp_by is not None:
+        payload["imp_by"] = imp_by
     return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
 
 

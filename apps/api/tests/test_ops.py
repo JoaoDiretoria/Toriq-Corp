@@ -157,3 +157,52 @@ async def test_suporte_nao_concede_papel_staff(client):
     await _register_login(client, "sup13@toriq.com", "suporte")
     r = await client.patch(f"/ops/users/{alvo_id}/role", json={"role": "suporte"})
     assert r.status_code == 403
+
+
+# ─── Impersonação ────────────────────────────────────────────────────────────
+
+async def test_impersonar_e_parar(client):
+    """Fluxo completo: impersonar cliente_final → /auth/me mostra alvo → stop → volta ao operador."""
+    # Registra alvo (cliente_final)
+    await _register_login(client, "alvo_imp@toriq.com", "cliente_final")
+    alvo_id = (await client.get("/auth/me")).json()["user"]["id"]
+    await client.post("/auth/logout")
+
+    # Loga como suporte (operador)
+    await _register_login(client, "sup_imp@toriq.com", "suporte")
+
+    # Impersona o alvo
+    r = await client.post(f"/ops/users/{alvo_id}/impersonate")
+    assert r.status_code == 200, r.text
+    # /auth/me deve mostrar o email do ALVO
+    me = (await client.get("/auth/me")).json()
+    assert me["user"]["email"] == "alvo_imp@toriq.com"
+
+    # Para a impersonação
+    r2 = await client.post("/ops/stop-impersonate")
+    assert r2.status_code == 200, r2.text
+    # /auth/me deve mostrar de volta o operador (suporte)
+    me2 = (await client.get("/auth/me")).json()
+    assert me2["user"]["email"] == "sup_imp@toriq.com"
+
+
+async def test_nao_impersona_admin(client):
+    """Impersonar admin_vertical deve ser bloqueado (403), mesmo para suporte."""
+    await _register_login(client, "admin_imp@toriq.com", "admin_vertical")
+    admin_id = (await client.get("/auth/me")).json()["user"]["id"]
+    await client.post("/auth/logout")
+
+    await _register_login(client, "sup_noadm@toriq.com", "suporte")
+    r = await client.post(f"/ops/users/{admin_id}/impersonate")
+    assert r.status_code == 403, r.text
+
+
+async def test_nao_impersona_outro_staff(client):
+    """suporte A não pode impersonar suporte B (get_alvo bloqueia staff targets)."""
+    await _register_login(client, "supB_imp@toriq.com", "suporte")
+    sup_b_id = (await client.get("/auth/me")).json()["user"]["id"]
+    await client.post("/auth/logout")
+
+    await _register_login(client, "supA_imp@toriq.com", "suporte")
+    r = await client.post(f"/ops/users/{sup_b_id}/impersonate")
+    assert r.status_code == 403, r.text

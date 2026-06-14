@@ -4,11 +4,13 @@ from __future__ import annotations
 import datetime
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_ops
+from app.core.tokens import TokenError, decode_token
+from app.api.auth import _set_auth_cookies
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.security import hash_password
@@ -272,3 +274,67 @@ async def audit(
     return AuditListOut(
         registros=[AuditRegistro.model_validate(r) for r in rows], total=len(rows)
     )
+
+
+@router.post("/users/{user_id}/impersonate", response_model=OpsUserOut)
+async def impersonate(
+    user_id: uuid.UUID,
+    request: Request,
+    response: Response,
+    actor: User = Depends(require_ops),
+    db: AsyncSession = Depends(get_db),
+) -> OpsUserOut:
+    """Impersona um usuário-alvo, emitindo tokens com claim imp_by = id do operador.
+
+    Restrições de segurança:
+    - get_alvo já bloqueia: self-target e staff targets para não-admin_vertical.
+    - Adicionalmente: NUNCA permite impersonar admin_vertical (nem por admin_vertical).
+    - Alvo deve estar ativo.
+    """
+    target = await ops_service.get_alvo(db, actor, user_id)
+    # Upgrade de segurança: admin_vertical NUNCA pode ser impersonado.
+    if target.role == UserRole.admin_vertical:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "não é permitido impersonar admin_vertical")
+    if not target.ativo:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "usuário inativo")
+    _set_auth_cookies(response, target, imp_by=str(actor.id))
+    await ops_service.registrar_auditoria(
+        db, actor, "impersonate", target_user_id=target.id,
+        ip=request.client.host if request.client else None,
+    )
+    await db.commit()
+    return OpsUserOut.model_validate(target)
+
+
+@router.post("/stop-impersonate", response_model=OpsUserOut)
+async def stop_impersonate(
+    request: Request,
+    response: Response,
+    access_token: str | None = Cookie(default=None),
+    db: AsyncSession = Depends(get_db),
+) -> OpsUserOut:
+    """Encerra uma sessão de impersonação: restaura os cookies do operador original.
+
+    A autoridade vem do claim imp_by no token atual — não requer require_ops
+    porque o token pertence ao usuário impersonado (que pode não ser staff).
+    """
+    if not access_token:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "sem token de acesso")
+    try:
+        payload = decode_token(access_token)
+    except TokenError:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "token inválido")
+    operador_id = payload.get("imp_by")
+    if not operador_id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "não há impersonação ativa")
+    operador = await db.get(UserModel, uuid.UUID(operador_id))
+    if operador is None or not operador.ativo:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "operador inválido ou inativo")
+    # Emite tokens do operador sem imp_by → encerra a impersonação.
+    _set_auth_cookies(response, operador)
+    await ops_service.registrar_auditoria(
+        db, operador, "stop_impersonate",
+        ip=request.client.host if request.client else None,
+    )
+    await db.commit()
+    return OpsUserOut.model_validate(operador)

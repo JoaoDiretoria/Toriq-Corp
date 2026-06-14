@@ -28,15 +28,17 @@ class DefinirSenhaIn(BaseModel):
     senha: str
 
 
-def _set_auth_cookies(response: Response, user: User) -> None:
+def _set_auth_cookies(response: Response, user: User, imp_by: str | None = None) -> None:
     empresa_id = str(user.empresa_id) if user.empresa_id else None
     access = create_token(
         subject=str(user.id), token_type="access",
         empresa_id=empresa_id, role=user.role.value,
+        imp_by=imp_by,
     )
     refresh = create_token(
         subject=str(user.id), token_type="refresh",
         empresa_id=empresa_id, role=user.role.value,
+        imp_by=imp_by,
     )
     common = {"httponly": True, "secure": settings.cookie_secure, "samesite": "lax"}
     response.set_cookie("access_token", access,
@@ -141,7 +143,7 @@ async def refresh(
     user = await db.get(User, uuid.UUID(payload["sub"]))
     if not user or not user.ativo:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "usuário inválido")
-    _set_auth_cookies(response, user)
+    _set_auth_cookies(response, user, imp_by=payload.get("imp_by"))
     return user
 
 
