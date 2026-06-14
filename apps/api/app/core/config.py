@@ -41,6 +41,17 @@ class Settings(BaseSettings):
     # Sem ela, criptografar/descriptografar segredos levanta erro claro no uso.
     integration_encryption_key: str | None = None
 
+    # Google OAuth (Agenda/Meet). Credenciais do app no Google Cloud Console
+    # (uma por instância TORIQ, não por empresa). A redirect URI tem que estar
+    # autorizada no console e bater com o endpoint /sistema/google-oauth/callback.
+    # OPCIONAIS: sem elas a integração fica desligada (endpoints respondem 503).
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+    google_redirect_uri: str | None = None
+    # Para onde o callback redireciona o navegador depois de conectar. Sem ela,
+    # usa a 1ª origem do CORS.
+    frontend_url: str | None = None
+
     # Redis (cache + filas). URL no formato redis://default:senha@host:6379.
     # OPCIONAL: sem ela o cache fica desligado (recalcula sempre) e a fila roda
     # inline/no scheduler — a aplicação NUNCA quebra por falta de Redis.
@@ -52,6 +63,14 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def frontend_base_url(self) -> str:
+        """Base do front para redirects (callback OAuth). Cai na 1ª origem CORS."""
+        if self.frontend_url:
+            return self.frontend_url.rstrip("/")
+        origens = self.cors_origins_list
+        return origens[0].rstrip("/") if origens else "http://localhost:8080"
 
 
 settings = Settings()  # type: ignore[call-arg]

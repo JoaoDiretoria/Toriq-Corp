@@ -12,6 +12,7 @@ from app.models import generated as m
 from app.models.user import User
 from app.repositories.base import TenantRepository
 from app.schemas import agenda as s
+from app.services import google_calendar as gcal_svc
 
 router = APIRouter(prefix="/agenda", tags=["agenda"])
 
@@ -111,6 +112,14 @@ async def criar_evento(
     db.add(evento)
     await db.commit()
     await db.refresh(evento)
+
+    # Sincroniza no Google Calendar (gera link do Meet) se a empresa estiver
+    # conectada. Best-effort: sem conexão/erro, segue só com o evento local.
+    if await gcal_svc.sincronizar_criar(
+        db, empresa_id=user.empresa_id, evento=evento
+    ):
+        await db.commit()
+        await db.refresh(evento)
     return evento
 
 
@@ -142,16 +151,32 @@ async def atualizar_evento(
         setattr(evento, k, v)
     await db.commit()
     await db.refresh(evento)
+
+    # Propaga a edição para o Google (se o evento já foi sincronizado lá).
+    await gcal_svc.sincronizar_atualizar(
+        db, empresa_id=user.empresa_id, evento=evento
+    )
     return evento
 
 
 @router.delete("/eventos/{evento_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remover_evento(
     evento_id: uuid.UUID,
-    repo: _EventoRepo = Depends(_get_evento_repo),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    if not await repo.delete(evento_id):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "evento não encontrado")
+    if user.empresa_id is None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "usuário sem empresa")
+
+    evento = await _get_evento_scoped(evento_id, db, user.empresa_id)
+    google_event_id = getattr(evento, "google_event_id", None)
+    await db.delete(evento)
+    await db.commit()
+
+    # Remove também no Google Calendar (se estava sincronizado).
+    await gcal_svc.sincronizar_deletar(
+        db, empresa_id=user.empresa_id, google_event_id=google_event_id
+    )
 
 
 # ── Compartilhamentos ─────────────────────────────────────────────────────────

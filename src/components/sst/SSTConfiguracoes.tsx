@@ -713,14 +713,28 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
   }, [empresaId]);
 
   const conectarGoogleMeet = async () => {
-    // NOTA (migração): fluxo OAuth do Google Meet usa Supabase Edge Function diretamente
-    // (google-meet-oauth). Sem endpoint equivalente no backend Python. Degradado: exibe
-    // instruções manuais e não abre janela de autorização automática.
-    toast({
-      title: 'Configuração necessária',
-      description: 'O fluxo de autenticação do Google Meet requer configuração via painel administrativo.',
-      variant: 'destructive',
-    });
+    // Inicia o OAuth no backend: pega a URL de consentimento e redireciona o
+    // navegador. Ao final, o Google volta para /sistema/google-oauth/callback,
+    // que salva o token e redireciona de volta ao app (?google_oauth=ok).
+    setConectandoGoogleMeet(true);
+    try {
+      const res = await api.get<{ url: string }>('/sistema/google-oauth/iniciar');
+      if (res?.url) {
+        window.location.href = res.url;
+        return; // navega para fora — não reseta o estado
+      }
+      toast({ title: 'Não foi possível iniciar a conexão', variant: 'destructive' });
+    } catch (e: any) {
+      const msg = String(e?.message ?? '');
+      toast({
+        title: 'Erro ao conectar o Google Meet',
+        description: msg.includes('503')
+          ? 'Integração Google não configurada no servidor (credenciais OAuth ausentes).'
+          : msg || 'Tente novamente.',
+        variant: 'destructive',
+      });
+    }
+    setConectandoGoogleMeet(false);
   };
 
   const desconectarGoogleMeet = async () => {

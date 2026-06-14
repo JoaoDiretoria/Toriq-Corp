@@ -3979,6 +3979,8 @@ class AgendaEventos(Base):
     cliente_nome: Mapped[Optional[str]] = mapped_column(Text)
     convite_enviado: Mapped[Optional[bool]] = mapped_column(Boolean, server_default=text('false'))
     convite_enviado_em: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True))
+    # ID do evento no Google Calendar (integração Agenda/Meet — migration d8a9b0c1e2f3).
+    google_event_id: Mapped[Optional[str]] = mapped_column(Text)
 
     cliente_sst: Mapped[Optional['ClientesSst']] = relationship('ClientesSst', back_populates='agenda_eventos')
     profiles: Mapped['Profiles'] = relationship('Profiles', back_populates='agenda_eventos')

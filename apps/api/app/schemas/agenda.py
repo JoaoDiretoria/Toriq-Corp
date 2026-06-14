@@ -72,6 +72,7 @@ class EventoOut(BaseModel):
     cliente_nome: Optional[str] = None
     convite_enviado: Optional[bool] = None
     convite_enviado_em: Optional[datetime.datetime] = None
+    google_event_id: Optional[str] = None
     created_at: Optional[datetime.datetime] = None
     updated_at: Optional[datetime.datetime] = None
     model_config = {"from_attributes": True}

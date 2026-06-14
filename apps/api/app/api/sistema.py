@@ -21,15 +21,19 @@ import time
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_role
+from app.core.config import settings
 from app.core.db import get_db
+from app.integrations import google_calendar as gcal
 from app.models import generated as m
 from app.models.user import User, UserRole
 from app.schemas import sistema as s
+from app.services import google_calendar as gsvc
 
 router = APIRouter(prefix="/sistema", tags=["sistema"])
 
@@ -333,6 +337,54 @@ def _token_status(tok: m.GoogleOauthTokens) -> s.GoogleOauthStatusOut:
         criado_em=tok.criado_em,
         atualizado_em=tok.atualizado_em,
     )
+
+
+@_goauth.get("/iniciar")
+async def iniciar_google_oauth(
+    user: User = Depends(get_current_user),
+):
+    """Devolve a URL de consentimento do Google para a empresa do usuário.
+
+    O front redireciona o navegador para essa URL; ao final o Google chama
+    ``/callback``. O ``state`` carrega a empresa assinada (Fernet)."""
+    empresa_id = _require_empresa(user)
+    try:
+        state = gsvc.assinar_state(empresa_id)
+        url = gcal.build_auth_url(state)
+    except gcal.GoogleNotConfigured as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc))
+    return {"url": url}
+
+
+@_goauth.get("/callback")
+async def callback_google_oauth(
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Callback do Google (rota PÚBLICA — o navegador é redirecionado para cá).
+
+    Valida o state (assinado), troca o code por tokens, salva CRIPTOGRAFADO e
+    redireciona o navegador de volta ao front com ?google_oauth=ok|erro.
+    """
+    destino = f"{settings.frontend_base_url}/?google_oauth="
+
+    if error or not code or not state:
+        return RedirectResponse(destino + "erro", status_code=302)
+    try:
+        empresa_id = gsvc.verificar_state(state)
+    except ValueError:
+        return RedirectResponse(destino + "erro", status_code=302)
+    try:
+        token_json = await gcal.exchange_code(code)
+        email = await gcal.get_email(token_json["access_token"])
+        await gsvc.salvar_tokens(
+            db, empresa_id=empresa_id, token_json=token_json, email=email
+        )
+    except (gcal.GoogleError, KeyError):
+        return RedirectResponse(destino + "erro", status_code=302)
+    return RedirectResponse(destino + "ok", status_code=302)
 
 
 @_goauth.get("/status", response_model=s.GoogleOauthStatusOut)
