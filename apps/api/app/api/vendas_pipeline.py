@@ -19,6 +19,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_role
+from app.core.cache import cache
 from app.core.db import get_db
 from app.core.esocial_crypto import decrypt_secret
 from app.integrations.whatsapp_meta import WhatsAppError, baixar_media
@@ -412,7 +413,12 @@ async def get_conversao(
     db: AsyncSession = Depends(get_db),
 ):
     empresa_id = _require_empresa(user)
-    return await svc.conversao(db, empresa_id=empresa_id)
+    # Dashboard agregado — cache curto (TTL padrão). Dados ~60s velhos são aceitáveis.
+    return await cache.get_or_set(
+        f"pipeline:conversao:{empresa_id}",
+        ttl=None,
+        factory=lambda: svc.conversao(db, empresa_id=empresa_id),
+    )
 
 
 @router.get("/pipeline/analytics", response_model=s.AnalyticsOut)
@@ -422,7 +428,12 @@ async def get_analytics(
 ):
     """Indicadores de desempenho: conversão, ganhos/perdidos, por origem/temperatura."""
     empresa_id = _require_empresa(user)
-    return await svc.analytics(db, empresa_id=empresa_id)
+    # Dashboard agregado — cache curto (TTL padrão). Dados ~60s velhos são aceitáveis.
+    return await cache.get_or_set(
+        f"pipeline:analytics:{empresa_id}",
+        ttl=None,
+        factory=lambda: svc.analytics(db, empresa_id=empresa_id),
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

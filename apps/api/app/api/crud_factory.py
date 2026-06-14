@@ -27,11 +27,13 @@ def make_crud_router(*, model, create_schema, update_schema, read_schema, prefix
 
     @router.get("", response_model=list[read_schema])
     async def listar(repo: _Repo = Depends(get_repo)):
-        return await repo.list()
+        # Leitura cacheada (Redis, TTL curto + invalidação no write). Devolve dicts
+        # de colunas que o response_model valida igual a um objeto ORM.
+        return await repo.list_cached()
 
     @router.get("/{id_}", response_model=read_schema)
     async def obter(id_: uuid.UUID, repo: _Repo = Depends(get_repo)):
-        obj = await repo.get(id_)
+        obj = await repo.get_cached(id_)
         if obj is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "não encontrado")
         return obj

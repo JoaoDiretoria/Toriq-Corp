@@ -411,7 +411,8 @@ def make_kanban_router(
 
     @router.get("", response_model=list[card_out])
     async def listar_cards(r: _CardRepo = Depends(_repo)):
-        return await r.list()
+        # Leitura cacheada (Redis, TTL curto + invalidação no write).
+        return await r.list_cached()
 
     @router.post("", response_model=card_out, status_code=status.HTTP_201_CREATED)
     async def criar_card(
@@ -432,7 +433,7 @@ def make_kanban_router(
 
     @router.get("/{id_}", response_model=card_out)
     async def obter_card(id_: uuid.UUID, r: _CardRepo = Depends(_repo)):
-        obj = await r.get(id_)
+        obj = await r.get_cached(id_)
         if obj is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "não encontrado")
         return obj
