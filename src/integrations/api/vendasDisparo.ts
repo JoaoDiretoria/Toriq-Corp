@@ -28,6 +28,7 @@ export interface DisparoConfig {
   smtp_user: string | null;
   smtp_use_tls: boolean | null;
   email_rate_limit: number | null;
+  dedup_dias: number | null;
   smtp_password_set: boolean;
   smtp_password_masked: string | null;
 }
@@ -43,6 +44,7 @@ export interface DisparoConfigUpdate {
   smtp_password?: string | null;
   smtp_use_tls?: boolean | null;
   email_rate_limit?: number | null;
+  dedup_dias?: number | null;
   clear_smtp_password?: boolean | null;
 }
 
@@ -129,6 +131,22 @@ export interface EnviarCampanhaResult {
   enviados: number;
   suprimidos: number;
   erros: number;
+  dedup: number;
+}
+
+/** Métricas/funil de uma campanha. */
+export interface MetricasCampanha {
+  campanha_id: string;
+  total: number;
+  por_status: Record<string, number>;
+  enviados: number;
+  entregues: number;
+  lidos: number;
+  respondidos: number;
+  erros: number;
+  taxa_entrega: number;
+  taxa_leitura: number;
+  taxa_resposta: number;
 }
 
 /** Mensagem individual de uma campanha. */
@@ -215,6 +233,9 @@ export const vendasDisparoApi = {
     api.get<DisparoMensagem[]>(
       `/vendas/campanhas/${id}/mensagens?limit=${limit}&offset=${offset}`,
     ),
+
+  getMetricas: (id: string) =>
+    api.get<MetricasCampanha>(`/vendas/campanhas/${id}/metricas`),
 
   // Supressão (opt-out / LGPD) -------------------------------------------
   listSupressao: () => api.get<DisparoSupressao[]>("/vendas/supressao"),

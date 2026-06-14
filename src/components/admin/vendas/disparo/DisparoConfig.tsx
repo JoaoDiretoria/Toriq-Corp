@@ -42,6 +42,7 @@ interface FormState {
   smtp_user: string;
   smtp_use_tls: boolean;
   email_rate_limit: string;
+  dedup_dias: string;
 }
 
 const EMPTY_FORM: FormState = {
@@ -52,6 +53,7 @@ const EMPTY_FORM: FormState = {
   smtp_user: '',
   smtp_use_tls: true,
   email_rate_limit: '100',
+  dedup_dias: '0',
 };
 
 export function DisparoConfig({ onSaved }: DisparoConfigProps) {
@@ -80,6 +82,7 @@ export function DisparoConfig({ onSaved }: DisparoConfigProps) {
         smtp_use_tls: cfg.smtp_use_tls ?? true,
         email_rate_limit:
           cfg.email_rate_limit != null ? String(cfg.email_rate_limit) : '100',
+        dedup_dias: cfg.dedup_dias != null ? String(cfg.dedup_dias) : '0',
       });
       setPasswordSet(!!cfg.smtp_password_set);
       setPasswordMasked(cfg.smtp_password_masked ?? null);
@@ -140,6 +143,7 @@ export function DisparoConfig({ onSaved }: DisparoConfigProps) {
       smtp_user: form.smtp_user.trim() || null,
       smtp_use_tls: form.smtp_use_tls,
       email_rate_limit: form.email_rate_limit ? Number(form.email_rate_limit) : null,
+      dedup_dias: form.dedup_dias !== '' ? Number(form.dedup_dias) : 0,
     };
     // Só envia a senha se o usuário digitou algo (vazio = manter a atual).
     if (passwordInput.trim()) payload.smtp_password = passwordInput.trim();
@@ -334,6 +338,22 @@ export function DisparoConfig({ onSaved }: DisparoConfigProps) {
             />
             <p className="text-xs text-muted-foreground">
               Quantos e-mails são enviados por execução do disparo.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="dedup-dias">Dedup — não reenviar (dias)</Label>
+            <Input
+              id="dedup-dias"
+              type="number"
+              min={0}
+              max={365}
+              value={form.dedup_dias}
+              onChange={(e) => updateField('dedup_dias', e.target.value)}
+              placeholder="0"
+            />
+            <p className="text-xs text-muted-foreground">
+              Não reenviar para um lead que já recebeu um disparo nos últimos N dias
+              (vale e-mail e WhatsApp). 0 = desligado.
             </p>
           </div>
         </div>

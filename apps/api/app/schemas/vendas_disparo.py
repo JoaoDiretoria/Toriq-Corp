@@ -23,6 +23,7 @@ class DisparoConfigUpdate(BaseModel):
     smtp_password: Optional[str] = None
     smtp_use_tls: Optional[bool] = None
     email_rate_limit: Optional[int] = None
+    dedup_dias: Optional[int] = None
     clear_smtp_password: Optional[bool] = None
     # WhatsApp (Fase 3 — Meta Cloud API)
     whatsapp_phone_id: Optional[str] = None
@@ -44,6 +45,7 @@ class DisparoConfigPublic(BaseModel):
     smtp_user: Optional[str] = None
     smtp_use_tls: Optional[bool] = None
     email_rate_limit: Optional[int] = None
+    dedup_dias: Optional[int] = None
     smtp_password_set: bool = False
     smtp_password_masked: Optional[str] = None
     # WhatsApp (Fase 3) — segredos nunca retornam em claro
@@ -139,6 +141,21 @@ class EnviarCampanhaOut(BaseModel):
     enviados: int
     suprimidos: int
     erros: int
+    dedup: int = 0
+
+
+class MetricasCampanhaOut(BaseModel):
+    campanha_id: uuid.UUID
+    total: int
+    por_status: dict
+    enviados: int
+    entregues: int
+    lidos: int
+    respondidos: int
+    erros: int
+    taxa_entrega: float
+    taxa_leitura: float
+    taxa_resposta: float
 
 
 # ── Mensagens ─────────────────────────────────────────────────────────────────

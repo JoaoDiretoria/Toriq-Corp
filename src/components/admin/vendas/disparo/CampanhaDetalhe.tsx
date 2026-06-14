@@ -3,6 +3,7 @@ import {
   vendasDisparoApi,
   type DisparoCampanha,
   type DisparoMensagem,
+  type MetricasCampanha,
 } from '@/integrations/api/vendasDisparo';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -74,6 +75,7 @@ const MSG_FILTERS = [
 export function CampanhaDetalhe({ campanhaId, onBack }: CampanhaDetalheProps) {
   const [campanha, setCampanha] = useState<DisparoCampanha | null>(null);
   const [mensagens, setMensagens] = useState<DisparoMensagem[]>([]);
+  const [metricas, setMetricas] = useState<MetricasCampanha | null>(null);
   const [loading, setLoading] = useState(true);
   const [msgFilter, setMsgFilter] = useState('todos');
   const [sending, setSending] = useState(false);
@@ -90,6 +92,7 @@ export function CampanhaDetalhe({ campanhaId, onBack }: CampanhaDetalheProps) {
 
   const fetchMensagens = useCallback(async () => {
     try {
+      vendasDisparoApi.getMetricas(campanhaId).then(setMetricas).catch(() => {});
       const data = await vendasDisparoApi.listMensagens(campanhaId, 200, 0);
       setMensagens(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -232,6 +235,23 @@ export function CampanhaDetalhe({ campanhaId, onBack }: CampanhaDetalheProps) {
               <p className="text-xs text-muted-foreground">Erros</p>
             </div>
           </div>
+
+          {metricas && metricas.enviados > 0 && (
+            <div className="grid grid-cols-3 gap-3 text-center border-t pt-3">
+              <div>
+                <p className="text-lg font-semibold tabular-nums">{metricas.taxa_entrega}%</p>
+                <p className="text-[11px] text-muted-foreground">Entrega</p>
+              </div>
+              <div>
+                <p className="text-lg font-semibold tabular-nums">{metricas.taxa_leitura}%</p>
+                <p className="text-[11px] text-muted-foreground">Leitura</p>
+              </div>
+              <div>
+                <p className="text-lg font-semibold tabular-nums">{metricas.taxa_resposta}%</p>
+                <p className="text-[11px] text-muted-foreground">Resposta</p>
+              </div>
+            </div>
+          )}
 
           {suprimidos > 0 && (
             <p className="text-xs text-muted-foreground flex items-center gap-1.5 pt-1">

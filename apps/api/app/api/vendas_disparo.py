@@ -16,7 +16,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import HTMLResponse, Response
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_role
@@ -90,6 +90,7 @@ def _config_public(obj: Optional[VendasDisparoConfig]) -> s.DisparoConfigPublic:
         smtp_user=obj.smtp_user,
         smtp_use_tls=obj.smtp_use_tls,
         email_rate_limit=obj.email_rate_limit,
+        dedup_dias=obj.dedup_dias,
         smtp_password_set=bool(obj.smtp_password_enc),
         smtp_password_masked=masked,
         whatsapp_phone_id=obj.whatsapp_phone_id,
@@ -142,6 +143,7 @@ async def put_disparo_config(
         "smtp_user",
         "smtp_use_tls",
         "email_rate_limit",
+        "dedup_dias",
         # WhatsApp (Fase 3) — campos simples (não-segredos).
         "whatsapp_phone_id",
         "whatsapp_waba_id",
@@ -426,6 +428,57 @@ async def listar_mensagens(
         .offset(offset)
     )
     return list(result)
+
+
+@router.get(
+    "/campanhas/{campanha_id}/metricas", response_model=s.MetricasCampanhaOut
+)
+async def metricas_campanha(
+    campanha_id: uuid.UUID,
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Métricas/funil da campanha: contagem por status + taxas de entrega/leitura/resposta."""
+    empresa_id = _require_empresa(user)
+    await _get_campanha(db, campanha_id, empresa_id)
+
+    rows = (
+        await db.execute(
+            select(VendasMensagens.status, func.count())
+            .where(
+                VendasMensagens.campanha_id == campanha_id,
+                VendasMensagens.empresa_id == empresa_id,
+            )
+            .group_by(VendasMensagens.status)
+        )
+    ).all()
+    por_status = {(st or "pendente"): int(q) for st, q in rows}
+    total = sum(por_status.values())
+
+    g = por_status.get
+    # Funil cumulativo: cada estágio inclui os posteriores.
+    enviados = g("enviado", 0) + g("entregue", 0) + g("lido", 0) + g("respondeu", 0)
+    entregues = g("entregue", 0) + g("lido", 0) + g("respondeu", 0)
+    lidos = g("lido", 0) + g("respondeu", 0)
+    respondidos = g("respondeu", 0)
+    erros = g("erro", 0)
+
+    def taxa(n: int, d: int) -> float:
+        return round(100 * n / d, 1) if d else 0.0
+
+    return s.MetricasCampanhaOut(
+        campanha_id=campanha_id,
+        total=total,
+        por_status=por_status,
+        enviados=enviados,
+        entregues=entregues,
+        lidos=lidos,
+        respondidos=respondidos,
+        erros=erros,
+        taxa_entrega=taxa(entregues, enviados),
+        taxa_leitura=taxa(lidos, enviados),
+        taxa_resposta=taxa(respondidos, enviados),
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

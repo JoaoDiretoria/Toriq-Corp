@@ -277,9 +277,16 @@ async def enviar_campanha(
     enviados = 0
     suprimidos = 0
     erros = 0
+    dedup = 0
 
     eh_whatsapp = campanha.canal == "whatsapp"
     tipo_supressao = "telefone" if eh_whatsapp else "email"
+
+    # Dedup (Fase 7): não reenviar para o mesmo lead em N dias (0 = desligado).
+    dedup_dias = config.dedup_dias or 0
+    dedup_cutoff = (
+        _now() - datetime.timedelta(days=dedup_dias) if dedup_dias > 0 else None
+    )
 
     for msg in pendentes:
         destinatario = msg.destinatario or ""
@@ -297,6 +304,28 @@ async def enviar_campanha(
             msg.status = "suprimido"
             suprimidos += 1
             continue
+
+        # Dedup: o lead já recebeu uma mensagem enviada (em OUTRA campanha) na
+        # janela? Então não reenvia agora.
+        if dedup_cutoff is not None and msg.lead_id is not None:
+            recente = await db.scalar(
+                select(VendasMensagens.id)
+                .where(
+                    VendasMensagens.empresa_id == empresa_id,
+                    VendasMensagens.lead_id == msg.lead_id,
+                    VendasMensagens.campanha_id != campanha.id,
+                    VendasMensagens.status.in_(
+                        ["enviado", "entregue", "lido", "respondeu"]
+                    ),
+                    VendasMensagens.enviado_em.isnot(None),
+                    VendasMensagens.enviado_em >= dedup_cutoff,
+                )
+                .limit(1)
+            )
+            if recente is not None:
+                msg.status = "dedup"
+                dedup += 1
+                continue
 
         if eh_whatsapp:
             # Canal WhatsApp: envio delegado ao serviço dedicado, que seta
@@ -387,6 +416,7 @@ async def enviar_campanha(
         "enviados": enviados,
         "suprimidos": suprimidos,
         "erros": erros,
+        "dedup": dedup,
     }
 
 

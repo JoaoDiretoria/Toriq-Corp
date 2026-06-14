@@ -64,6 +64,10 @@ class VendasDisparoConfig(Base):
     email_rate_limit: Mapped[Optional[int]] = mapped_column(
         Integer, server_default=text("100")
     )
+    # Dedup (Fase 7): não reenviar para o mesmo lead em N dias (0 = desligado).
+    dedup_dias: Mapped[Optional[int]] = mapped_column(
+        Integer, server_default=text("0")
+    )
     # WhatsApp (Fase 3 — Meta Cloud API). Token e app_secret criptografados.
     whatsapp_phone_id: Mapped[Optional[str]] = mapped_column(Text)
     whatsapp_waba_id: Mapped[Optional[str]] = mapped_column(Text)
