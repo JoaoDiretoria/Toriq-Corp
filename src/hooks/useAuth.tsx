@@ -37,7 +37,7 @@ interface Profile {
   id: string;
   email: string;
   nome: string;
-  role: 'admin_vertical' | 'cliente_torq' | 'cliente_final' | 'empresa_parceira' | 'instrutor';
+  role: 'admin_vertical' | 'cliente_torq' | 'cliente_final' | 'empresa_parceira' | 'instrutor' | 'suporte';
   empresa_id: string | null;
   instrutor_id?: string | null;
   primeiro_acesso?: boolean;

@@ -17,6 +17,7 @@ class UserRole(str, enum.Enum):
     empresa_parceira = "empresa_parceira"
     instrutor = "instrutor"
     cliente_torq = "cliente_torq"
+    suporte = "suporte"
 
 
 class User(Base):

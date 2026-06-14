@@ -16,6 +16,7 @@ import SobreNos from "./pages/SobreNos";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import AdminDashboard from "./pages/AdminDashboard";
+import SuporteDashboard from "./pages/SuporteDashboard";
 import SSTDashboard from "./pages/SSTDashboard";
 import ClienteDashboard from "./pages/ClienteDashboard";
 import ModuloPage from "./pages/ModuloPage";
@@ -39,6 +40,7 @@ import NotFound from "./pages/NotFound";
 import ApiTest from "./pages/dev/ApiTest";
 import SuporteTickets from "./pages/shared/SuporteTickets";
 import { FloatingSupportWidget } from "./components/shared/support";
+import { ImpersonationBanner } from "./components/suporte/ImpersonationBanner";
 import { UpdateNotificationPopup } from "./components/shared/UpdateNotificationPopup";
 import { RequireSenhaAlterada } from "./components/auth/RequireSenhaAlterada";
 import { ImportQueueProvider } from "./hooks/useImportQueue";
@@ -80,6 +82,7 @@ const App = () => (
             <Route path="/sair" element={<Logout />} />
             <Route path="/dashboard" element={<RequireSenhaAlterada><Dashboard /></RequireSenhaAlterada>} />
             <Route path="/admin" element={<RequireSenhaAlterada><AdminDashboard /></RequireSenhaAlterada>} />
+            <Route path="/ops" element={<RequireSenhaAlterada><SuporteDashboard /></RequireSenhaAlterada>} />
             <Route path="/toriqcorp" element={<RequireSenhaAlterada><SSTDashboard /></RequireSenhaAlterada>} />
             <Route path="/sst" element={<Navigate to="/toriqcorp" replace />} />
             <Route path="/cliente" element={<RequireSenhaAlterada><ClienteDashboard /></RequireSenhaAlterada>} />
@@ -100,6 +103,7 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
           </Routes>
           <FloatingSupportWidget />
+          <ImpersonationBanner />
           <UpdateNotificationPopup />
           <ImportQueueProvider>
             <ImportProgressPopup />

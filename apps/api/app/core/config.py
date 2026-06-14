@@ -80,6 +80,14 @@ class Settings(BaseSettings):
     cache_ttl_seconds: int = 60
     cache_prefix: str = "toriq"
 
+    # Sentry (observabilidade de erros). OPCIONAL: sem SENTRY_DSN o SDK não
+    # inicializa (degradação graciosa). org/project são usados só para montar a
+    # URL de link-out no dashboard /ops (não há chamada à API do Sentry no v1).
+    sentry_dsn: str | None = None
+    sentry_environment: str = "production"
+    sentry_org: str | None = None
+    sentry_project: str | None = None
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

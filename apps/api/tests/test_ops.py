@@ -1,0 +1,218 @@
+"""Testes do subsistema Ops/Suporte (role suporte + dashboard /ops)."""
+import pytest
+
+pytestmark = pytest.mark.anyio
+
+
+async def _register_login(client, email: str, role: str, empresa_id: str | None = None):
+    """Registra (open_register ligado nos testes) e loga; cookies ficam no client."""
+    await client.post(
+        "/auth/register",
+        json={
+            "email": email,
+            "password": "Senha123!",
+            "nome": f"User {role}",
+            "role": role,
+            "empresa_id": empresa_id,
+        },
+    )
+    r = await client.post("/auth/login", json={"email": email, "password": "Senha123!"})
+    assert r.status_code == 200, r.text
+
+
+async def test_suporte_role_pode_registrar_e_logar(client):
+    # Só passa se o enum app_role já tiver o valor 'suporte' (migração aplicada).
+    await _register_login(client, "sup1@toriq.com", "suporte")
+    r = await client.get("/auth/me")
+    assert r.status_code == 200
+    assert r.json()["user"]["email"] == "sup1@toriq.com"
+
+
+async def test_require_ops_bloqueia_nao_ops(client):
+    await _register_login(client, "cli@toriq.com", "cliente_final")
+    r = await client.get("/ops/health")
+    assert r.status_code == 403
+
+
+async def test_require_ops_permite_suporte(client):
+    await _register_login(client, "sup2@toriq.com", "suporte")
+    r = await client.get("/ops/health")
+    assert r.status_code == 200
+
+
+async def test_health_estrutura(client):
+    await _register_login(client, "sup3@toriq.com", "suporte")
+    r = await client.get("/ops/health")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] in ("ok", "degradado")
+    assert "versao" in body and "uptime_segundos" in body
+    nomes = {d["nome"] for d in body["dependencias"]}
+    assert {"postgres", "redis"} <= nomes
+
+
+async def test_database_tables(client):
+    await _register_login(client, "sup4@toriq.com", "suporte")
+    r = await client.get("/ops/database/tables")
+    assert r.status_code == 200
+    body = r.json()
+    assert "tabelas" in body and isinstance(body["tabelas"], list)
+    # users sempre existe; deve aparecer com contagem >= 0
+    nomes = {t["nome"] for t in body["tabelas"]}
+    assert "users" in nomes
+
+
+async def test_redis_overview_sem_redis(client):
+    # Em teste não há REDIS_URL: overview reporta desligado, sem quebrar.
+    await _register_login(client, "sup5@toriq.com", "suporte")
+    r = await client.get("/ops/redis/overview")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["conectado"] is False
+
+
+async def test_scheduler_jobs(client):
+    await _register_login(client, "sup6@toriq.com", "suporte")
+    r = await client.get("/ops/scheduler/jobs")
+    assert r.status_code == 200
+    assert isinstance(r.json()["jobs"], list)
+
+
+async def test_tickets_metrics_estrutura(client):
+    await _register_login(client, "sup7@toriq.com", "suporte")
+    r = await client.get("/ops/tickets/metrics")
+    assert r.status_code == 200
+    body = r.json()
+    assert "por_status" in body and "por_prioridade" in body
+    assert "abertos" in body and "sla_violados" in body
+
+
+async def test_tickets_lista(client):
+    await _register_login(client, "sup8@toriq.com", "suporte")
+    r = await client.get("/ops/tickets?limit=10")
+    assert r.status_code == 200
+    assert isinstance(r.json()["tickets"], list)
+
+
+async def test_ops_lista_usuarios_global(client):
+    # cria um alvo de outra "empresa" (sem empresa) e confere que suporte o vê.
+    await _register_login(client, "alvo@toriq.com", "cliente_final")
+    await client.post("/auth/logout")
+    await _register_login(client, "sup9@toriq.com", "suporte")
+    r = await client.get("/ops/users?q=alvo")
+    assert r.status_code == 200
+    emails = {u["email"] for u in r.json()["users"]}
+    assert "alvo@toriq.com" in emails
+
+
+async def test_ops_edita_usuario_e_audita(client):
+    await _register_login(client, "alvo2@toriq.com", "cliente_final")
+    me = (await client.get("/auth/me")).json()
+    alvo_id = me["user"]["id"]
+    await client.post("/auth/logout")
+
+    await _register_login(client, "sup10@toriq.com", "suporte")
+    r = await client.patch(f"/ops/users/{alvo_id}", json={"nome": "Nome Editado"})
+    assert r.status_code == 200
+    assert r.json()["nome"] == "Nome Editado"
+
+    # a edição gerou registro de auditoria
+    audit = (await client.get("/ops/audit")).json()
+    assert any(a["action"] == "update_user" for a in audit["registros"])
+
+
+async def test_suporte_nao_promove_para_admin(client):
+    await _register_login(client, "alvo3@toriq.com", "cliente_final")
+    alvo_id = (await client.get("/auth/me")).json()["user"]["id"]
+    await client.post("/auth/logout")
+
+    await _register_login(client, "sup11@toriq.com", "suporte")
+    r = await client.patch(f"/ops/users/{alvo_id}/role", json={"role": "admin_vertical"})
+    assert r.status_code == 403
+
+
+async def test_suporte_nao_edita_propria_conta(client):
+    await _register_login(client, "sup12@toriq.com", "suporte")
+    proprio_id = (await client.get("/auth/me")).json()["user"]["id"]
+    r = await client.patch(f"/ops/users/{proprio_id}", json={"nome": "x"})
+    assert r.status_code == 403
+
+
+async def test_suporte_nao_gerencia_outro_staff(client):
+    # alvo B também é staff (suporte): suporte A não pode gerenciá-lo.
+    await _register_login(client, "staffb@toriq.com", "suporte")
+    staff_b_id = (await client.get("/auth/me")).json()["user"]["id"]
+    await client.post("/auth/logout")
+
+    await _register_login(client, "staffa@toriq.com", "suporte")
+    r = await client.post(f"/ops/users/{staff_b_id}/reset-senha")
+    assert r.status_code == 403
+
+
+async def test_suporte_nao_concede_papel_staff(client):
+    await _register_login(client, "alvo4@toriq.com", "cliente_final")
+    alvo_id = (await client.get("/auth/me")).json()["user"]["id"]
+    await client.post("/auth/logout")
+
+    await _register_login(client, "sup13@toriq.com", "suporte")
+    r = await client.patch(f"/ops/users/{alvo_id}/role", json={"role": "suporte"})
+    assert r.status_code == 403
+
+
+# ─── Impersonação ────────────────────────────────────────────────────────────
+
+async def test_impersonar_e_parar(client):
+    """Fluxo completo: impersonar cliente_final → /auth/me mostra alvo → stop → volta ao operador."""
+    # Registra alvo (cliente_final)
+    await _register_login(client, "alvo_imp@toriq.com", "cliente_final")
+    alvo_id = (await client.get("/auth/me")).json()["user"]["id"]
+    await client.post("/auth/logout")
+
+    # Loga como suporte (operador)
+    await _register_login(client, "sup_imp@toriq.com", "suporte")
+
+    # Impersona o alvo
+    r = await client.post(f"/ops/users/{alvo_id}/impersonate")
+    assert r.status_code == 200, r.text
+    # /auth/me deve mostrar o email do ALVO
+    me = (await client.get("/auth/me")).json()
+    assert me["user"]["email"] == "alvo_imp@toriq.com"
+
+    # Para a impersonação
+    r2 = await client.post("/ops/stop-impersonate")
+    assert r2.status_code == 200, r2.text
+    # /auth/me deve mostrar de volta o operador (suporte)
+    me2 = (await client.get("/auth/me")).json()
+    assert me2["user"]["email"] == "sup_imp@toriq.com"
+
+
+async def test_nao_impersona_admin(client):
+    """Impersonar admin_vertical deve ser bloqueado (403), mesmo para suporte."""
+    await _register_login(client, "admin_imp@toriq.com", "admin_vertical")
+    admin_id = (await client.get("/auth/me")).json()["user"]["id"]
+    await client.post("/auth/logout")
+
+    await _register_login(client, "sup_noadm@toriq.com", "suporte")
+    r = await client.post(f"/ops/users/{admin_id}/impersonate")
+    assert r.status_code == 403, r.text
+
+
+async def test_nao_impersona_outro_staff(client):
+    """suporte A não pode impersonar suporte B (get_alvo bloqueia staff targets)."""
+    await _register_login(client, "supB_imp@toriq.com", "suporte")
+    sup_b_id = (await client.get("/auth/me")).json()["user"]["id"]
+    await client.post("/auth/logout")
+
+    await _register_login(client, "supA_imp@toriq.com", "suporte")
+    r = await client.post(f"/ops/users/{sup_b_id}/impersonate")
+    assert r.status_code == 403, r.text
+
+
+async def test_sentry_status(client):
+    """GET /ops/sentry → 200, body tem 'configurado' e é False (sem SENTRY_DSN nos testes)."""
+    await _register_login(client, "sup_sentry@toriq.com", "suporte")
+    r = await client.get("/ops/sentry")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert "configurado" in body
+    assert body["configurado"] is False

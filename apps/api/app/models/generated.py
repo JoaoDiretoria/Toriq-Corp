@@ -16,6 +16,7 @@ class AppRole(str, enum.Enum):
     EMPRESA_PARCEIRA = 'empresa_parceira'
     INSTRUTOR = 'instrutor'
     CLIENTE_TORQ = 'cliente_torq'
+    SUPORTE = 'suporte'
 
 
 class TipoEmpresa(str, enum.Enum):

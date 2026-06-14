@@ -260,6 +260,14 @@ export function AdminSidebar({ activeSection, onSectionChange }: AdminSidebarPro
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-4 space-y-1">
+        <Button
+          variant="ghost"
+          className="w-full justify-start"
+          onClick={() => navigate('/ops')}
+        >
+          <Headphones className="mr-2 h-4 w-4" />
+          Suporte / Ops
+        </Button>
         <ThemeToggle />
         <Button
           variant="ghost"

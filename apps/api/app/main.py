@@ -83,6 +83,7 @@ from app.api.storage import router as storage_router
 # RPCs portadas (white-label resolver, register_app_update, blog trending)
 from app.api.rpcs import router as rpcs_router
 from app.api.health import router as health_router
+from app.api.ops import router as ops_router
 from app.api.kanbans_legados import router as kanbans_legados_router
 from app.api.esocial import router as esocial_router
 from app.api.vendas import router as vendas_router
@@ -104,6 +105,8 @@ async def lifespan(app):
     scheduler = build_scheduler()
     scheduler.start()
     app.state.scheduler = scheduler
+    import datetime as _dt
+    app.state.started_at = _dt.datetime.now(tz=_dt.timezone.utc)
 
     # Consumidor da fila Redis (no-op gracioso se não houver REDIS_URL).
     from app.core.cache import cache
@@ -122,6 +125,15 @@ async def lifespan(app):
 
 
 def create_app() -> FastAPI:
+    # Sentry: só inicializa se houver DSN (degrade gracioso, igual ao Redis).
+    if settings.sentry_dsn:
+        import sentry_sdk
+
+        sentry_sdk.init(
+            dsn=settings.sentry_dsn,
+            environment=settings.sentry_environment,
+            traces_sample_rate=0.0,
+        )
     app = FastAPI(title="TORIQ API", version="0.1.0", lifespan=lifespan)
     # CORS: o front (Vite :8080) precisa enviar o cookie httpOnly de auth.
     # allow_credentials=True exige origens explícitas (não pode usar "*").
@@ -133,6 +145,8 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(health_router)
+    # Dashboard Ops/Suporte (observabilidade + gestão global) — guard require_ops
+    app.include_router(ops_router)
     app.include_router(auth_router)
     app.include_router(fin_cadastros_router)
     # Contas a Receber — kanban e colunas ANTES do CRUD de contas (evita que
