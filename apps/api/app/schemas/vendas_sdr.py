@@ -97,6 +97,13 @@ class QualificarBatchOut(BaseModel):
     erros: int
 
 
+class QualificarBatchAceitoOut(BaseModel):
+    """Resposta 202: o lote foi enfileirado para qualificação pela IA fora do
+    request (evita timeout em lotes grandes). O front acompanha relendo os leads."""
+    enfileirados: int
+    status: str = "processando"
+
+
 # ── Interações / Conversa ───────────────────────────────────────────────────
 
 class InteracaoIn(BaseModel):

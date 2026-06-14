@@ -11,26 +11,9 @@ import uuid
 from app.core.queue import register
 
 
-@register("disparo_campanha")
-async def _disparo_campanha(payload: dict) -> None:
-    """Processa uma rodada de envio de campanha fora do request."""
-    cid = payload.get("campanha_id")
-    eid = payload.get("empresa_id")
-    if not cid or not eid:
-        return
-    from app.core.db import SessionLocal
-    from app.services.vendas_disparo import enviar_campanha
-
-    async with SessionLocal() as db:
-        try:
-            await enviar_campanha(
-                db,
-                campanha_id=uuid.UUID(str(cid)),
-                empresa_id=uuid.UUID(str(eid)),
-            )
-        except ValueError:
-            # Sem config (email/whatsapp) ou campanha sumiu — ignora.
-            pass
+# NOTE: o disparo de campanha NÃO usa fila — o scheduler
+# (``processar_campanhas_pendentes``, ~1min) é o mecanismo assíncrono de envio.
+# O endpoint /campanhas/{id}/enviar só prepara (materializa + status='enviando').
 
 
 @register("sdr_inbound")

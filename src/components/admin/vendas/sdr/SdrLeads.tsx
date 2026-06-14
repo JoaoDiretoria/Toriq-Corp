@@ -253,10 +253,10 @@ export function SdrLeads({ onChanged }: SdrLeadsProps) {
     try {
       const res = await vendasSdrApi.qualificarBatch(selectedArray);
       toast.success(
-        `${res.qualificados} qualificado(s)` +
-          (res.erros > 0 ? `, ${res.erros} com erro` : ''),
+        `${res.enfileirados} lead(s) enviados para qualificação — processando em segundo plano.`,
       );
       setSelectedIds(new Set());
+      // A qualificação roda na fila; recarrega para refletir o que já concluiu.
       await fetchLeads();
       onChanged?.();
     } catch (err: any) {

@@ -128,10 +128,10 @@ export function CampanhaDetalhe({ campanhaId, onBack }: CampanhaDetalheProps) {
     setSending(true);
     try {
       const res = await vendasDisparoApi.enviarCampanha(campanhaId);
-      const partes = [`${res.enviados} enviado(s)`];
-      if (res.suprimidos > 0) partes.push(`${res.suprimidos} suprimido(s)`);
-      if (res.erros > 0) partes.push(`${res.erros} erro(s)`);
-      toast.success(`Disparo executado: ${partes.join(', ')}`);
+      toast.success(
+        `Disparo iniciado: ${res.total_destinatarios} destinatário(s) na fila. ` +
+          `O envio roda em segundo plano — acompanhe o progresso aqui.`,
+      );
       await Promise.all([fetchCampanha(), fetchMensagens()]);
     } catch (err: any) {
       toast.error(err?.message || 'Erro ao enviar campanha');

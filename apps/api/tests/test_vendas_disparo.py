@@ -209,15 +209,18 @@ async def test_campanha_enviar_lead_ids(client, db_session, monkeypatch):
     assert camp["status"] == "rascunho"
     camp_id = camp["id"]
 
-    # Enviar.
+    # Enviar (assíncrono): prepara + 202, NÃO envia no request.
     r = await client.post(f"/vendas/campanhas/{camp_id}/enviar")
-    assert r.status_code == 200, r.text
+    assert r.status_code == 202, r.text
     res = r.json()
     assert res["total_destinatarios"] == 2
-    assert res["enviados"] == 2
-    assert res["suprimidos"] == 0
-    assert res["erros"] == 0
-    assert res["status"] == "concluida"
+    assert res["status"] == "enviando"
+    assert res["enfileirado"] is True
+    # Ainda não chamou o provider (envio fica para o scheduler).
+    assert len(registro.chamadas) == 0
+
+    # O scheduler é quem envia — drena as pendentes via a sessão de teste.
+    await svc.processar_campanhas_pendentes(db_session)
 
     # Provider chamado 2x, com HTML contendo link de descadastro.
     assert len(registro.chamadas) == 2
@@ -225,12 +228,14 @@ async def test_campanha_enviar_lead_ids(client, db_session, monkeypatch):
     assert destinos == {"a@dest.com", "b@dest.com"}
     assert all("/vendas/descadastro/" in c["html"] for c in registro.chamadas)
 
-    # Mensagens viraram 'enviado' com provider_id.
+    # Mensagens viraram 'enviado' com provider_id; campanha 'concluida'.
     r = await client.get(f"/vendas/campanhas/{camp_id}/mensagens")
     msgs = r.json()
     assert len(msgs) == 2
     assert all(m["status"] == "enviado" for m in msgs)
     assert all(m["provider_id"] == "msgid-fake" for m in msgs)
+    r = await client.get(f"/vendas/campanhas/{camp_id}")
+    assert r.json()["status"] == "concluida"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -260,10 +265,10 @@ async def test_campanha_respeita_supressao(client, db_session, monkeypatch):
     camp_id = r.json()["id"]
 
     r = await client.post(f"/vendas/campanhas/{camp_id}/enviar")
-    assert r.status_code == 200, r.text
-    res = r.json()
-    assert res["enviados"] == 1
-    assert res["suprimidos"] == 1
+    assert r.status_code == 202, r.text
+
+    # O scheduler envia; supressão aplicada na rodada.
+    await svc.processar_campanhas_pendentes(db_session)
 
     # Provider chamado só p/ o não-suprimido.
     assert len(registro.chamadas) == 1
@@ -300,6 +305,7 @@ async def test_descadastro_publico_adiciona_supressao(client, db_session, monkey
     r = await client.post("/vendas/campanhas", json={"nome": "C", "lead_ids": [l1]})
     camp_id = r.json()["id"]
     await client.post(f"/vendas/campanhas/{camp_id}/enviar")
+    await svc.processar_campanhas_pendentes(db_session)
 
     r = await client.get(f"/vendas/campanhas/{camp_id}/mensagens")
     msg_id = r.json()[0]["id"]
@@ -333,6 +339,7 @@ async def test_rastrear_marca_lido(client, db_session, monkeypatch):
     r = await client.post("/vendas/campanhas", json={"nome": "C", "lead_ids": [l1]})
     camp_id = r.json()["id"]
     await client.post(f"/vendas/campanhas/{camp_id}/enviar")
+    await svc.processar_campanhas_pendentes(db_session)
 
     r = await client.get(f"/vendas/campanhas/{camp_id}/mensagens")
     msg_id = r.json()[0]["id"]

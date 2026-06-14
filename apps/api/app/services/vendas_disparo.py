@@ -23,6 +23,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache import cache
 from app.core.esocial_crypto import decrypt_secret
 from app.integrations.email_provider import (
     EmailError,
@@ -194,7 +195,96 @@ def _injetar_rastreio_descadastro(html: str, mensagem_id: uuid.UUID) -> str:
     return f"{html or ''}{descadastro}{pixel}"
 
 
+async def _resumo_status(
+    db: AsyncSession, campanha_id: uuid.UUID, empresa_id: uuid.UUID
+) -> dict:
+    """Resumo 'não enviei nada agora' (outra rodada está processando a campanha)."""
+    campanha = await db.scalar(
+        select(VendasCampanhas).where(
+            VendasCampanhas.id == campanha_id,
+            VendasCampanhas.empresa_id == empresa_id,
+        )
+    )
+    if campanha is None:
+        raise ValueError("campanha não encontrada")
+    return {
+        "campanha_id": campanha.id,
+        "status": campanha.status,
+        "total_destinatarios": campanha.total_destinatarios or 0,
+        "enviados": 0,
+        "suprimidos": 0,
+        "erros": 0,
+        "dedup": 0,
+    }
+
+
+async def preparar_campanha(
+    db: AsyncSession, *, campanha_id: uuid.UUID, empresa_id: uuid.UUID
+) -> dict:
+    """Valida + materializa as mensagens e marca a campanha como 'enviando'.
+
+    É a parte RÁPIDA (sem envio real) que o endpoint roda no request para dar
+    feedback imediato (total de destinatários). O envio em si fica para a fila /
+    scheduler. Idempotente. Levanta ValueError se a campanha/config não existir.
+    """
+    campanha = await db.scalar(
+        select(VendasCampanhas).where(
+            VendasCampanhas.id == campanha_id,
+            VendasCampanhas.empresa_id == empresa_id,
+        )
+    )
+    if campanha is None:
+        raise ValueError("campanha não encontrada")
+
+    config = await db.scalar(
+        select(VendasDisparoConfig).where(
+            VendasDisparoConfig.empresa_id == empresa_id
+        )
+    )
+    if campanha.canal == "whatsapp":
+        if config is None or not config.whatsapp_phone_id:
+            raise ValueError("configure o WhatsApp")
+    else:
+        if config is None or not config.smtp_host:
+            raise ValueError("configure o email")
+
+    await materializar_mensagens(db, campanha)
+    if campanha.status in ("rascunho", "agendada"):
+        campanha.status = "enviando"
+        if campanha.started_at is None:
+            campanha.started_at = _now()
+    await db.commit()
+    return {
+        "campanha_id": campanha.id,
+        "status": campanha.status,
+        "total_destinatarios": campanha.total_destinatarios or 0,
+    }
+
+
 async def enviar_campanha(
+    db: AsyncSession,
+    *,
+    campanha_id: uuid.UUID,
+    empresa_id: uuid.UUID,
+    limite: Optional[int] = None,
+) -> dict:
+    """Envia uma rodada da campanha, com lock por-campanha (anti envio duplicado).
+
+    O lock impede que duas rodadas concorrentes (fila + scheduler) enviem as
+    mesmas mensagens 'pendente'. Sem Redis, ``try_lock`` retorna sempre True
+    (sem lock distribuído) — comportamento idêntico ao de antes do lock.
+    """
+    if not await cache.try_lock(f"campanha:{campanha_id}", ttl=600):
+        return await _resumo_status(db, campanha_id, empresa_id)
+    try:
+        return await _enviar_campanha_inner(
+            db, campanha_id=campanha_id, empresa_id=empresa_id, limite=limite
+        )
+    finally:
+        await cache.release_lock(f"campanha:{campanha_id}")
+
+
+async def _enviar_campanha_inner(
     db: AsyncSession,
     *,
     campanha_id: uuid.UUID,

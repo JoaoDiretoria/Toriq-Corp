@@ -169,7 +169,8 @@ async def test_qualificar_atualiza_lead_e_cria_interacao(client, db_session, mon
 
 
 @pytest.mark.anyio
-async def test_qualificar_batch(client, db_session, monkeypatch):
+async def test_qualificar_batch_enfileira(client, db_session, monkeypatch):
+    """Assíncrono: valida config + enfileira + 202 (não roda a IA no request)."""
     await login_as(client, db_session, email="sdr_batch@torq.com")
     await _set_config(client)
     _patch_claude(monkeypatch)
@@ -180,8 +181,35 @@ async def test_qualificar_batch(client, db_session, monkeypatch):
     r = await client.post(
         "/vendas/sdr/qualificar-batch", json={"lead_ids": [l1, l2]}
     )
-    assert r.status_code == 200, r.text
+    assert r.status_code == 202, r.text
     res = r.json()
+    assert res["enfileirados"] == 2
+    assert res["status"] == "processando"
+
+
+@pytest.mark.anyio
+async def test_qualificar_batch_sem_config_400(client, db_session, monkeypatch):
+    """Sem SDR configurado → 400 imediato (antes de enfileirar)."""
+    await login_as(client, db_session, email="sdr_batch_nocfg@torq.com")
+    _patch_claude(monkeypatch)
+    l1 = await _criar_lead(client, email="a@dest.com")
+    r = await client.post("/vendas/sdr/qualificar-batch", json={"lead_ids": [l1]})
+    assert r.status_code == 400, r.text
+
+
+@pytest.mark.anyio
+async def test_qualificar_batch_servico_qualifica(client, db_session, monkeypatch):
+    """A lógica que a fila/worker executa qualifica os leads do lote."""
+    empresa_id = await login_as(client, db_session, email="sdr_batch_svc@torq.com")
+    await _set_config(client)
+    _patch_claude(monkeypatch)
+
+    l1 = await _criar_lead(client, nome="A", email="a@dest.com")
+    l2 = await _criar_lead(client, nome="B", email="b@dest.com")
+
+    res = await svc.qualificar_batch(
+        db_session, empresa_id=empresa_id, lead_ids=[uuid.UUID(l1), uuid.UUID(l2)]
+    )
     assert res["qualificados"] == 2
     assert res["erros"] == 0
 

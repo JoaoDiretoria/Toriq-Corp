@@ -106,6 +106,27 @@ class _Cache:
         except Exception as exc:
             logger.debug("cache.delete_prefixo falhou (%s) — ignorado.", exc)
 
+    async def try_lock(self, key: str, ttl: int) -> bool:
+        """Tenta adquirir um lock distribuído (SET NX EX). Retorna True se pegou.
+
+        SEM Redis (ou em erro), retorna SEMPRE True: não há lock, mas o trabalho
+        nunca é bloqueado — comportamento idêntico ao de antes do lock existir.
+        """
+        client = self._get_client()
+        if client is None:
+            return True
+        try:
+            return bool(
+                await client.set(self._k(f"lock:{key}"), "1", nx=True, ex=ttl)
+            )
+        except Exception as exc:
+            logger.debug("try_lock falhou (%s) — seguindo sem lock.", exc)
+            return True
+
+    async def release_lock(self, key: str) -> None:
+        """Libera um lock adquirido por ``try_lock``. Best-effort."""
+        await self.delete(f"lock:{key}")
+
     async def get_or_set(
         self,
         key: str,

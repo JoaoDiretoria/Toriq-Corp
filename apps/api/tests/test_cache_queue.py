@@ -32,6 +32,15 @@ async def test_cache_get_retorna_none_sem_redis():
 
 
 @pytest.mark.anyio
+async def test_try_lock_sem_redis_sempre_concede():
+    # Sem Redis não há lock distribuído: try_lock concede sempre (nunca bloqueia
+    # o trabalho). release_lock é no-op gracioso.
+    assert await cache.try_lock("campanha:abc", ttl=60) is True
+    assert await cache.try_lock("campanha:abc", ttl=60) is True
+    await cache.release_lock("campanha:abc")
+
+
+@pytest.mark.anyio
 async def test_fila_enqueue_roda_inline_sem_redis():
     recebido = {}
 

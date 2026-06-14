@@ -68,6 +68,13 @@ async def _carregar_config(db: AsyncSession, empresa_id: uuid.UUID) -> VendasSdr
     return config
 
 
+async def assegurar_config(db: AsyncSession, empresa_id: uuid.UUID) -> None:
+    """Valida que o SDR está configurado (ValueError se não). Pré-check síncrono
+    para o endpoint de qualificação assíncrona dar feedback imediato antes de
+    enfileirar o trabalho pesado de IA."""
+    await _carregar_config(db, empresa_id)
+
+
 def _resumo_lead(lead: VendasLeads) -> str:
     """Texto curto com os dados do lead para dar contexto ao modelo."""
     partes: list[str] = []

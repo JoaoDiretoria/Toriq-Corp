@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import require_role
 from app.core.db import get_db
 from app.core.esocial_crypto import decrypt_secret, encrypt_secret, mask_secret
+from app.core.queue import queue
 from app.models.user import User, UserRole
 from app.models.vendas import VendasLeads
 from app.models.vendas_sdr import VendasSdrConfig, VendasSdrInteracoes
@@ -234,19 +235,34 @@ async def qualificar_lead(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
 
 
-@router.post("/sdr/qualificar-batch", response_model=s.QualificarBatchOut)
+@router.post(
+    "/sdr/qualificar-batch",
+    response_model=s.QualificarBatchAceitoOut,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def qualificar_batch(
     payload: s.QualificarBatchIn,
     user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
+    """Qualifica um lote de leads pela IA de forma ASSÍNCRONA.
+
+    A qualificação chama o modelo por lead — em lote grande, rodar no request dá
+    timeout. Aqui validamos a config (feedback imediato: 400 se o SDR não está
+    configurado) e enfileiramos o trabalho (``sdr_qualificar_lote``) para fora do
+    request. Sem Redis, o enqueue roda inline. O front acompanha relendo os leads.
+    """
     empresa_id = _require_empresa(user)
     try:
-        return await svc.qualificar_batch(
-            db, empresa_id=empresa_id, lead_ids=payload.lead_ids
-        )
+        await svc.assegurar_config(db, empresa_id)
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+
+    await queue.enqueue(
+        "sdr_qualificar_lote",
+        {"empresa_id": str(empresa_id), "lead_ids": [str(x) for x in payload.lead_ids]},
+    )
+    return {"enfileirados": len(payload.lead_ids), "status": "processando"}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

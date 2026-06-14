@@ -387,22 +387,33 @@ async def deletar_campanha(
     await db.commit()
 
 
-@router.post("/campanhas/{campanha_id}/enviar", response_model=s.EnviarCampanhaOut)
+@router.post(
+    "/campanhas/{campanha_id}/enviar",
+    response_model=s.EnviarCampanhaAceitoOut,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def enviar_campanha(
     campanha_id: uuid.UUID,
     user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
+    """Dispara a campanha de forma ASSÍNCRONA (não bloqueia o request).
+
+    Materializa as mensagens + marca 'enviando' na hora (feedback imediato com o
+    total de destinatários). O envio real fica a cargo do scheduler
+    (``processar_campanhas_pendentes``, ~1min), que já é o mecanismo assíncrono
+    de envio — o endpoint NÃO envia no request (antes, travava em campanha grande).
+    O front acompanha o progresso por GET /campanhas/{id}/metricas.
+    """
     empresa_id = _require_empresa(user)
     # 404 se a campanha não é da empresa.
     await _get_campanha(db, campanha_id, empresa_id)
     try:
-        resultado = await svc.enviar_campanha(
+        return await svc.preparar_campanha(
             db, campanha_id=campanha_id, empresa_id=empresa_id
         )
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
-    return resultado
 
 
 @router.get(

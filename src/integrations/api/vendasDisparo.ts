@@ -126,15 +126,14 @@ export interface DisparoCampanhaUpdate {
   status?: string;
 }
 
-/** Resultado de uma rodada de envio. */
+/** Resposta do disparo assíncrono: a campanha foi preparada (mensagens
+ * materializadas, status 'enviando') e o envio real roda no scheduler (~1min).
+ * Acompanhe o progresso por listMensagens / métricas. */
 export interface EnviarCampanhaResult {
   campanha_id: string;
   status: string;
   total_destinatarios: number;
-  enviados: number;
-  suprimidos: number;
-  erros: number;
-  dedup: number;
+  enfileirado: boolean;
 }
 
 /** Métricas/funil de uma campanha. */

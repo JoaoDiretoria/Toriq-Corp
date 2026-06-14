@@ -147,6 +147,18 @@ class EnviarCampanhaOut(BaseModel):
     dedup: int = 0
 
 
+class EnviarCampanhaAceitoOut(BaseModel):
+    """Resposta 202 do disparo assíncrono: a campanha foi enfileirada para envio.
+
+    O envio real roda fora do request (fila + scheduler). O front acompanha o
+    progresso por GET /campanhas/{id}/metricas.
+    """
+    campanha_id: uuid.UUID
+    status: str
+    total_destinatarios: int
+    enfileirado: bool = True
+
+
 class MetricasCampanhaOut(BaseModel):
     campanha_id: uuid.UUID
     total: int

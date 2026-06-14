@@ -101,10 +101,11 @@ export interface QualificarResult {
   sdr_notas: string | null;
 }
 
-/** Resultado da qualificação em lote. */
+/** Resultado da qualificação em lote (assíncrona): o lote foi enfileirado para
+ * a IA processar fora do request. O front reacompanha relendo os leads. */
 export interface QualificarBatchResult {
-  qualificados: number;
-  erros: number;
+  enfileirados: number;
+  status: string;
 }
 
 /** Interação registrada na timeline do lead. */
