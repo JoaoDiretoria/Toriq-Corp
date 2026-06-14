@@ -75,3 +75,33 @@ class EsocialConfigUpdate(BaseModel):
     clear_govbr_client_secret: bool = False
     clear_esocial_cert: bool = False
     clear_esocial_cert_password: bool = False
+
+
+# ── 5) Assinatura digital de PDF (A1 ICP-Brasil) ───────────────────────────────
+
+class CertificateInfoOut(BaseModel):
+    """Status do certificado A1 para assinatura (usado pelo front antes de assinar)."""
+    configurado: bool
+    cn: Optional[str] = None
+    valido_ate: Optional[datetime.date] = None
+    expirado: Optional[bool] = None
+
+
+class AssinarPdfIn(BaseModel):
+    pdf_base64: str
+    documento_tipo: str
+    motivo_assinatura: Optional[str] = None
+    documento_id: Optional[str] = None
+
+
+class CertificadoAssinaturaInfo(BaseModel):
+    cn: str
+    emissor: str
+    serial_number: str
+
+
+class AssinarPdfOut(BaseModel):
+    success: bool
+    pdf_base64: Optional[str] = None
+    certificado_info: Optional[CertificadoAssinaturaInfo] = None
+    error: Optional[str] = None

@@ -20,6 +20,9 @@ dependencies = [
     "cryptography>=49.0.0",
     "httpx>=0.28",
     "redis>=5.2",
+    "pyhanko>=0.35.1",
+    "pypdf>=6.13.2",
+    "reportlab>=4.5.1",
 ]
 
 [dependency-groups]

@@ -9,6 +9,7 @@ Há 1 config por empresa (PK = empresa_id em empresa_integracoes_esocial).
 Segredos (client_secret, .pfx, senha) ficam criptografados nas colunas `*_enc`
 e NUNCA são devolvidos — a visão pública só expõe flags `has_*`.
 """
+import asyncio
 import base64
 import binascii
 import datetime
@@ -20,8 +21,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import require_role
 from app.core.db import get_db
 from app.core.esocial_cert import parse_pfx
-from app.core.esocial_crypto import encrypt_secret
+from app.core.esocial_crypto import decrypt_secret, encrypt_secret
+from app.core.pdf_sign import assinar_pdf
 from app.models.esocial import EmpresaIntegracoesEsocial
+from app.models.generated import Empresas
 from app.models.user import User, UserRole
 from app.schemas import esocial as s
 
@@ -231,3 +234,105 @@ async def delete_certificado(
     obj.certificado_valido_ate = None
     obj.updated_at = datetime.datetime.now(datetime.timezone.utc)
     await db.commit()
+
+
+# ── 5) Assinatura digital de PDF (A1 ICP-Brasil) ───────────────────────────────
+
+async def _cert_da_empresa(db: AsyncSession, empresa_id) -> tuple[bytes, str] | None:
+    """Devolve ``(pfx_bytes, senha)`` do certificado salvo, ou None se não houver.
+
+    Descriptografa o .pfx (base64) e a senha guardados em repouso.
+    """
+    obj = await db.scalar(
+        select(EmpresaIntegracoesEsocial).where(
+            EmpresaIntegracoesEsocial.empresa_id == empresa_id
+        )
+    )
+    if obj is None or not obj.esocial_cert_base64_enc or not obj.esocial_cert_password_enc:
+        return None
+    cert_b64 = decrypt_secret(obj.esocial_cert_base64_enc)
+    senha = decrypt_secret(obj.esocial_cert_password_enc)
+    try:
+        pfx_bytes = base64.b64decode(cert_b64, validate=True)
+    except (binascii.Error, ValueError):
+        return None
+    return pfx_bytes, senha
+
+
+@router.get("/pdf/certificate-info", response_model=s.CertificateInfoOut)
+async def pdf_certificate_info(
+    user: User = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Status do certificado A1 da empresa para assinatura (sem expor segredos)."""
+    empresa_id = _empresa_id(user)
+    par = await _cert_da_empresa(db, empresa_id)
+    if par is None:
+        return s.CertificateInfoOut(configurado=False)
+    pfx_bytes, senha = par
+    try:
+        info = parse_pfx(pfx_bytes, senha)
+    except ValueError:
+        return s.CertificateInfoOut(configurado=False)
+    return s.CertificateInfoOut(
+        configurado=True,
+        cn=info["cn"],
+        valido_ate=info["valido_ate"],
+        expirado=info["expirado"],
+    )
+
+
+@router.post("/pdf/sign", response_model=s.AssinarPdfOut)
+async def pdf_sign(
+    payload: s.AssinarPdfIn,
+    user: User = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Assina um PDF (base64) com o certificado A1 da empresa (PAdES ICP-Brasil).
+
+    Anexa a página de selo + aplica a assinatura criptográfica. Erros de cert
+    (ausente/expirado/senha) viram ``success=false`` — nunca 500.
+    """
+    empresa_id = _empresa_id(user)
+    par = await _cert_da_empresa(db, empresa_id)
+    if par is None:
+        return s.AssinarPdfOut(
+            success=False, error="Nenhum certificado A1 configurado para a empresa."
+        )
+    pfx_bytes, senha = par
+
+    try:
+        pdf_bytes = base64.b64decode(payload.pdf_base64, validate=True)
+    except (binascii.Error, ValueError):
+        return s.AssinarPdfOut(success=False, error="PDF inválido (base64 malformado).")
+
+    # Dados da empresa para o selo (nome/CNPJ).
+    empresa = await db.scalar(select(Empresas).where(Empresas.id == empresa_id))
+    dados = {
+        "documento_tipo": payload.documento_tipo,
+        "nome_empresa": getattr(empresa, "nome", "") if empresa else "",
+        "cnpj": getattr(empresa, "cnpj", "") if empresa else "",
+        "razao": payload.motivo_assinatura or f"Assinatura de {payload.documento_tipo}",
+        "local": "Brasil",
+        "documento_id": payload.documento_id,
+    }
+
+    try:
+        # Assinatura é CPU-bound e o pyhanko (API síncrona) usa asyncio.run()
+        # internamente — rodar em thread evita conflito com o event loop e não
+        # bloqueia o loop principal.
+        assinado, cert_info = await asyncio.to_thread(
+            assinar_pdf, pdf_bytes, pfx_bytes, senha, dados
+        )
+    except ValueError as exc:
+        return s.AssinarPdfOut(success=False, error=str(exc))
+
+    return s.AssinarPdfOut(
+        success=True,
+        pdf_base64=base64.b64encode(assinado).decode(),
+        certificado_info=s.CertificadoAssinaturaInfo(
+            cn=cert_info["cn"],
+            emissor=cert_info["emissor"],
+            serial_number=str(cert_info["serial_number"]),
+        ),
+    )
