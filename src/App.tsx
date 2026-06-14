@@ -39,6 +39,7 @@ import NotFound from "./pages/NotFound";
 import ApiTest from "./pages/dev/ApiTest";
 import SuporteTickets from "./pages/shared/SuporteTickets";
 import { FloatingSupportWidget } from "./components/shared/support";
+import { ImpersonationBanner } from "./components/suporte/ImpersonationBanner";
 import { UpdateNotificationPopup } from "./components/shared/UpdateNotificationPopup";
 import { RequireSenhaAlterada } from "./components/auth/RequireSenhaAlterada";
 import { ImportQueueProvider } from "./hooks/useImportQueue";
@@ -99,6 +100,7 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
           </Routes>
           <FloatingSupportWidget />
+          <ImpersonationBanner />
           <UpdateNotificationPopup />
           <ImportQueueProvider>
             <ImportProgressPopup />
