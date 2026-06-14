@@ -4,7 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
-import { ThemeProvider } from "@/hooks/useTheme";
+import { ThemeProvider, ThemeUserBridge } from "@/hooks/useTheme";
 import { EmpresaModeProvider } from "@/hooks/useEmpresaMode";
 import { ModulosAtivosProvider } from "@/hooks/useModulosAtivos";
 import { CurrentScreenProvider } from "@/hooks/useCurrentScreen";
@@ -57,6 +57,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
+          <ThemeUserBridge />
           <WhiteLabelProvider>
           <EmpresaModeProvider>
           <ModulosAtivosProvider>
