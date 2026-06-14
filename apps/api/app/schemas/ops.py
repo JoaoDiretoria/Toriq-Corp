@@ -151,3 +151,9 @@ class AuditRegistro(BaseModel):
 class AuditListOut(BaseModel):
     registros: list[AuditRegistro]
     total: int
+
+
+class SentryStatusOut(BaseModel):
+    configurado: bool
+    environment: str
+    url: str | None = None

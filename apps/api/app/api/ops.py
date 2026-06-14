@@ -31,6 +31,7 @@ from app.schemas.ops import (
     RedisKeysOut,
     RedisOverviewOut,
     SchedulerOut,
+    SentryStatusOut,
     TicketResumo,
     TicketsListOut,
     TicketsMetricsOut,
@@ -109,6 +110,19 @@ async def scheduler_jobs(
         for j in scheduler.get_jobs()
     ]
     return SchedulerOut(rodando=bool(scheduler.running), jobs=jobs)
+
+
+@router.get("/sentry", response_model=SentryStatusOut)
+async def sentry_status(_: User = Depends(require_ops)) -> SentryStatusOut:
+    configurado = bool(settings.sentry_dsn)
+    url: str | None = None
+    if settings.sentry_org and settings.sentry_project:
+        url = f"https://{settings.sentry_org}.sentry.io/projects/{settings.sentry_project}/"
+    return SentryStatusOut(
+        configurado=configurado,
+        environment=settings.sentry_environment,
+        url=url,
+    )
 
 
 @router.get("/tickets/metrics", response_model=TicketsMetricsOut)

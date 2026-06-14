@@ -206,3 +206,13 @@ async def test_nao_impersona_outro_staff(client):
     await _register_login(client, "supA_imp@toriq.com", "suporte")
     r = await client.post(f"/ops/users/{sup_b_id}/impersonate")
     assert r.status_code == 403, r.text
+
+
+async def test_sentry_status(client):
+    """GET /ops/sentry → 200, body tem 'configurado' e é False (sem SENTRY_DSN nos testes)."""
+    await _register_login(client, "sup_sentry@toriq.com", "suporte")
+    r = await client.get("/ops/sentry")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert "configurado" in body
+    assert body["configurado"] is False
