@@ -365,19 +365,19 @@ export function AdminEstatisticas() {
       <Tabs defaultValue="visao-geral" className="w-full">
         <div className="overflow-x-auto pb-2">
           <TabsList className="inline-flex h-12 items-center justify-start gap-1 rounded-lg bg-muted p-1 min-w-max">
-            <TabsTrigger value="visao-geral" className="flex items-center gap-2 px-4 py-2.5 rounded-md whitespace-nowrap text-white data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border">
+            <TabsTrigger value="visao-geral" className="flex items-center gap-2 px-4 py-2.5 rounded-md whitespace-nowrap text-muted-foreground data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border">
               <Activity className="h-4 w-4" />
               Visão Geral
             </TabsTrigger>
-            <TabsTrigger value="por-empresa" className="flex items-center gap-2 px-4 py-2.5 rounded-md whitespace-nowrap text-white data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border">
+            <TabsTrigger value="por-empresa" className="flex items-center gap-2 px-4 py-2.5 rounded-md whitespace-nowrap text-muted-foreground data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border">
               <Building2 className="h-4 w-4" />
               Por Empresa
             </TabsTrigger>
-            <TabsTrigger value="por-usuario" className="flex items-center gap-2 px-4 py-2.5 rounded-md whitespace-nowrap text-white data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border">
+            <TabsTrigger value="por-usuario" className="flex items-center gap-2 px-4 py-2.5 rounded-md whitespace-nowrap text-muted-foreground data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border">
               <Users className="h-4 w-4" />
               Por Usuário
             </TabsTrigger>
-            <TabsTrigger value="banco-dados" className="flex items-center gap-2 px-4 py-2.5 rounded-md whitespace-nowrap text-white data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border">
+            <TabsTrigger value="banco-dados" className="flex items-center gap-2 px-4 py-2.5 rounded-md whitespace-nowrap text-muted-foreground data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border">
               <Database className="h-4 w-4" />
               Banco de Dados
             </TabsTrigger>

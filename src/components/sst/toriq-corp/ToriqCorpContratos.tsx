@@ -277,8 +277,8 @@ export function ToriqCorpContratos() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value="contratos" className="text-white data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm">Contratos</TabsTrigger>
-          <TabsTrigger value="modelos" className="text-white data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm">Modelos de Contrato</TabsTrigger>
+          <TabsTrigger value="contratos" className="text-muted-foreground data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm">Contratos</TabsTrigger>
+          <TabsTrigger value="modelos" className="text-muted-foreground data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm">Modelos de Contrato</TabsTrigger>
         </TabsList>
 
         <TabsContent value="contratos" className="space-y-4">
