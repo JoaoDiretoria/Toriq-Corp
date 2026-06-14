@@ -61,6 +61,13 @@ class Settings(BaseSettings):
     # Sem ele, o webhook responde 503 (não processa eventos não verificados).
     resend_webhook_secret: str | None = None
 
+    # Sentry (monitoramento de erros do backend). OPCIONAL: sem o DSN, o init é
+    # no-op (nada é enviado). Usar o DSN do 2º projeto Sentry (backend), separado
+    # do front. send_default_pii fica False (não envia dados pessoais por padrão).
+    sentry_dsn: str | None = None
+    sentry_environment: str = "production"
+    sentry_traces_sample_rate: float = 0.1
+
     # Redis (cache + filas). URL no formato redis://default:senha@host:6379.
     # OPCIONAL: sem ela o cache fica desligado (recalcula sempre) e a fila roda
     # inline/no scheduler — a aplicação NUNCA quebra por falta de Redis.
