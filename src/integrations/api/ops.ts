@@ -89,6 +89,7 @@ export const opsApi = {
   updateUser: (id: string, body: { nome?: string; email?: string; ativo?: boolean }) =>
     api.patch<OpsUser>(`/ops/users/${id}`, body),
   updateRole: (id: string, role: Role) => api.patch<OpsUser>(`/ops/users/${id}/role`, { role }),
+  updateEmpresa: (id: string, empresa_id: string | null) => api.patch<OpsUser>(`/ops/users/${id}/empresa`, { empresa_id }),
   resetSenha: (id: string) => api.post<OpsResetSenhaOut>(`/ops/users/${id}/reset-senha`),
   impersonate: (id: string) => api.post<OpsUser>(`/ops/users/${id}/impersonate`),
   stopImpersonate: () => api.post<OpsUser>('/ops/stop-impersonate'),
