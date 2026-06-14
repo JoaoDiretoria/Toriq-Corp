@@ -26,3 +26,26 @@ async def test_suporte_role_pode_registrar_e_logar(client):
     r = await client.get("/auth/me")
     assert r.status_code == 200
     assert r.json()["user"]["email"] == "sup1@toriq.com"
+
+
+async def test_require_ops_bloqueia_nao_ops(client):
+    await _register_login(client, "cli@toriq.com", "cliente_final")
+    r = await client.get("/ops/health")
+    assert r.status_code == 403
+
+
+async def test_require_ops_permite_suporte(client):
+    await _register_login(client, "sup2@toriq.com", "suporte")
+    r = await client.get("/ops/health")
+    assert r.status_code == 200
+
+
+async def test_health_estrutura(client):
+    await _register_login(client, "sup3@toriq.com", "suporte")
+    r = await client.get("/ops/health")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] in ("ok", "degradado")
+    assert "versao" in body and "uptime_segundos" in body
+    nomes = {d["nome"] for d in body["dependencias"]}
+    assert {"postgres", "redis"} <= nomes

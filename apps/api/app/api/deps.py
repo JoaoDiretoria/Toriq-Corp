@@ -59,3 +59,8 @@ def require_role(*roles: UserRole) -> Callable:
         return user
 
     return _guard
+
+
+# Guard do dashboard de suporte/observabilidade (/ops): staff interno TORIQ.
+# admin_vertical (superadmin) também acessa. Use como dependência em todo /ops.
+require_ops = require_role(UserRole.admin_vertical, UserRole.suporte)
