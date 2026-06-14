@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_role
+from app.core.cache import cache
 from app.core.db import get_db
 from app.models.user import User, UserRole
 from app.schemas import vendas_uso as s
@@ -42,7 +43,12 @@ async def uso_da_empresa(
 ):
     """Uso da PRÓPRIA empresa. Sem ``periodo`` = acumulado total."""
     empresa_id = _require_empresa(user)
-    return await svc.resumo_uso(db, empresa_id=empresa_id, periodo=periodo)
+    chave = f"uso:{empresa_id}:{periodo or 'all'}"
+    return await cache.get_or_set(
+        chave,
+        ttl=None,
+        factory=lambda: svc.resumo_uso(db, empresa_id=empresa_id, periodo=periodo),
+    )
 
 
 @router.get("/uso/empresas", response_model=s.UsoEmpresasOut)
@@ -52,4 +58,9 @@ async def uso_por_empresa(
     db: AsyncSession = Depends(get_db),
 ):
     """Visão cross-empresa do uso (base para cobrança). SOMENTE admin_vertical."""
-    return await svc.resumo_por_empresa(db, periodo=periodo)
+    chave = f"uso_empresas:{periodo or 'all'}"
+    return await cache.get_or_set(
+        chave,
+        ttl=None,
+        factory=lambda: svc.resumo_por_empresa(db, periodo=periodo),
+    )

@@ -1,4 +1,5 @@
 import app.models  # noqa: F401  (registers all models in Base.metadata)
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -88,13 +89,27 @@ from app.jobs.scheduler import build_scheduler
 
 @asynccontextmanager
 async def lifespan(app):
+    # Registra os handlers de fila (import tardio evita ciclos).
+    import app.jobs.queue_handlers  # noqa: F401
+
     scheduler = build_scheduler()
     scheduler.start()
     app.state.scheduler = scheduler
+
+    # Consumidor da fila Redis (no-op gracioso se não houver REDIS_URL).
+    from app.core.cache import cache
+    from app.core.queue import queue
+
+    consumer_task = asyncio.create_task(queue.start_consumer())
+    app.state.queue = queue
     try:
         yield
     finally:
         scheduler.shutdown(wait=False)
+        queue.stop()
+        consumer_task.cancel()
+        await cache.close()
+        await queue.close()
 
 
 def create_app() -> FastAPI:
