@@ -220,13 +220,18 @@ async def registrar_auditoria(
 
 
 async def get_alvo(db: AsyncSession, actor: User, user_id) -> User:
-    """Carrega o usuário-alvo. suporte não pode tocar um admin_vertical
-    (anti-neutralização); admin_vertical pode tudo."""
+    """Carrega o usuário-alvo. suporte gere apenas contas NÃO-staff e nunca a
+    própria conta; contas de staff (suporte/admin_vertical) só por admin_vertical."""
     target = await db.get(User, user_id)
     if target is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "usuário não encontrado")
-    if actor.role == UserRole.suporte and target.role == UserRole.admin_vertical:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "suporte não pode modificar admin_vertical")
+    # Sem autoedição pelo /ops: a própria conta usa os fluxos de /auth.
+    if target.id == actor.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "use /auth para editar a própria conta")
+    # Contas de staff (suporte/admin_vertical) só são geridas por admin_vertical
+    # (anti-escalação: impede suporte de tocar/escalar contas privilegiadas).
+    if actor.role != UserRole.admin_vertical and target.role in (UserRole.suporte, UserRole.admin_vertical):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "gerenciar contas de staff requer admin_vertical")
     return target
 
 

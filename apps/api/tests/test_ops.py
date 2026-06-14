@@ -129,3 +129,31 @@ async def test_suporte_nao_promove_para_admin(client):
     await _register_login(client, "sup11@toriq.com", "suporte")
     r = await client.patch(f"/ops/users/{alvo_id}/role", json={"role": "admin_vertical"})
     assert r.status_code == 403
+
+
+async def test_suporte_nao_edita_propria_conta(client):
+    await _register_login(client, "sup12@toriq.com", "suporte")
+    proprio_id = (await client.get("/auth/me")).json()["user"]["id"]
+    r = await client.patch(f"/ops/users/{proprio_id}", json={"nome": "x"})
+    assert r.status_code == 403
+
+
+async def test_suporte_nao_gerencia_outro_staff(client):
+    # alvo B também é staff (suporte): suporte A não pode gerenciá-lo.
+    await _register_login(client, "staffb@toriq.com", "suporte")
+    staff_b_id = (await client.get("/auth/me")).json()["user"]["id"]
+    await client.post("/auth/logout")
+
+    await _register_login(client, "staffa@toriq.com", "suporte")
+    r = await client.post(f"/ops/users/{staff_b_id}/reset-senha")
+    assert r.status_code == 403
+
+
+async def test_suporte_nao_concede_papel_staff(client):
+    await _register_login(client, "alvo4@toriq.com", "cliente_final")
+    alvo_id = (await client.get("/auth/me")).json()["user"]["id"]
+    await client.post("/auth/logout")
+
+    await _register_login(client, "sup13@toriq.com", "suporte")
+    r = await client.patch(f"/ops/users/{alvo_id}/role", json={"role": "suporte"})
+    assert r.status_code == 403

@@ -201,9 +201,9 @@ async def update_role(
     db: AsyncSession = Depends(get_db),
 ) -> OpsUserOut:
     target = await ops_service.get_alvo(db, actor, user_id)
-    # Só admin_vertical promove para admin_vertical (anti-escalonamento).
-    if payload.role == UserRole.admin_vertical and actor.role != UserRole.admin_vertical:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "apenas admin_vertical promove para admin_vertical")
+    # suporte não pode conceder papéis de staff (suporte/admin_vertical) — anti-escalação.
+    if payload.role in (UserRole.suporte, UserRole.admin_vertical) and actor.role != UserRole.admin_vertical:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "conceder papel de staff requer admin_vertical")
     antigo = target.role.value
     target.role = payload.role
     await ops_service._sync_profile(db, target)
