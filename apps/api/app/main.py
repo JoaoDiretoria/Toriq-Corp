@@ -241,8 +241,6 @@ def create_app() -> FastAPI:
     app.include_router(admin_users_router)
     app.include_router(change_password_router)
     app.include_router(storage_router)
-        # Ops internos — Sentry issues dashboard (admin_vertical)
-        app.include_router(ops_router)
     return app
 
 
