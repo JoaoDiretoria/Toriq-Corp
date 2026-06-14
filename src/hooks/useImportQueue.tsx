@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { api } from '@/integrations/api/client';
 import { toast } from 'sonner';
+import { useLocation } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
 
 interface ImportJob {
   id: string;
@@ -29,12 +31,20 @@ interface ImportQueueContextType {
 const ImportQueueContext = createContext<ImportQueueContextType | null>(null);
 
 export function ImportQueueProvider({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  const { profile } = useAuth();
   const [activeJobs, setActiveJobs] = useState<ImportJob[]>([]);
   const [isMinimized, setIsMinimized] = useState(true);
   const [processingJobId, setProcessingJobId] = useState<string | null>(null);
+  const importsHabilitados = Boolean(profile?.empresa_id) && !location.pathname.startsWith('/ops');
 
   // Carregar jobs ativos ao iniciar
   const refreshJobs = useCallback(async () => {
+    if (!importsHabilitados) {
+      setActiveJobs([]);
+      return;
+    }
+
     try {
       const all = await api.get<any[]>('/sistema/import-queue').catch(() => [] as any[]);
 
@@ -67,15 +77,21 @@ export function ImportQueueProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Erro ao carregar jobs:', error);
     }
-  }, [processingJobId]);
+  }, [importsHabilitados, processingJobId]);
 
   useEffect(() => {
+    if (!importsHabilitados) {
+      setActiveJobs([]);
+      setProcessingJobId(null);
+      return;
+    }
+
     refreshJobs();
     
     // Polling a cada 5 segundos para atualizar status
     const interval = setInterval(refreshJobs, 5000);
     return () => clearInterval(interval);
-  }, [refreshJobs]);
+  }, [importsHabilitados, refreshJobs]);
 
   // Iniciar nova importação
   const startImport = async (empresaId: string, tipo: string, data: any[]): Promise<string | null> => {
@@ -123,6 +139,7 @@ export function ImportQueueProvider({ children }: { children: ReactNode }) {
 
   // Processar próximo lote
   const processNextBatch = async (jobId: string) => {
+    if (!importsHabilitados) return;
     if (processingJobId === jobId) return;
 
     setProcessingJobId(jobId);

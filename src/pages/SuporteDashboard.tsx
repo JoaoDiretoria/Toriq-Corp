@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
@@ -10,6 +10,9 @@ import { OpsTickets } from '@/components/suporte/OpsTickets';
 import { OpsUsuarios } from '@/components/suporte/OpsUsuarios';
 import { OpsSentry } from '@/components/suporte/OpsSentry';
 import { OpsAuditoria } from '@/components/suporte/OpsAuditoria';
+import { Button } from '@/components/ui/button';
+import { opsApi } from '@/integrations/api/ops';
+import { ApiError } from '@/integrations/api/client';
 
 const TITLES: Record<OpsSection, string> = {
   'visao-geral': 'Visão Geral do Sistema',
@@ -25,14 +28,48 @@ const SuporteDashboard = () => {
   const navigate = useNavigate();
   const { user, profile, loading } = useAuth();
   const [activeSection, setActiveSection] = useState<OpsSection>('visao-geral');
+  const [opsStatus, setOpsStatus] = useState<'checking' | 'ready' | 'missing' | 'forbidden' | 'error'>('checking');
+  const [opsError, setOpsError] = useState<string | null>(null);
+  const podeAcessarOps = profile?.role === 'suporte' || profile?.role === 'admin_vertical';
 
   // Acesso: apenas suporte e admin_vertical. Demais voltam para /dashboard.
   useEffect(() => {
     if (!loading && !user) navigate('/auth');
-    if (!loading && profile && profile.role !== 'suporte' && profile.role !== 'admin_vertical') {
+    if (!loading && profile && !podeAcessarOps) {
       navigate('/dashboard');
     }
-  }, [user, profile, loading, navigate]);
+  }, [user, profile, loading, navigate, podeAcessarOps]);
+
+  const verificarBackendOps = useCallback(async () => {
+    if (!podeAcessarOps) return;
+
+    setOpsStatus('checking');
+    setOpsError(null);
+
+    try {
+      await opsApi.health();
+      setOpsStatus('ready');
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        setOpsStatus('missing');
+        setOpsError('A API publicada ainda não expõe as rotas do módulo Ops.');
+        return;
+      }
+      if (error instanceof ApiError && error.status === 403) {
+        setOpsStatus('forbidden');
+        setOpsError('Seu usuário autenticado não tem acesso ao backend do módulo Ops.');
+        return;
+      }
+      setOpsStatus('error');
+      setOpsError(error instanceof Error ? error.message : 'Falha ao validar o backend do módulo Ops.');
+    }
+  }, [podeAcessarOps]);
+
+  useEffect(() => {
+    if (!loading && profile && podeAcessarOps) {
+      verificarBackendOps();
+    }
+  }, [loading, profile, podeAcessarOps, verificarBackendOps]);
 
   if (loading) {
     return (
@@ -41,7 +78,7 @@ const SuporteDashboard = () => {
       </div>
     );
   }
-  if (!profile || (profile.role !== 'suporte' && profile.role !== 'admin_vertical')) {
+  if (!profile || !podeAcessarOps) {
     return null;
   }
 
@@ -77,7 +114,24 @@ const SuporteDashboard = () => {
               </div>
             </div>
           </header>
-          <div className="p-6">{renderSection()}</div>
+          <div className="p-6">
+            {opsStatus === 'checking' ? (
+              <div className="animate-pulse text-muted-foreground">Validando backend do Ops...</div>
+            ) : opsStatus === 'ready' ? (
+              renderSection()
+            ) : (
+              <div className="max-w-2xl rounded-lg border border-destructive/20 bg-destructive/5 p-6">
+                <h2 className="text-lg font-semibold text-foreground">Módulo Ops indisponível</h2>
+                <p className="mt-2 text-sm text-muted-foreground">{opsError}</p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Quando isso acontece com `404`, o frontend foi publicado antes do backend correspondente ou a API em produção está com uma imagem desatualizada.
+                </p>
+                <div className="mt-4">
+                  <Button variant="outline" onClick={verificarBackendOps}>Tentar novamente</Button>
+                </div>
+              </div>
+            )}
+          </div>
         </main>
       </div>
     </SidebarProvider>
