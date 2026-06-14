@@ -72,3 +72,28 @@ class SchedulerJob(BaseModel):
 class SchedulerOut(BaseModel):
     rodando: bool
     jobs: list[SchedulerJob]
+
+
+class TicketResumo(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    titulo: str
+    status: str
+    prioridade: str
+    categoria: str | None = None
+    empresa_solicitante_id: uuid.UUID | None = None
+    solicitante_nome: str
+    created_at: datetime.datetime | None = None
+    resolvido_em: datetime.datetime | None = None
+
+
+class TicketsListOut(BaseModel):
+    tickets: list[TicketResumo]
+    total: int
+
+
+class TicketsMetricsOut(BaseModel):
+    abertos: int
+    sla_violados: int
+    por_status: dict[str, int]
+    por_prioridade: dict[str, int]

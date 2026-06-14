@@ -76,3 +76,19 @@ async def test_scheduler_jobs(client):
     r = await client.get("/ops/scheduler/jobs")
     assert r.status_code == 200
     assert isinstance(r.json()["jobs"], list)
+
+
+async def test_tickets_metrics_estrutura(client):
+    await _register_login(client, "sup7@toriq.com", "suporte")
+    r = await client.get("/ops/tickets/metrics")
+    assert r.status_code == 200
+    body = r.json()
+    assert "por_status" in body and "por_prioridade" in body
+    assert "abertos" in body and "sla_violados" in body
+
+
+async def test_tickets_lista(client):
+    await _register_login(client, "sup8@toriq.com", "suporte")
+    r = await client.get("/ops/tickets?limit=10")
+    assert r.status_code == 200
+    assert isinstance(r.json()["tickets"], list)

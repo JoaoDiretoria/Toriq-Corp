@@ -130,6 +130,74 @@ async def redis_keys(prefixo: str, limite: int = 200) -> dict:
     return {"prefixo": prefixo, "chaves": chaves, "truncado": truncado}
 
 
+import datetime as _dt
+
+from sqlalchemy import func, select
+
+from app.models.generated import TicketsSuporte
+
+# SLA padrão (horas) por prioridade para tickets ainda não resolvidos.
+# v1 usa thresholds fixos; integração com tickets_sla_config fica para fase 2.
+_SLA_HORAS = {"critica": 4, "alta": 24, "media": 72, "baixa": 168}
+_STATUS_ABERTOS = ("aberto", "em_andamento", "aguardando_resposta")
+
+
+async def listar_tickets(
+    db: AsyncSession, status: str | None, prioridade: str | None, limite: int
+) -> list[TicketsSuporte]:
+    stmt = select(TicketsSuporte).order_by(TicketsSuporte.created_at.desc())
+    if status:
+        stmt = stmt.where(TicketsSuporte.status == status)
+    if prioridade:
+        stmt = stmt.where(TicketsSuporte.prioridade == prioridade)
+    stmt = stmt.limit(limite)
+    return list((await db.scalars(stmt)).all())
+
+
+async def tickets_metrics(db: AsyncSession) -> dict:
+    por_status = {
+        row[0]: int(row[1])
+        for row in (
+            await db.execute(
+                select(TicketsSuporte.status, func.count()).group_by(TicketsSuporte.status)
+            )
+        ).all()
+    }
+    por_prioridade = {
+        row[0]: int(row[1])
+        for row in (
+            await db.execute(
+                select(TicketsSuporte.prioridade, func.count()).group_by(TicketsSuporte.prioridade)
+            )
+        ).all()
+    }
+    abertos = sum(por_status.get(s, 0) for s in _STATUS_ABERTOS)
+
+    # SLA violados: tickets abertos cuja idade ultrapassa o limite da prioridade.
+    agora = _dt.datetime.now(tz=_dt.timezone.utc)
+    abertos_rows = (
+        await db.execute(
+            select(TicketsSuporte.prioridade, TicketsSuporte.created_at).where(
+                TicketsSuporte.status.in_(_STATUS_ABERTOS)
+            )
+        )
+    ).all()
+    sla_violados = 0
+    for prioridade, created_at in abertos_rows:
+        if created_at is None:
+            continue
+        limite_h = _SLA_HORAS.get(prioridade, 72)
+        if (agora - created_at) > _dt.timedelta(hours=limite_h):
+            sla_violados += 1
+
+    return {
+        "abertos": abertos,
+        "sla_violados": sla_violados,
+        "por_status": por_status,
+        "por_prioridade": por_prioridade,
+    }
+
+
 async def montar_health(db: AsyncSession) -> dict:
     db_ok, db_detalhe = await _db_ok(db)
     redis_ok, redis_detalhe = await _redis_ok()

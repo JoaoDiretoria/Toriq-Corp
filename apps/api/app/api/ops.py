@@ -16,6 +16,9 @@ from app.schemas.ops import (
     RedisKeysOut,
     RedisOverviewOut,
     SchedulerOut,
+    TicketResumo,
+    TicketsListOut,
+    TicketsMetricsOut,
 )
 from app.services import ops as ops_service
 
@@ -91,3 +94,26 @@ async def scheduler_jobs(
         for j in scheduler.get_jobs()
     ]
     return SchedulerOut(rodando=bool(scheduler.running), jobs=jobs)
+
+
+@router.get("/tickets/metrics", response_model=TicketsMetricsOut)
+async def tickets_metrics(
+    _: User = Depends(require_ops),
+    db: AsyncSession = Depends(get_db),
+) -> TicketsMetricsOut:
+    return TicketsMetricsOut(**await ops_service.tickets_metrics(db))
+
+
+@router.get("/tickets", response_model=TicketsListOut)
+async def tickets(
+    status: str | None = None,
+    prioridade: str | None = None,
+    limit: int = 100,
+    _: User = Depends(require_ops),
+    db: AsyncSession = Depends(get_db),
+) -> TicketsListOut:
+    rows = await ops_service.listar_tickets(db, status, prioridade, min(limit, 500))
+    return TicketsListOut(
+        tickets=[TicketResumo.model_validate(t) for t in rows],
+        total=len(rows),
+    )
