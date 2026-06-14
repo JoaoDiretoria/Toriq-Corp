@@ -3,7 +3,6 @@ import {
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -14,70 +13,177 @@ import {
   SidebarFooter,
 } from '@/components/ui/sidebar';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Building2, Users, TrendingUp, DollarSign, LogOut, Shield, Package, ChevronDown, UserSearch, Zap, LayoutDashboard, UserCog, HeartHandshake, ClipboardList, Receipt, CreditCard, FileBarChart, Wallet, CheckSquare, BarChart3, Database, Headphones, PenTool, FileText, Mail, Briefcase, CalendarDays, Megaphone, Layers, Tags, Radar, Send, Bot, KanbanSquare } from 'lucide-react';
+import {
+  Building2,
+  Users,
+  TrendingUp,
+  DollarSign,
+  LogOut,
+  Shield,
+  Package,
+  ChevronDown,
+  UserSearch,
+  Zap,
+  LayoutDashboard,
+  UserCog,
+  HeartHandshake,
+  ClipboardList,
+  Receipt,
+  CreditCard,
+  FileBarChart,
+  Wallet,
+  CheckSquare,
+  BarChart3,
+  Headphones,
+  PenTool,
+  FileText,
+  Mail,
+  Briefcase,
+  CalendarDays,
+  Megaphone,
+  Layers,
+  Tags,
+  Radar,
+  Send,
+  Bot,
+  KanbanSquare,
+  type LucideIcon,
+} from 'lucide-react';
 import { NotificationPopover } from '@/components/shared/notifications';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
-type AdminSection = 'dashboard' | 'empresas' | 'usuarios' | 'colaboradores' | 'servicos' | 'modulos' | 'tarefas' | 'agenda' | 'comercial-dashboard' | 'comercial' | 'comercial-prospeccao' | 'comercial-pos-venda' | 'comercial-cross-selling' | 'financeiro' | 'financeiro-dashboard' | 'financeiro-cadastros' | 'financeiro-contas-receber' | 'financeiro-contas-pagar' | 'financeiro-fluxo-caixa' | 'financeiro-dre' | 'estatisticas' | 'suporte' | 'conteudo-blogs' | 'conteudo-pesquisas' | 'conteudo-newsletter' | 'conteudo-vagas' | 'vendas-prospeccao' | 'vendas-leads' | 'vendas-segmentacao' | 'vendas-tags' | 'vendas-disparo' | 'vendas-sdr' | 'vendas-uso';
+type AdminSection =
+  | 'dashboard'
+  | 'empresas'
+  | 'usuarios'
+  | 'colaboradores'
+  | 'servicos'
+  | 'modulos'
+  | 'tarefas'
+  | 'agenda'
+  | 'comercial-dashboard'
+  | 'comercial'
+  | 'comercial-prospeccao'
+  | 'comercial-pos-venda'
+  | 'comercial-cross-selling'
+  | 'financeiro'
+  | 'financeiro-dashboard'
+  | 'financeiro-cadastros'
+  | 'financeiro-contas-receber'
+  | 'financeiro-contas-pagar'
+  | 'financeiro-fluxo-caixa'
+  | 'financeiro-dre'
+  | 'estatisticas'
+  | 'suporte'
+  | 'conteudo-blogs'
+  | 'conteudo-pesquisas'
+  | 'conteudo-newsletter'
+  | 'conteudo-vagas'
+  | 'vendas-prospeccao'
+  | 'vendas-leads'
+  | 'vendas-pipeline'
+  | 'vendas-segmentacao'
+  | 'vendas-tags'
+  | 'vendas-disparo'
+  | 'vendas-sdr'
+  | 'vendas-uso';
 
 interface AdminSidebarProps {
   activeSection: AdminSection;
   onSectionChange: (section: AdminSection) => void;
 }
 
-const menuItems = [
-  { id: 'dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'usuarios' as const, label: 'Usuários', icon: Users },
-  { id: 'colaboradores' as const, label: 'Colaboradores', icon: UserCog },
-  { id: 'servicos' as const, label: 'Serviços', icon: Package },
-  { id: 'modulos' as const, label: 'Módulos', icon: Shield },
-  { id: 'suporte' as const, label: 'Suporte', icon: Headphones },
-];
+interface NavItem {
+  id: AdminSection;
+  label: string;
+  icon: LucideIcon;
+}
 
-const empresasSubItems = [
-  { id: 'empresas' as const, label: 'Empresas', icon: Building2 },
-];
+interface NavGroup {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  items: NavItem[];
+}
 
-const comercialSubItems = [
-  { id: 'comercial-dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'comercial' as const, label: 'Funil - CLOSER', icon: TrendingUp },
-  { id: 'comercial-prospeccao' as const, label: 'Prospecção (SDR)', icon: UserSearch },
-  { id: 'comercial-pos-venda' as const, label: 'Onboarding', icon: HeartHandshake },
-  { id: 'comercial-cross-selling' as const, label: 'CS / Cross-selling', icon: Zap },
-];
-
-const financeiroSubItems = [
-  { id: 'financeiro-dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'financeiro-cadastros' as const, label: 'Cadastros', icon: ClipboardList },
-  { id: 'financeiro-contas-receber' as const, label: 'Contas a Receber', icon: Receipt },
-  { id: 'financeiro-contas-pagar' as const, label: 'Contas a Pagar', icon: CreditCard },
-  { id: 'financeiro-fluxo-caixa' as const, label: 'Fluxo de Caixa', icon: Wallet },
-  { id: 'financeiro-dre' as const, label: 'DRE', icon: FileBarChart },
-];
-
-const vendasSubItems = [
-  { id: 'vendas-prospeccao' as const, label: 'Prospecção', icon: Radar },
-  { id: 'vendas-leads' as const, label: 'Leads Captados', icon: Users },
-  { id: 'vendas-pipeline' as const, label: 'Pipeline & Conversas', icon: KanbanSquare },
-  { id: 'vendas-disparo' as const, label: 'Disparo em Massa', icon: Send },
-  { id: 'vendas-sdr' as const, label: 'SDR Inteligente', icon: Bot },
-  { id: 'vendas-segmentacao' as const, label: 'Segmentação', icon: Layers },
-  { id: 'vendas-tags' as const, label: 'Tags', icon: Tags },
-  { id: 'vendas-uso' as const, label: 'Uso & Contratação', icon: BarChart3 },
-];
-
-const conteudoSubItems = [
-  { id: 'conteudo-blogs' as const, label: 'Blogs', icon: FileText },
-  { id: 'conteudo-pesquisas' as const, label: 'Pesquisas de Opinião', icon: ClipboardList },
-  { id: 'conteudo-newsletter' as const, label: 'Newsletter', icon: Mail },
-  { id: 'conteudo-vagas' as const, label: 'Vagas', icon: Briefcase },
+// Estrutura de navegação — cada grupo é um colapsável de PRIMEIRO nível (só um
+// nível de indentação para os itens, evitando que o texto seja cortado).
+const NAV_GROUPS: NavGroup[] = [
+  {
+    id: 'gestao',
+    label: 'Gestão Empresa TORIQ',
+    icon: Building2,
+    items: [
+      { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { id: 'empresas', label: 'Empresas', icon: Building2 },
+      { id: 'usuarios', label: 'Usuários', icon: Users },
+      { id: 'colaboradores', label: 'Colaboradores', icon: UserCog },
+      { id: 'servicos', label: 'Serviços', icon: Package },
+      { id: 'modulos', label: 'Módulos', icon: Shield },
+      { id: 'suporte', label: 'Suporte', icon: Headphones },
+      { id: 'tarefas', label: 'Tarefas', icon: CheckSquare },
+      { id: 'agenda', label: 'Agenda', icon: CalendarDays },
+      { id: 'estatisticas', label: 'Estatísticas do Sistema', icon: BarChart3 },
+    ],
+  },
+  {
+    id: 'comercial',
+    label: 'Comercial',
+    icon: TrendingUp,
+    items: [
+      { id: 'comercial-dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { id: 'comercial', label: 'Funil - CLOSER', icon: TrendingUp },
+      { id: 'comercial-prospeccao', label: 'Prospecção (SDR)', icon: UserSearch },
+      { id: 'comercial-pos-venda', label: 'Onboarding', icon: HeartHandshake },
+      { id: 'comercial-cross-selling', label: 'CS / Cross-selling', icon: Zap },
+    ],
+  },
+  {
+    id: 'vendas',
+    label: 'Toriq Vendas',
+    icon: Megaphone,
+    items: [
+      { id: 'vendas-prospeccao', label: 'Prospecção', icon: Radar },
+      { id: 'vendas-leads', label: 'Leads Captados', icon: Users },
+      { id: 'vendas-pipeline', label: 'Pipeline & Conversas', icon: KanbanSquare },
+      { id: 'vendas-disparo', label: 'Disparo em Massa', icon: Send },
+      { id: 'vendas-sdr', label: 'SDR Inteligente', icon: Bot },
+      { id: 'vendas-segmentacao', label: 'Segmentação', icon: Layers },
+      { id: 'vendas-tags', label: 'Tags', icon: Tags },
+      { id: 'vendas-uso', label: 'Uso & Contratação', icon: BarChart3 },
+    ],
+  },
+  {
+    id: 'financeiro',
+    label: 'Financeiro',
+    icon: DollarSign,
+    items: [
+      { id: 'financeiro-dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { id: 'financeiro-cadastros', label: 'Cadastros', icon: ClipboardList },
+      { id: 'financeiro-contas-receber', label: 'Contas a Receber', icon: Receipt },
+      { id: 'financeiro-contas-pagar', label: 'Contas a Pagar', icon: CreditCard },
+      { id: 'financeiro-fluxo-caixa', label: 'Fluxo de Caixa', icon: Wallet },
+      { id: 'financeiro-dre', label: 'DRE', icon: FileBarChart },
+    ],
+  },
+  {
+    id: 'conteudo',
+    label: 'Conteúdo',
+    icon: PenTool,
+    items: [
+      { id: 'conteudo-blogs', label: 'Blogs', icon: FileText },
+      { id: 'conteudo-pesquisas', label: 'Pesquisas de Opinião', icon: ClipboardList },
+      { id: 'conteudo-newsletter', label: 'Newsletter', icon: Mail },
+      { id: 'conteudo-vagas', label: 'Vagas', icon: Briefcase },
+    ],
+  },
 ];
 
 export function AdminSidebar({ activeSection, onSectionChange }: AdminSidebarProps) {
-  const { profile, signOut } = useAuth();
+  const { signOut } = useAuth();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
@@ -86,16 +192,21 @@ export function AdminSidebar({ activeSection, onSectionChange }: AdminSidebarPro
     navigate('/auth');
   };
 
+  // Grupo que contém a tela ativa — único que começa aberto.
+  const grupoAtivo =
+    NAV_GROUPS.find((g) => g.items.some((i) => i.id === activeSection))?.id ??
+    'gestao';
+
   return (
     <Sidebar className="border-r border-sidebar-border bg-sidebar">
       <SidebarHeader className="border-b border-sidebar-border p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="relative flex h-10 items-center justify-center">
-              <img src="/IDTORIQCOMPLETA/LOGO%20PNG/PRETA-HORIZONTAL.png" alt="TORIQ" className="h-10 w-auto" />
-            </div>
-          </div>
-          <NotificationPopover 
+        <div className="flex items-center justify-between gap-2">
+          <img
+            src="/IDTORIQCOMPLETA/LOGO%20PNG/PRETA-HORIZONTAL.png"
+            alt="TORIQ"
+            className="h-9 w-auto shrink-0"
+          />
+          <NotificationPopover
             onNotificacaoClick={(notificacao) => {
               if (notificacao.tela) {
                 onSectionChange(notificacao.tela as AdminSection);
@@ -108,228 +219,40 @@ export function AdminSidebar({ activeSection, onSectionChange }: AdminSidebarPro
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupContent>
-            <SidebarMenu>
-              <Collapsible defaultOpen className="group/collapsible">
-                <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton className="cursor-pointer">
-                      <Building2 className="h-4 w-4" />
-                      <span>Gestão Empresa TORIQ</span>
-                      <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      {/* Dashboard */}
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton
-                          onClick={() => onSectionChange('dashboard')}
-                          isActive={activeSection === 'dashboard'}
-                          className="cursor-pointer"
-                        >
-                          <LayoutDashboard className="h-4 w-4" />
-                          <span>Dashboard</span>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                      
-                      {/* Empresas com submenu */}
-                      <Collapsible defaultOpen className="group/empresas">
-                        <SidebarMenuSubItem>
-                          <CollapsibleTrigger asChild>
-                            <SidebarMenuSubButton className="cursor-pointer">
-                              <Building2 className="h-4 w-4" />
-                              <span>Empresas</span>
-                              <ChevronDown className="ml-auto h-3 w-3 transition-transform group-data-[state=open]/empresas:rotate-180" />
+            <SidebarMenu className="gap-0.5">
+              {NAV_GROUPS.map((grupo) => (
+                <Collapsible
+                  key={grupo.id}
+                  defaultOpen={grupo.id === grupoAtivo}
+                  className="group/collapsible"
+                >
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton className="cursor-pointer font-medium">
+                        <grupo.icon className="h-4 w-4 shrink-0" />
+                        <span className="truncate">{grupo.label}</span>
+                        <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub className="mr-0 gap-0.5">
+                        {grupo.items.map((item) => (
+                          <SidebarMenuSubItem key={item.id}>
+                            <SidebarMenuSubButton
+                              onClick={() => onSectionChange(item.id)}
+                              isActive={activeSection === item.id}
+                              className="cursor-pointer"
+                            >
+                              <item.icon className="h-4 w-4 shrink-0" />
+                              <span className="truncate">{item.label}</span>
                             </SidebarMenuSubButton>
-                          </CollapsibleTrigger>
-                          <CollapsibleContent>
-                            <SidebarMenuSub className="ml-4 border-l pl-2">
-                              {empresasSubItems.map((subItem) => (
-                                <SidebarMenuSubItem key={subItem.id}>
-                                  <SidebarMenuSubButton
-                                    onClick={() => onSectionChange(subItem.id)}
-                                    isActive={activeSection === subItem.id}
-                                    className="cursor-pointer text-xs"
-                                  >
-                                    <subItem.icon className="h-3 w-3" />
-                                    <span>{subItem.label}</span>
-                                  </SidebarMenuSubButton>
-                                </SidebarMenuSubItem>
-                              ))}
-                            </SidebarMenuSub>
-                          </CollapsibleContent>
-                        </SidebarMenuSubItem>
-                      </Collapsible>
-                      
-                      {/* Outros itens do menu */}
-                      {menuItems.filter(item => item.id !== 'dashboard').map((item) => (
-                        <SidebarMenuSubItem key={item.id}>
-                          <SidebarMenuSubButton
-                            onClick={() => onSectionChange(item.id)}
-                            isActive={activeSection === item.id}
-                            className="cursor-pointer"
-                          >
-                            <item.icon className="h-4 w-4" />
-                            <span>{item.label}</span>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      ))}
-
-                      {/* Tarefas - abaixo de Módulos */}
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton
-                          onClick={() => onSectionChange('tarefas')}
-                          isActive={activeSection === 'tarefas'}
-                          className="cursor-pointer"
-                        >
-                          <CheckSquare className="h-4 w-4" />
-                          <span>Tarefas</span>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-
-                      {/* Agenda */}
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton
-                          onClick={() => onSectionChange('agenda')}
-                          isActive={activeSection === 'agenda'}
-                          className="cursor-pointer"
-                        >
-                          <CalendarDays className="h-4 w-4" />
-                          <span>Agenda</span>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                      
-                      {/* Comercial com submenu */}
-                      <Collapsible defaultOpen className="group/comercial">
-                        <SidebarMenuSubItem>
-                          <CollapsibleTrigger asChild>
-                            <SidebarMenuSubButton className="cursor-pointer">
-                              <TrendingUp className="h-4 w-4" />
-                              <span>Comercial</span>
-                              <ChevronDown className="ml-auto h-3 w-3 transition-transform group-data-[state=open]/comercial:rotate-180" />
-                            </SidebarMenuSubButton>
-                          </CollapsibleTrigger>
-                          <CollapsibleContent>
-                            <SidebarMenuSub className="ml-4 border-l pl-2">
-                              {comercialSubItems.map((subItem) => (
-                                <SidebarMenuSubItem key={subItem.id}>
-                                  <SidebarMenuSubButton
-                                    onClick={() => onSectionChange(subItem.id)}
-                                    isActive={activeSection === subItem.id}
-                                    className="cursor-pointer text-xs"
-                                  >
-                                    <subItem.icon className="h-3 w-3" />
-                                    <span>{subItem.label}</span>
-                                  </SidebarMenuSubButton>
-                                </SidebarMenuSubItem>
-                              ))}
-                            </SidebarMenuSub>
-                          </CollapsibleContent>
-                        </SidebarMenuSubItem>
-                      </Collapsible>
-
-                      {/* Toriq Vendas com submenu */}
-                      <Collapsible defaultOpen className="group/vendas">
-                        <SidebarMenuSubItem>
-                          <CollapsibleTrigger asChild>
-                            <SidebarMenuSubButton className="cursor-pointer">
-                              <Megaphone className="h-4 w-4" />
-                              <span>Toriq Vendas</span>
-                              <ChevronDown className="ml-auto h-3 w-3 transition-transform group-data-[state=open]/vendas:rotate-180" />
-                            </SidebarMenuSubButton>
-                          </CollapsibleTrigger>
-                          <CollapsibleContent>
-                            <SidebarMenuSub className="ml-4 border-l pl-2">
-                              {vendasSubItems.map((subItem) => (
-                                <SidebarMenuSubItem key={subItem.id}>
-                                  <SidebarMenuSubButton
-                                    onClick={() => onSectionChange(subItem.id)}
-                                    isActive={activeSection === subItem.id}
-                                    className="cursor-pointer text-xs"
-                                  >
-                                    <subItem.icon className="h-3 w-3" />
-                                    <span>{subItem.label}</span>
-                                  </SidebarMenuSubButton>
-                                </SidebarMenuSubItem>
-                              ))}
-                            </SidebarMenuSub>
-                          </CollapsibleContent>
-                        </SidebarMenuSubItem>
-                      </Collapsible>
-
-                      {/* Financeiro com submenu */}
-                      <Collapsible defaultOpen className="group/financeiro">
-                        <SidebarMenuSubItem>
-                          <CollapsibleTrigger asChild>
-                            <SidebarMenuSubButton className="cursor-pointer">
-                              <DollarSign className="h-4 w-4" />
-                              <span>Financeiro</span>
-                              <ChevronDown className="ml-auto h-3 w-3 transition-transform group-data-[state=open]/financeiro:rotate-180" />
-                            </SidebarMenuSubButton>
-                          </CollapsibleTrigger>
-                          <CollapsibleContent>
-                            <SidebarMenuSub className="ml-4 border-l pl-2">
-                              {financeiroSubItems.map((subItem) => (
-                                <SidebarMenuSubItem key={subItem.id}>
-                                  <SidebarMenuSubButton
-                                    onClick={() => onSectionChange(subItem.id)}
-                                    isActive={activeSection === subItem.id}
-                                    className="cursor-pointer text-xs"
-                                  >
-                                    <subItem.icon className="h-3 w-3" />
-                                    <span>{subItem.label}</span>
-                                  </SidebarMenuSubButton>
-                                </SidebarMenuSubItem>
-                              ))}
-                            </SidebarMenuSub>
-                          </CollapsibleContent>
-                        </SidebarMenuSubItem>
-                      </Collapsible>
-
-                      {/* Criação de Conteúdo com submenu */}
-                      <Collapsible defaultOpen className="group/conteudo">
-                        <SidebarMenuSubItem>
-                          <CollapsibleTrigger asChild>
-                            <SidebarMenuSubButton className="cursor-pointer">
-                              <PenTool className="h-4 w-4" />
-                              <span>Conteúdo</span>
-                              <ChevronDown className="ml-auto h-3 w-3 transition-transform group-data-[state=open]/conteudo:rotate-180" />
-                            </SidebarMenuSubButton>
-                          </CollapsibleTrigger>
-                          <CollapsibleContent>
-                            <SidebarMenuSub className="ml-4 border-l pl-2">
-                              {conteudoSubItems.map((subItem) => (
-                                <SidebarMenuSubItem key={subItem.id}>
-                                  <SidebarMenuSubButton
-                                    onClick={() => onSectionChange(subItem.id)}
-                                    isActive={activeSection === subItem.id}
-                                    className="cursor-pointer text-xs"
-                                  >
-                                    <subItem.icon className="h-3 w-3" />
-                                    <span>{subItem.label}</span>
-                                  </SidebarMenuSubButton>
-                                </SidebarMenuSubItem>
-                              ))}
-                            </SidebarMenuSub>
-                          </CollapsibleContent>
-                        </SidebarMenuSubItem>
-                      </Collapsible>
-
-                      {/* Estatísticas do Sistema */}
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton
-                          onClick={() => onSectionChange('estatisticas')}
-                          isActive={activeSection === 'estatisticas'}
-                          className="cursor-pointer"
-                        >
-                          <BarChart3 className="h-4 w-4" />
-                          <span>Estatísticas do Sistema</span>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </SidebarMenuItem>
-              </Collapsible>
+                          </SidebarMenuSubItem>
+                        ))}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
