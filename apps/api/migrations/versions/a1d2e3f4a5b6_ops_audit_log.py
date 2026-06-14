@@ -1,8 +1,13 @@
 """Tabela ops_audit_log (auditoria do dashboard de suporte). Aditiva.
 
 Revision ID: a1d2e3f4a5b6
-Revises: f0c1a2b3c4d5
+Revises: f0c1d2e3a4b5
 Create Date: 2026-06-14 17:30:00.000000
+
+NOTA: encadeada após f0c1d2e3a4b5 (esocial_eventos_log, frente paralela) para
+linearizar o histórico — a auditoria de ops era irmã de f0c1d2e3a4b5 (ambas
+saíam de f0c1a2b3c4d5). O script da migração eSocial é incluído neste branch
+só para a continuidade da cadeia (idêntico ao da main → sem conflito no merge).
 """
 from typing import Sequence, Union
 
@@ -11,7 +16,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision: str = "a1d2e3f4a5b6"
-down_revision: Union[str, None] = "f0c1a2b3c4d5"
+down_revision: Union[str, None] = "f0c1d2e3a4b5"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
