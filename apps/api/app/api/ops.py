@@ -324,6 +324,9 @@ async def stop_impersonate(
         payload = decode_token(access_token)
     except TokenError:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "token inválido")
+    # Só aceita o token de ACESSO (não o refresh) — espelha o guard de deps.py.
+    if payload.get("type") != "access":
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "tipo de token inválido")
     operador_id = payload.get("imp_by")
     if not operador_id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "não há impersonação ativa")
