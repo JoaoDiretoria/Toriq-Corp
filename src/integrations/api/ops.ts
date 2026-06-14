@@ -63,6 +63,13 @@ export interface AuditRegistro {
 }
 export interface AuditListOut { registros: AuditRegistro[]; total: number; }
 
+// T22 — Sentry
+export interface SentryStatusOut {
+  configurado: boolean;
+  environment: string;
+  url: string | null;
+}
+
 export const opsApi = {
   health: () => api.get<HealthOut>('/ops/health'),
   database: () => api.get<DatabaseOut>('/ops/database/tables'),
@@ -87,4 +94,6 @@ export const opsApi = {
   stopImpersonate: () => api.post<OpsUser>('/ops/stop-impersonate'),
   // T21 — Auditoria
   audit: () => api.get<AuditListOut>('/ops/audit'),
+  // T22 — Sentry
+  sentry: () => api.get<SentryStatusOut>('/ops/sentry'),
 };

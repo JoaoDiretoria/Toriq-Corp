@@ -258,7 +258,15 @@ export function AdminSidebar({ activeSection, onSectionChange }: AdminSidebarPro
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border p-4">
+      <SidebarFooter className="border-t border-sidebar-border p-4 space-y-1">
+        <Button
+          variant="ghost"
+          className="w-full justify-start"
+          onClick={() => navigate('/ops')}
+        >
+          <Headphones className="mr-2 h-4 w-4" />
+          Suporte / Ops
+        </Button>
         <Button
           variant="ghost"
           className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10"
