@@ -166,6 +166,20 @@ export function TemplatesManager() {
                       {tpl.categoria && (
                         <Badge variant="outline" className="text-xs">{tpl.categoria}</Badge>
                       )}
+                      {tpl.canal === 'whatsapp' && tpl.meta_template_name && (
+                        <Badge
+                          variant={
+                            tpl.approval_status === 'approved'
+                              ? 'default'
+                              : tpl.approval_status === 'rejected'
+                                ? 'destructive'
+                                : 'secondary'
+                          }
+                          className="text-xs"
+                        >
+                          HSM: {tpl.approval_status ?? 'unknown'}
+                        </Badge>
+                      )}
                     </div>
                     {tpl.assunto && (
                       <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5 truncate">

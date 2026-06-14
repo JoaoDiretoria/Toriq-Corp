@@ -68,6 +68,7 @@ class TemplateIn(BaseModel):
     conteudo: str
     categoria: Optional[str] = None
     meta_template_name: Optional[str] = None
+    approval_status: Optional[str] = None
 
 
 class TemplateUpdate(BaseModel):
@@ -77,6 +78,7 @@ class TemplateUpdate(BaseModel):
     conteudo: Optional[str] = None
     categoria: Optional[str] = None
     meta_template_name: Optional[str] = None
+    approval_status: Optional[str] = None
 
 
 class TemplateOut(BaseModel):
@@ -88,6 +90,7 @@ class TemplateOut(BaseModel):
     conteudo: str
     categoria: Optional[str]
     meta_template_name: Optional[str]
+    approval_status: Optional[str] = None
     created_at: Optional[datetime.datetime]
     updated_at: Optional[datetime.datetime]
     model_config = ConfigDict(from_attributes=True)

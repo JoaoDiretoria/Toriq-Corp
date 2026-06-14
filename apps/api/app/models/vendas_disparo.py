@@ -109,6 +109,10 @@ class VendasTemplates(Base):
     conteudo: Mapped[str] = mapped_column(Text, nullable=False)
     categoria: Mapped[Optional[str]] = mapped_column(Text)
     meta_template_name: Mapped[Optional[str]] = mapped_column(Text)
+    # Status de aprovação do template HSM na Meta (Fase 9).
+    approval_status: Mapped[Optional[str]] = mapped_column(
+        Text, server_default=text("'unknown'")
+    )
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime(True), server_default=text("now()")
     )

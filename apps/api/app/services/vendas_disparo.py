@@ -254,6 +254,17 @@ async def enviar_campanha(
             )
         )
 
+    # HSM (Fase 9): não disparar WhatsApp com template marcado como rejeitado.
+    if (
+        campanha.canal == "whatsapp"
+        and template is not None
+        and template.meta_template_name
+        and template.approval_status == "rejected"
+    ):
+        raise ValueError(
+            "template WhatsApp rejeitado pela Meta — corrija/reaprove antes de disparar"
+        )
+
     rate = limite if limite is not None else (config.email_rate_limit or 100)
     pendentes = (
         await db.scalars(

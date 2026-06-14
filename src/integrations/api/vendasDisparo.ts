@@ -58,6 +58,7 @@ export interface DisparoTemplate {
   conteudo: string;
   categoria: string | null;
   meta_template_name: string | null;
+  approval_status: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -70,6 +71,7 @@ export interface DisparoTemplateInput {
   conteudo: string;
   categoria?: string | null;
   meta_template_name?: string | null;
+  approval_status?: string | null;
 }
 
 /** Payload de edição de template (todos opcionais). */
@@ -80,6 +82,7 @@ export interface DisparoTemplateUpdate {
   conteudo?: string;
   categoria?: string | null;
   meta_template_name?: string | null;
+  approval_status?: string | null;
 }
 
 /** Campanha de disparo. */
