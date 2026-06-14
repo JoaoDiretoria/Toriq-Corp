@@ -205,11 +205,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const resetPassword = async (
-    _email: string,
+    email: string,
     _captchaToken?: string,
   ): Promise<{ error: Error | null }> => {
-    // Adiado: depende de infraestrutura de email.
-    return { error: new Error('A recuperação de senha por email estará disponível em breve.') };
+    // Dispara o email de redefinição via Resend. O backend SEMPRE responde 204
+    // (não revela se o email existe) — então só falha em erro de rede.
+    try {
+      await authApi.esqueciSenha(email);
+      return { error: null };
+    } catch (err) {
+      return { error: err instanceof Error ? err : new Error('Falha ao solicitar redefinição') };
+    }
   };
 
   // Stubs de sessão única (adiada).

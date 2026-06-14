@@ -24,4 +24,12 @@ export const authApi = {
 
   /** Renova o access token a partir do refresh cookie. */
   refresh: () => api.post<UserOut>("/auth/refresh"),
+
+  /** Solicita o link de redefinição de senha por email (sempre 204). */
+  esqueciSenha: (email: string) =>
+    api.post<void>("/auth/esqueci-senha", { email }),
+
+  /** Define a senha a partir do token recebido por email (convite/reset). */
+  definirSenha: (token: string, senha: string) =>
+    api.post<UserOut>("/auth/definir-senha", { token, senha }),
 };

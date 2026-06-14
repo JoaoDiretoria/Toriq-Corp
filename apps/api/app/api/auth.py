@@ -1,19 +1,31 @@
 import uuid
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.db import get_db
+from app.core.reset_token import gerar_token_senha, ler_token_senha
 from app.core.security import hash_password, verify_password
 from app.core.turnstile import verify_turnstile
 from app.core.tokens import TokenError, create_token, decode_token
 from app.api.deps import get_current_user, get_optional_user
 from app.models.user import User, UserRole
 from app.schemas.auth import EmpresaOut, LoginIn, MeOut, ProfileOut, RegisterIn, UserOut
+from app.services import email_sistema
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+class EsqueciSenhaIn(BaseModel):
+    email: str
+
+
+class DefinirSenhaIn(BaseModel):
+    token: str
+    senha: str
 
 
 def _set_auth_cookies(response: Response, user: User) -> None:
@@ -137,3 +149,55 @@ async def refresh(
 async def logout(response: Response) -> None:
     response.delete_cookie("access_token")
     response.delete_cookie("refresh_token", path="/auth")
+
+
+@router.post("/esqueci-senha", status_code=status.HTTP_204_NO_CONTENT)
+async def esqueci_senha(
+    payload: EsqueciSenhaIn, db: AsyncSession = Depends(get_db)
+) -> None:
+    """Solicita redefinição de senha por email (link com token de 24h).
+
+    SEMPRE responde 204 — não revela se o email existe (anti-enumeração). Só
+    dispara o email se houver um usuário ativo com aquele email.
+    """
+    email = (payload.email or "").strip().lower()
+    if not email:
+        return
+    user = await db.scalar(select(User).where(User.email == email))
+    if user is None or not user.ativo:
+        return
+    token = gerar_token_senha(user.id)
+    link = f"{settings.frontend_base_url}/definir-senha?token={token}"
+    await email_sistema.enviar_reset_senha(
+        db, to=user.email, link=link, empresa_id=user.empresa_id
+    )
+
+
+@router.post("/definir-senha", response_model=UserOut)
+async def definir_senha(
+    payload: DefinirSenhaIn, response: Response, db: AsyncSession = Depends(get_db)
+) -> User:
+    """Define a senha a partir do token do email (convite/reset). Loga o usuário."""
+    try:
+        user_id = ler_token_senha(payload.token)
+    except ValueError:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "token inválido ou expirado")
+    if len(payload.senha or "") < 8:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "a senha deve ter ao menos 8 caracteres"
+        )
+    user = await db.get(User, user_id)
+    if user is None or not user.ativo:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "usuário inválido")
+
+    user.senha_hash = hash_password(payload.senha)
+    # Marca o perfil como senha já definida (libera do fluxo de 1º acesso).
+    from app.models.generated import Profiles
+
+    profile = await db.get(Profiles, user.id)
+    if profile is not None:
+        profile.senha_alterada = True
+    await db.commit()
+    await db.refresh(user)
+    _set_auth_cookies(response, user)
+    return user

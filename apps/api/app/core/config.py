@@ -52,6 +52,15 @@ class Settings(BaseSettings):
     # usa a 1ª origem do CORS.
     frontend_url: str | None = None
 
+    # Resend (envio de emails transacionais do sistema). OPCIONAIS: sem a API key
+    # o envio é no-op (a ação que dispara o email não quebra). O domínio do
+    # ``resend_from`` precisa estar verificado no Resend.
+    resend_api_key: str | None = None
+    resend_from: str = "TORIQ <nao-responda@toriqcorp.com.br>"
+    # Segredo de assinatura do webhook do Resend (Svix, começa com "whsec_").
+    # Sem ele, o webhook responde 503 (não processa eventos não verificados).
+    resend_webhook_secret: str | None = None
+
     # Redis (cache + filas). URL no formato redis://default:senha@host:6379.
     # OPCIONAL: sem ela o cache fica desligado (recalcula sempre) e a fila roda
     # inline/no scheduler — a aplicação NUNCA quebra por falta de Redis.

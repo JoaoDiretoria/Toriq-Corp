@@ -169,6 +169,18 @@ async def create_user(
     await db.refresh(user)
     await db.refresh(profile)
 
+    # Email de convite com link "Definir Minha Senha" (best-effort — não quebra
+    # a criação se o Resend não estiver configurado/falhar).
+    from app.core.config import settings
+    from app.core.reset_token import gerar_token_senha
+    from app.services import email_sistema
+
+    token = gerar_token_senha(user.id)
+    link = f"{settings.frontend_base_url}/definir-senha?token={token}"
+    await email_sistema.enviar_convite(
+        db, to=user.email, link=link, empresa_id=user.empresa_id
+    )
+
     base = _merge_user_profile(user, profile)
     out = AdminUserCreatedOut(**base.model_dump())
     out.temp_password = temp_password
@@ -301,6 +313,17 @@ async def reset_password(
     await db.refresh(target)
     if profile is not None:
         await db.refresh(profile)
+
+    # Email de redefinição com link (best-effort).
+    from app.core.config import settings
+    from app.core.reset_token import gerar_token_senha
+    from app.services import email_sistema
+
+    token = gerar_token_senha(target.id)
+    link = f"{settings.frontend_base_url}/definir-senha?token={token}"
+    await email_sistema.enviar_reset_senha(
+        db, to=target.email, link=link, empresa_id=target.empresa_id
+    )
 
     base = _merge_user_profile(target, profile)
     out = AdminUserCreatedOut(**base.model_dump())

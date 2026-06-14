@@ -23,6 +23,8 @@ import GestaoTerceiros from "./pages/modulos/GestaoTerceiros";
 import ColaboradorDetalhes from "./pages/modulos/ColaboradorDetalhes";
 import ClienteDetalhesPage from "./pages/sst/ClienteDetalhesPage";
 import ResetPassword from "./pages/ResetPassword";
+import DefinirSenha from "./pages/DefinirSenha";
+import EsqueciSenha from "./pages/EsqueciSenha";
 import AlterarSenha from "./pages/AlterarSenha";
 import Logout from "./pages/Logout";
 import PropostaWeb from "./pages/public/PropostaWeb";
@@ -68,6 +70,8 @@ const App = () => (
             <Route path="/trabalhe-conosco" element={<TrabalheConosco />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/definir-senha" element={<DefinirSenha />} />
+            <Route path="/esqueci-senha" element={<EsqueciSenha />} />
             <Route path="/alterar-senha" element={<AlterarSenha />} />
             <Route path="/logout" element={<Logout />} />
             <Route path="/sair" element={<Logout />} />

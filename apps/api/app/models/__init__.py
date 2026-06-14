@@ -7,6 +7,7 @@ from app.models import vendas_disparo  # noqa: F401  (Toriq Vendas — Fase 2)
 from app.models import vendas_sdr  # noqa: F401  (Toriq Vendas — Fase 4)
 from app.models import vendas_uso  # noqa: F401  (Toriq Vendas — Fase 5)
 from app.models import vendas_pipeline  # noqa: F401  (Toriq Vendas — Pipeline & Conversas)
+from app.models import email_envios  # noqa: F401  (log de emails transacionais — Resend)
 from app.models.user import User, UserRole
 
 __all__ = ["Base", "User", "UserRole", "generated"]

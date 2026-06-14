@@ -85,6 +85,7 @@ from app.api.vendas_whatsapp import router as vendas_whatsapp_router
 from app.api.vendas_sdr import router as vendas_sdr_router
 from app.api.vendas_uso import router as vendas_uso_router
 from app.api.vendas_pipeline import router as vendas_pipeline_router
+from app.api.webhooks_resend import router as webhooks_resend_router
 from app.jobs.scheduler import build_scheduler
 
 
@@ -171,6 +172,8 @@ def create_app() -> FastAPI:
     # Toriq Vendas — Pipeline & Conversas (CRM estilo Chatwoot): kanban, inbox,
     # conversão e SSE em tempo real (Redis pub/sub)
     app.include_router(vendas_pipeline_router)
+    # Webhook do Resend (eventos de entrega de email transacional) — rota pública
+    app.include_router(webhooks_resend_router)
     # Frota — veículos, motoristas, manutenções, checklists, custos, documentos, ocorrências
     app.include_router(frota_router)
     # Catálogo, notificações, suporte, agenda
