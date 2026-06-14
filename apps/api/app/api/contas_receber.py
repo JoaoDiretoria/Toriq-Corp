@@ -12,6 +12,7 @@ from app.models import generated as m
 from app.models.user import User
 from app.repositories.base import TenantRepository
 from app.schemas import contas_receber as s
+from app.services.notificacoes import notificar
 
 # ── CRUD básico via fábrica ───────────────────────────────────────────────────
 # Exportamos três routers: contas, colunas e kanban.
@@ -71,7 +72,23 @@ async def criar_conta(
     )
     if col is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "coluna não encontrada")
-    return await repo.add(**payload.model_dump(exclude_unset=True))
+    conta = await repo.add(**payload.model_dump(exclude_unset=True))
+
+    desc = getattr(conta, "servico_produto", None) or getattr(conta, "cliente_nome", None) or "Conta a receber"
+    receb = getattr(conta, "data_recebimento", None)
+    await notificar(
+        db,
+        empresa_id=repo.empresa_id,
+        titulo="Nova conta a receber",
+        mensagem=f"{desc}" + (f" — previsto para {receb}." if receb else "."),
+        tipo="info",
+        categoria="financeiro",
+        modulo="financeiro",
+        tela="contas-receber",
+        referencia_tipo="conta_receber",
+        referencia_id=conta.id,
+    )
+    return conta
 
 
 @router.patch("/reorder", status_code=status.HTTP_204_NO_CONTENT)

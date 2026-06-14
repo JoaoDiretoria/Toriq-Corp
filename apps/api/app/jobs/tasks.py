@@ -3,6 +3,12 @@ async def job_contas_recorrentes() -> None:
     await gerar_contas_recorrentes_todas_empresas()
 
 
+async def job_vencimentos() -> None:
+    """Notifica contas a pagar/receber que vencem hoje (diário)."""
+    from app.services.notificacoes_vencimentos import notificar_vencimentos_todas_empresas
+    await notificar_vencimentos_todas_empresas()
+
+
 async def job_automacao_colunas() -> None:
     from app.services.automacao_colunas import aplicar_automacao_colunas_todas_empresas
     await aplicar_automacao_colunas_todas_empresas()

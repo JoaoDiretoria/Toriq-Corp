@@ -12,6 +12,7 @@ from app.models import generated as m
 from app.models.user import User
 from app.repositories.base import TenantRepository
 from app.schemas import contas_pagar as s
+from app.services.notificacoes import notificar
 
 # ── CRUD básico via fábrica ───────────────────────────────────────────────────
 contas_crud_router = make_crud_router(
@@ -68,7 +69,23 @@ async def criar_conta(
     )
     if col is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "coluna não encontrada")
-    return await repo.add(**payload.model_dump(exclude_unset=True))
+    conta = await repo.add(**payload.model_dump(exclude_unset=True))
+
+    desc = getattr(conta, "descricao", None) or getattr(conta, "fornecedor_nome", None) or "Conta a pagar"
+    venc = getattr(conta, "data_vencimento", None)
+    await notificar(
+        db,
+        empresa_id=repo.empresa_id,
+        titulo="Nova conta a pagar",
+        mensagem=f"{desc}" + (f" — vence em {venc}." if venc else "."),
+        tipo="info",
+        categoria="financeiro",
+        modulo="financeiro",
+        tela="contas-pagar",
+        referencia_tipo="conta_pagar",
+        referencia_id=conta.id,
+    )
+    return conta
 
 
 @router.patch("/reorder", status_code=status.HTTP_204_NO_CONTENT)

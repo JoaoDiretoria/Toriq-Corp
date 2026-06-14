@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { api } from '@/integrations/api/client';
+import { api, API_URL } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
 
 export interface Notificacao {
@@ -66,11 +66,49 @@ export function useNotificacoes() {
   }, [profile]);
 
   // Carregar ao montar e quando mudar o perfil.
-  // NOTA (migração): a subscrição realtime do Supabase foi removida (sem push no
-  // backend novo). Atualização via `refetch()` / próximo carregamento.
   useEffect(() => {
     fetchNotificacoes();
   }, [fetchNotificacoes]);
+
+  // PUSH em tempo real via SSE (GET /notificacoes/stream).
+  // EventSource envia o cookie httpOnly de auth com `withCredentials` e reconecta
+  // sozinho em queda de conexão. Em backend sem Redis o canal só emite heartbeats
+  // (ping) — o sino continua funcionando via carregamento/refetch, sem push.
+  useEffect(() => {
+    if (!profile) return;
+    if (typeof EventSource === 'undefined') return; // SSR / browser sem suporte
+
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource(`${API_URL}/notificacoes/stream`, { withCredentials: true });
+    } catch {
+      return; // falha ao abrir → segue só com refetch
+    }
+
+    es.onmessage = (ev) => {
+      let data: any;
+      try {
+        data = JSON.parse(ev.data);
+      } catch {
+        return; // heartbeat / linha não-JSON
+      }
+      if (data?.tipo !== 'notificacao_nova' || !data.notificacao) return;
+
+      const nova = data.notificacao as Notificacao;
+      setNotificacoes((prev) => {
+        if (prev.some((n) => n.id === nova.id)) return prev; // dedupe
+        return [nova, ...prev].slice(0, 50);
+      });
+      setNaoLidas((prev) => prev + (nova.lida ? 0 : 1));
+    };
+
+    // EventSource reconecta automaticamente em erro; nada a fazer aqui.
+    es.onerror = () => {};
+
+    return () => {
+      es?.close();
+    };
+  }, [profile]);
 
   // Marcar uma notificação como lida → PATCH /notificacoes/{id}/lida
   const marcarComoLida = useCallback(async (notificacaoId: string) => {

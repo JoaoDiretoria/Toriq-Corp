@@ -21,6 +21,7 @@ from app.core.db import get_db
 from app.models.user import User, UserRole
 from app.models.vendas import VendasLeadTags, VendasLeads, VendasSegmentos, VendasTags
 from app.schemas import vendas as s
+from app.services.notificacoes import notificar
 
 router = APIRouter(prefix="/vendas", tags=["vendas"])
 
@@ -143,6 +144,20 @@ async def criar_lead(
     db.add(obj)
     await db.commit()
     await db.refresh(obj)
+
+    await notificar(
+        db,
+        empresa_id=empresa_id,
+        titulo="Novo lead",
+        mensagem=f"{getattr(obj, 'nome', None) or 'Um lead'} foi adicionado ao funil.",
+        tipo="info",
+        categoria="comercial",
+        modulo="toriq_vendas",
+        tela="vendas",
+        referencia_tipo="lead",
+        referencia_id=obj.id,
+        usuario_nome=getattr(user, "nome", None),
+    )
     return obj
 
 
@@ -170,6 +185,24 @@ async def atualizar_lead(
         obj.dedupe_key = _dedupe_key(obj.telefone, obj.email)
     await db.commit()
     await db.refresh(obj)
+
+    # Notifica o responsável quando o lead é (re)atribuído.
+    atribuido_a = data.get("assigned_to")
+    if atribuido_a:
+        await notificar(
+            db,
+            empresa_id=empresa_id,
+            titulo="Lead atribuído a você",
+            mensagem=f"O lead {getattr(obj, 'nome', None) or ''} foi atribuído a você.".strip(),
+            tipo="info",
+            categoria="comercial",
+            modulo="toriq_vendas",
+            tela="vendas",
+            referencia_tipo="lead",
+            referencia_id=obj.id,
+            usuario_id=atribuido_a,
+            usuario_nome=getattr(user, "nome", None),
+        )
     return obj
 
 

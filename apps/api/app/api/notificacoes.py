@@ -10,15 +10,18 @@ Rotas:
   PATCH  /notificacoes/config/{tabela}        — atualiza config por tabela
 """
 import datetime
+import json
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_role
 from app.core.db import get_db
+from app.core.events import assinar
 from app.models import generated as m
 from app.models.user import User, UserRole
 from app.repositories.base import TenantRepository
@@ -105,6 +108,46 @@ async def listar_notificacoes(
         q = q.where(m.Notificacoes.usuario_id == usuario_id)
     result = await repo.db.scalars(q)
     return list(result)
+
+
+# IMPORTANTE: rota específica ANTES de /{notif_id} para não ser capturada como UUID
+@router.get("/stream")
+async def stream_notificacoes(
+    request: Request,
+    user: User = Depends(get_current_user),
+):
+    """Server-Sent Events — PUSH de notificações em tempo real.
+
+    Assina o canal da empresa (Redis pub/sub) e repassa apenas os eventos de
+    notificação (``notificacao_nova``) e heartbeats (``ping``). O front conecta
+    via ``EventSource(url, { withCredentials: true })`` — o cookie httpOnly de
+    auth é enviado automaticamente.
+    """
+    if user.empresa_id is None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "usuário sem empresa")
+    empresa_id = user.empresa_id
+
+    async def gerar():
+        # Comentário inicial abre o stream imediatamente (alguns proxies bufferizam).
+        yield ": ok\n\n"
+        async for evento in assinar(empresa_id):
+            if await request.is_disconnected():
+                break
+            tipo = (evento or {}).get("tipo")
+            # Só interessa ao sino: eventos de notificação + heartbeat.
+            if tipo not in ("notificacao_nova", "ping"):
+                continue
+            yield f"data: {json.dumps(evento, default=str)}\n\n"
+
+    return StreamingResponse(
+        gerar(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # desliga buffering do nginx
+        },
+    )
 
 
 @router.get("/{notif_id}", response_model=s.NotificacaoOut)
