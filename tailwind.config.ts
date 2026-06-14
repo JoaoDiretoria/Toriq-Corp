@@ -84,12 +84,22 @@ export default {
         'bg-surface': 'hsl(var(--bg-surface))',
         'bg-muted': 'hsl(var(--bg-muted))',
       },
+      // Raio PADRONIZADO em todo o sistema: toda a escala de cantos resolve
+      // para o MESMO valor (--radius). Assim cards, inputs, popups, botões,
+      // badges etc. ficam uniformes e qualquer `rounded-*` futuro já nasce
+      // no padrão — sem precisar editar componente por componente.
+      // Exceções intencionais: `rounded-none` (0) e `rounded-full` (círculos:
+      // avatares, spinners, switches, dots).
       borderRadius: {
+        none: '0px',
+        sm: 'var(--radius)',
+        DEFAULT: 'var(--radius)',
+        md: 'var(--radius)',
         lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
-        xl: 'var(--radius-xl)',
-        '2xl': 'var(--radius-2xl)',
+        xl: 'var(--radius)',
+        '2xl': 'var(--radius)',
+        '3xl': 'var(--radius)',
+        full: '9999px',
       },
       boxShadow: {
         'glow-primary': 'var(--shadow-glow-primary)',
