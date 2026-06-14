@@ -46,6 +46,23 @@ export interface TicketsMetricsOut {
   por_prioridade: Record<string, number>;
 }
 
+// T20 — Usuários
+export type Role = 'admin_vertical' | 'cliente_torq' | 'cliente_final' | 'empresa_parceira' | 'instrutor' | 'suporte';
+export interface OpsUser {
+  id: string; email: string; nome: string; role: Role;
+  empresa_id: string | null; ativo: boolean; created_at: string | null;
+}
+export interface OpsUsersListOut { users: OpsUser[]; total: number; }
+export interface OpsResetSenhaOut { ok: boolean; temp_password: string | null; }
+
+// T21 — Auditoria
+export interface AuditRegistro {
+  id: string; actor_id: string; actor_nome: string | null; action: string;
+  target_user_id: string | null; details: Record<string, unknown> | null;
+  ip: string | null; created_at: string;
+}
+export interface AuditListOut { registros: AuditRegistro[]; total: number; }
+
 export const opsApi = {
   health: () => api.get<HealthOut>('/ops/health'),
   database: () => api.get<DatabaseOut>('/ops/database/tables'),
@@ -60,4 +77,14 @@ export const opsApi = {
     return api.get<TicketsListOut>(`/ops/tickets${qs ? `?${qs}` : ''}`);
   },
   ticketsMetrics: () => api.get<TicketsMetricsOut>('/ops/tickets/metrics'),
+  // T20 — Usuários
+  users: (q?: string) => api.get<OpsUsersListOut>(`/ops/users${q ? `?q=${encodeURIComponent(q)}` : ''}`),
+  updateUser: (id: string, body: { nome?: string; email?: string; ativo?: boolean }) =>
+    api.patch<OpsUser>(`/ops/users/${id}`, body),
+  updateRole: (id: string, role: Role) => api.patch<OpsUser>(`/ops/users/${id}/role`, { role }),
+  resetSenha: (id: string) => api.post<OpsResetSenhaOut>(`/ops/users/${id}/reset-senha`),
+  impersonate: (id: string) => api.post<OpsUser>(`/ops/users/${id}/impersonate`),
+  stopImpersonate: () => api.post<OpsUser>('/ops/stop-impersonate'),
+  // T21 — Auditoria
+  audit: () => api.get<AuditListOut>('/ops/audit'),
 };
