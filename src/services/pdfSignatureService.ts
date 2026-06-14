@@ -1,12 +1,15 @@
 /**
- * Serviço para assinatura digital de PDFs com certificado ICP-Brasil A1
- * 
- * Este serviço se comunica com o backend-esocial para:
- * - Verificar se a empresa tem certificado A1 configurado
- * - Assinar PDFs com o certificado da empresa
+ * Serviço para assinatura digital de PDFs com certificado ICP-Brasil A1.
+ *
+ * Migração: antes apontava para um backend eSocial externo (VITE_ESOCIAL_BACKEND_URL).
+ * Agora usa a API principal (apps/api), autenticada via cookie httpOnly:
+ *   - GET  /esocial/pdf/certificate-info  → status do certificado A1 da empresa
+ *   - POST /esocial/pdf/sign              → assina o PDF (PAdES ICP-Brasil)
+ *
+ * O tenant vem do usuário autenticado — o parâmetro empresaId é mantido só por
+ * compatibilidade com os chamadores (não é mais enviado ao backend).
  */
-
-const ESOCIAL_BACKEND_URL = (import.meta.env.VITE_ESOCIAL_BACKEND_URL || '').replace(/\/+$/, '');
+import { api } from '@/integrations/api/client';
 
 interface CertificadoInfo {
   configurado: boolean;
@@ -26,37 +29,35 @@ interface AssinaturaResultado {
   };
 }
 
+// Shapes retornados pelo backend (snake_case).
+interface CertificateInfoOut {
+  configurado: boolean;
+  cn?: string | null;
+  valido_ate?: string | null;
+  expirado?: boolean | null;
+}
+
+interface AssinarPdfOut {
+  success: boolean;
+  pdf_base64?: string | null;
+  certificado_info?: { cn: string; emissor: string; serial_number: string } | null;
+  error?: string | null;
+}
+
 /**
- * Verifica se a empresa tem um certificado A1 configurado e válido
+ * Verifica se a empresa tem um certificado A1 configurado e válido.
  */
-export async function verificarCertificadoEmpresa(empresaId: string): Promise<CertificadoInfo> {
+export async function verificarCertificadoEmpresa(_empresaId?: string): Promise<CertificadoInfo> {
   try {
-    if (!ESOCIAL_BACKEND_URL || /seu-backend-esocial/i.test(ESOCIAL_BACKEND_URL)) {
-      console.warn('VITE_ESOCIAL_BACKEND_URL não configurada');
+    const data = await api.get<CertificateInfoOut>('/esocial/pdf/certificate-info');
+    if (!data?.configurado) {
       return { configurado: false };
     }
-
-    const response = await fetch(`${ESOCIAL_BACKEND_URL}/api/pdf/certificate-info/${empresaId}`, {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      return { configurado: false };
-    }
-
-    const data = await response.json();
-    
-    if (!data.success || !data.hasCertificate) {
-      return { configurado: false };
-    }
-
     return {
       configurado: true,
-      cn: data.cn,
-      validade: data.validoAte,
-      expirado: data.expirado,
+      cn: data.cn ?? undefined,
+      validade: data.valido_ate ?? undefined,
+      expirado: data.expirado ?? undefined,
     };
   } catch (error) {
     console.error('Erro ao verificar certificado da empresa:', error);
@@ -65,55 +66,42 @@ export async function verificarCertificadoEmpresa(empresaId: string): Promise<Ce
 }
 
 /**
- * Assina um PDF com o certificado ICP-Brasil A1 da empresa
- * Adiciona uma página de assinatura ao final do documento
+ * Assina um PDF com o certificado ICP-Brasil A1 da empresa.
+ * Adiciona uma página de assinatura ao final e aplica a assinatura PAdES.
  */
 export async function assinarPdfComIcpBrasil(
   pdfBase64: string,
-  empresaId: string,
+  _empresaId: string,
   documentoTipo: string,
-  motivoAssinatura?: string
+  motivoAssinatura?: string,
 ): Promise<AssinaturaResultado> {
   try {
-    if (!ESOCIAL_BACKEND_URL || /seu-backend-esocial/i.test(ESOCIAL_BACKEND_URL)) {
-      return {
-        success: false,
-        error: 'Backend de assinatura não configurado (VITE_ESOCIAL_BACKEND_URL)',
-      };
-    }
-
-    const response = await fetch(`${ESOCIAL_BACKEND_URL}/api/pdf/sign`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        pdfBase64,
-        empresaId,
-        documentoTipo,
-        motivoAssinatura: motivoAssinatura || `Certificado de ${documentoTipo}`,
-      }),
+    const data = await api.post<AssinarPdfOut>('/esocial/pdf/sign', {
+      pdf_base64: pdfBase64,
+      documento_tipo: documentoTipo,
+      motivo_assinatura: motivoAssinatura || `Certificado de ${documentoTipo}`,
     });
 
-    const data = await response.json();
-
-    if (!response.ok || !data.success) {
-      return {
-        success: false,
-        error: data.error || 'Erro ao assinar PDF',
-      };
+    if (!data?.success || !data.pdf_base64) {
+      return { success: false, error: data?.error || 'Erro ao assinar PDF' };
     }
 
     return {
       success: true,
-      pdfAssinadoBase64: data.pdfBase64 || data.pdfAssinado,
-      certificadoInfo: data.certificadoInfo,
+      pdfAssinadoBase64: data.pdf_base64,
+      certificadoInfo: data.certificado_info
+        ? {
+            cn: data.certificado_info.cn,
+            emissor: data.certificado_info.emissor,
+            serialNumber: data.certificado_info.serial_number,
+          }
+        : undefined,
     };
   } catch (error: any) {
     console.error('Erro ao assinar PDF:', error);
     return {
       success: false,
-      error: error.message || 'Erro de conexão com o servidor de assinatura',
+      error: error?.message || 'Erro de conexão com o servidor de assinatura',
     };
   }
 }
