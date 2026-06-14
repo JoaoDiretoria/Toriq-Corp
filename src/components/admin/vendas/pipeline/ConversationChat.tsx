@@ -1,14 +1,23 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   vendasPipelineApi,
+  mediaUrl,
   type LeadCard,
   type ConversaMensagem,
   type EventoPipeline,
+  type TemplateAprovado,
 } from '@/integrations/api/vendasPipeline';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { toast } from 'sonner';
 import {
   Send,
@@ -18,6 +27,8 @@ import {
   MessageSquare,
   AlertCircle,
   MessagesSquare,
+  FileText,
+  Download,
 } from 'lucide-react';
 import {
   temperaturaEmoji,
@@ -42,6 +53,52 @@ function horaCurta(iso: string | null | undefined): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+/** Renderiza a mídia de uma mensagem (imagem/áudio/vídeo/documento). */
+function MediaContent({ media }: { media: Record<string, unknown> }) {
+  const tipo = typeof media.tipo === 'string' ? media.tipo : undefined;
+  const id = typeof media.id === 'string' ? media.id : undefined;
+  if (!id) return null;
+  const url = mediaUrl(id);
+  const filename =
+    typeof media.filename === 'string' && media.filename
+      ? media.filename
+      : 'arquivo';
+
+  if (tipo === 'image' || tipo === 'sticker') {
+    return (
+      <a href={url} target="_blank" rel="noopener noreferrer">
+        <img
+          src={url}
+          alt={filename}
+          loading="lazy"
+          className="mb-1 max-h-64 w-auto rounded-lg object-cover"
+        />
+      </a>
+    );
+  }
+  if (tipo === 'video') {
+    return (
+      <video src={url} controls className="mb-1 max-h-64 w-full rounded-lg" />
+    );
+  }
+  if (tipo === 'audio') {
+    return <audio src={url} controls className="mb-1 w-full" />;
+  }
+  // document / outros: link para baixar.
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="mb-1 flex items-center gap-2 rounded-lg bg-background/40 px-2.5 py-2 text-xs hover:underline"
+    >
+      <FileText className="h-4 w-4 shrink-0" />
+      <span className="truncate">{filename}</span>
+      <Download className="ml-auto h-3.5 w-3.5 shrink-0 opacity-70" />
+    </a>
+  );
 }
 
 function MessageBubble({ msg }: { msg: ConversaMensagem }) {
@@ -70,7 +127,10 @@ function MessageBubble({ msg }: { msg: ConversaMensagem }) {
               : 'rounded-br-sm bg-primary text-primary-foreground'
         }`}
       >
-        <p className="whitespace-pre-wrap break-words">{msg.conteudo}</p>
+        {msg.media && <MediaContent media={msg.media} />}
+        {msg.conteudo && (
+          <p className="whitespace-pre-wrap break-words">{msg.conteudo}</p>
+        )}
         <div
           className={`mt-1 flex items-center gap-1 text-[10px] ${
             isInbound || erro ? 'text-muted-foreground' : 'text-primary-foreground/70'
@@ -119,6 +179,9 @@ export function ConversationChat({
   const [loading, setLoading] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [texto, setTexto] = useState('');
+  const [janelaAberta, setJanelaAberta] = useState(true);
+  const [templates, setTemplates] = useState<TemplateAprovado[]>([]);
+  const [templateSel, setTemplateSel] = useState<string>('');
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -137,6 +200,7 @@ export function ConversationChat({
         const res = await vendasPipelineApi.getThread(leadId);
         setLead(res.lead);
         setMensagens(Array.isArray(res.mensagens) ? res.mensagens : []);
+        setJanelaAberta(res.janela_aberta !== false);
         scrollToBottom();
         if (markRead) {
           try {
@@ -165,8 +229,17 @@ export function ConversationChat({
     }
     fetchThread(true);
     setTexto('');
+    setTemplateSel('');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leadId]);
+
+  // -- Templates aprovados (HSM): carregados uma vez, usados quando a janela fecha
+  useEffect(() => {
+    vendasPipelineApi
+      .listTemplatesAprovados()
+      .then(setTemplates)
+      .catch(() => setTemplates([]));
+  }, []);
 
   // -- Eventos SSE / polling: se o evento é deste lead, refaz a thread (e relê)
   useEffect(() => {
@@ -194,6 +267,27 @@ export function ConversationChat({
       onEnviado?.(leadId);
     } catch (err: any) {
       toast.error(err?.message || 'Erro ao enviar a mensagem');
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  const handleEnviarTemplate = async () => {
+    if (!templateSel || !leadId || enviando) return;
+    setEnviando(true);
+    try {
+      const msg = await vendasPipelineApi.enviarTemplate(leadId, templateSel);
+      setMensagens((prev) => [...prev, msg]);
+      setTemplateSel('');
+      scrollToBottom();
+      if (msg.status === 'erro') {
+        toast.error('O template foi registrado, mas o envio pelo WhatsApp falhou.');
+      } else {
+        toast.success('Template enviado.');
+      }
+      onEnviado?.(leadId);
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao enviar o template');
     } finally {
       setEnviando(false);
     }
@@ -284,29 +378,71 @@ export function ConversationChat({
 
       {/* Composer */}
       <div className="border-t p-3">
-        <div className="flex items-end gap-2">
-          <Textarea
-            value={texto}
-            onChange={(e) => setTexto(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Escreva uma mensagem… (Enter envia, Shift+Enter quebra linha)"
-            rows={1}
-            className="max-h-32 min-h-[40px] resize-none"
-            disabled={enviando}
-          />
-          <Button
-            onClick={handleEnviar}
-            disabled={enviando || !texto.trim()}
-            size="icon"
-            className="h-10 w-10 shrink-0"
-          >
-            {enviando ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+        {janelaAberta ? (
+          <div className="flex items-end gap-2">
+            <Textarea
+              value={texto}
+              onChange={(e) => setTexto(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Escreva uma mensagem… (Enter envia, Shift+Enter quebra linha)"
+              rows={1}
+              className="max-h-32 min-h-[40px] resize-none"
+              disabled={enviando}
+            />
+            <Button
+              onClick={handleEnviar}
+              disabled={enviando || !texto.trim()}
+              size="icon"
+              className="h-10 w-10 shrink-0"
+            >
+              {enviando ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+              Janela de 24h fechada — só é possível reabrir com um template aprovado.
+            </div>
+            {templates.length === 0 ? (
+              <p className="px-1 text-xs text-muted-foreground">
+                Nenhum template aprovado. Crie e aprove um template de WhatsApp em
+                Disparo em Massa para reengajar este lead.
+              </p>
             ) : (
-              <Send className="h-4 w-4" />
+              <div className="flex items-end gap-2">
+                <Select value={templateSel} onValueChange={setTemplateSel}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Escolha um template aprovado…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {templates.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  onClick={handleEnviarTemplate}
+                  disabled={enviando || !templateSel}
+                  className="shrink-0 gap-1.5"
+                >
+                  {enviando ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                  Enviar template
+                </Button>
+              </div>
             )}
-          </Button>
-        </div>
+          </div>
+        )}
         {lead?.last_message_at && (
           <p className="mt-1.5 px-1 text-[10px] text-muted-foreground">
             Última atividade {tempoRelativo(lead.last_message_at)}

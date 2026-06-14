@@ -92,10 +92,18 @@ class ConversaMensagemOut(BaseModel):
 class ConversaThreadOut(BaseModel):
     lead: LeadCardOut
     mensagens: list[ConversaMensagemOut]
+    # Janela de atendimento do WhatsApp (24h desde a última msg do lead). Quando
+    # fechada, texto livre é rejeitado pela Meta → o front força um template HSM.
+    janela_aberta: bool = True
+    janela_expira_em: Optional[datetime.datetime] = None
 
 
 class EnviarMensagemIn(BaseModel):
     conteudo: str
+
+
+class EnviarTemplateIn(BaseModel):
+    template_id: uuid.UUID
 
 
 class LeadPatchIn(BaseModel):

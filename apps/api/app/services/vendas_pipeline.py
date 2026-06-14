@@ -24,10 +24,14 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.esocial_crypto import decrypt_secret
-from app.integrations.whatsapp_meta import WhatsAppError, send_text
+from app.integrations.whatsapp_meta import WhatsAppError, send_template, send_text
 from app.models.vendas import VendasLeads, VendasLeadTags, VendasTags
-from app.models.vendas_disparo import VendasDisparoConfig
+from app.models.vendas_disparo import VendasDisparoConfig, VendasTemplates
 from app.models.vendas_pipeline import VendasConversas, VendasPipelineStages
+
+
+# Janela de atendimento do WhatsApp (Meta): 24h desde a última msg do cliente.
+JANELA_ATENDIMENTO = datetime.timedelta(hours=24)
 
 
 # Estágios padrão (nome, cor, ordem, is_closed, is_won) — lazy-seed por empresa.
@@ -399,10 +403,33 @@ async def listar_conversas(
     return [await _card(db, l, tags=tags_map.get(l.id, [])) for l in leads]
 
 
+async def _janela_atendimento(
+    db: AsyncSession, *, empresa_id: uuid.UUID, lead_id: uuid.UUID
+) -> tuple[bool, Optional[datetime.datetime]]:
+    """Janela de 24h do WhatsApp: (aberta?, quando expira).
+
+    Aberta enquanto faltar menos de 24h desde a ÚLTIMA mensagem do lead
+    (sender_type='lead'). Sem nenhum inbound → fechada (None)."""
+    ultimo_inbound = await db.scalar(
+        select(VendasConversas.created_at)
+        .where(
+            VendasConversas.empresa_id == empresa_id,
+            VendasConversas.lead_id == lead_id,
+            VendasConversas.sender_type == "lead",
+        )
+        .order_by(VendasConversas.created_at.desc())
+        .limit(1)
+    )
+    if ultimo_inbound is None:
+        return False, None
+    expira = ultimo_inbound + JANELA_ATENDIMENTO
+    return _now() < expira, expira
+
+
 async def thread(
     db: AsyncSession, *, empresa_id: uuid.UUID, lead_id: uuid.UUID, limit: int = 200
 ) -> dict:
-    """{lead, mensagens(asc)} da thread. NÃO marca lido. ValueError se cross-tenant."""
+    """{lead, mensagens(asc), janela_*} da thread. NÃO marca lido."""
     lead = await _get_lead(db, empresa_id, lead_id)
     if lead is None:
         raise ValueError("lead não encontrado")
@@ -418,7 +445,15 @@ async def thread(
             .limit(limit)
         )
     ).all()
-    return {"lead": await _card(db, lead), "mensagens": list(mensagens)}
+    aberta, expira = await _janela_atendimento(
+        db, empresa_id=empresa_id, lead_id=lead_id
+    )
+    return {
+        "lead": await _card(db, lead),
+        "mensagens": list(mensagens),
+        "janela_aberta": aberta,
+        "janela_expira_em": expira,
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -469,6 +504,67 @@ async def enviar_resposta(
         lead_id=lead_id,
         sender_type="agente",
         conteudo=conteudo,
+        canal="whatsapp",
+        status=status,
+    )
+
+
+async def enviar_template(
+    db: AsyncSession, *, empresa_id: uuid.UUID, lead_id: uuid.UUID, template_id: uuid.UUID
+) -> VendasConversas:
+    """Envia um TEMPLATE aprovado (HSM) — reabre conversa fora da janela 24h.
+
+    Valida que o template é da empresa, é WhatsApp e está 'approved' (com
+    meta_template_name). Tolerante a falha de envio (registra status='erro').
+    """
+    lead = await _get_lead(db, empresa_id, lead_id)
+    if lead is None:
+        raise ValueError("lead não encontrado")
+
+    template = await db.scalar(
+        select(VendasTemplates).where(
+            VendasTemplates.id == template_id,
+            VendasTemplates.empresa_id == empresa_id,
+        )
+    )
+    if template is None:
+        raise ValueError("template não encontrado")
+    if not template.meta_template_name or template.approval_status != "approved":
+        raise ValueError("template não aprovado pela Meta")
+
+    config = await db.scalar(
+        select(VendasDisparoConfig).where(
+            VendasDisparoConfig.empresa_id == empresa_id
+        )
+    )
+
+    status = "enviado"
+    if (
+        config is None
+        or not config.whatsapp_phone_id
+        or not config.whatsapp_token_enc
+        or not lead.telefone
+    ):
+        status = "erro"
+    else:
+        to = re.sub(r"\D", "", lead.telefone)
+        try:
+            await send_template(
+                phone_id=config.whatsapp_phone_id,
+                token=decrypt_secret(config.whatsapp_token_enc),
+                to=to,
+                template_name=template.meta_template_name,
+                lang_code="pt_BR",
+            )
+        except WhatsAppError:
+            status = "erro"
+
+    return await append_mensagem(
+        db,
+        empresa_id=empresa_id,
+        lead_id=lead_id,
+        sender_type="agente",
+        conteudo=template.conteudo,
         canal="whatsapp",
         status=status,
     )

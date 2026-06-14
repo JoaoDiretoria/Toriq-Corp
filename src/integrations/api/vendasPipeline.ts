@@ -117,6 +117,19 @@ export interface ConversaMensagem {
 export interface ConversaThread {
   lead: LeadCard;
   mensagens: ConversaMensagem[];
+  /** Janela de 24h do WhatsApp aberta? Fora dela, só template HSM. */
+  janela_aberta: boolean;
+  /** Quando a janela de 24h expira (ISO) ou null se não há inbound. */
+  janela_expira_em: string | null;
+}
+
+/** Template WhatsApp aprovado (HSM) para reabrir conversa fora das 24h. */
+export interface TemplateAprovado {
+  id: string;
+  nome: string;
+  conteudo: string;
+  meta_template_name: string | null;
+  approval_status: string | null;
 }
 
 /** Filtros aceitos por GET /vendas/conversas. */
@@ -158,6 +171,15 @@ export interface EventoPipeline {
 // ---------------------------------------------------------------------------
 
 const API_URL: string = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+
+/**
+ * URL do proxy autenticado de mídia (imagem/áudio/vídeo/doc recebidos no
+ * WhatsApp). Usada direto em <img>/<audio>/<video> src — o cookie httpOnly de
+ * auth é enviado porque a API é same-site (subdomínio do mesmo domínio).
+ */
+export function mediaUrl(mediaId: string): string {
+  return `${API_URL}/vendas/conversas/media/${encodeURIComponent(mediaId)}`;
+}
 
 function buildQuery(filters: ConversasFilters): string {
   const params = new URLSearchParams();
@@ -204,6 +226,21 @@ export const vendasPipelineApi = {
 
   enviarMensagem: (leadId: string, conteudo: string) =>
     api.post<ConversaMensagem>(`/vendas/conversas/${leadId}/mensagem`, { conteudo }),
+
+  enviarTemplate: (leadId: string, templateId: string) =>
+    api.post<ConversaMensagem>(`/vendas/conversas/${leadId}/template`, {
+      template_id: templateId,
+    }),
+
+  /** Templates WhatsApp aprovados (HSM) — para reabrir conversa fora das 24h. */
+  listTemplatesAprovados: async (): Promise<TemplateAprovado[]> => {
+    const todos = await api.get<TemplateAprovado[]>(
+      "/vendas/templates?canal=whatsapp",
+    );
+    return (todos ?? []).filter(
+      (t) => t.approval_status === "approved" && !!t.meta_template_name,
+    );
+  },
 
   marcarLido: (leadId: string) =>
     apiRequest<void>(`/vendas/conversas/${leadId}/ler`, { method: "POST" }),

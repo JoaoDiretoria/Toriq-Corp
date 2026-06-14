@@ -236,6 +236,7 @@ async def processar_inbound_webhook(
                 sender_type="lead",
                 conteudo=inbound.get("texto") or "",
                 canal="whatsapp",
+                media=inbound.get("media"),
             )
         except Exception:  # pragma: no cover - tolerante a falha de gravação
             await db.rollback()

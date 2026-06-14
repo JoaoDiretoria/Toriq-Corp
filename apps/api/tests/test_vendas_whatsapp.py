@@ -456,3 +456,74 @@ async def test_enviar_mensagem_whatsapp_error_vira_erro(db_session, monkeypatch)
 
 def _normalizar_telefone_sanity():
     assert svc.normalizar_telefone("+55 (11) 9-8888.7777") == "5511988887777"
+
+
+def test_parse_webhook_extrai_midia_imagem_com_legenda():
+    """Mensagem de imagem com legenda → media preenchido + texto=caption."""
+    from app.integrations.whatsapp_meta import parse_webhook
+
+    payload = {
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "value": {
+                            "messages": [
+                                {
+                                    "id": "wamid.IMG",
+                                    "from": "5511999990000",
+                                    "type": "image",
+                                    "image": {
+                                        "id": "media-123",
+                                        "mime_type": "image/jpeg",
+                                        "caption": "olha isso",
+                                    },
+                                    "timestamp": "1700000000",
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+    msg = parse_webhook(payload)["mensagens"][0]
+    assert msg["tipo"] == "image"
+    assert msg["texto"] == "olha isso"
+    assert msg["media"] == {
+        "tipo": "image",
+        "id": "media-123",
+        "mime_type": "image/jpeg",
+        "filename": None,
+        "caption": "olha isso",
+        "voice": None,
+    }
+
+
+def test_parse_webhook_texto_puro_sem_midia():
+    """Mensagem de texto comum → media=None."""
+    from app.integrations.whatsapp_meta import parse_webhook
+
+    payload = {
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "value": {
+                            "messages": [
+                                {
+                                    "id": "wamid.TXT",
+                                    "from": "5511999990000",
+                                    "type": "text",
+                                    "text": {"body": "oi"},
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+    msg = parse_webhook(payload)["mensagens"][0]
+    assert msg["texto"] == "oi"
+    assert msg["media"] is None

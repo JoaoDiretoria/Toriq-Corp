@@ -112,6 +112,42 @@ async def _post_message(url: str, token: str, payload: dict, *, contexto: str) -
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Download de mídia (Cloud API) — id da mídia → bytes
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def baixar_media(*, token: str, media_id: str) -> tuple[bytes, str]:
+    """Baixa o binário de uma mídia recebida pelo seu ``media_id``.
+
+    São 2 passos na Graph API (ambos exigem Bearer token):
+    1. ``GET {BASE}/{GRAPH_VERSION}/{media_id}`` → devolve ``{"url", "mime_type"}``;
+    2. ``GET <url>`` (host lookaside da Meta) → bytes do arquivo.
+
+    Retorna ``(conteudo, mime_type)``. Falha → ``WhatsAppError``.
+    """
+    headers = {"Authorization": f"Bearer {token}"}
+    meta_url = f"{BASE}/{GRAPH_VERSION}/{media_id}"
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
+        try:
+            resp = await c.get(meta_url, headers=headers)
+            resp.raise_for_status()
+            info = resp.json()
+            url = info.get("url")
+            mime = info.get("mime_type") or "application/octet-stream"
+            if not url:
+                raise WhatsAppError(f"Mídia sem url: {info!r}")
+            # O download do binário também precisa do Bearer token.
+            bin_resp = await c.get(url, headers=headers)
+            bin_resp.raise_for_status()
+            return bin_resp.content, mime
+        except httpx.HTTPStatusError as e:
+            raise WhatsAppError(
+                f"Falha ao baixar mídia: HTTP {e.response.status_code} — {e.response.text}"
+            ) from e
+        except httpx.HTTPError as e:
+            raise WhatsAppError(f"Erro de rede ao baixar mídia: {e}") from e
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Webhook — verificação do handshake (GET)
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -163,7 +199,11 @@ def parse_webhook(payload: dict) -> dict:
     nunca levantam exceção.
 
     Retorna ``{"mensagens": [...], "statuses": [...]}``:
-    - mensagem: ``{"wamid", "from", "tipo", "texto", "timestamp"}``
+    - mensagem: ``{"wamid", "from", "tipo", "texto", "media", "timestamp"}``
+      onde ``media`` é ``None`` para texto puro ou
+      ``{"tipo","id","mime_type","filename","caption","voice"}`` para
+      image/audio/video/document/sticker. ``texto`` cai para a legenda
+      (``caption``) quando a mensagem é uma mídia legendada.
     - status:   ``{"wamid", "status", "timestamp", "recipient"}``
     """
     mensagens: list[dict] = []
@@ -185,12 +225,28 @@ def parse_webhook(payload: dict) -> dict:
             for m in value.get("messages") or []:
                 if not isinstance(m, dict):
                     continue
+                tipo = m.get("type")
+                media = None
+                caption = None
+                if tipo in ("image", "audio", "video", "document", "sticker"):
+                    obj = m.get(tipo) if isinstance(m.get(tipo), dict) else {}
+                    caption = obj.get("caption")
+                    media = {
+                        "tipo": tipo,
+                        "id": obj.get("id"),
+                        "mime_type": obj.get("mime_type"),
+                        "filename": obj.get("filename"),
+                        "caption": caption,
+                        "voice": obj.get("voice"),
+                    }
+                texto = (m.get("text") or {}).get("body") or caption
                 mensagens.append(
                     {
                         "wamid": m.get("id"),
                         "from": m.get("from"),
-                        "tipo": m.get("type"),
-                        "texto": (m.get("text") or {}).get("body"),
+                        "tipo": tipo,
+                        "texto": texto,
+                        "media": media,
                         "timestamp": m.get("timestamp"),
                     }
                 )

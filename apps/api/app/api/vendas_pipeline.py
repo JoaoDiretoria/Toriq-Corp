@@ -13,15 +13,18 @@ import json
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_role
 from app.core.db import get_db
+from app.core.esocial_crypto import decrypt_secret
+from app.integrations.whatsapp_meta import WhatsAppError, baixar_media
 from app.models.user import User, UserRole
 from app.models.vendas import VendasLeads
+from app.models.vendas_disparo import VendasDisparoConfig
 from app.models.vendas_pipeline import VendasPipelineStages
 from app.schemas import vendas_pipeline as s
 from app.services import vendas_pipeline as svc
@@ -264,6 +267,62 @@ async def enviar_mensagem(
     try:
         return await svc.enviar_resposta(
             db, empresa_id=empresa_id, lead_id=lead_id, conteudo=payload.conteudo
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc))
+
+
+@router.get("/conversas/media/{media_id}")
+async def baixar_media_conversa(
+    media_id: str,
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Proxy autenticado: baixa o binário de uma mídia recebida no WhatsApp.
+
+    A URL da mídia na Meta exige o token da empresa, então o front não consegue
+    acessá-la direto — busca por aqui (escopado por empresa, com o token da
+    config de disparo). Devolve os bytes com o ``Content-Type`` correto.
+    """
+    empresa_id = _require_empresa(user)
+    config = await db.scalar(
+        select(VendasDisparoConfig).where(
+            VendasDisparoConfig.empresa_id == empresa_id
+        )
+    )
+    if config is None or not config.whatsapp_token_enc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "WhatsApp não configurado")
+    try:
+        conteudo, mime = await baixar_media(
+            token=decrypt_secret(config.whatsapp_token_enc), media_id=media_id
+        )
+    except WhatsAppError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc))
+    return Response(
+        content=conteudo,
+        media_type=mime,
+        headers={"Cache-Control": "private, max-age=86400"},
+    )
+
+
+@router.post(
+    "/conversas/{lead_id}/template",
+    response_model=s.ConversaMensagemOut,
+)
+async def enviar_template(
+    lead_id: uuid.UUID,
+    payload: s.EnviarTemplateIn,
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Envia um template HSM aprovado para reabrir a conversa (fora das 24h)."""
+    empresa_id = _require_empresa(user)
+    try:
+        return await svc.enviar_template(
+            db,
+            empresa_id=empresa_id,
+            lead_id=lead_id,
+            template_id=payload.template_id,
         )
     except ValueError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc))

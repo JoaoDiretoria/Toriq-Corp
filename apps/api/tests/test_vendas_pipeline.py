@@ -208,6 +208,91 @@ async def test_enviar_resposta_sem_config_registra_erro(client, db_session, monk
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# TEMPLATE HSM (reabrir conversa fora da janela 24h)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def _criar_template_aprovado(db_session, empresa_id):
+    from app.models.vendas_disparo import VendasTemplates
+
+    tpl = VendasTemplates(
+        id=uuid.uuid4(),
+        empresa_id=empresa_id,
+        nome="Reengajar",
+        canal="whatsapp",
+        conteudo="Oi! Podemos retomar?",
+        meta_template_name="reengajar_pt",
+        approval_status="approved",
+    )
+    db_session.add(tpl)
+    await db_session.commit()
+    return tpl.id
+
+
+@pytest.mark.anyio
+async def test_enviar_template_chama_send_template(client, db_session, monkeypatch):
+    empresa_id = await login_as(client, db_session, email="pipe_tpl@torq.com")
+    await _set_whatsapp_config(client, db_session, empresa_id)
+    lead_id = await _criar_lead(client, nome="Eva", telefone="+55 (11) 97777-0001")
+    tpl_id = await _criar_template_aprovado(db_session, empresa_id)
+
+    chamadas = []
+
+    async def fake_send_template(**kwargs):
+        chamadas.append(kwargs)
+        return "wamid-tpl"
+
+    monkeypatch.setattr(svc, "send_template", fake_send_template)
+
+    r = await client.post(
+        f"/vendas/conversas/{lead_id}/template", json={"template_id": str(tpl_id)}
+    )
+    assert r.status_code == 200, r.text
+    msg = r.json()
+    assert msg["sender_type"] == "agente"
+    assert msg["status"] == "enviado"
+    assert msg["conteudo"] == "Oi! Podemos retomar?"
+    assert len(chamadas) == 1
+    assert chamadas[0]["template_name"] == "reengajar_pt"
+    assert chamadas[0]["to"] == "5511977770001"
+
+
+@pytest.mark.anyio
+async def test_enviar_template_nao_aprovado_404(client, db_session, monkeypatch):
+    empresa_id = await login_as(client, db_session, email="pipe_tpl_na@torq.com")
+    await _set_whatsapp_config(client, db_session, empresa_id)
+    lead_id = await _criar_lead(client, nome="Fred")
+
+    from app.models.vendas_disparo import VendasTemplates
+
+    tpl = VendasTemplates(
+        id=uuid.uuid4(),
+        empresa_id=empresa_id,
+        nome="Pendente",
+        canal="whatsapp",
+        conteudo="x",
+        meta_template_name="pend",
+        approval_status="pending",
+    )
+    db_session.add(tpl)
+    await db_session.commit()
+
+    r = await client.post(
+        f"/vendas/conversas/{lead_id}/template", json={"template_id": str(tpl.id)}
+    )
+    assert r.status_code == 404, r.text
+
+
+@pytest.mark.anyio
+async def test_thread_janela_fechada_sem_inbound(client, db_session):
+    """Sem nenhuma mensagem do lead, a janela de 24h está fechada."""
+    await login_as(client, db_session, email="pipe_janela@torq.com")
+    lead_id = await _criar_lead(client, nome="Gabi")
+    r = await client.get(f"/vendas/conversas/{lead_id}")
+    assert r.status_code == 200, r.text
+    assert r.json()["janela_aberta"] is False
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # LISTAR CONVERSAS — filtros
 # ═══════════════════════════════════════════════════════════════════════════════
 
