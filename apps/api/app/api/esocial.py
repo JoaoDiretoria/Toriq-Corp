@@ -13,6 +13,7 @@ import asyncio
 import base64
 import binascii
 import datetime
+import hashlib
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -23,10 +24,16 @@ from app.core.db import get_db
 from app.core.esocial_cert import parse_pfx
 from app.core.esocial_crypto import decrypt_secret, encrypt_secret
 from app.core.pdf_sign import assinar_pdf
+from app.core.xml_signer import assinar_evento
+from app.integrations import esocial_ws
 from app.models.esocial import EmpresaIntegracoesEsocial
+from app.models.esocial_eventos_log import EsocialEventosLog
 from app.models.generated import Empresas
 from app.models.user import User, UserRole
 from app.schemas import esocial as s
+from app.services.esocial_eventos import EsocialConfig, gerar_evento, montar_lote
+
+_TIPOS_EVENTO = {"S-2210", "S-2220", "S-2240"}
 
 router = APIRouter(prefix="/esocial", tags=["esocial"])
 
@@ -336,3 +343,137 @@ async def pdf_sign(
             serial_number=str(cert_info["serial_number"]),
         ),
     )
+
+
+# ── 6) Transmissão de eventos eSocial SST (S-2210/2220/2240) ───────────────────
+
+def _config_transmissao(obj: EmpresaIntegracoesEsocial | None) -> EsocialConfig | None:
+    """Monta a EsocialConfig (ambiente + inscrição) ou None se faltar dado."""
+    if obj is None or not obj.esocial_tipo_inscricao or not obj.esocial_nr_inscricao:
+        return None
+    return EsocialConfig(
+        ambiente=obj.esocial_ambiente or "2",
+        tipo_inscricao=obj.esocial_tipo_inscricao,
+        nr_inscricao=obj.esocial_nr_inscricao,
+    )
+
+
+@router.post("/eventos/{tipo}/enviar", response_model=s.EnviarEventoOut)
+async def enviar_evento(
+    tipo: str,
+    payload: s.EnviarEventoIn,
+    user: User = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Gera o XML do evento, assina (XMLDSig A1), monta o lote e transmite ao eSocial.
+
+    Registra o resultado em ``esocial_eventos_log``. ``tipo`` ∈ {S-2210, S-2220, S-2240}.
+    """
+    if tipo not in _TIPOS_EVENTO:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"tipo inválido: {tipo}")
+    empresa_id = _empresa_id(user)
+
+    obj = await db.scalar(
+        select(EmpresaIntegracoesEsocial).where(
+            EmpresaIntegracoesEsocial.empresa_id == empresa_id
+        )
+    )
+    cfg = _config_transmissao(obj)
+    if cfg is None:
+        return s.EnviarEventoOut(
+            success=False, error="Configure tipo/número de inscrição do eSocial."
+        )
+    par = await _cert_da_empresa(db, empresa_id)
+    if par is None:
+        return s.EnviarEventoOut(success=False, error="Nenhum certificado A1 configurado.")
+    pfx_bytes, senha = par
+
+    # Gera + assina + monta lote (CPU-bound → thread). Erros de dados/cert → 400.
+    try:
+        def _preparar() -> tuple[str, str]:
+            xml = gerar_evento(tipo, cfg, payload.dados)
+            assinado = assinar_evento(xml, pfx_bytes, senha)
+            return montar_lote(cfg, [assinado]), hashlib.sha256(xml.encode()).hexdigest()
+
+        lote_xml, payload_hash = await asyncio.to_thread(_preparar)
+    except ValueError as exc:
+        return s.EnviarEventoOut(success=False, error=str(exc))
+
+    resultado = await esocial_ws.enviar_lote(cfg.ambiente, lote_xml, pfx_bytes, senha)
+
+    log = EsocialEventosLog(
+        empresa_id=empresa_id,
+        tipo=tipo,
+        fonte_id=payload.fonte_id,
+        protocolo=resultado.get("protocolo"),
+        status="enviado" if resultado.get("success") else "erro",
+        erro=resultado.get("error"),
+        payload_hash=payload_hash,
+    )
+    db.add(log)
+    await db.commit()
+    await db.refresh(log)
+
+    return s.EnviarEventoOut(
+        success=bool(resultado.get("success")),
+        protocolo=resultado.get("protocolo"),
+        id_log=log.id,
+        error=resultado.get("error"),
+    )
+
+
+@router.get("/lotes/{protocolo}", response_model=s.ConsultarLoteOut)
+async def consultar_lote(
+    protocolo: str,
+    user: User = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Consulta o processamento de um lote pelo protocolo e atualiza o log."""
+    empresa_id = _empresa_id(user)
+    obj = await db.scalar(
+        select(EmpresaIntegracoesEsocial).where(
+            EmpresaIntegracoesEsocial.empresa_id == empresa_id
+        )
+    )
+    cfg = _config_transmissao(obj)
+    par = await _cert_da_empresa(db, empresa_id)
+    if cfg is None or par is None:
+        return s.ConsultarLoteOut(success=False, error="eSocial não configurado.")
+    pfx_bytes, senha = par
+
+    resultado = await esocial_ws.consultar_lote(cfg.ambiente, protocolo, pfx_bytes, senha)
+
+    # Atualiza o log da empresa que tiver esse protocolo.
+    log = await db.scalar(
+        select(EsocialEventosLog).where(
+            EsocialEventosLog.empresa_id == empresa_id,
+            EsocialEventosLog.protocolo == protocolo,
+        )
+    )
+    if log is not None and resultado.get("success"):
+        log.status = resultado.get("status") or log.status
+        log.updated_at = datetime.datetime.now(datetime.timezone.utc)
+        await db.commit()
+
+    return s.ConsultarLoteOut(
+        success=bool(resultado.get("success")),
+        status=resultado.get("status"),
+        eventos=resultado.get("eventos") or [],
+        error=resultado.get("error"),
+    )
+
+
+@router.get("/eventos", response_model=list[s.EventoLogOut])
+async def listar_eventos(
+    user: User = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lista o log de transmissões de eventos da empresa (mais recentes primeiro)."""
+    empresa_id = _empresa_id(user)
+    rows = await db.scalars(
+        select(EsocialEventosLog)
+        .where(EsocialEventosLog.empresa_id == empresa_id)
+        .order_by(EsocialEventosLog.created_at.desc())
+        .limit(200)
+    )
+    return list(rows)

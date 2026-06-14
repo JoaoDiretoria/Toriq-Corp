@@ -105,3 +105,37 @@ class AssinarPdfOut(BaseModel):
     pdf_base64: Optional[str] = None
     certificado_info: Optional[CertificadoAssinaturaInfo] = None
     error: Optional[str] = None
+
+
+# ── 6) Transmissão de eventos eSocial SST (S-2210/2220/2240) ───────────────────
+
+class EnviarEventoIn(BaseModel):
+    """``dados`` carrega os campos do evento (preenchidos pela tela SST)."""
+    dados: dict
+    fonte_id: Optional[uuid.UUID] = None
+
+
+class EnviarEventoOut(BaseModel):
+    success: bool
+    protocolo: Optional[str] = None
+    id_log: Optional[uuid.UUID] = None
+    error: Optional[str] = None
+
+
+class ConsultarLoteOut(BaseModel):
+    success: bool
+    status: Optional[str] = None
+    eventos: list[dict] = []
+    error: Optional[str] = None
+
+
+class EventoLogOut(BaseModel):
+    id: uuid.UUID
+    tipo: str
+    fonte_id: Optional[uuid.UUID] = None
+    protocolo: Optional[str] = None
+    status: Optional[str] = None
+    erro: Optional[str] = None
+    created_at: Optional[datetime.datetime] = None
+    updated_at: Optional[datetime.datetime] = None
+    model_config = {"from_attributes": True}
