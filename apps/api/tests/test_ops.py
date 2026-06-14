@@ -92,3 +92,24 @@ async def test_tickets_lista(client):
     r = await client.get("/ops/tickets?limit=10")
     assert r.status_code == 200
     assert isinstance(r.json()["tickets"], list)
+
+
+async def test_ops_lista_usuarios_global(client):
+    # cria um alvo de outra "empresa" (sem empresa) e confere que suporte o vê.
+    await _register_login(client, "alvo@toriq.com", "cliente_final")
+    await client.post("/auth/logout")
+    await _register_login(client, "sup9@toriq.com", "suporte")
+    r = await client.get("/ops/users?q=alvo")
+    assert r.status_code == 200
+    emails = {u["email"] for u in r.json()["users"]}
+    assert "alvo@toriq.com" in emails
+
+
+async def test_suporte_nao_promove_para_admin(client):
+    await _register_login(client, "alvo3@toriq.com", "cliente_final")
+    alvo_id = (await client.get("/auth/me")).json()["user"]["id"]
+    await client.post("/auth/logout")
+
+    await _register_login(client, "sup11@toriq.com", "suporte")
+    r = await client.patch(f"/ops/users/{alvo_id}/role", json={"role": "admin_vertical"})
+    assert r.status_code == 403

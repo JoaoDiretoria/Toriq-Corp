@@ -198,6 +198,47 @@ async def tickets_metrics(db: AsyncSession) -> dict:
     }
 
 
+from fastapi import HTTPException, status
+
+from app.models.ops_audit import OpsAuditLog
+from app.models.user import User, UserRole
+from app.models.generated import Profiles
+
+
+async def registrar_auditoria(
+    db: AsyncSession, actor: User, action: str,
+    target_user_id=None, details: dict | None = None, ip: str | None = None,
+) -> None:
+    db.add(OpsAuditLog(
+        actor_id=actor.id,
+        actor_nome=getattr(actor, "nome", None),
+        action=action,
+        target_user_id=target_user_id,
+        details=details,
+        ip=ip,
+    ))
+
+
+async def get_alvo(db: AsyncSession, actor: User, user_id) -> User:
+    """Carrega o usuário-alvo. suporte não pode tocar um admin_vertical
+    (anti-neutralização); admin_vertical pode tudo."""
+    target = await db.get(User, user_id)
+    if target is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "usuário não encontrado")
+    if actor.role == UserRole.suporte and target.role == UserRole.admin_vertical:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "suporte não pode modificar admin_vertical")
+    return target
+
+
+async def _sync_profile(db: AsyncSession, target: User) -> None:
+    profile = await db.get(Profiles, target.id)
+    if profile is not None:
+        profile.nome = target.nome
+        profile.role = target.role.value
+        profile.ativo = target.ativo
+        profile.empresa_id = target.empresa_id
+
+
 async def montar_health(db: AsyncSession) -> dict:
     db_ok, db_detalhe = await _db_ok(db)
     redis_ok, redis_detalhe = await _redis_ok()

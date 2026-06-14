@@ -6,6 +6,8 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict
 
+from app.models.user import UserRole
+
 
 class DependenciaStatus(BaseModel):
     nome: str
@@ -97,3 +99,38 @@ class TicketsMetricsOut(BaseModel):
     sla_violados: int
     por_status: dict[str, int]
     por_prioridade: dict[str, int]
+
+
+class OpsUserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    email: str
+    nome: str
+    role: UserRole
+    empresa_id: uuid.UUID | None = None
+    ativo: bool
+    created_at: datetime.datetime | None = None
+
+
+class OpsUsersListOut(BaseModel):
+    users: list[OpsUserOut]
+    total: int
+
+
+class OpsUserUpdateIn(BaseModel):
+    nome: str | None = None
+    email: str | None = None
+    ativo: bool | None = None
+
+
+class OpsRoleUpdateIn(BaseModel):
+    role: UserRole
+
+
+class OpsEmpresaUpdateIn(BaseModel):
+    empresa_id: uuid.UUID | None = None
+
+
+class OpsResetSenhaOut(BaseModel):
+    ok: bool
+    temp_password: str | None = None
