@@ -28,12 +28,18 @@ async def test_todas_as_tabelas_existem(conn):
     assert n >= 173  # 172 introspectadas + users (credenciais)
 
 
-async def test_enum_app_role_tem_6_valores(conn):
+async def test_enum_app_role_tem_7_valores(conn):
+    # 6 originais + 'suporte' (role de staff interno do dashboard /ops).
     vals = await conn.scalar(text(
         "select count(*) from pg_enum e join pg_type t on t.oid=e.enumtypid "
         "where t.typname='app_role'"
     ))
-    assert vals == 6
+    assert vals == 7
+    tem_suporte = await conn.scalar(text(
+        "select count(*) from pg_enum e join pg_type t on t.oid=e.enumtypid "
+        "where t.typname='app_role' and e.enumlabel='suporte'"
+    ))
+    assert tem_suporte == 1
 
 
 async def test_nenhuma_fk_aponta_para_schema_auth(conn):
