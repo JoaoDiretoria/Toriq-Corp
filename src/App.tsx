@@ -15,6 +15,7 @@ import SobreNos from "./pages/SobreNos";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import AdminDashboard from "./pages/AdminDashboard";
+import SuporteDashboard from "./pages/SuporteDashboard";
 import SSTDashboard from "./pages/SSTDashboard";
 import ClienteDashboard from "./pages/ClienteDashboard";
 import ModuloPage from "./pages/ModuloPage";
@@ -77,6 +78,7 @@ const App = () => (
             <Route path="/sair" element={<Logout />} />
             <Route path="/dashboard" element={<RequireSenhaAlterada><Dashboard /></RequireSenhaAlterada>} />
             <Route path="/admin" element={<RequireSenhaAlterada><AdminDashboard /></RequireSenhaAlterada>} />
+            <Route path="/ops" element={<RequireSenhaAlterada><SuporteDashboard /></RequireSenhaAlterada>} />
             <Route path="/toriqcorp" element={<RequireSenhaAlterada><SSTDashboard /></RequireSenhaAlterada>} />
             <Route path="/sst" element={<Navigate to="/toriqcorp" replace />} />
             <Route path="/cliente" element={<RequireSenhaAlterada><ClienteDashboard /></RequireSenhaAlterada>} />
