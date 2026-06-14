@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { api } from '@/integrations/api/client';
 import { useAuth } from '@/hooks/useAuth';
+import { AdminSentryPanel } from '@/components/admin/AdminSentryPanel';
 
 interface KPIData {
   totalEmpresas: number;
@@ -410,6 +411,9 @@ export function AdminDashboardHome({ onNavigate }: AdminDashboardHomeProps) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Painel de Erros Sentry */}
+              <AdminSentryPanel />
     </div>
   );
 }

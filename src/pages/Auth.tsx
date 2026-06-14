@@ -228,7 +228,7 @@ const Auth = () => {
             <img
               src="/IDTORIQCOMPLETA/LOGO%20PNG/PRETA-HORIZONTAL.png"
               alt="TORIQ"
-              className="h-28 w-auto"
+              className="h-28 w-auto dark:brightness-0 dark:invert"
             />
           </div>
         </div>

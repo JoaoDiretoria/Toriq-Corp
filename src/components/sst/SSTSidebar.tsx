@@ -31,6 +31,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ThemeToggle } from '@/components/shared/ThemeToggle';
 
 interface Modulo {
   id: string;
@@ -751,6 +752,7 @@ export function SSTSidebar({ activeSection, onSectionChange, modulosAtivos, load
                 <PanelLeftClose className="h-4 w-4" />
               </Button>
             </div>
+            <ThemeToggle />
             <Button variant="outline" className="w-full" onClick={handleSignOut}>
               <LogOut className="h-4 w-4 mr-2" />
               Sair
@@ -760,8 +762,8 @@ export function SSTSidebar({ activeSection, onSectionChange, modulosAtivos, load
         {/* Controles quando recolhido - ícones empilhados e centralizados */}
         {isCollapsed && (
           <div className="flex flex-col items-center gap-2">
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               size="icon"
               onClick={toggleSidebar}
               className="h-8 w-8"
@@ -769,8 +771,9 @@ export function SSTSidebar({ activeSection, onSectionChange, modulosAtivos, load
             >
               <PanelLeft className="h-4 w-4" />
             </Button>
-            <Button 
-              variant="ghost" 
+            <ThemeToggle iconOnly />
+            <Button
+              variant="ghost"
               size="icon"
               onClick={handleSignOut}
               className="h-8 w-8"

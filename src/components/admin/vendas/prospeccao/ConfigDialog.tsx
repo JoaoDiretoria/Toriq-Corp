@@ -168,19 +168,19 @@ export function ConfigDialog({ open, onOpenChange, onSaved }: ConfigDialogProps)
               </Label>
 
               {tokenSet && (
-                <div className="flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2">
-                  <span className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <CheckCircle2 className="h-4 w-4 text-green-600" />
-                    Token configurado
+                <div className="flex items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 py-2">
+                  <span className="flex min-w-0 flex-1 items-center gap-2 text-sm text-muted-foreground">
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
+                    <span className="shrink-0">Token configurado</span>
                     {tokenMasked && (
-                      <code className="text-xs font-mono text-foreground">{tokenMasked}</code>
+                      <code className="min-w-0 truncate text-xs font-mono text-foreground">{tokenMasked}</code>
                     )}
                   </span>
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="h-7 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                    className="h-7 shrink-0 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
                     onClick={handleClearToken}
                     disabled={saving}
                   >

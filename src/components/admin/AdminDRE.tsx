@@ -539,15 +539,15 @@ export function AdminDRE() {
       {/* Tabs de Visualização */}
       <Tabs defaultValue="tabela" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="tabela" className="flex items-center gap-2 text-white data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm">
+          <TabsTrigger value="tabela" className="flex items-center gap-2 text-muted-foreground data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm">
             <FileBarChart className="h-4 w-4" />
             Tabela DRE
           </TabsTrigger>
-          <TabsTrigger value="graficos" className="flex items-center gap-2 text-white data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm">
+          <TabsTrigger value="graficos" className="flex items-center gap-2 text-muted-foreground data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm">
             <LineChart className="h-4 w-4" />
             Gráficos
           </TabsTrigger>
-          <TabsTrigger value="analise" className="flex items-center gap-2 text-white data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm">
+          <TabsTrigger value="analise" className="flex items-center gap-2 text-muted-foreground data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm">
             <PieChart className="h-4 w-4" />
             Análise
           </TabsTrigger>

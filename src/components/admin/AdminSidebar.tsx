@@ -13,6 +13,7 @@ import {
   SidebarFooter,
 } from '@/components/ui/sidebar';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ThemeToggle } from '@/components/shared/ThemeToggle';
 import {
   Building2,
   Users,
@@ -267,6 +268,7 @@ export function AdminSidebar({ activeSection, onSectionChange }: AdminSidebarPro
           <Headphones className="mr-2 h-4 w-4" />
           Suporte / Ops
         </Button>
+        <ThemeToggle />
         <Button
           variant="ghost"
           className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10"

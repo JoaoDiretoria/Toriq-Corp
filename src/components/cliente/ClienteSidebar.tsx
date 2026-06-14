@@ -16,6 +16,7 @@ import {
   SidebarFooter,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/shared/ThemeToggle';
 import type { ClienteSection } from '@/pages/ClienteDashboard';
 
 interface ClienteSidebarProps {
@@ -91,7 +92,8 @@ export function ClienteSidebar({ activeSection, onSectionChange }: ClienteSideba
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="border-t border-border p-4">
+      <SidebarFooter className="border-t border-border p-4 space-y-1">
+        <ThemeToggle />
         <Button variant="outline" className="w-full" onClick={handleSignOut}>
           <LogOut className="h-4 w-4 mr-2" />
           Sair

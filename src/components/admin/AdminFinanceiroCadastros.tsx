@@ -1553,49 +1553,49 @@ export function AdminFinanceiroCadastros() {
           <TabsList className="inline-flex h-12 items-center justify-start gap-1 rounded-lg bg-muted p-1 min-w-max">
             <TabsTrigger 
               value="plano-receitas" 
-              className="flex items-center gap-2 px-4 py-2.5 rounded-md whitespace-nowrap text-white data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-md whitespace-nowrap text-muted-foreground data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border"
             >
               <TrendingUp className="h-4 w-4" />
               <span>Plano de Receitas</span>
             </TabsTrigger>
             <TabsTrigger 
               value="plano-despesas" 
-              className="flex items-center gap-2 px-4 py-2.5 rounded-md whitespace-nowrap text-white data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-md whitespace-nowrap text-muted-foreground data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border"
             >
               <Receipt className="h-4 w-4" />
               <span>Plano de Despesas</span>
             </TabsTrigger>
             <TabsTrigger 
               value="centros-custo" 
-              className="flex items-center gap-2 px-4 py-2.5 rounded-md whitespace-nowrap text-white data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-md whitespace-nowrap text-muted-foreground data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border"
             >
               <Tags className="h-4 w-4" />
               <span>Centros de Custo</span>
             </TabsTrigger>
             <TabsTrigger 
               value="formas-pagamento" 
-              className="flex items-center gap-2 px-4 py-2.5 rounded-md whitespace-nowrap text-white data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-md whitespace-nowrap text-muted-foreground data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border"
             >
               <CreditCard className="h-4 w-4" />
               <span>Formas de Pagamento</span>
             </TabsTrigger>
             <TabsTrigger 
               value="condicoes-pagamento" 
-              className="flex items-center gap-2 px-4 py-2.5 rounded-md whitespace-nowrap text-white data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-md whitespace-nowrap text-muted-foreground data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border"
             >
               <FileText className="h-4 w-4" />
               <span>Condições de Pagamento</span>
             </TabsTrigger>
             <TabsTrigger 
               value="contas-bancarias" 
-              className="flex items-center gap-2 px-4 py-2.5 rounded-md whitespace-nowrap text-white data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-md whitespace-nowrap text-muted-foreground data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border"
             >
               <Landmark className="h-4 w-4" />
               <span>Contas Bancárias</span>
             </TabsTrigger>
             <TabsTrigger 
               value="fornecedores" 
-              className="flex items-center gap-2 px-4 py-2.5 rounded-md whitespace-nowrap text-white data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-md whitespace-nowrap text-muted-foreground data-[state=active]:text-foreground data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border"
             >
               <Building2 className="h-4 w-4" />
               <span>Fornecedores</span>

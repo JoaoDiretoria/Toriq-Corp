@@ -119,8 +119,8 @@ export function NotificationItem({ notificacao, onClick, onMarcarLida }: Notific
     <div
       onClick={handleClick}
       className={cn(
-        'group relative flex gap-3 p-4 cursor-pointer transition-colors duration-200 bg-white',
-        'hover:bg-gray-50 border-b border-gray-100'
+        'group relative flex gap-3 p-4 cursor-pointer transition-colors duration-200 bg-popover',
+        'hover:bg-muted border-b border-border'
       )}
     >
       {/* Ícone da categoria */}
@@ -133,7 +133,7 @@ export function NotificationItem({ notificacao, onClick, onMarcarLida }: Notific
         {/* Indicador de não lida */}
         {!notificacao.lida && (
           <span className={cn(
-            'absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-white',
+            'absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-popover',
             'bg-primary'
           )} />
         )}
@@ -145,7 +145,7 @@ export function NotificationItem({ notificacao, onClick, onMarcarLida }: Notific
         <div className="flex items-start justify-between gap-2">
           <p className={cn(
             'text-sm leading-tight',
-            !notificacao.lida ? 'font-semibold text-gray-900' : 'font-medium text-gray-700'
+            !notificacao.lida ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground'
           )}>
             {notificacao.titulo}
           </p>
@@ -166,7 +166,7 @@ export function NotificationItem({ notificacao, onClick, onMarcarLida }: Notific
         </div>
 
         {/* Mensagem */}
-        <p className="text-sm text-gray-600 line-clamp-2 leading-relaxed">
+        <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">
           {notificacao.mensagem}
         </p>
 
@@ -181,15 +181,15 @@ export function NotificationItem({ notificacao, onClick, onMarcarLida }: Notific
           </span>
           
           {/* Tempo */}
-          <span className="text-[10px] text-gray-500">
+          <span className="text-[10px] text-muted-foreground">
             {tempoRelativo}
           </span>
-          
+
           {/* Usuário */}
           {notificacao.usuario_nome && notificacao.usuario_nome !== 'Sistema' && (
             <>
-              <span className="text-[10px] text-gray-400">•</span>
-              <span className="text-[10px] text-gray-500 truncate max-w-[100px]">
+              <span className="text-[10px] text-muted-foreground/60">•</span>
+              <span className="text-[10px] text-muted-foreground truncate max-w-[100px]">
                 {notificacao.usuario_nome}
               </span>
             </>

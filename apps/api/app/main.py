@@ -6,7 +6,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.core.sentry import init_sentry
+
+# Inicializa o Sentry o quanto antes (antes de criar o app FastAPI) para que a
+# integração Starlette/FastAPI seja auto-habilitada. No-op sem SENTRY_DSN.
+init_sentry()
+
 from app.api.auth import router as auth_router
+from app.api.ops import router as ops_router
 from app.api.contas_pagar import (
     colunas_crud_router as cp_colunas_router,
     contas_crud_router as cp_contas_router,
@@ -234,6 +241,8 @@ def create_app() -> FastAPI:
     app.include_router(admin_users_router)
     app.include_router(change_password_router)
     app.include_router(storage_router)
+        # Ops internos — Sentry issues dashboard (admin_vertical)
+        app.include_router(ops_router)
     return app
 
 
