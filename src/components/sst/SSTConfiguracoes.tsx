@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
-import { api, ApiError } from '@/integrations/api/client';
+import { api, ApiError, API_URL } from '@/integrations/api/client';
 import { useAccessLog } from '@/hooks/useAccessLog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -2383,15 +2383,15 @@ export function SSTConfiguracoes({ initialSection }: SSTConfiguracoesProps) {
                         <span>
                           Crie um <strong>ID do cliente OAuth</strong> (tipo: Aplicativo da Web) e adicione este URI de redirecionamento:
                           <code className="block mt-1 bg-white border border-blue-200 px-2 py-1 rounded text-blue-900 break-all select-all">
-                            https://bsvtgdtsbrjdwdnpirzb.supabase.co/functions/v1/google-meet-callback
+                            {API_URL}/sistema/google-oauth/callback
                           </code>
+                          <span className="block mt-1 text-blue-600">
+                            Este valor deve ser idêntico à variável <code className="bg-white border border-blue-200 px-1 rounded">GOOGLE_REDIRECT_URI</code> configurada no backend.
+                          </span>
                         </span>
                       </li>
                       <li className="flex gap-2"><span className="font-bold shrink-0">5.</span><span>Clique em <strong>"Conectar Google"</strong> acima e autorize as permissões solicitadas</span></li>
                     </ol>
-                    <p className="text-blue-600 text-xs pt-2 border-t border-blue-200">
-                      Manual completo: <code className="bg-white border border-blue-200 px-1 rounded text-blue-900">doc/GOOGLE_MEET_CONFIGURACAO.md</code>
-                    </p>
                   </div>
                 )}
               </div>
