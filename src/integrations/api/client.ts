@@ -10,7 +10,7 @@
  * Tipos vêm de `schema.d.ts` (gerado do OpenAPI — `npm run gen:api`).
  */
 
-const API_URL: string = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+export const API_URL: string = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
 export class ApiError extends Error {
   readonly status: number;

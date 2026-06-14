@@ -23,6 +23,7 @@ from app.core.db import get_db
 from app.models import generated as m
 from app.models.user import User, UserRole
 from app.schemas import empresas as s
+from app.services.notificacoes import notificar
 
 router = APIRouter(prefix="/empresas", tags=["empresas"])
 
@@ -86,6 +87,28 @@ async def criar_empresa(
     db.add(obj)
     await db.commit()
     await db.refresh(obj)
+
+    # Notifica o tenant do criador (a empresa nova ainda não tem usuários).
+    if user.empresa_id is not None:
+        nome_empresa = (
+            getattr(obj, "nome", None)
+            or getattr(obj, "razao_social", None)
+            or getattr(obj, "nome_fantasia", None)
+            or "Nova empresa"
+        )
+        await notificar(
+            db,
+            empresa_id=user.empresa_id,
+            titulo="Nova empresa cadastrada",
+            mensagem=f"A empresa {nome_empresa} foi criada.",
+            tipo="success",
+            categoria="cadastro",
+            modulo="gestao_empresa",
+            tela="empresas",
+            referencia_tipo="empresa",
+            referencia_id=obj.id,
+            usuario_nome=getattr(user, "nome", None),
+        )
     return obj
 
 

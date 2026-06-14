@@ -324,6 +324,28 @@ async def mover_lead(
         empresa_id,
         {"tipo": "lead_movido", "lead_id": str(lead_id), "stage_id": str(stage_id)},
     )
+
+    # Notificação persistente (além do evento efêmero de UI acima).
+    try:
+        from app.services.notificacoes import notificar
+
+        await notificar(
+            db,
+            empresa_id=empresa_id,
+            titulo="Lead movido no funil",
+            mensagem=(
+                f"{getattr(lead, 'nome', None) or 'Um lead'} foi movido para "
+                f"{getattr(stage, 'nome', None) or 'outro estágio'}."
+            ),
+            tipo="info",
+            categoria="comercial",
+            modulo="toriq_vendas",
+            tela="vendas",
+            referencia_tipo="lead",
+            referencia_id=lead_id,
+        )
+    except Exception:  # pragma: no cover - notificação é best-effort
+        pass
     return lead
 
 

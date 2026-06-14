@@ -15,6 +15,7 @@ def build_scheduler() -> AsyncIOScheduler:
         job_contas_recorrentes,
         job_disparo_campanhas,
         job_sdr_followups,
+        job_vencimentos,
     )
 
     sched = AsyncIOScheduler(timezone="America/Sao_Paulo")
@@ -27,6 +28,11 @@ def build_scheduler() -> AsyncIOScheduler:
     sched.add_job(
         job_automacao_colunas, CronTrigger(hour=0, minute=5),
         id="automacao_colunas_diaria", replace_existing=True,
+    )
+    # Todo dia 08:00 — notifica contas a pagar/receber que vencem hoje.
+    sched.add_job(
+        job_vencimentos, CronTrigger(hour=8, minute=0),
+        id="notificacoes_vencimentos_diaria", replace_existing=True,
     )
     # A cada 1 min — executa automações de funil agendadas que venceram.
     sched.add_job(

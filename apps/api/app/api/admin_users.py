@@ -22,6 +22,7 @@ from app.core.db import get_db
 from app.core.security import hash_password, verify_password
 from app.models.generated import Profiles
 from app.models.user import User, UserRole
+from app.services.notificacoes import notificar
 from app.schemas.admin_users import (
     AdminResetPasswordIn,
     AdminUserCreatedOut,
@@ -168,6 +169,21 @@ async def create_user(
     await db.commit()
     await db.refresh(user)
     await db.refresh(profile)
+
+    # Notifica o tenant de destino sobre o novo usuário.
+    await notificar(
+        db,
+        empresa_id=empresa_id,
+        titulo="Novo usuário",
+        mensagem=f"{user.nome or user.email} foi adicionado à equipe.",
+        tipo="success",
+        categoria="cadastro",
+        modulo="gestao_empresa",
+        tela="usuarios",
+        referencia_tipo="usuario",
+        referencia_id=user.id,
+        usuario_nome=getattr(actor, "nome", None),
+    )
 
     # Email de convite com link "Definir Minha Senha" (best-effort — não quebra
     # a criação se o Resend não estiver configurado/falhar).
