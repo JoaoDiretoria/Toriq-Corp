@@ -17,8 +17,13 @@ logger = logging.getLogger("toriq.sentry")
 
 
 def get_sentry_dsn() -> str | None:
-    """Retorna o DSN normalizado ou ``None`` quando ausente/vazio."""
-    dsn = (settings.sentry_dsn or "").strip()
+    """Retorna o DSN normalizado ou ``None`` quando ausente/vazio.
+
+    Alguns PaaS gravam o valor da env com aspas literais em volta (ex.:
+    ``"https://..."``); removê-las evita um DSN "inválido" por um caractere a mais.
+    Espaços nas duas pontas também são aparados.
+    """
+    dsn = (settings.sentry_dsn or "").strip().strip("\"'").strip()
     return dsn or None
 
 
@@ -39,17 +44,21 @@ def has_valid_sentry_dsn() -> bool:
 def init_sentry() -> None:
     dsn = get_sentry_dsn()
     if not dsn:
+        logger.info("Sentry desativado: SENTRY_DSN ausente.")
         return
     if not has_valid_sentry_dsn():
         # DSN presente porém malformado (ex.: projeto vazio em "Invalid project in
         # DSN ('')"). Evita chamar sentry_sdk.init — que lançaria a cada boot de worker
-        # — e desativa o Sentry de forma limpa, avisando uma única vez.
+        # — e desativa o Sentry de forma limpa, com uma mensagem acionável.
         logger.warning(
-            "SENTRY_DSN presente mas inválido; Sentry desativado. Confira o valor no ambiente."
+            "Sentry desativado: SENTRY_DSN inválido. O DSN precisa estar COMPLETO, no "
+            "formato https://<key>@<host>/<project_id> — o id do projeto (número no "
+            "final) não pode faltar."
         )
         return
     try:
         import sentry_sdk
+        from sentry_sdk.utils import Dsn
 
         sentry_sdk.init(
             dsn=dsn,
@@ -59,6 +68,13 @@ def init_sentry() -> None:
             # headers de auth, etc. até decisão explícita.
             send_default_pii=False,
         )
-        logger.info("Sentry inicializado (environment=%s).", settings.sentry_environment)
+        # Confirmação clara no boot — sem vazar a key, só host/projeto/ambiente.
+        parsed = Dsn(dsn)
+        logger.info(
+            "Sentry ATIVO (host=%s, project=%s, environment=%s).",
+            parsed.host,
+            parsed.project_id,
+            settings.sentry_environment,
+        )
     except Exception as exc:  # pragma: no cover - nunca derruba o boot por causa do Sentry
         logger.warning("Falha ao inicializar Sentry (%s); seguindo sem.", exc)
