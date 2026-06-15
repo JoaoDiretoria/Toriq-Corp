@@ -29,11 +29,28 @@ logger = logging.getLogger("toriq.queue")
 
 try:
     import redis.asyncio as aioredis
+    from redis.exceptions import (
+        ConnectionError as RedisConnectionError,
+        TimeoutError as RedisTimeoutError,
+    )
 except Exception:  # pragma: no cover
     aioredis = None  # type: ignore[assignment]
 
+    class RedisConnectionError(Exception):  # type: ignore[no-redef]
+        ...
+
+    class RedisTimeoutError(Exception):  # type: ignore[no-redef]
+        ...
+
 Handler = Callable[[dict], Awaitable[None]]
 _handlers: dict[str, Handler] = {}
+
+# Poll da fila: LPOP rápido + sleep, em vez de BLPOP bloqueante. Um BLPOP que
+# bloqueia mais que o ``socket_timeout`` da conexão estoura "Timeout reading
+# from ..." a cada ciclo ocioso. O LPOP é uma ida-e-volta curta e não conflita
+# com esse timeout.
+_POLL_INTERVAL_SECONDS = 1.0
+_REDIS_BACKOFF_SECONDS = 5.0
 
 
 def register(nome: str) -> Callable[[Handler], Handler]:
@@ -105,23 +122,44 @@ class _Queue:
             logger.exception("Handler da tarefa %s falhou.", nome)
 
     async def start_consumer(self) -> None:
-        """Loop do consumidor (rodar como asyncio task). No-op sem Redis."""
+        """Loop do consumidor (rodar como asyncio task). No-op sem Redis.
+
+        Usa LPOP com poll curto em vez de BLPOP bloqueante: um BLPOP que bloqueia
+        mais que o ``socket_timeout`` da conexão lança "Timeout reading from ..." a
+        cada ciclo ocioso, poluindo o log. LPOP é uma ida-e-volta rápida (não
+        conflita com o socket_timeout) e mantém a ordem FIFO (RPUSH na cauda,
+        LPOP na cabeça).
+        """
         client = self._get_client()
         if client is None:
             logger.info("Fila sem Redis: consumidor não inicia (modo inline).")
             return
-        logger.info("Consumidor da fila iniciado (Redis).")
+        logger.info(
+            "Consumidor da fila iniciado (Redis, poll=%ss).", _POLL_INTERVAL_SECONDS
+        )
         self._stop = False
+        falhas_redis = 0
         while not self._stop:
             try:
-                item = await client.blpop([self._list_key], timeout=5)
-                if item is None:
+                raw = await client.lpop(self._list_key)
+                falhas_redis = 0
+                if raw is None:
+                    await asyncio.sleep(_POLL_INTERVAL_SECONDS)
                     continue
-                _, raw = item
                 msg = json.loads(raw)
                 await self._dispatch(msg.get("task", ""), msg.get("payload") or {})
             except asyncio.CancelledError:  # pragma: no cover
                 break
+            except (RedisConnectionError, RedisTimeoutError) as exc:
+                # Redis indisponível/lento: backoff e log parcimonioso (1ª falha e
+                # depois a cada ~30 ciclos) — não inunda o log nem esconde uma
+                # queda real do Redis.
+                falhas_redis += 1
+                if falhas_redis == 1 or falhas_redis % 30 == 0:
+                    logger.warning(
+                        "Fila: Redis indisponível (%s); tentando de novo.", exc
+                    )
+                await asyncio.sleep(_REDIS_BACKOFF_SECONDS)
             except Exception as exc:
                 logger.warning("Erro no loop da fila (%s); continuando.", exc)
                 await asyncio.sleep(1)
