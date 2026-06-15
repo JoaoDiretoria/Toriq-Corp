@@ -226,7 +226,7 @@ const Auth = () => {
         <div className="mb-8 text-center">
           <div className="flex justify-center">
             <img
-              src="/IDTORIQCOMPLETA/LOGO%20PNG/PRETA-HORIZONTAL.png"
+              src="/IDTORIQCOMPLETA/LOGO%20PNG/PRETA-HORIZONTAL-TIGHT.png"
               alt="TORIQ"
               className="h-28 w-auto dark:brightness-0 dark:invert"
             />

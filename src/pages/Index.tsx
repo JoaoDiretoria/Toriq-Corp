@@ -91,7 +91,7 @@ const Index = () => {
           <div className="flex items-center gap-3">
             <div className="-my-2 h-16 w-auto overflow-hidden rounded-md">
               <img
-                src="/IDTORIQCOMPLETA/LOGO%20PNG/PRETA-HORIZONTAL.png"
+                src="/IDTORIQCOMPLETA/LOGO%20PNG/PRETA-HORIZONTAL-TIGHT.png"
                 alt="TORIQ"
                 className="h-full w-auto object-contain"
               />

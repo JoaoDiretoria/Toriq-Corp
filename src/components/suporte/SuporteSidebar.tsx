@@ -5,8 +5,9 @@ import {
 } from '@/components/ui/sidebar';
 import {
   Activity, Database, Server, Headphones, Users, Bug, ScrollText,
-  LogOut, type LucideIcon,
+  LogOut, LayoutDashboard, type LucideIcon,
 } from 'lucide-react';
+import { ThemeToggle } from '@/components/shared/ThemeToggle';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -46,9 +47,9 @@ export function SuporteSidebar({ activeSection, onSectionChange }: Props) {
     <Sidebar className="border-r border-sidebar-border bg-sidebar">
       <SidebarHeader className="border-b border-sidebar-border p-4">
         <img
-          src="/IDTORIQCOMPLETA/LOGO%20PNG/PRETA-HORIZONTAL.png"
+          src="/IDTORIQCOMPLETA/LOGO%20PNG/PRETA-HORIZONTAL-TIGHT.png"
           alt="TORIQ"
-          className="h-9 w-auto shrink-0"
+          className="h-9 w-auto shrink-0 dark:brightness-0 dark:invert"
         />
         <span className="mt-2 text-xs font-medium text-muted-foreground">Suporte · Ops</span>
       </SidebarHeader>
@@ -72,7 +73,18 @@ export function SuporteSidebar({ activeSection, onSectionChange }: Props) {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="border-t border-sidebar-border p-4">
+      <SidebarFooter className="border-t border-sidebar-border p-4 space-y-1">
+        {/* Volta para o app comum. /dashboard é dispatcher por role: suporte cai
+            no portal de módulos, admin_vertical é roteado para /admin. */}
+        <Button
+          variant="ghost"
+          className="w-full justify-start"
+          onClick={() => navigate('/dashboard')}
+        >
+          <LayoutDashboard className="mr-2 h-4 w-4" />
+          Voltar ao app
+        </Button>
+        <ThemeToggle />
         <Button
           variant="ghost"
           className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10"

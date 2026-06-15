@@ -203,9 +203,9 @@ export function AdminSidebar({ activeSection, onSectionChange }: AdminSidebarPro
       <SidebarHeader className="border-b border-sidebar-border p-4">
         <div className="flex items-center justify-between gap-2">
           <img
-            src="/IDTORIQCOMPLETA/LOGO%20PNG/PRETA-HORIZONTAL.png"
+            src="/IDTORIQCOMPLETA/LOGO%20PNG/PRETA-HORIZONTAL-TIGHT.png"
             alt="TORIQ"
-            className="h-9 w-auto shrink-0"
+            className="h-9 w-auto shrink-0 dark:brightness-0 dark:invert"
           />
           <NotificationPopover
             onNotificacaoClick={(notificacao) => {
