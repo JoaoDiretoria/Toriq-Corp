@@ -40,6 +40,14 @@ def init_sentry() -> None:
     dsn = get_sentry_dsn()
     if not dsn:
         return
+    if not has_valid_sentry_dsn():
+        # DSN presente porém malformado (ex.: projeto vazio em "Invalid project in
+        # DSN ('')"). Evita chamar sentry_sdk.init — que lançaria a cada boot de worker
+        # — e desativa o Sentry de forma limpa, avisando uma única vez.
+        logger.warning(
+            "SENTRY_DSN presente mas inválido; Sentry desativado. Confira o valor no ambiente."
+        )
+        return
     try:
         import sentry_sdk
 

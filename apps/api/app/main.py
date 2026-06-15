@@ -100,7 +100,10 @@ from app.jobs.scheduler import build_scheduler
 @asynccontextmanager
 async def lifespan(app):
     # Registra os handlers de fila (import tardio evita ciclos).
-    import app.jobs.queue_handlers  # noqa: F401
+    # IMPORTANTE: usar `from app.jobs import ...` e NÃO `import app.jobs.queue_handlers`.
+    # A forma `import app.x.y` religa o nome local `app` ao PACOTE `app`, sobrescrevendo
+    # o parâmetro `app` (instância FastAPI) e quebrando `app.state` abaixo.
+    from app.jobs import queue_handlers  # noqa: F401
 
     scheduler = build_scheduler()
     scheduler.start()
