@@ -1,3 +1,10 @@
+# Configura o loguru ANTES de qualquer import que possa logar (models, sentry).
+# Como o uvicorn já configurou o logging no Config.__init__ (antes de importar
+# este módulo), esta chamada roda depois e tem a palavra final.
+from app.core.logging import setup_logging
+
+setup_logging()
+
 import app.models  # noqa: F401  (registers all models in Base.metadata)
 import asyncio
 from contextlib import asynccontextmanager

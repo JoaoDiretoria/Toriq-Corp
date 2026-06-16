@@ -83,6 +83,19 @@ class Settings(BaseSettings):
     cache_ttl_seconds: int = 60
     cache_prefix: str = "toriq"
 
+    # Logging (loguru) — saída única, legível e colorida no stdout. Ver
+    # app.core.logging.setup_logging(). Todos os defaults são seguros para prod.
+    log_level: str = "INFO"
+    # True → linhas JSON (para agregadores: Loki, Datadog...). False → bonito/colorido.
+    log_json: bool = False
+    # Força cor mesmo sem TTY (containers do EasyPanel/Railway renderizam ANSI).
+    # Defina LOG_COLORIZE=false se a sua saída for um arquivo cru (evita lixo ANSI).
+    log_colorize: bool = True
+    # Stack completa em exceções. log_diagnose mostra os VALORES das variáveis no
+    # traceback — ótimo p/ debugar, mas pode vazar dados (LGPD), então off por padrão.
+    log_backtrace: bool = True
+    log_diagnose: bool = False
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

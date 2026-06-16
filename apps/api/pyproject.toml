@@ -25,6 +25,7 @@ dependencies = [
     "reportlab>=4.5.1",
     "signxml>=4.5.1",
     "sentry-sdk[fastapi]>=2.62.0",
+    "loguru>=0.7.3",
 ]
 
 [dependency-groups]

@@ -58,6 +58,8 @@ def init_sentry() -> None:
         return
     try:
         import sentry_sdk
+        from sentry_sdk.integrations.logging import LoggingIntegration
+        from sentry_sdk.integrations.loguru import LoguruIntegration
         from sentry_sdk.utils import Dsn
 
         sentry_sdk.init(
@@ -67,6 +69,11 @@ def init_sentry() -> None:
             # Não enviar dados pessoais por padrão (LGPD): sem corpo de request,
             # headers de auth, etc. até decisão explícita.
             send_default_pii=False,
+            # Todo log já flui pelo loguru (via app.core.logging.InterceptHandler):
+            # o Sentry escuta o loguru (ERROR vira evento, INFO+ vira breadcrumb) e
+            # DESLIGAMOS a integração de stdlib — senão o mesmo erro vira 2 eventos.
+            integrations=[LoguruIntegration()],
+            disabled_integrations=[LoggingIntegration()],
         )
         # Confirmação clara no boot — sem vazar a key, só host/projeto/ambiente.
         parsed = Dsn(dsn)
