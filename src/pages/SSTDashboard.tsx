@@ -42,6 +42,15 @@ import { SSTContasPagar } from '@/components/sst/toriq-corp/SSTContasPagar';
 import { SSTFluxoCaixa } from '@/components/sst/toriq-corp/SSTFluxoCaixa';
 import { api } from '@/integrations/api/client';
 import { Agenda } from '@/components/shared/Agenda';
+// Toriq Vendas — componentes reaproveitados do dashboard admin (APIs já tenant-scoped)
+import { Prospeccao } from '@/components/admin/vendas/prospeccao/Prospeccao';
+import { LeadsCaptados } from '@/components/admin/vendas/LeadsCaptados';
+import { PipelineCRM } from '@/components/admin/vendas/pipeline/PipelineCRM';
+import { Disparo } from '@/components/admin/vendas/disparo/Disparo';
+import { SdrInteligente } from '@/components/admin/vendas/sdr/SdrInteligente';
+import { Segmentacao } from '@/components/admin/vendas/Segmentacao';
+import { TagsManager } from '@/components/admin/vendas/TagsManager';
+import { PainelUso } from '@/components/admin/vendas/uso/PainelUso';
 
 interface Modulo {
   id: string;
@@ -76,6 +85,15 @@ const SECAO_PARA_MODULO: Record<string, string> = {
   'toriq-corp-controle-frota': 'toriq_corp',
   'toriq-corp-controle-equipamentos': 'toriq_corp',
   'toriq-corp-configuracoes': 'toriq_corp',
+  // Toriq Vendas
+  'vendas-prospeccao': 'toriq_vendas',
+  'vendas-leads': 'toriq_vendas',
+  'vendas-pipeline': 'toriq_vendas',
+  'vendas-disparo': 'toriq_vendas',
+  'vendas-sdr': 'toriq_vendas',
+  'vendas-segmentacao': 'toriq_vendas',
+  'vendas-tags': 'toriq_vendas',
+  'vendas-uso': 'toriq_vendas',
 };
 
 const SSTDashboard = () => {
@@ -478,6 +496,32 @@ const SSTDashboard = () => {
           onCardOpened={() => setPendingCardId(null)}
         />
       );
+    }
+
+    // ========== TORIQ VENDAS ==========
+    if (activeSection === 'vendas-prospeccao') {
+      return <Prospeccao />;
+    }
+    if (activeSection === 'vendas-leads') {
+      return <LeadsCaptados />;
+    }
+    if (activeSection === 'vendas-pipeline') {
+      return <PipelineCRM />;
+    }
+    if (activeSection === 'vendas-disparo') {
+      return <Disparo />;
+    }
+    if (activeSection === 'vendas-sdr') {
+      return <SdrInteligente />;
+    }
+    if (activeSection === 'vendas-segmentacao') {
+      return <Segmentacao />;
+    }
+    if (activeSection === 'vendas-tags') {
+      return <TagsManager />;
+    }
+    if (activeSection === 'vendas-uso') {
+      return <PainelUso />;
     }
 
     // Verificar se é um módulo ativo

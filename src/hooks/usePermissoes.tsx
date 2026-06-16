@@ -48,6 +48,16 @@ const SECAO_PARA_PERMISSAO: Record<string, { modulo_id: string; pagina_id: strin
   'toriq-corp-controle-equipamentos': { modulo_id: 'toriq_corp', pagina_id: 'toriq_corp_controle_equipamentos' },
   'toriq-corp-configuracoes': { modulo_id: 'toriq_corp', pagina_id: 'toriq_corp_configuracoes' },
 
+  // Toriq Vendas
+  'vendas-prospeccao': { modulo_id: 'toriq_vendas', pagina_id: 'vendas_prospeccao' },
+  'vendas-leads': { modulo_id: 'toriq_vendas', pagina_id: 'vendas_leads' },
+  'vendas-pipeline': { modulo_id: 'toriq_vendas', pagina_id: 'vendas_pipeline' },
+  'vendas-disparo': { modulo_id: 'toriq_vendas', pagina_id: 'vendas_disparo' },
+  'vendas-sdr': { modulo_id: 'toriq_vendas', pagina_id: 'vendas_sdr' },
+  'vendas-segmentacao': { modulo_id: 'toriq_vendas', pagina_id: 'vendas_segmentacao' },
+  'vendas-tags': { modulo_id: 'toriq_vendas', pagina_id: 'vendas_tags' },
+  'vendas-uso': { modulo_id: 'toriq_vendas', pagina_id: 'vendas_uso' },
+
 };
 
 // Mapeamento de módulos para suas seções
@@ -55,8 +65,12 @@ const MODULO_SECOES: Record<string, string[]> = {
   'perfil_empresa': ['meu-perfil', 'usuarios', 'clientes', 'informacoes-empresa', 'configuracoes'],
   'toriq_corp': [
     'toriq-corp-tarefas', 'toriq-corp-comercial', 'toriq-corp-contratos', 'toriq-corp-setores',
-    'toriq-corp-administrativo', 'toriq-corp-financeiro', 'toriq-corp-tecnico', 'toriq-corp-marketing', 
+    'toriq-corp-administrativo', 'toriq-corp-financeiro', 'toriq-corp-tecnico', 'toriq-corp-marketing',
     'toriq-corp-controle-frota', 'toriq-corp-controle-equipamentos', 'toriq-corp-configuracoes'
+  ],
+  'toriq_vendas': [
+    'vendas-prospeccao', 'vendas-leads', 'vendas-pipeline', 'vendas-disparo',
+    'vendas-sdr', 'vendas-segmentacao', 'vendas-tags', 'vendas-uso'
   ],
 };
 

@@ -27,6 +27,7 @@ export interface ModuloConfig {
 // Mapeamento de nomes de módulos do banco para IDs usados no código
 export const MODULO_NOME_PARA_CODIGO: Record<string, string> = {
   'Toriq Corp': 'toriq_corp',
+  'Toriq Vendas': 'toriq_vendas',
 };
 
 // Configuração completa de módulos e suas telas
@@ -71,6 +72,21 @@ export const MODULOS_CONFIG: ModuloConfig[] = [
       { id: 'toriq-corp-controle-frota', nome: 'Controle da Frota', icone: 'Car' },
       { id: 'toriq-corp-controle-equipamentos', nome: 'Controle de Equipamentos', icone: 'HardHat' },
       { id: 'toriq-corp-configuracoes', nome: 'Configurações Corp', icone: 'Settings' },
+    ]
+  },
+  {
+    id: 'toriq_vendas',
+    nome: 'Toriq Vendas',
+    icone: 'Megaphone',
+    telas: [
+      { id: 'vendas-prospeccao', nome: 'Prospecção', icone: 'Megaphone' },
+      { id: 'vendas-leads', nome: 'Leads Captados', icone: 'Users' },
+      { id: 'vendas-pipeline', nome: 'Pipeline & Conversas', icone: 'Grid3X3' },
+      { id: 'vendas-disparo', nome: 'Disparo em Massa', icone: 'Megaphone' },
+      { id: 'vendas-sdr', nome: 'SDR Inteligente', icone: 'CheckSquare' },
+      { id: 'vendas-segmentacao', nome: 'Segmentação', icone: 'ListChecks' },
+      { id: 'vendas-tags', nome: 'Tags', icone: 'FileText' },
+      { id: 'vendas-uso', nome: 'Uso & Contratação', icone: 'TrendingUp' },
     ]
   },
 ];

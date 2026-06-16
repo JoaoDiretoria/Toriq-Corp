@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, LogOut, Package, Shield, Heart, GraduationCap, Building2, FileText, Building, ChevronDown, Settings, User, Building as BuildingIcon, UsersRound, ClipboardList, Briefcase, TrendingUp, DollarSign, GitBranch, CheckSquare, FileSignature, HardHat, FolderPlus, Receipt, Wallet, Car, Headphones, LayoutDashboard, PanelLeftClose, PanelLeft, Search, CalendarDays } from 'lucide-react';
+import { Users, LogOut, Package, Shield, Heart, GraduationCap, Building2, FileText, Building, ChevronDown, Settings, User, Building as BuildingIcon, UsersRound, ClipboardList, Briefcase, TrendingUp, DollarSign, GitBranch, CheckSquare, FileSignature, HardHat, FolderPlus, Receipt, Wallet, Car, Headphones, LayoutDashboard, PanelLeftClose, PanelLeft, Search, CalendarDays, Megaphone, Radar, Send, Bot, Layers, Tags, KanbanSquare, BarChart3 } from 'lucide-react';
 import { NotificationPopover } from '@/components/shared/notifications';
 import { QuickSearch, useQuickSearch, TelaItem } from '@/components/shared/QuickSearch';
 import { useNavigate } from 'react-router-dom';
@@ -261,6 +261,18 @@ export function SSTSidebar({ activeSection, onSectionChange, modulosAtivos, load
       }
     }
     
+    // Toriq Vendas
+    if (moduloVisivelEContratado('toriq_vendas')) {
+      if (telaVisivel('vendas-prospeccao')) telas.push({ id: 'vendas-prospeccao', nome: 'Prospecção', icone: 'Radar', categoria: 'Toriq Vendas' });
+      if (telaVisivel('vendas-leads')) telas.push({ id: 'vendas-leads', nome: 'Leads Captados', icone: 'Users', categoria: 'Toriq Vendas' });
+      if (telaVisivel('vendas-pipeline')) telas.push({ id: 'vendas-pipeline', nome: 'Pipeline & Conversas', icone: 'KanbanSquare', categoria: 'Toriq Vendas' });
+      if (telaVisivel('vendas-disparo')) telas.push({ id: 'vendas-disparo', nome: 'Disparo em Massa', icone: 'Send', categoria: 'Toriq Vendas' });
+      if (telaVisivel('vendas-sdr')) telas.push({ id: 'vendas-sdr', nome: 'SDR Inteligente', icone: 'Bot', categoria: 'Toriq Vendas' });
+      if (telaVisivel('vendas-segmentacao')) telas.push({ id: 'vendas-segmentacao', nome: 'Segmentação', icone: 'Layers', categoria: 'Toriq Vendas' });
+      if (telaVisivel('vendas-tags')) telas.push({ id: 'vendas-tags', nome: 'Tags', icone: 'Tags', categoria: 'Toriq Vendas' });
+      if (telaVisivel('vendas-uso')) telas.push({ id: 'vendas-uso', nome: 'Uso & Contratação', icone: 'BarChart3', categoria: 'Toriq Vendas' });
+    }
+
     // Configurações - só mostra se o usuário tem acesso à tela de configurações
     if (telaVisivel('configuracoes')) {
       telas.push({ id: 'configuracoes', nome: 'Configurações', icone: 'Settings', categoria: 'Sistema', descricao: 'Todas as configurações' });
@@ -723,6 +735,92 @@ export function SSTSidebar({ activeSection, onSectionChange, modulosAtivos, load
                             >
                               <Settings className="h-4 w-4" />
                               <span>Configurações</span>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        )}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              )}
+
+              {/* ========== MÓDULO TORIQ VENDAS ========== */}
+              {moduloVisivelEContratado('toriq_vendas') && (
+                <Collapsible defaultOpen className="group/collapsible-vendas">
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton
+                        className="cursor-pointer"
+                        onClick={() => onSectionChange('vendas-pipeline')}
+                      >
+                        <Megaphone className="h-4 w-4" />
+                        <span>Toriq Vendas</span>
+                        <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]/collapsible-vendas:rotate-180" />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        {telaVisivel('vendas-prospeccao') && (
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton onClick={() => onSectionChange('vendas-prospeccao')} isActive={activeSection === 'vendas-prospeccao'} className="cursor-pointer">
+                              <Radar className="h-4 w-4" />
+                              <span>Prospecção</span>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        )}
+                        {telaVisivel('vendas-leads') && (
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton onClick={() => onSectionChange('vendas-leads')} isActive={activeSection === 'vendas-leads'} className="cursor-pointer">
+                              <Users className="h-4 w-4" />
+                              <span>Leads Captados</span>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        )}
+                        {telaVisivel('vendas-pipeline') && (
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton onClick={() => onSectionChange('vendas-pipeline')} isActive={activeSection === 'vendas-pipeline'} className="cursor-pointer">
+                              <KanbanSquare className="h-4 w-4" />
+                              <span>Pipeline & Conversas</span>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        )}
+                        {telaVisivel('vendas-disparo') && (
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton onClick={() => onSectionChange('vendas-disparo')} isActive={activeSection === 'vendas-disparo'} className="cursor-pointer">
+                              <Send className="h-4 w-4" />
+                              <span>Disparo em Massa</span>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        )}
+                        {telaVisivel('vendas-sdr') && (
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton onClick={() => onSectionChange('vendas-sdr')} isActive={activeSection === 'vendas-sdr'} className="cursor-pointer">
+                              <Bot className="h-4 w-4" />
+                              <span>SDR Inteligente</span>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        )}
+                        {telaVisivel('vendas-segmentacao') && (
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton onClick={() => onSectionChange('vendas-segmentacao')} isActive={activeSection === 'vendas-segmentacao'} className="cursor-pointer">
+                              <Layers className="h-4 w-4" />
+                              <span>Segmentação</span>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        )}
+                        {telaVisivel('vendas-tags') && (
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton onClick={() => onSectionChange('vendas-tags')} isActive={activeSection === 'vendas-tags'} className="cursor-pointer">
+                              <Tags className="h-4 w-4" />
+                              <span>Tags</span>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        )}
+                        {telaVisivel('vendas-uso') && (
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton onClick={() => onSectionChange('vendas-uso')} isActive={activeSection === 'vendas-uso'} className="cursor-pointer">
+                              <BarChart3 className="h-4 w-4" />
+                              <span>Uso & Contratação</span>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
                         )}
