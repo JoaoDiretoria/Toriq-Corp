@@ -46,6 +46,7 @@ from app.api.funil_card_extras import router as funil_card_extras_router
 from app.api.empresas import router as empresas_router
 from app.api.tipos_empresa import router as tipos_empresa_router
 from app.api.modulos import router as modulos_router
+from app.api.empresas_modulos_admin import router as empresas_modulos_admin_router
 from app.api.setor_permissoes import router as setor_permissoes_router
 from app.api.empresa_settings import router as empresa_settings_router
 from app.api.cadastros_empresa import router as cadastros_empresa_router
@@ -211,6 +212,9 @@ def create_app() -> FastAPI:
     app.include_router(empresas_router)
     app.include_router(tipos_empresa_router)
     app.include_router(modulos_router)
+    # Administração cross-tenant de módulos por empresa (super admin, guard
+    # admin_vertical): configura módulos/telas de QUALQUER empresa pelo path.
+    app.include_router(empresas_modulos_admin_router)
     app.include_router(setor_permissoes_router)
     app.include_router(empresa_settings_router)
     app.include_router(cadastros_empresa_router)

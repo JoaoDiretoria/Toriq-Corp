@@ -221,12 +221,10 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
     }
   };
 
-  // Carregar módulos ativos da empresa (usa o UUID do módulo como chave)
+  // Carregar módulos ativos da empresa-ALVO (cross-tenant, escopo pelo path do
+  // endpoint admin — não mais pelo token do admin logado).
   const fetchModulosAtivos = async () => {
-    // GET /white-label/empresa-modulos — escopo pelo token (empresa do usuário logado).
-    // NOTA (migração): admin_vertical vê apenas os módulos da sua própria empresa,
-    // não os da empresa visualizada (sem endpoint cross-tenant). Degrada para vazio.
-    const data = await api.get<any[]>('/white-label/empresa-modulos').catch(() => [] as any[]);
+    const data = await api.get<any[]>(`/empresas/${empresa.id}/modulos`).catch(() => [] as any[]);
     if (data) {
       const ativos: Record<string, boolean> = {};
       data.forEach((em: any) => {
@@ -237,10 +235,7 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
   };
 
   const fetchEmpresaModulosTelas = async () => {
-    // GET /white-label/empresa-modulos-telas — escopo pelo token (empresa do usuário logado).
-    // NOTA (migração): admin_vertical vê apenas as telas da sua própria empresa,
-    // não as da empresa visualizada (sem endpoint cross-tenant). Degrada para vazio.
-    const data = await (api.get<any[]>('/white-label/empresa-modulos-telas').catch(() => [] as any[]));
+    const data = await (api.get<any[]>(`/empresas/${empresa.id}/modulos-telas`).catch(() => [] as any[]));
     if (data) {
       setEmpresaModulosTelas(data);
     }
@@ -315,37 +310,16 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
     setSavingTelas(true);
 
     try {
-      // Deletar telas existentes deste módulo para esta empresa (loop client-side via Promise.all)
-      const telasDoModulo = empresaModulosTelas.filter(t => t.modulo_id === dbModulo.id);
-      await Promise.all(
-        telasDoModulo
-          .filter((t: any) => t.id)
-          .map((t: any) => api.del(`/white-label/empresa-modulos-telas/${t.id}`).catch(() => null))
-      );
+      // 1 PUT atômico — o servidor reconcilia o conjunto exato de telas ativas.
+      await api.put(`/empresas/${empresa.id}/modulos/${dbModulo.id}/telas`, {
+        tela_ids: telasSelecionadas,
+      });
 
-      // Se tem telas selecionadas, inserir e ativar o módulo
-      if (telasSelecionadas.length > 0) {
-        // Inserir telas selecionadas (loop client-side via Promise.all)
-        await Promise.all(
-          telasSelecionadas.map(telaId =>
-            api.post('/white-label/empresa-modulos-telas', {
-              modulo_id: dbModulo.id,
-              tela_id: telaId,
-              ativo: true
-            }).catch(() => null)
-          )
-        );
-
-        // Garantir que o módulo está ativo
-        if (!isModuloAtivo(dbModulo.id)) {
-          setModulosAtivosMap(prev => ({ ...prev, [dbModulo.id]: true }));
-        }
-      } else {
-        // Se não tem telas, desativar o módulo
-        setModulosAtivosMap(prev => ({ ...prev, [dbModulo.id]: false }));
+      // Selecionar telas implica módulo ativo (reflete no mapa local).
+      if (telasSelecionadas.length > 0 && !isModuloAtivo(dbModulo.id)) {
+        setModulosAtivosMap(prev => ({ ...prev, [dbModulo.id]: true }));
       }
 
-      // Recarregar dados
       await fetchEmpresaModulosTelas();
 
       toast.success('Permissões de telas atualizadas!');
@@ -384,74 +358,37 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
   const toggleModulo = async (moduloId: string) => {
     const novoEstado = !modulosAtivosMap[moduloId];
 
-    // Atualizar estado local imediatamente
+    // Atualizar estado local imediatamente (otimista)
     setModulosAtivosMap(prev => ({
       ...prev,
       [moduloId]: novoEstado
     }));
 
-    // Salvar no banco automaticamente
     try {
+      // Upsert do vínculo na empresa-ALVO (idempotente no backend).
+      await api.put(`/empresas/${empresa.id}/modulos/${moduloId}`, { ativo: novoEstado });
+
       if (novoEstado) {
-        // Ativar módulo — verificar se já existe um vínculo, então PUT, senão POST
-        const existentes = await api.get<any[]>('/white-label/empresa-modulos').catch(() => [] as any[]);
-        const existente = existentes.find((em: any) => em.modulo_id === moduloId);
-        if (existente && existente.id) {
-          await api.put(`/white-label/empresa-modulos/${existente.id}`, { ativo: true });
-        } else {
-          await api.post('/white-label/empresa-modulos', { modulo_id: moduloId, ativo: true });
-        }
-
-        // Buscar configuração do módulo para inserir todas as telas como ativas
+        // Ativar: liberar todas as telas do módulo (se houver config de telas).
         const dbModulo = modulosDoBanco.find(m => m.id === moduloId);
-        if (dbModulo) {
-          const configModulo = MODULOS_CONFIG.find(c => c.nome === dbModulo.nome);
-          if (configModulo) {
-            // Coletar todas as telas do módulo (incluindo subtelas)
-            const todasTelas: string[] = [];
-            configModulo.telas.forEach(tela => {
-              todasTelas.push(tela.id);
-              if (tela.subTelas) {
-                tela.subTelas.forEach(sub => todasTelas.push(sub.id));
-              }
-            });
-
-            // Inserir todas as telas como ativas (upsert via loop: ignorar erros de duplicata)
-            if (todasTelas.length > 0) {
-              await Promise.all(
-                todasTelas.map(telaId =>
-                  api.post('/white-label/empresa-modulos-telas', {
-                    modulo_id: moduloId,
-                    tela_id: telaId,
-                    ativo: true
-                  }).catch(() => null)
-                )
-              );
-            }
-          }
+        const configModulo = dbModulo
+          ? MODULOS_CONFIG.find(c => c.nome === dbModulo.nome)
+          : undefined;
+        const todasTelas: string[] = [];
+        configModulo?.telas.forEach(tela => {
+          todasTelas.push(tela.id);
+          tela.subTelas?.forEach(sub => todasTelas.push(sub.id));
+        });
+        if (todasTelas.length > 0) {
+          await api.put(`/empresas/${empresa.id}/modulos/${moduloId}/telas`, { tela_ids: todasTelas });
         }
-
-        toast.success('Módulo ativado com todas as telas!');
+        toast.success(todasTelas.length > 0 ? 'Módulo ativado com todas as telas!' : 'Módulo ativado!');
       } else {
-        // Desativar módulo — buscar registro e deletar
-        const existentes = await api.get<any[]>('/white-label/empresa-modulos').catch(() => [] as any[]);
-        const existente = existentes.find((em: any) => em.modulo_id === moduloId);
-        if (existente && existente.id) {
-          await api.del(`/white-label/empresa-modulos/${existente.id}`);
-        }
-
-        // Também desativar todas as telas deste módulo (loop client-side)
-        const telasDoModulo = empresaModulosTelas.filter((t: any) => t.modulo_id === moduloId);
-        await Promise.all(
-          telasDoModulo
-            .filter((t: any) => t.id)
-            .map((t: any) => api.del(`/white-label/empresa-modulos-telas/${t.id}`).catch(() => null))
-        );
-
+        // Desativar: limpar as telas do módulo (conjunto vazio).
+        await api.put(`/empresas/${empresa.id}/modulos/${moduloId}/telas`, { tela_ids: [] });
         toast.success('Módulo desativado!');
       }
 
-      // Recarregar telas da empresa
       await fetchEmpresaModulosTelas();
       onUpdate();
     } catch (error) {
@@ -738,14 +675,19 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
-                      {MODULOS_CONFIG.filter(m => m.id !== 'perfil_empresa').map((config) => {
-                        // Buscar módulo correspondente no banco de dados
-                        const dbModulo = getModuloDoBancoPorNome(config.nome);
-                        if (!dbModulo) return null; // Módulo não existe no banco
-
-                        const totalTelas = config.telas.reduce((acc, t) => acc + 1 + (t.subTelas?.length || 0), 0);
-                        const telasAtivas = contarTelasAtivas(dbModulo.id, config);
+                      {modulosDoBanco
+                        .filter((dbModulo) => dbModulo.nome !== 'Perfil da Empresa')
+                        .map((dbModulo) => {
+                        // Config de telas do front (pode não existir — ex. módulos
+                        // ainda sem telas mapeadas no client). A lista vem do
+                        // CATÁLOGO (banco), que é a fonte da verdade do que existe.
+                        const config = MODULOS_CONFIG.find(c => c.nome === dbModulo.nome);
+                        const totalTelas = config
+                          ? config.telas.reduce((acc, t) => acc + 1 + (t.subTelas?.length || 0), 0)
+                          : 0;
+                        const telasAtivas = config ? contarTelasAtivas(dbModulo.id, config) : 0;
                         const ativo = isModuloAtivo(dbModulo.id);
+                        const IconComponent = getIcon(config?.icone || dbModulo.icone || 'Package');
 
                         return (
                           <div
@@ -756,18 +698,17 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
                             <div className="flex items-center justify-between p-4">
                               <div className="flex items-center gap-3">
                                 <div className={`p-2.5 rounded-lg ${ativo ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                                  {(() => {
-                                    const IconComponent = getIcon(config.icone);
-                                    return <IconComponent className="h-5 w-5" />;
-                                  })()}
+                                  <IconComponent className="h-5 w-5" />
                                 </div>
                                 <div>
                                   <p className={`font-semibold ${ativo ? 'text-foreground' : 'text-muted-foreground'}`}>
-                                    {config.nome}
+                                    {dbModulo.nome}
                                   </p>
                                   <p className="text-xs text-muted-foreground">
                                     {ativo
-                                      ? (telasAtivas > 0 ? `${telasAtivas} de ${totalTelas} telas liberadas` : 'Todas as telas liberadas')
+                                      ? (config
+                                          ? (telasAtivas > 0 ? `${telasAtivas} de ${totalTelas} telas liberadas` : 'Todas as telas liberadas')
+                                          : 'Módulo ativo')
                                       : 'Módulo desativado - sem acesso'
                                     }
                                   </p>
@@ -796,8 +737,8 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
                               </div>
                             </div>
 
-                            {/* Área de configuração de telas - só aparece se ativo */}
-                            {ativo && (
+                            {/* Configuração de telas — só se ativo E houver telas mapeadas no front */}
+                            {ativo && config && (
                               <div className="px-4 pb-4 pt-0">
                                 <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border border-border/50">
                                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -824,7 +765,7 @@ export function EmpresaDetalhe({ empresa, onClose, onUpdate }: EmpresaDetalhePro
                           </div>
                         );
                       })}
-                      {MODULOS_CONFIG.filter(m => m.id !== 'perfil_empresa').length === 0 && (
+                      {modulosDoBanco.filter((dbModulo) => dbModulo.nome !== 'Perfil da Empresa').length === 0 && (
                         <p className="text-sm text-muted-foreground text-center py-8">
                           Nenhum módulo disponível
                         </p>

@@ -907,10 +907,10 @@ export function AdminEmpresas() {
     // Check if empresa has linked users via GET /admin/users?empresa_id={id}
     const profiles = await api.get<any[]>(`/admin/users?empresa_id=${empresaToDelete.id}`).catch(() => [] as any[]);
 
-    // NOTA (migração): verificação de módulos vinculados por empresa_id arbitrário
-    // não é possível via /white-label/empresa-modulos (escopo do token). Assume-se
-    // sem módulos vinculados para não bloquear o fluxo. Revisão necessária.
-    const empresasModulos: any[] = [];
+    // Módulos vinculados à empresa-ALVO (cross-tenant pelo path, guard admin_vertical).
+    const empresasModulos = await api
+      .get<any[]>(`/empresas/${empresaToDelete.id}/modulos`)
+      .catch(() => [] as any[]);
 
     if ((profiles && profiles.length > 0) || (empresasModulos && empresasModulos.length > 0)) {
       toast.error('Não é possível excluir: empresa possui usuários ou módulos vinculados');
@@ -973,12 +973,8 @@ export function AdminEmpresas() {
   // MODULES
   const openModulosDialog = async (empresa: Empresa) => {
     setSelectedEmpresa(empresa);
-    // NOTA (migração): GET /white-label/empresa-modulos é scoped ao token do
-    // usuário autenticado; não aceita empresa_id arbitrário. Para admin gerindo
-    // outra empresa, o endpoint retorna os módulos da empresa do admin, não da
-    // empresa alvo. Módulos exibidos podem não refletir o estado real da empresa
-    // selecionada. TODO: implementar GET /empresas/{id}/modulos no backend.
-    const data = await api.get<any[]>('/white-label/empresa-modulos').catch(() => [] as any[]);
+    // Cross-tenant: lê os módulos da empresa-ALVO pelo path (guard admin_vertical).
+    const data = await api.get<any[]>(`/empresas/${empresa.id}/modulos`).catch(() => [] as any[]);
     setEmpresaModulos((data || []).map((em: any) => ({ modulo_id: em.modulo_id, ativo: em.ativo })) as EmpresaModulo[]);
     setModulosDialogOpen(true);
   };
@@ -1003,24 +999,11 @@ export function AdminEmpresas() {
     setSavingModulos(true);
 
     try {
-      // NOTA (migração): /white-label/empresa-modulos é scoped pelo token.
-      // Buscar estado atual dos módulos da empresa do token para calcular diff.
-      const currentModulos = await api.get<any[]>('/white-label/empresa-modulos').catch(() => [] as any[]);
-
-      // Deletar todos os existentes (loop client-side)
+      // Upsert cross-tenant de cada módulo na empresa-ALVO (idempotente no backend).
       await Promise.all(
-        (currentModulos || []).map((em: any) =>
-          api.del(`/white-label/empresa-modulos/${em.id}`).catch(() => null)
-        )
-      );
-
-      // Inserir apenas os ativos
-      const activeModulos = empresaModulos.filter((em) => em.ativo);
-      await Promise.all(
-        activeModulos.map((em) =>
-          api.post('/white-label/empresa-modulos', {
-            modulo_id: em.modulo_id,
-            ativo: true,
+        empresaModulos.map((em) =>
+          api.put(`/empresas/${selectedEmpresa.id}/modulos/${em.modulo_id}`, {
+            ativo: em.ativo,
           }).catch(() => null)
         )
       );

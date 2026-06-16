@@ -52,6 +52,23 @@ class EmpresaModuloUpdate(BaseModel):
     ativo: Optional[bool] = None
 
 
+# ── Administração cross-tenant (super admin) — escopo pelo empresa_id do path ──
+# Usados por /empresas/{empresa_id}/modulos*. Diferente do auto-serviço acima, o
+# modulo_id vem do path; o corpo carrega só o estado.
+
+class EmpresaModuloAtivoIn(BaseModel):
+    ativo: bool = True
+
+
+class TelasSetIn(BaseModel):
+    """Conjunto EXATO de telas ativas de um módulo para a empresa.
+
+    O servidor reconcilia: insere as ausentes, remove as que sumiram, reativa
+    as presentes. Substitui o loop client-side de N requests por 1 chamada.
+    """
+    tela_ids: list[str]
+
+
 class EmpresaModuloOut(BaseModel):
     id: uuid.UUID
     empresa_id: uuid.UUID

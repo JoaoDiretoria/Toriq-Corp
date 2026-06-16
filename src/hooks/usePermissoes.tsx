@@ -3,6 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useEmpresaMode } from '@/hooks/useEmpresaMode';
 import { api } from '@/integrations/api/client';
 import { useHierarquia, GrupoAcesso } from '@/hooks/useHierarquia';
+import { MODULO_NOME_PARA_CODIGO } from '@/config/modulosTelas';
 
 interface PermissaoSetor {
   setor_id: string;
@@ -67,6 +68,9 @@ export function usePermissoes() {
   const [permissoes, setPermissoes] = useState<PermissaoSetor[]>([]);
   const [telasEmpresa, setTelasEmpresa] = useState<TelasEmpresa[]>([]);
   const [modulosEmpresa, setModulosEmpresa] = useState<ModuloEmpresa[]>([]);
+  // Mapa código do módulo (ex. 'toriq_corp') → UUID real do catálogo, resolvido
+  // dinamicamente no load. Substitui o MODULO_ID_PARA_UUID chumbado.
+  const [moduloUuidPorCodigo, setModuloUuidPorCodigo] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isAdminVertical, setIsAdminVertical] = useState(false);
@@ -107,10 +111,20 @@ export function usePermissoes() {
       // no .eq() do Supabase, é aplicado no cliente.
       if (empresaId) {
         try {
-          const [modulosData, telasData] = await Promise.all([
+          const [modulosData, telasData, catalogoData] = await Promise.all([
             api.get<any[]>('/white-label/empresa-modulos').catch(() => [] as any[]),
             api.get<any[]>('/white-label/empresa-modulos-telas').catch(() => [] as any[]),
+            api.get<any[]>('/white-label/modulos').catch(() => [] as any[]),
           ]);
+
+          // Resolve código do módulo (ex. 'toriq_corp') → UUID real do catálogo,
+          // eliminando o UUID chumbado que nunca casava com o id gerado no banco.
+          const codigoParaUuid: Record<string, string> = {};
+          (catalogoData || []).forEach((mod: any) => {
+            const codigo = MODULO_NOME_PARA_CODIGO[mod.nome];
+            if (codigo) codigoParaUuid[codigo] = mod.id;
+          });
+          setModuloUuidPorCodigo(codigoParaUuid);
 
           setModulosEmpresa(
             (modulosData || [])
@@ -162,28 +176,22 @@ export function usePermissoes() {
     loadPermissoes();
   }, [profile, empresaId]);
 
-  // Mapeamento de ID de módulo para UUID (baseado na tabela modulos)
-  const MODULO_ID_PARA_UUID: Record<string, string> = {
-    'toriq_corp': 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-    'saude_ocupacional': 'ae7578b5-2f80-460c-ae44-f79c6ea827d8',
-    'gestao_terceiros': '2353de90-96c9-41f7-aaa8-8c39ce0e6329',
-    'gestao_documentos': 'aaaa1111-1111-1111-1111-111111111111',
-  };
-
-  // Verifica se o módulo está ativo para a empresa (usando ID ou UUID do módulo)
+  // Verifica se o módulo está ativo para a empresa. Aceita o código do módulo
+  // (ex. 'toriq_corp') OU o UUID real — o código é resolvido para o UUID real
+  // dinamicamente via catálogo (moduloUuidPorCodigo), sem UUID chumbado.
   const moduloAtivoParaEmpresa = useCallback((moduloIdOuUUID: string): boolean => {
     // Admin Vertical sempre tem acesso total
     if (isAdminVertical) return true;
-    
+
     // Se não há módulos configurados, permite tudo (comportamento legado)
     if (modulosEmpresa.length === 0) return true;
-    
-    // Converter ID para UUID se necessário
-    const moduloUUID = MODULO_ID_PARA_UUID[moduloIdOuUUID] || moduloIdOuUUID;
-    
+
+    // Converter código → UUID real se for um código conhecido; senão usa como veio
+    const moduloUUID = moduloUuidPorCodigo[moduloIdOuUUID] || moduloIdOuUUID;
+
     // Verifica se o módulo está na lista de módulos ativos
     return modulosEmpresa.some(m => m.modulo_id === moduloUUID && m.ativo);
-  }, [isAdminVertical, modulosEmpresa]);
+  }, [isAdminVertical, modulosEmpresa, moduloUuidPorCodigo]);
 
   // Telas do módulo "Perfil da Empresa" que são sempre liberadas para a EMPRESA (não para o usuário)
   // Estas telas são liberadas no nível da empresa, mas o usuário ainda precisa ter permissão do setor
@@ -231,14 +239,14 @@ export function usePermissoes() {
     if (mapeamentoTela) {
       const moduloDaTela = mapeamentoTela.modulo_id;
       const moduloAtivo = moduloAtivoParaEmpresa(moduloDaTela);
-      const telasDoModuloConfiguradas = telasEmpresa.some(t => t.modulo_id === (MODULO_ID_PARA_UUID[moduloDaTela] || moduloDaTela));
+      const telasDoModuloConfiguradas = telasEmpresa.some(t => t.modulo_id === (moduloUuidPorCodigo[moduloDaTela] || moduloDaTela));
       if (moduloAtivo && !telasDoModuloConfiguradas) return true;
     }
-    
+
     // Se a tela não está na lista de telas liberadas, NÃO libera
     // Mesmo para admin da empresa, ele só pode ver o que a Toriq liberou
     return false;
-  }, [isAdmin, isAdminVertical, telasEmpresa, modulosEmpresa, moduloAtivoParaEmpresa]);
+  }, [isAdmin, isAdminVertical, telasEmpresa, modulosEmpresa, moduloAtivoParaEmpresa, moduloUuidPorCodigo]);
 
   // Verifica se o usuário pode visualizar uma seção
   // Combina: permissões do setor + telas liberadas da empresa
