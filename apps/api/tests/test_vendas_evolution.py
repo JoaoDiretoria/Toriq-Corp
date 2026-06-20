@@ -228,3 +228,58 @@ async def test_webhook_connection_update_atualiza_status(db_session, monkeypatch
     )
     await db_session.refresh(ref)
     assert ref.status == "conectada"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# API — auth, criação/listagem, cross-tenant, webhook 403
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.anyio
+async def test_api_servidor_requer_super_admin(client, db_session):
+    # cliente_torq NÃO pode configurar o servidor global.
+    await login_as(client, db_session, role="cliente_torq", email="evo_cli@torq.com")
+    r = await client.put("/vendas/evolution/servidor", json={"base_url": "x"})
+    assert r.status_code == 403, r.text
+
+
+@pytest.mark.anyio
+async def test_api_criar_instancia_e_listar(client, db_session, monkeypatch):
+    _mock_rede(monkeypatch)
+    await _criar_servidor(db_session)
+    await login_as(client, db_session, role="cliente_torq", email="evo_ok@torq.com")
+    r = await client.post(
+        "/vendas/evolution/instancias", json={"nome_exibicao": "Minha"}
+    )
+    assert r.status_code == 200, r.text
+    iid = r.json()["id"]
+
+    r2 = await client.get("/vendas/evolution/instancias")
+    assert r2.status_code == 200
+    assert any(i["id"] == iid for i in r2.json())
+
+
+@pytest.mark.anyio
+async def test_api_cross_tenant_nao_ve_instancia_de_outro(
+    client, db_session, monkeypatch
+):
+    _mock_rede(monkeypatch)
+    await _criar_servidor(db_session)
+    # Empresa A cria instância.
+    await login_as(client, db_session, role="cliente_torq", email="evo_a@torq.com")
+    ra = await client.post(
+        "/vendas/evolution/instancias", json={"nome_exibicao": "A"}
+    )
+    iid_a = ra.json()["id"]
+
+    # Empresa B loga e não deve ver a instância de A.
+    await login_as(client, db_session, role="cliente_torq", email="evo_b@torq.com")
+    rb = await client.get("/vendas/evolution/instancias")
+    assert all(i["id"] != iid_a for i in rb.json())
+
+
+@pytest.mark.anyio
+async def test_api_webhook_token_invalido_403(client, db_session):
+    r = await client.post(
+        "/vendas/evolution/webhook/token-que-nao-existe", json={"event": "x"}
+    )
+    assert r.status_code == 403, r.text
