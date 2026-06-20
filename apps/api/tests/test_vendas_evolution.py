@@ -340,3 +340,29 @@ async def test_campanha_whatsapp_evo_envia_pela_instancia(db_session, monkeypatc
     await db_session.refresh(msg)
     assert msg.status == "enviado"
     assert msg.instancia_id == inst.id
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SDR — responde via Evolution quando o lead chegou pelo canal evo
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.anyio
+async def test_sdr_envia_via_evolution_quando_ultimo_canal_evo(db_session, monkeypatch):
+    chamadas = _mock_rede(monkeypatch)
+    await _criar_servidor(db_session)
+    empresa_id = uuid.uuid4()
+    await _criar_empresa(db_session, empresa_id)
+    inst = await svc.criar_instancia(
+        db_session, empresa_id=empresa_id, nome_exibicao="X"
+    )
+    inst.status = "conectada"
+    await db_session.commit()
+
+    from app.services.vendas_sdr import _enviar_whatsapp_sdr
+
+    ok = await _enviar_whatsapp_sdr(
+        db_session, empresa_id=empresa_id, to="5511999990000",
+        texto="resposta sdr", canal="whatsapp_evo",
+    )
+    assert ok is True
+    assert chamadas["textos"][-1]["texto"] == "resposta sdr"

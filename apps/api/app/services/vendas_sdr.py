@@ -500,11 +500,32 @@ def _telefones_notificacao(config: VendasSdrConfig) -> list[str]:
 
 
 async def _enviar_whatsapp_sdr(
-    db: AsyncSession, *, empresa_id: uuid.UUID, to: str, texto: str
+    db: AsyncSession, *, empresa_id: uuid.UUID, to: str, texto: str,
+    canal: str = "whatsapp",
 ) -> bool:
-    """Envia um texto livre por WhatsApp (janela 24h) usando a config de disparo.
+    """Envia um texto por WhatsApp escolhendo o transporte pelo canal do lead.
+    'whatsapp_evo' → Evolution; 'whatsapp' (default) → Meta (config de disparo).
     Retorna True se enviou. Tolerante a falhas (nunca levanta)."""
     import re
+
+    destino = re.sub(r"\D", "", to or "")
+    if not destino:
+        return False
+
+    if canal == "whatsapp_evo":
+        from app.services.vendas_evolution import enviar_texto, instancia_conectada
+
+        inst = await instancia_conectada(db, empresa_id)
+        if inst is None:
+            return False
+        try:
+            res = await enviar_texto(
+                db, empresa_id=empresa_id, instancia_id=inst.id,
+                numero=destino, texto=texto,
+            )
+            return bool(res.get("enviado"))
+        except Exception:
+            return False
 
     from app.integrations.whatsapp_meta import WhatsAppError, send_text
     from app.models.vendas_disparo import VendasDisparoConfig
@@ -512,12 +533,10 @@ async def _enviar_whatsapp_sdr(
     dconf = await db.scalar(
         select(VendasDisparoConfig).where(VendasDisparoConfig.empresa_id == empresa_id)
     )
-    destino = re.sub(r"\D", "", to or "")
     if (
         dconf is None
         or not dconf.whatsapp_phone_id
         or not dconf.whatsapp_token_enc
-        or not destino
     ):
         return False
     try:
@@ -624,7 +643,8 @@ async def processar_inbound_sdr(
     # 5) Responde automaticamente (se houver next_message e telefone).
     if next_msg:
         enviou = await _enviar_whatsapp_sdr(
-            db, empresa_id=empresa_id, to=lead.telefone or "", texto=next_msg
+            db, empresa_id=empresa_id, to=lead.telefone or "", texto=next_msg,
+            canal=(lead.ultimo_canal or "whatsapp"),
         )
         db.add(
             VendasSdrInteracoes(
@@ -684,7 +704,10 @@ async def processar_inbound_sdr(
         )
         notificados = 0
         for tel in telefones:
-            if await _enviar_whatsapp_sdr(db, empresa_id=empresa_id, to=tel, texto=alerta):
+            if await _enviar_whatsapp_sdr(
+                db, empresa_id=empresa_id, to=tel, texto=alerta,
+                canal=(lead.ultimo_canal or "whatsapp"),
+            ):
                 notificados += 1
         db.add(
             VendasSdrInteracoes(
@@ -782,7 +805,8 @@ async def processar_followup_sdr(
     enviou = False
     if texto:
         enviou = await _enviar_whatsapp_sdr(
-            db, empresa_id=empresa_id, to=lead.telefone or "", texto=texto
+            db, empresa_id=empresa_id, to=lead.telefone or "", texto=texto,
+            canal=(lead.ultimo_canal or "whatsapp"),
         )
         db.add(
             VendasSdrInteracoes(
