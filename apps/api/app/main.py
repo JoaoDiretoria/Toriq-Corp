@@ -99,6 +99,7 @@ from app.api.vendas_prospeccao import router as vendas_prospeccao_router
 from app.api.vendas_disparo import router as vendas_disparo_router
 from app.api.vendas_whatsapp import router as vendas_whatsapp_router
 from app.api.vendas_sdr import router as vendas_sdr_router
+from app.api.vendas_evolution import router as vendas_evolution_router
 from app.api.vendas_uso import router as vendas_uso_router
 from app.api.vendas_pipeline import router as vendas_pipeline_router
 from app.api.webhooks_resend import router as webhooks_resend_router
@@ -191,6 +192,8 @@ def create_app() -> FastAPI:
     app.include_router(vendas_whatsapp_router)
     # Toriq Vendas Fase 4 — SDR Inteligente (agente Claude): qualificar, conversar, stats
     app.include_router(vendas_sdr_router)
+    # Toriq Vendas — Canal WhatsApp via Evolution API (instâncias, envio, webhook)
+    app.include_router(vendas_evolution_router)
     # Toriq Vendas Fase 5 — Medição & Contratação: uso por empresa (base p/ cobrança)
     app.include_router(vendas_uso_router)
     # Toriq Vendas — Pipeline & Conversas (CRM estilo Chatwoot): kanban, inbox,

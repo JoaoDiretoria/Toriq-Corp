@@ -111,6 +111,11 @@ class VendasLeads(Base):
     # Operador responsável pela conversa (assignee estilo Chatwoot). FK users
     # SET NULL ao apagar o usuário (migration c7f8a9b0d1e2).
     assigned_to: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
+    # Canal por onde chegou o último inbound do lead (define o transporte de
+    # resposta do SDR). 'whatsapp' (Meta, default) | 'whatsapp_evo' (Evolution).
+    ultimo_canal: Mapped[Optional[str]] = mapped_column(
+        Text, server_default=text("'whatsapp'")
+    )
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime(True), server_default=text("now()")
     )
