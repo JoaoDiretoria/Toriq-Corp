@@ -45,13 +45,20 @@ def _now() -> datetime.datetime:
     return datetime.datetime.now(datetime.timezone.utc)
 
 
+_CANAIS_WHATSAPP = ("whatsapp", "whatsapp_evo")
+
+
 def _campo_destino(campanha: "VendasCampanhas"):
     """Coluna do lead usada como destinatário conforme o canal da campanha."""
-    return VendasLeads.telefone if campanha.canal == "whatsapp" else VendasLeads.email
+    return (
+        VendasLeads.telefone
+        if campanha.canal in _CANAIS_WHATSAPP
+        else VendasLeads.email
+    )
 
 
 def _valor_destino(campanha: "VendasCampanhas", lead: VendasLeads) -> Optional[str]:
-    return lead.telefone if campanha.canal == "whatsapp" else lead.email
+    return lead.telefone if campanha.canal in _CANAIS_WHATSAPP else lead.email
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -244,6 +251,11 @@ async def preparar_campanha(
     if campanha.canal == "whatsapp":
         if config is None or not config.whatsapp_phone_id:
             raise ValueError("configure o WhatsApp")
+    elif campanha.canal == "whatsapp_evo":
+        from app.services.vendas_evolution import instancia_conectada
+
+        if await instancia_conectada(db, empresa_id) is None:
+            raise ValueError("conecte uma instância Evolution antes de enviar")
     else:
         if config is None or not config.smtp_host:
             raise ValueError("configure o email")
@@ -323,6 +335,11 @@ async def _enviar_campanha_inner(
     if campanha.canal == "whatsapp":
         if config is None or not config.whatsapp_phone_id:
             raise ValueError("configure o WhatsApp")
+    elif campanha.canal == "whatsapp_evo":
+        from app.services.vendas_evolution import instancia_conectada
+
+        if await instancia_conectada(db, empresa_id) is None:
+            raise ValueError("conecte uma instância Evolution antes de enviar")
     else:
         if config is None or not config.smtp_host:
             raise ValueError("configure o email")
@@ -355,7 +372,9 @@ async def _enviar_campanha_inner(
             "template WhatsApp rejeitado pela Meta — corrija/reaprove antes de disparar"
         )
 
-    rate = limite if limite is not None else (config.email_rate_limit or 100)
+    rate = limite if limite is not None else (
+        (config.email_rate_limit if config else None) or 100
+    )
     pendentes = (
         await db.scalars(
             select(VendasMensagens)
@@ -371,7 +390,7 @@ async def _enviar_campanha_inner(
     # Segredo SMTP descriptografado uma única vez.
     smtp_password = (
         decrypt_secret(config.smtp_password_enc)
-        if config.smtp_password_enc
+        if config and config.smtp_password_enc
         else None
     )
 
@@ -381,10 +400,20 @@ async def _enviar_campanha_inner(
     dedup = 0
 
     eh_whatsapp = campanha.canal == "whatsapp"
-    tipo_supressao = "telefone" if eh_whatsapp else "email"
+    eh_evo = campanha.canal == "whatsapp_evo"
+    tipo_supressao = "telefone" if (eh_whatsapp or eh_evo) else "email"
+
+    # Canal Evolution: resolve a instância conectada uma única vez.
+    evo_inst = None
+    if eh_evo:
+        from app.services.vendas_evolution import instancia_conectada
+
+        evo_inst = await instancia_conectada(db, empresa_id)
+        if evo_inst is None:
+            raise ValueError("conecte uma instância Evolution antes de enviar")
 
     # Dedup (Fase 7): não reenviar para o mesmo lead em N dias (0 = desligado).
-    dedup_dias = config.dedup_dias or 0
+    dedup_dias = (config.dedup_dias if config else 0) or 0
     dedup_cutoff = (
         _now() - datetime.timedelta(days=dedup_dias) if dedup_dias > 0 else None
     )
@@ -427,6 +456,30 @@ async def _enviar_campanha_inner(
                 msg.status = "dedup"
                 dedup += 1
                 continue
+
+        if eh_evo:
+            # Canal Evolution: envia pela instância conectada da empresa.
+            from app.services.vendas_evolution import enviar_texto as evo_enviar
+
+            corpo_evo = (template.conteudo if template is not None else "") or ""
+            res = await evo_enviar(
+                db,
+                empresa_id=empresa_id,
+                instancia_id=evo_inst.id,
+                numero=destinatario,
+                texto=corpo_evo,
+            )
+            if res["enviado"]:
+                msg.status = "enviado"
+                msg.provider_id = res["provider_id"]
+                msg.instancia_id = evo_inst.id
+                msg.enviado_em = _now()
+                enviados += 1
+            else:
+                msg.status = "erro"
+                msg.erro = res["erro"]
+                erros += 1
+            continue
 
         if eh_whatsapp:
             # Canal WhatsApp: envio delegado ao serviço dedicado, que seta
@@ -503,7 +556,9 @@ async def _enviar_campanha_inner(
         await registrar_uso(
             db,
             empresa_id=empresa_id,
-            metrica="whatsapp_enviados" if eh_whatsapp else "emails_enviados",
+            metrica=(
+                "whatsapp_enviados" if (eh_whatsapp or eh_evo) else "emails_enviados"
+            ),
             quantidade=enviados,
             referencia=str(campanha.id),
         )

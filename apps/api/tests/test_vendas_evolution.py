@@ -283,3 +283,60 @@ async def test_api_webhook_token_invalido_403(client, db_session):
         "/vendas/evolution/webhook/token-que-nao-existe", json={"event": "x"}
     )
     assert r.status_code == 403, r.text
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CAMPANHA — canal whatsapp_evo envia pela instância conectada
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.anyio
+async def test_campanha_whatsapp_evo_envia_pela_instancia(db_session, monkeypatch):
+    chamadas = _mock_rede(monkeypatch)
+    await _criar_servidor(db_session)
+    empresa_id = uuid.uuid4()
+    await _criar_empresa(db_session, empresa_id)
+    inst = await svc.criar_instancia(
+        db_session, empresa_id=empresa_id, nome_exibicao="X"
+    )
+    inst.status = "conectada"
+    await db_session.commit()
+
+    lead = VendasLeads(
+        id=uuid.uuid4(), empresa_id=empresa_id, nome="L",
+        telefone="+55 (11) 98888-7777",
+    )
+    db_session.add(lead)
+    from app.models.vendas_disparo import VendasCampanhas, VendasTemplates
+
+    tpl = VendasTemplates(
+        id=uuid.uuid4(), empresa_id=empresa_id, nome="T",
+        canal="whatsapp_evo", conteudo="Olá!",
+    )
+    db_session.add(tpl)
+    await db_session.commit()
+    camp = VendasCampanhas(
+        id=uuid.uuid4(), empresa_id=empresa_id, nome="C",
+        canal="whatsapp_evo", template_id=tpl.id, lead_ids=[str(lead.id)],
+        status="rascunho",
+    )
+    db_session.add(camp)
+    await db_session.commit()
+
+    from app.services import vendas_disparo as disparo
+
+    await disparo.preparar_campanha(
+        db_session, campanha_id=camp.id, empresa_id=empresa_id
+    )
+    await disparo.enviar_campanha(
+        db_session, campanha_id=camp.id, empresa_id=empresa_id
+    )
+    await db_session.commit()
+
+    assert len(chamadas["textos"]) == 1
+    assert chamadas["textos"][0]["texto"] == "Olá!"
+    msg = await db_session.scalar(
+        select(VendasMensagens).where(VendasMensagens.campanha_id == camp.id)
+    )
+    await db_session.refresh(msg)
+    assert msg.status == "enviado"
+    assert msg.instancia_id == inst.id
