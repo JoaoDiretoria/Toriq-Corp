@@ -203,6 +203,8 @@ class VendasMensagens(Base):
     campanha_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
     lead_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
     canal: Mapped[Optional[str]] = mapped_column(Text)
+    # Instância Evolution que enviou/recebeu (null p/ email e WhatsApp Meta).
+    instancia_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
     destinatario: Mapped[Optional[str]] = mapped_column(Text)
     status: Mapped[Optional[str]] = mapped_column(
         Text, server_default=text("'pendente'")

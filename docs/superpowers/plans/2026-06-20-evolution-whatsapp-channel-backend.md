@@ -32,7 +32,7 @@
 - `apps/api/app/services/vendas_evolution.py` — regra (ciclo de vida, envio, webhook). Não commita (exceto webhook).
 - `apps/api/app/schemas/vendas_evolution.py` — Pydantic (config servidor + instâncias, com masking).
 - `apps/api/app/api/vendas_evolution.py` — router (config servidor, CRUD instâncias, qrcode/status, enviar, webhook público).
-- `apps/api/migrations/versions/d4e5f6a7b8c9_evolution_channel.py` — migration.
+- `apps/api/migrations/versions/e1f2a3b4c5d6_evolution_channel.py` — migration.
 - `apps/api/tests/test_evolution_api.py` — testes do parsing puro.
 - `apps/api/tests/test_vendas_evolution.py` — testes de serviço + webhook + cross-tenant.
 
@@ -206,14 +206,14 @@ git commit -m "feat(evolution): instancia_id em mensagens e ultimo_canal em lead
 ## Task 3: Migration Alembic
 
 **Files:**
-- Create: `apps/api/migrations/versions/d4e5f6a7b8c9_evolution_channel.py`
+- Create: `apps/api/migrations/versions/e1f2a3b4c5d6_evolution_channel.py`
 
 - [ ] **Step 1: Escrever a migration**
 
 ```python
 """canal evolution: servidor, instancias, instancia_id em mensagens, ultimo_canal em leads
 
-Revision ID: d4e5f6a7b8c9
+Revision ID: e1f2a3b4c5d6
 Revises: c7d8e9f0a1b2
 Create Date: 2026-06-20
 """
@@ -222,7 +222,7 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "d4e5f6a7b8c9"
+revision: str = "e1f2a3b4c5d6"
 down_revision: Union[str, None] = "c7d8e9f0a1b2"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -320,7 +320,7 @@ def downgrade() -> None:
 - [ ] **Step 2: Aplicar no banco de teste e de dev**
 
 Run: `cd apps/api && alembic upgrade head`
-Expected: aplica `d4e5f6a7b8c9` sem erro. (Confirme que aponta para o banco de teste/dev correto via `DATABASE_URL`/`TEST_DATABASE_URL`.)
+Expected: aplica `e1f2a3b4c5d6` sem erro. (Confirme que aponta para o banco de teste/dev correto via `DATABASE_URL`/`TEST_DATABASE_URL`.)
 
 - [ ] **Step 3: Verificar reversibilidade**
 
@@ -330,7 +330,7 @@ Expected: desce e sobe sem erro.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add apps/api/migrations/versions/d4e5f6a7b8c9_evolution_channel.py
+git add apps/api/migrations/versions/e1f2a3b4c5d6_evolution_channel.py
 git commit -m "feat(evolution): migration de servidor/instancias + colunas"
 ```
 
@@ -1211,7 +1211,7 @@ async def test_enviar_texto_mockado(db_session, monkeypatch):
 - [ ] **Step 3: Rodar e ver passar**
 
 Run: `cd apps/api && pytest tests/test_vendas_evolution.py -v`
-Expected: PASS (3 testes). Pré-requisito: migration `d4e5f6a7b8c9` aplicada (Task 3).
+Expected: PASS (3 testes). Pré-requisito: migration `e1f2a3b4c5d6` aplicada (Task 3).
 
 - [ ] **Step 4: Commit**
 
