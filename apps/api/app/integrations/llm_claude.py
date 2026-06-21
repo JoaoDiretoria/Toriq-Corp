@@ -82,6 +82,37 @@ async def chamar_claude(
     return "".join(partes)
 
 
+async def descrever_imagem(
+    *, api_key: str, modelo: str, imagem: bytes, mime: str | None,
+    prompt: str | None = None,
+) -> str:
+    """Descreve uma imagem recebida (Claude vision) em pt-BR, p/ alimentar o SDR.
+
+    Reusa ``chamar_claude`` passando um bloco de imagem (base64) + um bloco de
+    texto. Retorna a descrição (string). Levanta ``LLMError`` em falha.
+    """
+    import base64
+
+    media_type = (mime or "image/jpeg").split(";")[0].strip() or "image/jpeg"
+    b64 = base64.b64encode(imagem).decode()
+    pergunta = prompt or (
+        "Descreva esta imagem em 1-2 frases, em português, focando o que é "
+        "relevante para um atendimento de vendas (ex.: produto, documento, print)."
+    )
+    blocos = [
+        {
+            "type": "image",
+            "source": {"type": "base64", "media_type": media_type, "data": b64},
+        },
+        {"type": "text", "text": pergunta},
+    ]
+    return await chamar_claude(
+        api_key=api_key, modelo=modelo, system=None,
+        mensagens=[{"role": "user", "content": blocos}],
+        temperatura=0.2, max_tokens=300,
+    )
+
+
 def extrair_json(texto: str) -> dict | None:
     """Tenta extrair o primeiro objeto JSON contido em ``texto``.
 

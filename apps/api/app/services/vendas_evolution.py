@@ -412,8 +412,45 @@ async def persistir_midia_inbound(
 async def _texto_de_midia(
     db: AsyncSession, *, empresa_id: uuid.UUID, media: dict, conteudo: bytes | None
 ) -> str | None:
-    """Texto que representa a mídia para a IA (transcrição de áudio / descrição de
-    imagem). Implementado na P6 (Whisper + Claude vision). Stub: sem IA → None."""
+    """Texto que representa a mídia para a IA: áudio→Whisper, imagem→Claude vision.
+
+    Usa a config do SDR (openai_api_key_enc p/ Whisper; api_key_enc/modelo p/
+    Claude). Degrada graciosamente (sem chave / falha → None → cai no placeholder).
+    """
+    if not conteudo:
+        return None
+    from app.models.vendas_sdr import VendasSdrConfig
+
+    sdr = await db.scalar(
+        select(VendasSdrConfig).where(VendasSdrConfig.empresa_id == empresa_id)
+    )
+    if sdr is None:
+        return None
+
+    tipo = media.get("tipo")
+    mime = media.get("mime_type")
+    try:
+        if tipo == "audio" and sdr.openai_api_key_enc:
+            from app.integrations.openai_whisper import transcrever
+
+            texto = await transcrever(
+                api_key=decrypt_secret(sdr.openai_api_key_enc),
+                audio=conteudo, mime=mime,
+            )
+            return f"[áudio transcrito] {texto}".strip() if texto else None
+        if tipo == "image" and sdr.api_key_enc:
+            from app.integrations.llm_claude import descrever_imagem
+
+            desc = await descrever_imagem(
+                api_key=decrypt_secret(sdr.api_key_enc),
+                modelo=sdr.modelo or "claude-sonnet-4-6",
+                imagem=conteudo, mime=mime,
+            )
+            cap = media.get("caption")
+            prefixo = f"[imagem] {desc}".strip()
+            return f"{prefixo}\nLegenda: {cap}" if cap else prefixo
+    except Exception:  # noqa: BLE001 - IA é best-effort; placeholder se falhar
+        return None
     return None
 
 

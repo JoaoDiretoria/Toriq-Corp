@@ -52,6 +52,9 @@ class VendasSdrConfig(Base):
         Text, server_default=text("'anthropic'")
     )
     api_key_enc: Mapped[Optional[str]] = mapped_column(Text)
+    # Chave OpenAI (criptografada) p/ transcrição de áudio (Whisper) do canal
+    # Evolution. Imagem usa o próprio Claude (api_key_enc).
+    openai_api_key_enc: Mapped[Optional[str]] = mapped_column(Text)
     modelo: Mapped[Optional[str]] = mapped_column(
         Text, server_default=text("'claude-sonnet-4-6'")
     )

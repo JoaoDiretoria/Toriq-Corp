@@ -60,6 +60,9 @@ def _config_public(obj: Optional[VendasSdrConfig]) -> s.SdrConfigPublic:
     masked = None
     if obj.api_key_enc:
         masked = mask_secret(decrypt_secret(obj.api_key_enc))
+    openai_masked = None
+    if obj.openai_api_key_enc:
+        openai_masked = mask_secret(decrypt_secret(obj.openai_api_key_enc))
     return s.SdrConfigPublic(
         provider=obj.provider,
         modelo=obj.modelo,
@@ -74,6 +77,8 @@ def _config_public(obj: Optional[VendasSdrConfig]) -> s.SdrConfigPublic:
         notificar_telefones=obj.notificar_telefones,
         api_key_set=bool(obj.api_key_enc),
         api_key_masked=masked,
+        openai_api_key_set=bool(obj.openai_api_key_enc),
+        openai_api_key_masked=openai_masked,
     )
 
 
@@ -126,6 +131,12 @@ async def put_sdr_config(
         obj.api_key_enc = None
     elif payload.api_key is not None:
         obj.api_key_enc = encrypt_secret(payload.api_key)
+
+    # Chave OpenAI (Whisper) — mesmo padrão.
+    if payload.clear_openai_api_key:
+        obj.openai_api_key_enc = None
+    elif payload.openai_api_key is not None:
+        obj.openai_api_key_enc = encrypt_secret(payload.openai_api_key)
 
     if created:
         db.add(obj)

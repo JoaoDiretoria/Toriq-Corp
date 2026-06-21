@@ -589,6 +589,66 @@ async def test_webhook_inbound_imagem_persiste_midia(db_session, monkeypatch):
     assert conv.media["url"].startswith("https://cdn.test/")
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# IA DE MÍDIA — áudio→Whisper, imagem→Claude vision (mockados)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.anyio
+async def test_texto_de_midia_audio_transcreve(db_session, monkeypatch):
+    from app.integrations import openai_whisper
+    from app.models.vendas_sdr import VendasSdrConfig
+
+    async def fake_transcrever(**kw):
+        return "olá tenho interesse"
+
+    monkeypatch.setattr(openai_whisper, "transcrever", fake_transcrever)
+
+    empresa_id = uuid.uuid4()
+    await _criar_empresa(db_session, empresa_id)
+    db_session.add(
+        VendasSdrConfig(
+            id=uuid.uuid4(), empresa_id=empresa_id,
+            openai_api_key_enc=encrypt_secret("sk-openai"),
+        )
+    )
+    await db_session.commit()
+
+    txt = await svc._texto_de_midia(
+        db_session, empresa_id=empresa_id,
+        media={"tipo": "audio", "mime_type": "audio/ogg"}, conteudo=b"audio-bytes",
+    )
+    assert txt == "[áudio transcrito] olá tenho interesse"
+
+
+@pytest.mark.anyio
+async def test_texto_de_midia_imagem_descreve(db_session, monkeypatch):
+    from app.integrations import llm_claude
+    from app.models.vendas_sdr import VendasSdrConfig
+
+    async def fake_descrever(**kw):
+        return "um comprovante de pagamento"
+
+    monkeypatch.setattr(llm_claude, "descrever_imagem", fake_descrever)
+
+    empresa_id = uuid.uuid4()
+    await _criar_empresa(db_session, empresa_id)
+    db_session.add(
+        VendasSdrConfig(
+            id=uuid.uuid4(), empresa_id=empresa_id,
+            api_key_enc=encrypt_secret("sk-ant"),
+        )
+    )
+    await db_session.commit()
+
+    txt = await svc._texto_de_midia(
+        db_session, empresa_id=empresa_id,
+        media={"tipo": "image", "mime_type": "image/jpeg", "caption": "olha"},
+        conteudo=b"img",
+    )
+    assert txt.startswith("[imagem] um comprovante de pagamento")
+    assert "Legenda: olha" in txt
+
+
 @pytest.mark.anyio
 async def test_api_webhook_duplicado_responde_deduped(client, db_session, monkeypatch):
     _mock_rede(monkeypatch)
