@@ -84,6 +84,7 @@ export const MODULOS_CONFIG: ModuloConfig[] = [
       { id: 'vendas-pipeline', nome: 'Pipeline & Conversas', icone: 'Grid3X3' },
       { id: 'vendas-disparo', nome: 'Disparo em Massa', icone: 'Megaphone' },
       { id: 'vendas-sdr', nome: 'SDR Inteligente', icone: 'CheckSquare' },
+      { id: 'vendas-evolution', nome: 'WhatsApp Evolution', icone: 'MessageCircle' },
       { id: 'vendas-segmentacao', nome: 'Segmentação', icone: 'ListChecks' },
       { id: 'vendas-tags', nome: 'Tags', icone: 'FileText' },
       { id: 'vendas-uso', nome: 'Uso & Contratação', icone: 'TrendingUp' },
