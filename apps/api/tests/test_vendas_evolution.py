@@ -35,7 +35,7 @@ async def _criar_servidor(db_session):
 
 
 def _mock_rede(monkeypatch):
-    chamadas = {"criadas": [], "webhooks": [], "textos": []}
+    chamadas = {"criadas": [], "webhooks": [], "textos": [], "presencas": []}
 
     async def fake_criar(**kw):
         chamadas["criadas"].append(kw)
@@ -61,6 +61,10 @@ def _mock_rede(monkeypatch):
     async def fake_deletar(**kw):
         return {}
 
+    async def fake_presenca(**kw):
+        chamadas["presencas"].append(kw)
+
+    monkeypatch.setattr(evolution_api, "enviar_presenca", fake_presenca)
     monkeypatch.setattr(evolution_api, "criar_instancia", fake_criar)
     monkeypatch.setattr(evolution_api, "definir_webhook", fake_webhook)
     monkeypatch.setattr(evolution_api, "conectar_qrcode", fake_qr)
@@ -366,6 +370,9 @@ async def test_sdr_envia_via_evolution_quando_ultimo_canal_evo(db_session, monke
     )
     assert ok is True
     assert chamadas["textos"][-1]["texto"] == "resposta sdr"
+    # typing indicator: 'composing' enviado antes do texto
+    assert chamadas["presencas"], "SDR deve mostrar 'digitando...' antes de responder"
+    assert chamadas["presencas"][-1]["presence"] == "composing"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

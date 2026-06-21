@@ -195,15 +195,23 @@ async def deletar_instancia(
 
 async def enviar_texto(
     db: AsyncSession, *, empresa_id: uuid.UUID, instancia_id: uuid.UUID,
-    numero: str, texto: str,
+    numero: str, texto: str, typing: bool = False,
 ) -> dict:
-    """Envia um texto e grava em vendas_mensagens. NÃO commita."""
+    """Envia um texto e grava em vendas_mensagens. NÃO commita.
+
+    ``typing=True`` mostra 'digitando...' antes (respostas do SDR — mais humano).
+    """
     base_url, api_key = await _exigir_servidor(db)
     inst = await _get_instancia(db, empresa_id=empresa_id, instancia_id=instancia_id)
     if inst is None:
         raise ValueError("instância não encontrada")
 
     destino = re.sub(r"\D", "", numero or "")
+    if typing:
+        await evolution_api.enviar_presenca(
+            base_url=base_url, api_key=api_key,
+            instance_name=inst.instance_name, numero=destino, presence="composing",
+        )
     enviado, provider_id, erro = False, None, None
     try:
         provider_id = await evolution_api.enviar_texto(

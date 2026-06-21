@@ -127,6 +127,23 @@ async def enviar_texto(
     return _extrair_id(data)
 
 
+async def enviar_presenca(
+    *, base_url: str, api_key: str, instance_name: str, numero: str,
+    presence: str = "composing", delay_ms: int = 1200,
+) -> None:
+    """Mostra 'digitando...'/'gravando...' no WhatsApp do contato (humaniza o SDR).
+
+    presence: 'composing' | 'recording' | 'paused' | 'available'. Best-effort:
+    nunca levanta (igual ao tio-crm) — falha de presença não pode bloquear o envio.
+    """
+    url = f"{_base(base_url)}/chat/sendPresence/{instance_name}"
+    payload = {"number": numero, "presence": presence, "delay": delay_ms}
+    try:
+        await _request("POST", url, api_key, json=payload, contexto="presence")
+    except EvolutionError:
+        return
+
+
 def _extrair_id(data) -> str:
     if isinstance(data, dict):
         key = data.get("key")
