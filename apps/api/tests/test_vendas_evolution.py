@@ -366,3 +366,64 @@ async def test_sdr_envia_via_evolution_quando_ultimo_canal_evo(db_session, monke
     )
     assert ok is True
     assert chamadas["textos"][-1]["texto"] == "resposta sdr"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# WEBHOOK — idempotência / dedup (evita reprocessar reenvios da Evolution)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _payload_inbound(instance_name: str, wid: str = "DUP-1") -> dict:
+    return {
+        "event": "messages.upsert",
+        "instance": instance_name,
+        "data": {
+            "key": {
+                "remoteJid": "5511999990000@s.whatsapp.net",
+                "fromMe": False, "id": wid,
+            },
+            "message": {"conversation": "oi"},
+        },
+    }
+
+
+@pytest.mark.anyio
+async def test_registrar_webhook_evento_deduplica(db_session, monkeypatch):
+    _mock_rede(monkeypatch)
+    await _criar_servidor(db_session)
+    empresa_id = uuid.uuid4()
+    await _criar_empresa(db_session, empresa_id)
+    inst = await svc.criar_instancia(
+        db_session, empresa_id=empresa_id, nome_exibicao="X"
+    )
+    await db_session.commit()
+
+    payload = _payload_inbound(inst.instance_name, "WID-DUP")
+    id1 = await svc.registrar_webhook_evento(db_session, instancia=inst, payload=payload)
+    id2 = await svc.registrar_webhook_evento(db_session, instancia=inst, payload=payload)
+    assert id1 is not None
+    assert id2 is None  # mesma key.id → descartado
+
+
+@pytest.mark.anyio
+async def test_api_webhook_duplicado_responde_deduped(client, db_session, monkeypatch):
+    _mock_rede(monkeypatch)
+    await _criar_servidor(db_session)
+    empresa_id = uuid.uuid4()
+    await _criar_empresa(db_session, empresa_id)
+    inst = await svc.criar_instancia(
+        db_session, empresa_id=empresa_id, nome_exibicao="X"
+    )
+    await db_session.commit()
+
+    payload = _payload_inbound(inst.instance_name, "WID-API")
+    r1 = await client.post(
+        f"/vendas/evolution/webhook/{inst.webhook_token}", json=payload
+    )
+    assert r1.status_code == 200, r1.text
+    assert r1.json().get("deduped") is not True
+
+    r2 = await client.post(
+        f"/vendas/evolution/webhook/{inst.webhook_token}", json=payload
+    )
+    assert r2.status_code == 200, r2.text
+    assert r2.json().get("deduped") is True

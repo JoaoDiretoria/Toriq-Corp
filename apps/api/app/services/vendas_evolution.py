@@ -15,6 +15,7 @@ import secrets
 import uuid
 
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.esocial_crypto import decrypt_secret, encrypt_secret
@@ -24,6 +25,7 @@ from app.models.vendas_disparo import VendasMensagens
 from app.models.vendas_evolution import (
     VendasEvolutionInstancias,
     VendasEvolutionServidor,
+    VendasEvolutionWebhookEventos,
 )
 
 
@@ -234,6 +236,44 @@ async def instancia_conectada(
         .where(VendasEvolutionInstancias.empresa_id == empresa_id)
         .limit(1)
     )
+
+
+# ───────────────── Webhook: idempotência (dedup por event_id) ─────────────────
+
+def _event_id_de(payload: dict) -> str:
+    """ID estável do evento p/ dedup. Mensagens → data.key.id; resto → sintético."""
+    data = (payload or {}).get("data")
+    if isinstance(data, list):
+        data = data[0] if data else None
+    if isinstance(data, dict):
+        key = data.get("key") or {}
+        if key.get("id"):
+            return str(key["id"])
+    return f"evt-{uuid.uuid4()}"
+
+
+async def registrar_webhook_evento(
+    db: AsyncSession, *, instancia, payload: dict
+) -> uuid.UUID | None:
+    """Insere o evento (idempotente via UNIQUE event_id). Retorna o id se NOVO,
+    ou None se já existia (duplicata → descartar). Usa ON CONFLICT DO NOTHING."""
+    stmt = (
+        pg_insert(VendasEvolutionWebhookEventos.__table__)
+        .values(
+            id=uuid.uuid4(),
+            instancia_id=instancia.id,
+            event_id=_event_id_de(payload),
+            event_type=(payload or {}).get("event"),
+            payload=payload,
+            status="received",
+        )
+        .on_conflict_do_nothing(index_elements=["event_id"])
+        .returning(VendasEvolutionWebhookEventos.__table__.c.id)
+    )
+    res = await db.execute(stmt)
+    row = res.first()
+    await db.commit()
+    return row[0] if row else None
 
 
 # ───────────────── Webhook (ponto de entrada — COMMITA) ─────────────────

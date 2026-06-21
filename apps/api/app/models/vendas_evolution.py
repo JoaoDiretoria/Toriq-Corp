@@ -23,6 +23,7 @@ from sqlalchemy import (
     Uuid,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.generated import Base
@@ -88,3 +89,39 @@ class VendasEvolutionInstancias(Base):
     updated_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime(True), server_default=text("now()")
     )
+
+
+class VendasEvolutionWebhookEventos(Base):
+    """Idempotência do webhook: 1 linha por evento, UNIQUE em event_id.
+
+    A Evolution reenvia o webhook se não receber 200 rápido. Antes de processar,
+    inserimos o evento aqui; o UNIQUE em event_id descarta duplicatas (evita, p.ex.,
+    o SDR responder o mesmo lead duas vezes). Eventos de mensagem usam o
+    ``data.key.id`` como event_id; demais usam um id sintético (sempre processam).
+    """
+
+    __tablename__ = "vendas_evolution_webhook_eventos"
+    __table_args__ = (
+        PrimaryKeyConstraint("id", name="vendas_evolution_webhook_eventos_pkey"),
+        UniqueConstraint(
+            "event_id", name="vendas_evolution_webhook_eventos_event_id_key"
+        ),
+        Index("idx_vendas_evolution_webhook_eventos_instancia", "instancia_id"),
+        {"schema": "public"},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    instancia_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
+    event_id: Mapped[str] = mapped_column(Text, nullable=False)
+    event_type: Mapped[Optional[str]] = mapped_column(Text)
+    payload: Mapped[Optional[dict]] = mapped_column(JSONB)
+    status: Mapped[Optional[str]] = mapped_column(
+        Text, server_default=text("'received'")
+    )
+    erro: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[Optional[datetime.datetime]] = mapped_column(
+        DateTime(True), server_default=text("now()")
+    )
+    processed_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True))

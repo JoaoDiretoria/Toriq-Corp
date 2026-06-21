@@ -203,5 +203,15 @@ async def webhook(
         payload = await request.json()
     except Exception:  # noqa: BLE001
         payload = {}
-    await svc.processar_webhook(db, instancia=inst, payload=payload)
+
+    # Idempotência: a Evolution reenvia se não receber 200 rápido. Persistimos o
+    # evento (UNIQUE event_id); duplicata → 200 deduped sem reprocessar.
+    evento_id = await svc.registrar_webhook_evento(db, instancia=inst, payload=payload)
+    if evento_id is None:
+        return JSONResponse({"ok": True, "deduped": True}, status_code=200)
+
+    # Processa fora do request (com Redis); sem Redis roda inline. 200 imediato.
+    from app.core.queue import queue
+
+    await queue.enqueue("evolution_webhook", {"evento_id": str(evento_id)})
     return JSONResponse({"ok": True}, status_code=200)
