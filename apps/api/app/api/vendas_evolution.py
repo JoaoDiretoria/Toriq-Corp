@@ -201,6 +201,28 @@ async def enviar(
     return s.EnviarOut(**res)
 
 
+@router.post(
+    "/evolution/instancias/{instancia_id}/enviar-midia", response_model=s.EnviarOut
+)
+async def enviar_midia(
+    instancia_id: uuid.UUID,
+    dados: s.EnviarMidiaIn,
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    empresa_id = _require_empresa(user)
+    try:
+        res = await svc.enviar_midia(
+            db, empresa_id=empresa_id, instancia_id=instancia_id,
+            numero=dados.numero, mediatype=dados.mediatype, media=dados.media,
+            mimetype=dados.mimetype, filename=dados.filename, caption=dados.caption,
+        )
+    except ValueError as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
+    await db.commit()
+    return s.EnviarOut(**res)
+
+
 # ───────────────────────── Webhook (público) ─────────────────────────
 
 @router.post("/evolution/webhook/{webhook_token}")

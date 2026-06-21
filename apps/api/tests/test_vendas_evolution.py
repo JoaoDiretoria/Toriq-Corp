@@ -76,6 +76,16 @@ def _mock_rede(monkeypatch):
         chamadas["settings"].append(kw)
         return {}
 
+    async def fake_midia(**kw):
+        chamadas.setdefault("midias", []).append(kw)
+        return "EVO-MEDIA-1"
+
+    async def fake_audio(**kw):
+        chamadas.setdefault("audios", []).append(kw)
+        return "EVO-AUDIO-1"
+
+    monkeypatch.setattr(evolution_api, "enviar_midia", fake_midia)
+    monkeypatch.setattr(evolution_api, "enviar_audio", fake_audio)
     monkeypatch.setattr(evolution_api, "reiniciar", fake_reiniciar)
     monkeypatch.setattr(evolution_api, "definir_settings", fake_settings)
     monkeypatch.setattr(evolution_api, "enviar_presenca", fake_presenca)
@@ -458,6 +468,52 @@ async def test_reconectar_faz_ritual_e_retorna_qr(db_session, monkeypatch):
     assert data["base64"]  # novo QR retornado
     assert chamadas["logouts"] and chamadas["restarts"]  # ritual chamado
     assert inst.status == "conectando"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MÍDIA — envio (image via sendMedia, audio via sendWhatsAppAudio)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.anyio
+async def test_enviar_midia_imagem(db_session, monkeypatch):
+    chamadas = _mock_rede(monkeypatch)
+    await _criar_servidor(db_session)
+    empresa_id = uuid.uuid4()
+    await _criar_empresa(db_session, empresa_id)
+    inst = await svc.criar_instancia(
+        db_session, empresa_id=empresa_id, nome_exibicao="X"
+    )
+    await db_session.commit()
+
+    res = await svc.enviar_midia(
+        db_session, empresa_id=empresa_id, instancia_id=inst.id,
+        numero="+55 11 99999-0000", mediatype="image",
+        media="https://ex.com/foto.png", caption="olha",
+    )
+    assert res["enviado"] is True
+    assert res["provider_id"] == "EVO-MEDIA-1"
+    assert chamadas["midias"][0]["numero"] == "5511999990000"
+    assert chamadas["midias"][0]["caption"] == "olha"
+
+
+@pytest.mark.anyio
+async def test_enviar_midia_audio_usa_endpoint_de_voz(db_session, monkeypatch):
+    chamadas = _mock_rede(monkeypatch)
+    await _criar_servidor(db_session)
+    empresa_id = uuid.uuid4()
+    await _criar_empresa(db_session, empresa_id)
+    inst = await svc.criar_instancia(
+        db_session, empresa_id=empresa_id, nome_exibicao="X"
+    )
+    await db_session.commit()
+
+    res = await svc.enviar_midia(
+        db_session, empresa_id=empresa_id, instancia_id=inst.id,
+        numero="5511999990000", mediatype="audio", media="https://ex.com/a.ogg",
+    )
+    assert res["enviado"] is True
+    assert res["provider_id"] == "EVO-AUDIO-1"
+    assert chamadas["audios"][0]["audio"] == "https://ex.com/a.ogg"
 
 
 @pytest.mark.anyio

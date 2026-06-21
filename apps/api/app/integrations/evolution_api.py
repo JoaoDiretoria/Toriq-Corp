@@ -140,6 +140,35 @@ async def enviar_texto(
     return _extrair_id(data)
 
 
+async def enviar_midia(
+    *, base_url: str, api_key: str, instance_name: str, numero: str,
+    mediatype: str, media: str, mimetype: str | None = None,
+    filename: str | None = None, caption: str | None = None,
+) -> str:
+    """Envia mídia (image/video/document). ``media`` = URL pública ou base64.
+    Retorna o id da mensagem."""
+    url = f"{_base(base_url)}/message/sendMedia/{instance_name}"
+    payload: dict = {"number": numero, "mediatype": mediatype, "media": media}
+    if mimetype:
+        payload["mimetype"] = mimetype
+    if filename:
+        payload["fileName"] = filename
+    if caption:
+        payload["caption"] = caption
+    data = await _request("POST", url, api_key, json=payload, contexto="enviar midia")
+    return _extrair_id(data)
+
+
+async def enviar_audio(
+    *, base_url: str, api_key: str, instance_name: str, numero: str, audio: str
+) -> str:
+    """Envia áudio de voz (PTT). ``audio`` = URL pública ou base64."""
+    url = f"{_base(base_url)}/message/sendWhatsAppAudio/{instance_name}"
+    payload = {"number": numero, "audio": audio}
+    data = await _request("POST", url, api_key, json=payload, contexto="enviar audio")
+    return _extrair_id(data)
+
+
 async def enviar_presenca(
     *, base_url: str, api_key: str, instance_name: str, numero: str,
     presence: str = "composing", delay_ms: int = 1200,

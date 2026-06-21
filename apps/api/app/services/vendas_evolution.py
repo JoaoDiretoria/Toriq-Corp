@@ -275,6 +275,40 @@ async def enviar_texto(
     return {"enviado": enviado, "provider_id": provider_id, "erro": erro}
 
 
+async def enviar_midia(
+    db: AsyncSession, *, empresa_id: uuid.UUID, instancia_id: uuid.UUID,
+    numero: str, mediatype: str, media: str, mimetype: str | None = None,
+    filename: str | None = None, caption: str | None = None,
+) -> dict:
+    """Envia mídia (image/video/document/audio) pela instância. NÃO commita.
+    ``media`` = URL pública ou base64. mediatype='audio' usa o endpoint de voz."""
+    base_url, api_key = await _exigir_servidor(db)
+    inst = await _get_instancia(db, empresa_id=empresa_id, instancia_id=instancia_id)
+    if inst is None:
+        raise ValueError("instância não encontrada")
+
+    destino = re.sub(r"\D", "", numero or "")
+    enviado, provider_id, erro = False, None, None
+    try:
+        if mediatype == "audio":
+            provider_id = await evolution_api.enviar_audio(
+                base_url=base_url, api_key=api_key,
+                instance_name=inst.instance_name, numero=destino, audio=media,
+            )
+        else:
+            provider_id = await evolution_api.enviar_midia(
+                base_url=base_url, api_key=api_key,
+                instance_name=inst.instance_name, numero=destino,
+                mediatype=mediatype, media=media, mimetype=mimetype,
+                filename=filename, caption=caption,
+            )
+        enviado = True
+    except evolution_api.EvolutionError as exc:
+        erro = str(exc)
+
+    return {"enviado": enviado, "provider_id": provider_id, "erro": erro}
+
+
 async def instancia_conectada(
     db: AsyncSession, empresa_id: uuid.UUID
 ) -> VendasEvolutionInstancias | None:
