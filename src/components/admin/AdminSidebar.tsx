@@ -47,6 +47,7 @@ import {
   Radar,
   Send,
   Bot,
+  MessageCircle,
   KanbanSquare,
   type LucideIcon,
 } from 'lucide-react';
@@ -90,6 +91,7 @@ type AdminSection =
   | 'vendas-tags'
   | 'vendas-disparo'
   | 'vendas-sdr'
+  | 'vendas-evolution'
   | 'vendas-uso';
 
 interface AdminSidebarProps {
@@ -152,6 +154,7 @@ const NAV_GROUPS: NavGroup[] = [
       { id: 'vendas-pipeline', label: 'Pipeline & Conversas', icon: KanbanSquare },
       { id: 'vendas-disparo', label: 'Disparo em Massa', icon: Send },
       { id: 'vendas-sdr', label: 'SDR Inteligente', icon: Bot },
+      { id: 'vendas-evolution', label: 'WhatsApp Evolution', icon: MessageCircle },
       { id: 'vendas-segmentacao', label: 'Segmentação', icon: Layers },
       { id: 'vendas-tags', label: 'Tags', icon: Tags },
       { id: 'vendas-uso', label: 'Uso & Contratação', icon: BarChart3 },

@@ -48,6 +48,7 @@ import { LeadsCaptados } from '@/components/admin/vendas/LeadsCaptados';
 import { PipelineCRM } from '@/components/admin/vendas/pipeline/PipelineCRM';
 import { Disparo } from '@/components/admin/vendas/disparo/Disparo';
 import { SdrInteligente } from '@/components/admin/vendas/sdr/SdrInteligente';
+import { EvolutionApi } from '@/components/admin/vendas/evolution/EvolutionApi';
 import { Segmentacao } from '@/components/admin/vendas/Segmentacao';
 import { TagsManager } from '@/components/admin/vendas/TagsManager';
 import { PainelUso } from '@/components/admin/vendas/uso/PainelUso';
@@ -91,6 +92,7 @@ const SECAO_PARA_MODULO: Record<string, string> = {
   'vendas-pipeline': 'toriq_vendas',
   'vendas-disparo': 'toriq_vendas',
   'vendas-sdr': 'toriq_vendas',
+  'vendas-evolution': 'toriq_vendas',
   'vendas-segmentacao': 'toriq_vendas',
   'vendas-tags': 'toriq_vendas',
   'vendas-uso': 'toriq_vendas',
@@ -513,6 +515,9 @@ const SSTDashboard = () => {
     }
     if (activeSection === 'vendas-sdr') {
       return <SdrInteligente />;
+    }
+    if (activeSection === 'vendas-evolution') {
+      return <EvolutionApi />;
     }
     if (activeSection === 'vendas-segmentacao') {
       return <Segmentacao />;
