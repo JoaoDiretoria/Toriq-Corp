@@ -516,6 +516,79 @@ async def test_enviar_midia_audio_usa_endpoint_de_voz(db_session, monkeypatch):
     assert chamadas["audios"][0]["audio"] == "https://ex.com/a.ogg"
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# MÍDIA INBOUND — webhook de imagem grava no pipeline + storage (best-effort)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.anyio
+async def test_webhook_inbound_imagem_persiste_midia(db_session, monkeypatch):
+    import base64 as b64
+
+    _mock_rede(monkeypatch)
+    # storage mockado (sem tocar rede/RustFS) → retorna URL pública
+    from app.core import storage as storage_mod
+
+    subiu = {}
+
+    def fake_upload(bucket, key, data, content_type, content_disposition=None):
+        subiu["bucket"] = bucket
+        subiu["key"] = key
+        subiu["bytes"] = len(data)
+        return f"https://cdn.test/{bucket}/{key}"
+
+    monkeypatch.setattr(storage_mod.storage_service, "upload", fake_upload)
+
+    await _criar_servidor(db_session)
+    empresa_id = uuid.uuid4()
+    await _criar_empresa(db_session, empresa_id)
+    inst = await svc.criar_instancia(
+        db_session, empresa_id=empresa_id, nome_exibicao="X"
+    )
+    await db_session.commit()
+
+    lead = VendasLeads(
+        id=uuid.uuid4(), empresa_id=empresa_id, nome="Lead",
+        telefone="+55 (11) 99999-0000",
+    )
+    db_session.add(lead)
+    await db_session.commit()
+
+    img_b64 = b64.b64encode(b"\xff\xd8\xff\xe0fakejpg").decode()
+    payload = {
+        "event": "messages.upsert",
+        "instance": inst.instance_name,
+        "data": {
+            "key": {
+                "remoteJid": "5511999990000@s.whatsapp.net",
+                "fromMe": False, "id": "IMG-1",
+            },
+            "message": {
+                "imageMessage": {"mimetype": "image/jpeg", "caption": "olha isso"},
+                "base64": img_b64,
+            },
+        },
+    }
+    n = await svc.processar_webhook(db_session, instancia=inst, payload=payload)
+    assert n == 1
+    assert subiu.get("bytes", 0) > 0  # upload chamado
+    assert subiu["bucket"] == "vendas-evolution"
+
+    # registrou no pipeline com a media e o caption como texto
+    from app.models.vendas_pipeline import VendasConversas
+
+    conv = await db_session.scalar(
+        select(VendasConversas)
+        .where(VendasConversas.lead_id == lead.id)
+        .order_by(VendasConversas.created_at.desc())
+        .limit(1)
+    )
+    await db_session.refresh(conv)
+    assert conv.conteudo == "olha isso"
+    assert conv.media is not None
+    assert conv.media["tipo"] == "image"
+    assert conv.media["url"].startswith("https://cdn.test/")
+
+
 @pytest.mark.anyio
 async def test_api_webhook_duplicado_responde_deduped(client, db_session, monkeypatch):
     _mock_rede(monkeypatch)

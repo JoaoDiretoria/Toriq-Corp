@@ -169,6 +169,19 @@ async def enviar_audio(
     return _extrair_id(data)
 
 
+async def baixar_midia(
+    *, base_url: str, api_key: str, instance_name: str, message_id: str
+) -> str:
+    """Baixa a mídia de uma mensagem recebida como base64 (fallback quando o
+    webhook não trouxe base64 inline). Retorna '' se não vier."""
+    url = f"{_base(base_url)}/chat/getBase64FromMediaMessage/{instance_name}"
+    payload = {"message": {"key": {"id": message_id}}}
+    data = await _request("POST", url, api_key, json=payload, contexto="baixar midia")
+    if isinstance(data, dict):
+        return data.get("base64") or ""
+    return ""
+
+
 async def enviar_presenca(
     *, base_url: str, api_key: str, instance_name: str, numero: str,
     presence: str = "composing", delay_ms: int = 1200,
@@ -204,6 +217,38 @@ def normalizar_telefone(valor: str) -> str:
     return re.sub(r"\D", "", base)
 
 
+# Tipos de mídia da Evolution (chave em data.message → nosso vocabulário).
+_MEDIA_KEYS = {
+    "imageMessage": "image",
+    "audioMessage": "audio",
+    "videoMessage": "video",
+    "documentMessage": "document",
+    "stickerMessage": "sticker",
+}
+
+
+def _extrair_media(m: dict, msg: dict) -> dict | None:
+    """Extrai metadados de mídia + base64 inline (quando o webhook manda base64).
+
+    Retorna ``None`` p/ mensagem de texto puro; senão um dict com
+    ``{tipo, mime_type, caption, filename, seconds, media_id, base64}``.
+    O ``base64`` é usado em memória (download/transcrição) e NÃO é persistido.
+    """
+    for chave, tipo in _MEDIA_KEYS.items():
+        obj = msg.get(chave)
+        if isinstance(obj, dict):
+            return {
+                "tipo": tipo,
+                "mime_type": obj.get("mimetype"),
+                "caption": obj.get("caption"),
+                "filename": obj.get("fileName"),
+                "seconds": obj.get("seconds"),
+                "media_id": (m.get("key") or {}).get("id"),
+                "base64": msg.get("base64") or m.get("base64"),
+            }
+    return None
+
+
 def parse_webhook(payload) -> dict:
     """Extrai inbound/conexão do callback da Evolution. Tolerante a lixo.
 
@@ -227,15 +272,19 @@ def parse_webhook(payload) -> dict:
             if key.get("fromMe"):
                 continue  # ignora as mensagens que NÓS enviamos
             msg = m.get("message") or {}
-            texto = msg.get("conversation") or (
-                msg.get("extendedTextMessage") or {}
-            ).get("text")
+            media = _extrair_media(m, msg)
+            texto = (
+                msg.get("conversation")
+                or (msg.get("extendedTextMessage") or {}).get("text")
+                or (media or {}).get("caption")
+            )
             out["mensagens"].append(
                 {
                     "wamid": key.get("id"),
                     "from": normalizar_telefone(key.get("remoteJid") or ""),
                     "pushName": m.get("pushName"),
                     "texto": texto,
+                    "media": media,
                     "timestamp": m.get("messageTimestamp"),
                 }
             )

@@ -9,6 +9,8 @@ monkeypatch nesse módulo.
 """
 from __future__ import annotations
 
+import asyncio
+import base64 as _b64
 import datetime
 import re
 import secrets
@@ -330,6 +332,91 @@ async def instancia_conectada(
     )
 
 
+# ───────────────── Webhook: mídia inbound (download + storage) ─────────────────
+
+_EXT_MIME = {
+    "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp",
+    "audio/ogg": ".ogg", "audio/mpeg": ".mp3", "video/mp4": ".mp4",
+    "application/pdf": ".pdf",
+}
+
+
+def _ext_de_mime(mime: str | None) -> str:
+    if not mime:
+        return ".bin"
+    return _EXT_MIME.get(mime.split(";")[0].strip(), ".bin")
+
+
+async def _obter_base64(db: AsyncSession, *, instancia, media: dict) -> str:
+    """base64 inline (preferido) ou fallback baixando da Evolution. '' se nada."""
+    b64 = media.get("base64")
+    if b64:
+        return b64
+    if media.get("media_id"):
+        try:
+            base_url, api_key = await _exigir_servidor(db)
+            return await evolution_api.baixar_midia(
+                base_url=base_url, api_key=api_key,
+                instance_name=instancia.instance_name, message_id=media["media_id"],
+            )
+        except (ValueError, evolution_api.EvolutionError):
+            return ""
+    return ""
+
+
+async def persistir_midia_inbound(
+    db: AsyncSession, *, empresa_id: uuid.UUID, instancia, media: dict
+) -> tuple[dict, bytes | None]:
+    """Sobe a mídia recebida no storage (best-effort) e devolve (metadata, bytes).
+
+    metadata (p/ o pipeline): {tipo, mime_type, caption, filename, url, downloaded}.
+    Os ``bytes`` brutos são devolvidos p/ a IA (transcrição/visão) sem persistir o
+    base64 no banco. Storage não configurado (503) → url=None, mas o resto segue.
+    """
+    meta = {
+        "tipo": media.get("tipo"),
+        "mime_type": media.get("mime_type"),
+        "caption": media.get("caption"),
+        "filename": media.get("filename"),
+        "url": None,
+        "downloaded": False,
+    }
+    b64 = await _obter_base64(db, instancia=instancia, media=media)
+    if not b64:
+        return meta, None
+    try:
+        conteudo = _b64.b64decode(b64)
+    except Exception:  # base64 inválido
+        return meta, None
+
+    ext = _ext_de_mime(media.get("mime_type"))
+    chave = f"{empresa_id}/{instancia.instance_name}/{media.get('media_id') or uuid.uuid4()}{ext}"
+    try:
+        from app.core.storage import storage_service
+
+        url = await asyncio.to_thread(
+            storage_service.upload,
+            "vendas-evolution",
+            chave,
+            conteudo,
+            media.get("mime_type") or "application/octet-stream",
+            "attachment",
+        )
+        meta["url"] = url
+        meta["downloaded"] = True
+    except Exception:  # pragma: no cover - storage 503/erro: best-effort
+        pass
+    return meta, conteudo
+
+
+async def _texto_de_midia(
+    db: AsyncSession, *, empresa_id: uuid.UUID, media: dict, conteudo: bytes | None
+) -> str | None:
+    """Texto que representa a mídia para a IA (transcrição de áudio / descrição de
+    imagem). Implementado na P6 (Whisper + Claude vision). Stub: sem IA → None."""
+    return None
+
+
 # ───────────────── Webhook: idempotência (dedup por event_id) ─────────────────
 
 def _event_id_de(payload: dict) -> str:
@@ -424,13 +511,28 @@ async def processar_webhook(db: AsyncSession, *, instancia, payload: dict) -> in
         lead.ultimo_canal = "whatsapp_evo"
         processadas += 1
 
+        # Mídia recebida: download + storage (best-effort) + texto para a IA.
+        midia = inbound.get("media")
+        texto_in = inbound.get("texto") or ""
+        media_meta = None
+        if midia:
+            media_meta, conteudo_bytes = await persistir_midia_inbound(
+                db, empresa_id=empresa_id, instancia=instancia, media=midia
+            )
+            texto_ia = await _texto_de_midia(
+                db, empresa_id=empresa_id, media=midia, conteudo=conteudo_bytes
+            )
+            texto_in = (
+                texto_ia or texto_in or f"[{midia.get('tipo') or 'mídia'} recebido]"
+            )
+
         from app.services.vendas_pipeline import append_mensagem
 
         try:
             await append_mensagem(
                 db, empresa_id=empresa_id, lead_id=lead.id,
-                sender_type="lead", conteudo=inbound.get("texto") or "",
-                canal="whatsapp_evo", media=None,
+                sender_type="lead", conteudo=texto_in,
+                canal="whatsapp_evo", media=media_meta,
             )
         except Exception:  # pragma: no cover - best-effort
             await db.rollback()
@@ -449,7 +551,7 @@ async def processar_webhook(db: AsyncSession, *, instancia, payload: dict) -> in
                 {
                     "empresa_id": str(empresa_id),
                     "lead_id": str(lead.id),
-                    "mensagem": inbound.get("texto") or "",
+                    "mensagem": texto_in,
                 },
             )
 
