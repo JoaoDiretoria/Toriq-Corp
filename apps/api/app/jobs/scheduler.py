@@ -14,6 +14,7 @@ def build_scheduler() -> AsyncIOScheduler:
         job_automacoes_negocio_parado,
         job_contas_recorrentes,
         job_disparo_campanhas,
+        job_sdr_buffers,
         job_sdr_followups,
         job_vencimentos,
     )
@@ -53,5 +54,10 @@ def build_scheduler() -> AsyncIOScheduler:
     sched.add_job(
         job_sdr_followups, IntervalTrigger(minutes=5),
         id="sdr_followups", replace_existing=True,
+    )
+    # A cada 10s — drena os buffers de debounce do SDR (canal Evolution).
+    sched.add_job(
+        job_sdr_buffers, IntervalTrigger(seconds=10),
+        id="sdr_buffers", replace_existing=True,
     )
     return sched

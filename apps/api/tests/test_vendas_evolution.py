@@ -649,6 +649,81 @@ async def test_texto_de_midia_imagem_descreve(db_session, monkeypatch):
     assert "Legenda: olha" in txt
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# DEBOUNCE — agrupa mensagens rápidas em 1 chamada ao SDR
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.anyio
+async def test_debounce_agrupa_inbounds_em_uma_chamada(db_session, monkeypatch):
+    import datetime as _dt
+
+    _mock_rede(monkeypatch)
+
+    # Registra os enqueues do SDR (sem rodar o handler).
+    from app.core import queue as queue_mod
+    from app.models.vendas_sdr import VendasSdrConfig
+
+    enfileirados = []
+
+    async def fake_enqueue(nome, payload=None):
+        enfileirados.append((nome, payload))
+
+    monkeypatch.setattr(queue_mod.queue, "enqueue", fake_enqueue)
+
+    await _criar_servidor(db_session)
+    empresa_id = uuid.uuid4()
+    await _criar_empresa(db_session, empresa_id)
+    inst = await svc.criar_instancia(
+        db_session, empresa_id=empresa_id, nome_exibicao="X"
+    )
+    await db_session.commit()
+
+    db_session.add(
+        VendasSdrConfig(
+            id=uuid.uuid4(), empresa_id=empresa_id, ativo=True,
+            auto_responder=True, api_key_enc=encrypt_secret("sk-ant"),
+        )
+    )
+    lead = VendasLeads(
+        id=uuid.uuid4(), empresa_id=empresa_id, nome="L",
+        telefone="+55 (11) 99999-0000",
+    )
+    db_session.add(lead)
+    await db_session.commit()
+
+    # Dois inbounds rápidos → bufferizam, NÃO enfileiram ainda.
+    for txt, wid in [("oi", "B1"), ("tudo bem?", "B2")]:
+        payload = {
+            "event": "messages.upsert", "instance": inst.instance_name,
+            "data": {
+                "key": {
+                    "remoteJid": "5511999990000@s.whatsapp.net",
+                    "fromMe": False, "id": wid,
+                },
+                "message": {"conversation": txt},
+            },
+        }
+        await svc.processar_webhook(db_session, instancia=inst, payload=payload)
+
+    assert enfileirados == []  # debounce: nada disparado ainda
+    lead_ref = await db_session.scalar(
+        select(VendasLeads).where(VendasLeads.id == lead.id)
+    )
+    await db_session.refresh(lead_ref)
+    assert "oi" in (lead_ref.sdr_buffer or "")
+    assert "tudo bem?" in (lead_ref.sdr_buffer or "")
+
+    # Força a janela vencer e drena → UMA chamada com o texto agrupado.
+    lead_ref.sdr_buffer_ate = svc._now() - _dt.timedelta(seconds=1)
+    await db_session.commit()
+    n = await svc.processar_sdr_buffers(db_session)
+    assert n == 1
+    assert len(enfileirados) == 1
+    nome, payload = enfileirados[0]
+    assert nome == "sdr_inbound"
+    assert "oi" in payload["mensagem"] and "tudo bem?" in payload["mensagem"]
+
+
 @pytest.mark.anyio
 async def test_api_webhook_duplicado_responde_deduped(client, db_session, monkeypatch):
     _mock_rede(monkeypatch)

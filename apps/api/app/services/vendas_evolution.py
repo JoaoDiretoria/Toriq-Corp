@@ -35,6 +35,11 @@ def _now() -> datetime.datetime:
     return datetime.datetime.now(datetime.timezone.utc)
 
 
+# Janela de debounce do SDR: mensagens do mesmo lead em até N segundos são
+# agrupadas numa única chamada ao SDR (economiza LLM e evita respostas picadas).
+_DEBOUNCE_SEG = 8
+
+
 def _slug(s: str) -> str:
     s = re.sub(r"[^a-z0-9]+", "-", (s or "").lower()).strip("-")
     return s or "wa"
@@ -580,17 +585,49 @@ async def processar_webhook(db: AsyncSession, *, instancia, payload: dict) -> in
             select(VendasSdrConfig).where(VendasSdrConfig.empresa_id == empresa_id)
         )
         if sdr is not None and sdr.ativo and sdr.auto_responder and sdr.api_key_enc:
-            from app.core.queue import queue
-
-            await db.commit()
-            await queue.enqueue(
-                "sdr_inbound",
-                {
-                    "empresa_id": str(empresa_id),
-                    "lead_id": str(lead.id),
-                    "mensagem": texto_in,
-                },
+            # Debounce: agrupa mensagens que chegam rápido. Acumula no buffer do
+            # lead e estende a janela; o scheduler drena depois e chama o SDR 1x.
+            atual = (lead.sdr_buffer or "").strip()
+            lead.sdr_buffer = (
+                f"{atual}\n{texto_in}".strip() if atual else texto_in
             )
+            lead.sdr_buffer_ate = _now() + datetime.timedelta(seconds=_DEBOUNCE_SEG)
 
     await db.commit()
     return processadas
+
+
+async def processar_sdr_buffers(db: AsyncSession, limite: int = 200) -> int:
+    """Drena os buffers de debounce vencidos: para cada lead com a janela
+    encerrada, enfileira UM ``sdr_inbound`` com as mensagens agrupadas. Roda no
+    scheduler (~10s). Retorna quantos leads foram despachados."""
+    agora = _now()
+    leads = (
+        await db.scalars(
+            select(VendasLeads)
+            .where(
+                VendasLeads.sdr_buffer_ate.isnot(None),
+                VendasLeads.sdr_buffer_ate <= agora,
+            )
+            .limit(limite)
+        )
+    ).all()
+
+    despachados = 0
+    for lead in leads:
+        texto = (lead.sdr_buffer or "").strip()
+        empresa_id = lead.empresa_id
+        lead_id = lead.id
+        lead.sdr_buffer = None
+        lead.sdr_buffer_ate = None
+        await db.commit()
+        if not texto:
+            continue
+        from app.core.queue import queue
+
+        await queue.enqueue(
+            "sdr_inbound",
+            {"empresa_id": str(empresa_id), "lead_id": str(lead_id), "mensagem": texto},
+        )
+        despachados += 1
+    return despachados

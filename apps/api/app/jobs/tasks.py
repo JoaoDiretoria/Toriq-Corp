@@ -52,3 +52,14 @@ async def job_sdr_followups() -> None:
     from app.services.vendas_sdr import processar_followups_pendentes
     async with SessionLocal() as db:
         await processar_followups_pendentes(db)
+
+
+async def job_sdr_buffers() -> None:
+    """Drena os buffers de debounce do SDR (canal Evolution) que venceram (~10s).
+
+    Agrupa mensagens que chegaram rápido e chama o SDR uma vez por lead.
+    """
+    from app.core.db import SessionLocal
+    from app.services.vendas_evolution import processar_sdr_buffers
+    async with SessionLocal() as db:
+        await processar_sdr_buffers(db)
