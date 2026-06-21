@@ -24,6 +24,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { toast } from 'sonner';
 import {
   Loader2, Plus, QrCode, RefreshCw, RotateCcw, Send, Trash2,
@@ -64,10 +71,14 @@ export function EvolutionInstancias() {
   const [qrLoading, setQrLoading] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // enviar teste
+  // enviar teste (texto ou mídia por URL)
   const [envInst, setEnvInst] = useState<Instancia | null>(null);
   const [envNumero, setEnvNumero] = useState('');
   const [envTexto, setEnvTexto] = useState('');
+  const [envModo, setEnvModo] = useState<'texto' | 'image' | 'document' | 'audio'>(
+    'texto',
+  );
+  const [envMedia, setEnvMedia] = useState('');
   const [enviando, setEnviando] = useState(false);
 
   const fetchInstancias = useCallback(async () => {
@@ -192,23 +203,46 @@ export function EvolutionInstancias() {
     }
   };
 
+  const resetEnvio = () => {
+    setEnvInst(null);
+    setEnvNumero('');
+    setEnvTexto('');
+    setEnvMedia('');
+    setEnvModo('texto');
+  };
+
   const handleEnviar = async () => {
     if (!envInst) return;
-    if (!envNumero.trim() || !envTexto.trim()) {
-      toast.error('Informe número e texto');
+    if (!envNumero.trim()) {
+      toast.error('Informe o número');
+      return;
+    }
+    const ehMidia = envModo !== 'texto';
+    if (ehMidia && !envMedia.trim()) {
+      toast.error('Informe a URL da mídia');
+      return;
+    }
+    if (!ehMidia && !envTexto.trim()) {
+      toast.error('Informe o texto');
       return;
     }
     setEnviando(true);
     try {
-      const res = await vendasEvolutionApi.enviar(envInst.id, {
-        numero: envNumero.trim(),
-        texto: envTexto.trim(),
-      });
+      const res = ehMidia
+        ? await vendasEvolutionApi.enviarMidia(envInst.id, {
+            numero: envNumero.trim(),
+            mediatype: envModo,
+            media: envMedia.trim(),
+            caption:
+              envModo === 'audio' ? null : envTexto.trim() || null,
+          })
+        : await vendasEvolutionApi.enviar(envInst.id, {
+            numero: envNumero.trim(),
+            texto: envTexto.trim(),
+          });
       if (res.enviado) {
         toast.success('Mensagem enviada');
-        setEnvInst(null);
-        setEnvNumero('');
-        setEnvTexto('');
+        resetEnvio();
       } else {
         toast.error(res.erro || 'Falha ao enviar');
       }
@@ -280,13 +314,12 @@ export function EvolutionInstancias() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
+                    resetEnvio();
                     setEnvInst(inst);
-                    setEnvNumero('');
-                    setEnvTexto('');
                   }}
                 >
                   <Send className="mr-2 h-4 w-4" />
-                  Enviar teste
+                  Enviar
                 </Button>
                 <Button
                   variant="ghost"
@@ -370,13 +403,13 @@ export function EvolutionInstancias() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog: enviar teste */}
-      <Dialog open={!!envInst} onOpenChange={(o) => !o && setEnvInst(null)}>
+      {/* Dialog: enviar (texto ou mídia por URL) */}
+      <Dialog open={!!envInst} onOpenChange={(o) => !o && resetEnvio()}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Enviar teste — {envInst?.nome_exibicao}</DialogTitle>
+            <DialogTitle>Enviar — {envInst?.nome_exibicao}</DialogTitle>
             <DialogDescription>
-              Envia uma mensagem de texto pela instância conectada.
+              Envia texto ou mídia (por URL pública) pela instância conectada.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -390,17 +423,51 @@ export function EvolutionInstancias() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="evo-env-txt">Mensagem</Label>
-              <Textarea
-                id="evo-env-txt"
-                rows={3}
-                value={envTexto}
-                onChange={(e) => setEnvTexto(e.target.value)}
-              />
+              <Label>Tipo</Label>
+              <Select
+                value={envModo}
+                onValueChange={(v) =>
+                  setEnvModo(v as 'texto' | 'image' | 'document' | 'audio')
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="texto">Texto</SelectItem>
+                  <SelectItem value="image">Imagem</SelectItem>
+                  <SelectItem value="document">Documento</SelectItem>
+                  <SelectItem value="audio">Áudio (voz)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+            {envModo !== 'texto' && (
+              <div className="space-y-2">
+                <Label htmlFor="evo-env-media">URL da mídia</Label>
+                <Input
+                  id="evo-env-media"
+                  placeholder="https://exemplo.com/arquivo"
+                  value={envMedia}
+                  onChange={(e) => setEnvMedia(e.target.value)}
+                />
+              </div>
+            )}
+            {envModo !== 'audio' && (
+              <div className="space-y-2">
+                <Label htmlFor="evo-env-txt">
+                  {envModo === 'texto' ? 'Mensagem' : 'Legenda (opcional)'}
+                </Label>
+                <Textarea
+                  id="evo-env-txt"
+                  rows={3}
+                  value={envTexto}
+                  onChange={(e) => setEnvTexto(e.target.value)}
+                />
+              </div>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEnvInst(null)}>
+            <Button variant="outline" onClick={resetEnvio}>
               Cancelar
             </Button>
             <Button onClick={handleEnviar} disabled={enviando}>
