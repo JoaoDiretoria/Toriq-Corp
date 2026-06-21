@@ -35,7 +35,10 @@ async def _criar_servidor(db_session):
 
 
 def _mock_rede(monkeypatch):
-    chamadas = {"criadas": [], "webhooks": [], "textos": [], "presencas": []}
+    chamadas = {
+        "criadas": [], "webhooks": [], "textos": [], "presencas": [],
+        "logouts": [], "restarts": [], "settings": [],
+    }
 
     async def fake_criar(**kw):
         chamadas["criadas"].append(kw)
@@ -56,6 +59,7 @@ def _mock_rede(monkeypatch):
         return "EVO-MSG-1"
 
     async def fake_logout(**kw):
+        chamadas["logouts"].append(kw)
         return {}
 
     async def fake_deletar(**kw):
@@ -64,6 +68,16 @@ def _mock_rede(monkeypatch):
     async def fake_presenca(**kw):
         chamadas["presencas"].append(kw)
 
+    async def fake_reiniciar(**kw):
+        chamadas["restarts"].append(kw)
+        return {}
+
+    async def fake_settings(**kw):
+        chamadas["settings"].append(kw)
+        return {}
+
+    monkeypatch.setattr(evolution_api, "reiniciar", fake_reiniciar)
+    monkeypatch.setattr(evolution_api, "definir_settings", fake_settings)
     monkeypatch.setattr(evolution_api, "enviar_presenca", fake_presenca)
     monkeypatch.setattr(evolution_api, "criar_instancia", fake_criar)
     monkeypatch.setattr(evolution_api, "definir_webhook", fake_webhook)
@@ -409,6 +423,41 @@ async def test_registrar_webhook_evento_deduplica(db_session, monkeypatch):
     id2 = await svc.registrar_webhook_evento(db_session, instancia=inst, payload=payload)
     assert id1 is not None
     assert id2 is None  # mesma key.id → descartado
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CONEXÃO — settings padrão no create + ritual de reconexão
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.anyio
+async def test_criar_instancia_aplica_settings_padrao(db_session, monkeypatch):
+    chamadas = _mock_rede(monkeypatch)
+    await _criar_servidor(db_session)
+    empresa_id = uuid.uuid4()
+    await _criar_empresa(db_session, empresa_id)
+    await svc.criar_instancia(db_session, empresa_id=empresa_id, nome_exibicao="X")
+    await db_session.commit()
+    assert chamadas["settings"], "settings padrão devem ser aplicados no create"
+    assert chamadas["settings"][0]["settings"]["groupsIgnore"] is True
+
+
+@pytest.mark.anyio
+async def test_reconectar_faz_ritual_e_retorna_qr(db_session, monkeypatch):
+    chamadas = _mock_rede(monkeypatch)
+    await _criar_servidor(db_session)
+    empresa_id = uuid.uuid4()
+    await _criar_empresa(db_session, empresa_id)
+    inst = await svc.criar_instancia(
+        db_session, empresa_id=empresa_id, nome_exibicao="X"
+    )
+    await db_session.commit()
+
+    data = await svc.reconectar(
+        db_session, empresa_id=empresa_id, instancia_id=inst.id
+    )
+    assert data["base64"]  # novo QR retornado
+    assert chamadas["logouts"] and chamadas["restarts"]  # ritual chamado
+    assert inst.status == "conectando"
 
 
 @pytest.mark.anyio

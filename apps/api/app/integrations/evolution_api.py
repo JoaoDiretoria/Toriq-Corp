@@ -115,6 +115,19 @@ async def deletar(*, base_url: str, api_key: str, instance_name: str) -> dict:
     return await _request("DELETE", url, api_key, contexto="deletar")
 
 
+async def reiniciar(*, base_url: str, api_key: str, instance_name: str) -> dict:
+    url = f"{_base(base_url)}/instance/restart/{instance_name}"
+    return await _request("PUT", url, api_key, contexto="reiniciar")
+
+
+async def definir_settings(
+    *, base_url: str, api_key: str, instance_name: str, settings: dict
+) -> dict:
+    """Aplica settings da instância (rejectCall, groupsIgnore, readMessages, ...)."""
+    url = f"{_base(base_url)}/settings/set/{instance_name}"
+    return await _request("POST", url, api_key, json=settings, contexto="settings")
+
+
 # ───────────────────────────── Mensagens ─────────────────────────────
 
 async def enviar_texto(

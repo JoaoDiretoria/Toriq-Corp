@@ -130,6 +130,23 @@ async def qrcode(
     return s.QRCodeOut(**data)
 
 
+@router.post("/evolution/instancias/{instancia_id}/reconectar", response_model=s.QRCodeOut)
+async def reconectar(
+    instancia_id: uuid.UUID,
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    empresa_id = _require_empresa(user)
+    try:
+        data = await svc.reconectar(
+            db, empresa_id=empresa_id, instancia_id=instancia_id
+        )
+    except ValueError as e:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(e))
+    await db.commit()
+    return s.QRCodeOut(**data)
+
+
 @router.get("/evolution/instancias/{instancia_id}/status", response_model=s.StatusOut)
 async def status_instancia(
     instancia_id: uuid.UUID,

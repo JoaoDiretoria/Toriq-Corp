@@ -43,6 +43,18 @@ def gerar_instance_name(empresa_id: uuid.UUID, nome: str) -> str:
     return f"emp_{str(empresa_id)[:8]}_{_slug(nome)}_{secrets.token_hex(2)}"
 
 
+# Settings padrão de uma instância de vendas: ignora grupos, não rejeita ligação,
+# não marca lido automaticamente (o SDR controla o fluxo). Best-effort no create.
+SETTINGS_PADRAO = {
+    "rejectCall": False,
+    "groupsIgnore": True,
+    "alwaysOnline": False,
+    "readMessages": False,
+    "readStatus": False,
+    "syncFullHistory": False,
+}
+
+
 # ───────────────────────── Servidor (global) ─────────────────────────
 
 async def get_servidor(db: AsyncSession) -> VendasEvolutionServidor | None:
@@ -113,6 +125,14 @@ async def criar_instancia(
         base_url=base_url, api_key=api_key,
         instance_name=instance_name, webhook_url=webhook_url,
     )
+    # Settings padrão (best-effort: não bloqueia a criação se falhar).
+    try:
+        await evolution_api.definir_settings(
+            base_url=base_url, api_key=api_key,
+            instance_name=instance_name, settings=SETTINGS_PADRAO,
+        )
+    except evolution_api.EvolutionError:
+        pass
 
     obj = VendasEvolutionInstancias(
         id=uuid.uuid4(),
@@ -169,6 +189,36 @@ async def sincronizar_status(
     )
     inst.updated_at = _now()
     return inst.status
+
+
+async def reconectar(
+    db: AsyncSession, *, empresa_id: uuid.UUID, instancia_id: uuid.UUID
+) -> dict:
+    """Ritual de reconexão (estilo tio-crm, sem bloquear): logout → restart →
+    novo QR. logout/restart são best-effort; o status vai p/ 'conectando' e o
+    frontend faz polling de status até 'conectada'. NÃO commita."""
+    base_url, api_key = await _exigir_servidor(db)
+    inst = await _get_instancia(db, empresa_id=empresa_id, instancia_id=instancia_id)
+    if inst is None:
+        raise ValueError("instância não encontrada")
+
+    for fn in (evolution_api.logout, evolution_api.reiniciar):
+        try:
+            await fn(
+                base_url=base_url, api_key=api_key, instance_name=inst.instance_name
+            )
+        except evolution_api.EvolutionError:
+            pass
+
+    inst.status = "conectando"
+    inst.updated_at = _now()
+    data = await evolution_api.conectar_qrcode(
+        base_url=base_url, api_key=api_key, instance_name=inst.instance_name
+    )
+    return {
+        "base64": data.get("base64"),
+        "code": data.get("code") or data.get("pairingCode"),
+    }
 
 
 async def deletar_instancia(
