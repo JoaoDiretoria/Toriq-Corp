@@ -34,6 +34,8 @@ export interface SdrConfigPublic {
   notificar_telefones: string | null;
   api_key_set: boolean;
   api_key_masked: string | null;
+  openai_api_key_set?: boolean;
+  openai_api_key_masked?: string | null;
 }
 
 /** Payload de atualização da config (api_key em claro só ao alterar). */
@@ -51,6 +53,8 @@ export interface SdrConfigUpdate {
   auto_responder?: boolean | null;
   notificar_telefones?: string | null;
   clear_api_key?: boolean | null;
+  openai_api_key?: string | null; // Whisper (transcrição de áudio do WhatsApp)
+  clear_openai_api_key?: boolean | null;
 }
 
 /** Lead na visão do SDR (campos sdr_* incluídos). */

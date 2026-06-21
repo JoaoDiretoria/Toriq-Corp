@@ -25,7 +25,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Loader2, Plus, QrCode, RefreshCw, Send, Trash2 } from 'lucide-react';
+import {
+  Loader2, Plus, QrCode, RefreshCw, RotateCcw, Send, Trash2,
+} from 'lucide-react';
 
 const STATUS_VARIANT: Record<string, { label: string; cls: string }> = {
   conectada: { label: 'Conectada', cls: 'bg-green-500/15 text-green-600' },
@@ -159,6 +161,16 @@ export function EvolutionInstancias() {
     setQrInst(null);
   };
 
+  const handleReconectar = async (inst: Instancia) => {
+    try {
+      await vendasEvolutionApi.reconectar(inst.id);
+    } catch (error) {
+      toast.error((error as Error)?.message || 'Erro ao reconectar');
+      return;
+    }
+    abrirQr(inst); // mostra o novo QR + faz polling até conectar
+  };
+
   const handleStatus = async (inst: Instancia) => {
     try {
       const { status } = await vendasEvolutionApi.getStatus(inst.id);
@@ -255,6 +267,14 @@ export function EvolutionInstancias() {
                 <Button variant="outline" size="sm" onClick={() => handleStatus(inst)}>
                   <RefreshCw className="mr-2 h-4 w-4" />
                   Status
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleReconectar(inst)}
+                >
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Reconectar
                 </Button>
                 <Button
                   variant="outline"
