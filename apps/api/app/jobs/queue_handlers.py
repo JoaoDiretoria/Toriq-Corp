@@ -36,6 +36,60 @@ async def _sdr_inbound(payload: dict) -> None:
         )
 
 
+@register("evolution_webhook")
+async def _evolution_webhook(payload: dict) -> None:
+    """Processa um evento de webhook da Evolution já persistido (fora do request).
+
+    Carrega o evento pelo id, acha a instância e roda ``processar_webhook``
+    (inbound → pipeline + SDR; connection.update → status). Marca o evento como
+    processed/error. Idempotente: pula se já processado.
+    """
+    import datetime
+
+    from sqlalchemy import update
+
+    evento_id = payload.get("evento_id")
+    if not evento_id:
+        return
+    from app.core.db import SessionLocal
+    from app.models.vendas_evolution import (
+        VendasEvolutionInstancias,
+        VendasEvolutionWebhookEventos,
+    )
+    from app.services.vendas_evolution import processar_webhook
+
+    async with SessionLocal() as db:
+        evt = await db.get(VendasEvolutionWebhookEventos, uuid.UUID(str(evento_id)))
+        if evt is None or evt.status == "processed":
+            return
+        inst = (
+            await db.get(VendasEvolutionInstancias, evt.instancia_id)
+            if evt.instancia_id
+            else None
+        )
+        payload_evt = evt.payload or {}
+        agora = datetime.datetime.now(datetime.timezone.utc)
+        if inst is None:
+            await db.execute(
+                update(VendasEvolutionWebhookEventos)
+                .where(VendasEvolutionWebhookEventos.id == evt.id)
+                .values(status="error", erro="instância ausente", processed_at=agora)
+            )
+            await db.commit()
+            return
+        try:
+            await processar_webhook(db, instancia=inst, payload=payload_evt)
+            novo_status, erro = "processed", None
+        except Exception as exc:  # noqa: BLE001 - registra e não derruba o worker
+            novo_status, erro = "error", str(exc)[:500]
+        await db.execute(
+            update(VendasEvolutionWebhookEventos)
+            .where(VendasEvolutionWebhookEventos.id == evt.id)
+            .values(status=novo_status, erro=erro, processed_at=agora)
+        )
+        await db.commit()
+
+
 @register("sdr_qualificar_lote")
 async def _sdr_qualificar_lote(payload: dict) -> None:
     """Qualifica um lote de leads pelo SDR fora do request."""

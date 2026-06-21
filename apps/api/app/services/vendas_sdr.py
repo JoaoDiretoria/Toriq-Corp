@@ -521,7 +521,7 @@ async def _enviar_whatsapp_sdr(
         try:
             res = await enviar_texto(
                 db, empresa_id=empresa_id, instancia_id=inst.id,
-                numero=destino, texto=texto,
+                numero=destino, texto=texto, typing=True,
             )
             return bool(res.get("enviado"))
         except Exception:

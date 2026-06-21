@@ -70,6 +70,15 @@ export interface EnviarOut {
   erro: string | null;
 }
 
+export interface EnviarMidiaIn {
+  numero: string;
+  mediatype: string; // image | video | document | audio
+  media: string; // URL pública ou base64
+  mimetype?: string | null;
+  filename?: string | null;
+  caption?: string | null;
+}
+
 // ---------------------------------------------------------------------------
 // API
 // ---------------------------------------------------------------------------
@@ -89,8 +98,12 @@ export const vendasEvolutionApi = {
     api.get<QRCode>(`/vendas/evolution/instancias/${id}/qrcode`),
   getStatus: (id: string) =>
     api.get<StatusOut>(`/vendas/evolution/instancias/${id}/status`),
+  reconectar: (id: string) =>
+    api.post<QRCode>(`/vendas/evolution/instancias/${id}/reconectar`),
   deletarInstancia: (id: string) =>
     api.del<{ ok: boolean }>(`/vendas/evolution/instancias/${id}`),
   enviar: (id: string, data: EnviarIn) =>
     api.post<EnviarOut>(`/vendas/evolution/instancias/${id}/enviar`, data),
+  enviarMidia: (id: string, data: EnviarMidiaIn) =>
+    api.post<EnviarOut>(`/vendas/evolution/instancias/${id}/enviar-midia`, data),
 };

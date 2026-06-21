@@ -115,6 +115,19 @@ async def deletar(*, base_url: str, api_key: str, instance_name: str) -> dict:
     return await _request("DELETE", url, api_key, contexto="deletar")
 
 
+async def reiniciar(*, base_url: str, api_key: str, instance_name: str) -> dict:
+    url = f"{_base(base_url)}/instance/restart/{instance_name}"
+    return await _request("PUT", url, api_key, contexto="reiniciar")
+
+
+async def definir_settings(
+    *, base_url: str, api_key: str, instance_name: str, settings: dict
+) -> dict:
+    """Aplica settings da instância (rejectCall, groupsIgnore, readMessages, ...)."""
+    url = f"{_base(base_url)}/settings/set/{instance_name}"
+    return await _request("POST", url, api_key, json=settings, contexto="settings")
+
+
 # ───────────────────────────── Mensagens ─────────────────────────────
 
 async def enviar_texto(
@@ -125,6 +138,65 @@ async def enviar_texto(
     payload = {"number": numero, "text": texto}
     data = await _request("POST", url, api_key, json=payload, contexto="enviar texto")
     return _extrair_id(data)
+
+
+async def enviar_midia(
+    *, base_url: str, api_key: str, instance_name: str, numero: str,
+    mediatype: str, media: str, mimetype: str | None = None,
+    filename: str | None = None, caption: str | None = None,
+) -> str:
+    """Envia mídia (image/video/document). ``media`` = URL pública ou base64.
+    Retorna o id da mensagem."""
+    url = f"{_base(base_url)}/message/sendMedia/{instance_name}"
+    payload: dict = {"number": numero, "mediatype": mediatype, "media": media}
+    if mimetype:
+        payload["mimetype"] = mimetype
+    if filename:
+        payload["fileName"] = filename
+    if caption:
+        payload["caption"] = caption
+    data = await _request("POST", url, api_key, json=payload, contexto="enviar midia")
+    return _extrair_id(data)
+
+
+async def enviar_audio(
+    *, base_url: str, api_key: str, instance_name: str, numero: str, audio: str
+) -> str:
+    """Envia áudio de voz (PTT). ``audio`` = URL pública ou base64."""
+    url = f"{_base(base_url)}/message/sendWhatsAppAudio/{instance_name}"
+    payload = {"number": numero, "audio": audio}
+    data = await _request("POST", url, api_key, json=payload, contexto="enviar audio")
+    return _extrair_id(data)
+
+
+async def baixar_midia(
+    *, base_url: str, api_key: str, instance_name: str, message_id: str
+) -> str:
+    """Baixa a mídia de uma mensagem recebida como base64 (fallback quando o
+    webhook não trouxe base64 inline). Retorna '' se não vier."""
+    url = f"{_base(base_url)}/chat/getBase64FromMediaMessage/{instance_name}"
+    payload = {"message": {"key": {"id": message_id}}}
+    data = await _request("POST", url, api_key, json=payload, contexto="baixar midia")
+    if isinstance(data, dict):
+        return data.get("base64") or ""
+    return ""
+
+
+async def enviar_presenca(
+    *, base_url: str, api_key: str, instance_name: str, numero: str,
+    presence: str = "composing", delay_ms: int = 1200,
+) -> None:
+    """Mostra 'digitando...'/'gravando...' no WhatsApp do contato (humaniza o SDR).
+
+    presence: 'composing' | 'recording' | 'paused' | 'available'. Best-effort:
+    nunca levanta (igual ao tio-crm) — falha de presença não pode bloquear o envio.
+    """
+    url = f"{_base(base_url)}/chat/sendPresence/{instance_name}"
+    payload = {"number": numero, "presence": presence, "delay": delay_ms}
+    try:
+        await _request("POST", url, api_key, json=payload, contexto="presence")
+    except EvolutionError:
+        return
 
 
 def _extrair_id(data) -> str:
@@ -143,6 +215,38 @@ def normalizar_telefone(valor: str) -> str:
     """Remove sufixo JID (@s.whatsapp.net/@g.us) e tudo que não é dígito."""
     base = (valor or "").split("@")[0]
     return re.sub(r"\D", "", base)
+
+
+# Tipos de mídia da Evolution (chave em data.message → nosso vocabulário).
+_MEDIA_KEYS = {
+    "imageMessage": "image",
+    "audioMessage": "audio",
+    "videoMessage": "video",
+    "documentMessage": "document",
+    "stickerMessage": "sticker",
+}
+
+
+def _extrair_media(m: dict, msg: dict) -> dict | None:
+    """Extrai metadados de mídia + base64 inline (quando o webhook manda base64).
+
+    Retorna ``None`` p/ mensagem de texto puro; senão um dict com
+    ``{tipo, mime_type, caption, filename, seconds, media_id, base64}``.
+    O ``base64`` é usado em memória (download/transcrição) e NÃO é persistido.
+    """
+    for chave, tipo in _MEDIA_KEYS.items():
+        obj = msg.get(chave)
+        if isinstance(obj, dict):
+            return {
+                "tipo": tipo,
+                "mime_type": obj.get("mimetype"),
+                "caption": obj.get("caption"),
+                "filename": obj.get("fileName"),
+                "seconds": obj.get("seconds"),
+                "media_id": (m.get("key") or {}).get("id"),
+                "base64": msg.get("base64") or m.get("base64"),
+            }
+    return None
 
 
 def parse_webhook(payload) -> dict:
@@ -168,15 +272,19 @@ def parse_webhook(payload) -> dict:
             if key.get("fromMe"):
                 continue  # ignora as mensagens que NÓS enviamos
             msg = m.get("message") or {}
-            texto = msg.get("conversation") or (
-                msg.get("extendedTextMessage") or {}
-            ).get("text")
+            media = _extrair_media(m, msg)
+            texto = (
+                msg.get("conversation")
+                or (msg.get("extendedTextMessage") or {}).get("text")
+                or (media or {}).get("caption")
+            )
             out["mensagens"].append(
                 {
                     "wamid": key.get("id"),
                     "from": normalizar_telefone(key.get("remoteJid") or ""),
                     "pushName": m.get("pushName"),
                     "texto": texto,
+                    "media": media,
                     "timestamp": m.get("messageTimestamp"),
                 }
             )

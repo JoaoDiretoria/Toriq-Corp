@@ -130,6 +130,23 @@ async def qrcode(
     return s.QRCodeOut(**data)
 
 
+@router.post("/evolution/instancias/{instancia_id}/reconectar", response_model=s.QRCodeOut)
+async def reconectar(
+    instancia_id: uuid.UUID,
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    empresa_id = _require_empresa(user)
+    try:
+        data = await svc.reconectar(
+            db, empresa_id=empresa_id, instancia_id=instancia_id
+        )
+    except ValueError as e:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(e))
+    await db.commit()
+    return s.QRCodeOut(**data)
+
+
 @router.get("/evolution/instancias/{instancia_id}/status", response_model=s.StatusOut)
 async def status_instancia(
     instancia_id: uuid.UUID,
@@ -184,6 +201,28 @@ async def enviar(
     return s.EnviarOut(**res)
 
 
+@router.post(
+    "/evolution/instancias/{instancia_id}/enviar-midia", response_model=s.EnviarOut
+)
+async def enviar_midia(
+    instancia_id: uuid.UUID,
+    dados: s.EnviarMidiaIn,
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    empresa_id = _require_empresa(user)
+    try:
+        res = await svc.enviar_midia(
+            db, empresa_id=empresa_id, instancia_id=instancia_id,
+            numero=dados.numero, mediatype=dados.mediatype, media=dados.media,
+            mimetype=dados.mimetype, filename=dados.filename, caption=dados.caption,
+        )
+    except ValueError as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
+    await db.commit()
+    return s.EnviarOut(**res)
+
+
 # ───────────────────────── Webhook (público) ─────────────────────────
 
 @router.post("/evolution/webhook/{webhook_token}")
@@ -203,5 +242,15 @@ async def webhook(
         payload = await request.json()
     except Exception:  # noqa: BLE001
         payload = {}
-    await svc.processar_webhook(db, instancia=inst, payload=payload)
+
+    # Idempotência: a Evolution reenvia se não receber 200 rápido. Persistimos o
+    # evento (UNIQUE event_id); duplicata → 200 deduped sem reprocessar.
+    evento_id = await svc.registrar_webhook_evento(db, instancia=inst, payload=payload)
+    if evento_id is None:
+        return JSONResponse({"ok": True, "deduped": True}, status_code=200)
+
+    # Processa fora do request (com Redis); sem Redis roda inline. 200 imediato.
+    from app.core.queue import queue
+
+    await queue.enqueue("evolution_webhook", {"evento_id": str(evento_id)})
     return JSONResponse({"ok": True}, status_code=200)

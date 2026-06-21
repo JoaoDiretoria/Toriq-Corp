@@ -28,6 +28,8 @@ class SdrConfigUpdate(BaseModel):
     auto_responder: Optional[bool] = None
     notificar_telefones: Optional[str] = None
     clear_api_key: Optional[bool] = None
+    openai_api_key: Optional[str] = None  # Whisper (transcrição de áudio)
+    clear_openai_api_key: Optional[bool] = None
 
 
 class SdrConfigPublic(BaseModel):
@@ -44,6 +46,8 @@ class SdrConfigPublic(BaseModel):
     notificar_telefones: Optional[str] = None
     api_key_set: bool = False
     api_key_masked: Optional[str] = None
+    openai_api_key_set: bool = False
+    openai_api_key_masked: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
 

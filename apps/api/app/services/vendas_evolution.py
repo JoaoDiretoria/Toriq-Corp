@@ -9,12 +9,15 @@ monkeypatch nesse módulo.
 """
 from __future__ import annotations
 
+import asyncio
+import base64 as _b64
 import datetime
 import re
 import secrets
 import uuid
 
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.esocial_crypto import decrypt_secret, encrypt_secret
@@ -24,11 +27,17 @@ from app.models.vendas_disparo import VendasMensagens
 from app.models.vendas_evolution import (
     VendasEvolutionInstancias,
     VendasEvolutionServidor,
+    VendasEvolutionWebhookEventos,
 )
 
 
 def _now() -> datetime.datetime:
     return datetime.datetime.now(datetime.timezone.utc)
+
+
+# Janela de debounce do SDR: mensagens do mesmo lead em até N segundos são
+# agrupadas numa única chamada ao SDR (economiza LLM e evita respostas picadas).
+_DEBOUNCE_SEG = 8
 
 
 def _slug(s: str) -> str:
@@ -39,6 +48,18 @@ def _slug(s: str) -> str:
 def gerar_instance_name(empresa_id: uuid.UUID, nome: str) -> str:
     """Namespeado por empresa para não colidir no servidor compartilhado."""
     return f"emp_{str(empresa_id)[:8]}_{_slug(nome)}_{secrets.token_hex(2)}"
+
+
+# Settings padrão de uma instância de vendas: ignora grupos, não rejeita ligação,
+# não marca lido automaticamente (o SDR controla o fluxo). Best-effort no create.
+SETTINGS_PADRAO = {
+    "rejectCall": False,
+    "groupsIgnore": True,
+    "alwaysOnline": False,
+    "readMessages": False,
+    "readStatus": False,
+    "syncFullHistory": False,
+}
 
 
 # ───────────────────────── Servidor (global) ─────────────────────────
@@ -111,6 +132,14 @@ async def criar_instancia(
         base_url=base_url, api_key=api_key,
         instance_name=instance_name, webhook_url=webhook_url,
     )
+    # Settings padrão (best-effort: não bloqueia a criação se falhar).
+    try:
+        await evolution_api.definir_settings(
+            base_url=base_url, api_key=api_key,
+            instance_name=instance_name, settings=SETTINGS_PADRAO,
+        )
+    except evolution_api.EvolutionError:
+        pass
 
     obj = VendasEvolutionInstancias(
         id=uuid.uuid4(),
@@ -169,6 +198,36 @@ async def sincronizar_status(
     return inst.status
 
 
+async def reconectar(
+    db: AsyncSession, *, empresa_id: uuid.UUID, instancia_id: uuid.UUID
+) -> dict:
+    """Ritual de reconexão (estilo tio-crm, sem bloquear): logout → restart →
+    novo QR. logout/restart são best-effort; o status vai p/ 'conectando' e o
+    frontend faz polling de status até 'conectada'. NÃO commita."""
+    base_url, api_key = await _exigir_servidor(db)
+    inst = await _get_instancia(db, empresa_id=empresa_id, instancia_id=instancia_id)
+    if inst is None:
+        raise ValueError("instância não encontrada")
+
+    for fn in (evolution_api.logout, evolution_api.reiniciar):
+        try:
+            await fn(
+                base_url=base_url, api_key=api_key, instance_name=inst.instance_name
+            )
+        except evolution_api.EvolutionError:
+            pass
+
+    inst.status = "conectando"
+    inst.updated_at = _now()
+    data = await evolution_api.conectar_qrcode(
+        base_url=base_url, api_key=api_key, instance_name=inst.instance_name
+    )
+    return {
+        "base64": data.get("base64"),
+        "code": data.get("code") or data.get("pairingCode"),
+    }
+
+
 async def deletar_instancia(
     db: AsyncSession, *, empresa_id: uuid.UUID, instancia_id: uuid.UUID
 ) -> bool:
@@ -193,9 +252,43 @@ async def deletar_instancia(
 
 async def enviar_texto(
     db: AsyncSession, *, empresa_id: uuid.UUID, instancia_id: uuid.UUID,
-    numero: str, texto: str,
+    numero: str, texto: str, typing: bool = False,
 ) -> dict:
-    """Envia um texto e grava em vendas_mensagens. NÃO commita."""
+    """Envia um texto e grava em vendas_mensagens. NÃO commita.
+
+    ``typing=True`` mostra 'digitando...' antes (respostas do SDR — mais humano).
+    """
+    base_url, api_key = await _exigir_servidor(db)
+    inst = await _get_instancia(db, empresa_id=empresa_id, instancia_id=instancia_id)
+    if inst is None:
+        raise ValueError("instância não encontrada")
+
+    destino = re.sub(r"\D", "", numero or "")
+    if typing:
+        await evolution_api.enviar_presenca(
+            base_url=base_url, api_key=api_key,
+            instance_name=inst.instance_name, numero=destino, presence="composing",
+        )
+    enviado, provider_id, erro = False, None, None
+    try:
+        provider_id = await evolution_api.enviar_texto(
+            base_url=base_url, api_key=api_key,
+            instance_name=inst.instance_name, numero=destino, texto=texto,
+        )
+        enviado = True
+    except evolution_api.EvolutionError as exc:
+        erro = str(exc)
+
+    return {"enviado": enviado, "provider_id": provider_id, "erro": erro}
+
+
+async def enviar_midia(
+    db: AsyncSession, *, empresa_id: uuid.UUID, instancia_id: uuid.UUID,
+    numero: str, mediatype: str, media: str, mimetype: str | None = None,
+    filename: str | None = None, caption: str | None = None,
+) -> dict:
+    """Envia mídia (image/video/document/audio) pela instância. NÃO commita.
+    ``media`` = URL pública ou base64. mediatype='audio' usa o endpoint de voz."""
     base_url, api_key = await _exigir_servidor(db)
     inst = await _get_instancia(db, empresa_id=empresa_id, instancia_id=instancia_id)
     if inst is None:
@@ -204,10 +297,18 @@ async def enviar_texto(
     destino = re.sub(r"\D", "", numero or "")
     enviado, provider_id, erro = False, None, None
     try:
-        provider_id = await evolution_api.enviar_texto(
-            base_url=base_url, api_key=api_key,
-            instance_name=inst.instance_name, numero=destino, texto=texto,
-        )
+        if mediatype == "audio":
+            provider_id = await evolution_api.enviar_audio(
+                base_url=base_url, api_key=api_key,
+                instance_name=inst.instance_name, numero=destino, audio=media,
+            )
+        else:
+            provider_id = await evolution_api.enviar_midia(
+                base_url=base_url, api_key=api_key,
+                instance_name=inst.instance_name, numero=destino,
+                mediatype=mediatype, media=media, mimetype=mimetype,
+                filename=filename, caption=caption,
+            )
         enviado = True
     except evolution_api.EvolutionError as exc:
         erro = str(exc)
@@ -234,6 +335,166 @@ async def instancia_conectada(
         .where(VendasEvolutionInstancias.empresa_id == empresa_id)
         .limit(1)
     )
+
+
+# ───────────────── Webhook: mídia inbound (download + storage) ─────────────────
+
+_EXT_MIME = {
+    "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp",
+    "audio/ogg": ".ogg", "audio/mpeg": ".mp3", "video/mp4": ".mp4",
+    "application/pdf": ".pdf",
+}
+
+
+def _ext_de_mime(mime: str | None) -> str:
+    if not mime:
+        return ".bin"
+    return _EXT_MIME.get(mime.split(";")[0].strip(), ".bin")
+
+
+async def _obter_base64(db: AsyncSession, *, instancia, media: dict) -> str:
+    """base64 inline (preferido) ou fallback baixando da Evolution. '' se nada."""
+    b64 = media.get("base64")
+    if b64:
+        return b64
+    if media.get("media_id"):
+        try:
+            base_url, api_key = await _exigir_servidor(db)
+            return await evolution_api.baixar_midia(
+                base_url=base_url, api_key=api_key,
+                instance_name=instancia.instance_name, message_id=media["media_id"],
+            )
+        except (ValueError, evolution_api.EvolutionError):
+            return ""
+    return ""
+
+
+async def persistir_midia_inbound(
+    db: AsyncSession, *, empresa_id: uuid.UUID, instancia, media: dict
+) -> tuple[dict, bytes | None]:
+    """Sobe a mídia recebida no storage (best-effort) e devolve (metadata, bytes).
+
+    metadata (p/ o pipeline): {tipo, mime_type, caption, filename, url, downloaded}.
+    Os ``bytes`` brutos são devolvidos p/ a IA (transcrição/visão) sem persistir o
+    base64 no banco. Storage não configurado (503) → url=None, mas o resto segue.
+    """
+    meta = {
+        "tipo": media.get("tipo"),
+        "mime_type": media.get("mime_type"),
+        "caption": media.get("caption"),
+        "filename": media.get("filename"),
+        "url": None,
+        "downloaded": False,
+    }
+    b64 = await _obter_base64(db, instancia=instancia, media=media)
+    if not b64:
+        return meta, None
+    try:
+        conteudo = _b64.b64decode(b64)
+    except Exception:  # base64 inválido
+        return meta, None
+
+    ext = _ext_de_mime(media.get("mime_type"))
+    chave = f"{empresa_id}/{instancia.instance_name}/{media.get('media_id') or uuid.uuid4()}{ext}"
+    try:
+        from app.core.storage import storage_service
+
+        url = await asyncio.to_thread(
+            storage_service.upload,
+            "vendas-evolution",
+            chave,
+            conteudo,
+            media.get("mime_type") or "application/octet-stream",
+            "attachment",
+        )
+        meta["url"] = url
+        meta["downloaded"] = True
+    except Exception:  # pragma: no cover - storage 503/erro: best-effort
+        pass
+    return meta, conteudo
+
+
+async def _texto_de_midia(
+    db: AsyncSession, *, empresa_id: uuid.UUID, media: dict, conteudo: bytes | None
+) -> str | None:
+    """Texto que representa a mídia para a IA: áudio→Whisper, imagem→Claude vision.
+
+    Usa a config do SDR (openai_api_key_enc p/ Whisper; api_key_enc/modelo p/
+    Claude). Degrada graciosamente (sem chave / falha → None → cai no placeholder).
+    """
+    if not conteudo:
+        return None
+    from app.models.vendas_sdr import VendasSdrConfig
+
+    sdr = await db.scalar(
+        select(VendasSdrConfig).where(VendasSdrConfig.empresa_id == empresa_id)
+    )
+    if sdr is None:
+        return None
+
+    tipo = media.get("tipo")
+    mime = media.get("mime_type")
+    try:
+        if tipo == "audio" and sdr.openai_api_key_enc:
+            from app.integrations.openai_whisper import transcrever
+
+            texto = await transcrever(
+                api_key=decrypt_secret(sdr.openai_api_key_enc),
+                audio=conteudo, mime=mime,
+            )
+            return f"[áudio transcrito] {texto}".strip() if texto else None
+        if tipo == "image" and sdr.api_key_enc:
+            from app.integrations.llm_claude import descrever_imagem
+
+            desc = await descrever_imagem(
+                api_key=decrypt_secret(sdr.api_key_enc),
+                modelo=sdr.modelo or "claude-sonnet-4-6",
+                imagem=conteudo, mime=mime,
+            )
+            cap = media.get("caption")
+            prefixo = f"[imagem] {desc}".strip()
+            return f"{prefixo}\nLegenda: {cap}" if cap else prefixo
+    except Exception:  # noqa: BLE001 - IA é best-effort; placeholder se falhar
+        return None
+    return None
+
+
+# ───────────────── Webhook: idempotência (dedup por event_id) ─────────────────
+
+def _event_id_de(payload: dict) -> str:
+    """ID estável do evento p/ dedup. Mensagens → data.key.id; resto → sintético."""
+    data = (payload or {}).get("data")
+    if isinstance(data, list):
+        data = data[0] if data else None
+    if isinstance(data, dict):
+        key = data.get("key") or {}
+        if key.get("id"):
+            return str(key["id"])
+    return f"evt-{uuid.uuid4()}"
+
+
+async def registrar_webhook_evento(
+    db: AsyncSession, *, instancia, payload: dict
+) -> uuid.UUID | None:
+    """Insere o evento (idempotente via UNIQUE event_id). Retorna o id se NOVO,
+    ou None se já existia (duplicata → descartar). Usa ON CONFLICT DO NOTHING."""
+    stmt = (
+        pg_insert(VendasEvolutionWebhookEventos.__table__)
+        .values(
+            id=uuid.uuid4(),
+            instancia_id=instancia.id,
+            event_id=_event_id_de(payload),
+            event_type=(payload or {}).get("event"),
+            payload=payload,
+            status="received",
+        )
+        .on_conflict_do_nothing(index_elements=["event_id"])
+        .returning(VendasEvolutionWebhookEventos.__table__.c.id)
+    )
+    res = await db.execute(stmt)
+    row = res.first()
+    await db.commit()
+    return row[0] if row else None
 
 
 # ───────────────── Webhook (ponto de entrada — COMMITA) ─────────────────
@@ -292,13 +553,28 @@ async def processar_webhook(db: AsyncSession, *, instancia, payload: dict) -> in
         lead.ultimo_canal = "whatsapp_evo"
         processadas += 1
 
+        # Mídia recebida: download + storage (best-effort) + texto para a IA.
+        midia = inbound.get("media")
+        texto_in = inbound.get("texto") or ""
+        media_meta = None
+        if midia:
+            media_meta, conteudo_bytes = await persistir_midia_inbound(
+                db, empresa_id=empresa_id, instancia=instancia, media=midia
+            )
+            texto_ia = await _texto_de_midia(
+                db, empresa_id=empresa_id, media=midia, conteudo=conteudo_bytes
+            )
+            texto_in = (
+                texto_ia or texto_in or f"[{midia.get('tipo') or 'mídia'} recebido]"
+            )
+
         from app.services.vendas_pipeline import append_mensagem
 
         try:
             await append_mensagem(
                 db, empresa_id=empresa_id, lead_id=lead.id,
-                sender_type="lead", conteudo=inbound.get("texto") or "",
-                canal="whatsapp_evo", media=None,
+                sender_type="lead", conteudo=texto_in,
+                canal="whatsapp_evo", media=media_meta,
             )
         except Exception:  # pragma: no cover - best-effort
             await db.rollback()
@@ -309,17 +585,49 @@ async def processar_webhook(db: AsyncSession, *, instancia, payload: dict) -> in
             select(VendasSdrConfig).where(VendasSdrConfig.empresa_id == empresa_id)
         )
         if sdr is not None and sdr.ativo and sdr.auto_responder and sdr.api_key_enc:
-            from app.core.queue import queue
-
-            await db.commit()
-            await queue.enqueue(
-                "sdr_inbound",
-                {
-                    "empresa_id": str(empresa_id),
-                    "lead_id": str(lead.id),
-                    "mensagem": inbound.get("texto") or "",
-                },
+            # Debounce: agrupa mensagens que chegam rápido. Acumula no buffer do
+            # lead e estende a janela; o scheduler drena depois e chama o SDR 1x.
+            atual = (lead.sdr_buffer or "").strip()
+            lead.sdr_buffer = (
+                f"{atual}\n{texto_in}".strip() if atual else texto_in
             )
+            lead.sdr_buffer_ate = _now() + datetime.timedelta(seconds=_DEBOUNCE_SEG)
 
     await db.commit()
     return processadas
+
+
+async def processar_sdr_buffers(db: AsyncSession, limite: int = 200) -> int:
+    """Drena os buffers de debounce vencidos: para cada lead com a janela
+    encerrada, enfileira UM ``sdr_inbound`` com as mensagens agrupadas. Roda no
+    scheduler (~10s). Retorna quantos leads foram despachados."""
+    agora = _now()
+    leads = (
+        await db.scalars(
+            select(VendasLeads)
+            .where(
+                VendasLeads.sdr_buffer_ate.isnot(None),
+                VendasLeads.sdr_buffer_ate <= agora,
+            )
+            .limit(limite)
+        )
+    ).all()
+
+    despachados = 0
+    for lead in leads:
+        texto = (lead.sdr_buffer or "").strip()
+        empresa_id = lead.empresa_id
+        lead_id = lead.id
+        lead.sdr_buffer = None
+        lead.sdr_buffer_ate = None
+        await db.commit()
+        if not texto:
+            continue
+        from app.core.queue import queue
+
+        await queue.enqueue(
+            "sdr_inbound",
+            {"empresa_id": str(empresa_id), "lead_id": str(lead_id), "mensagem": texto},
+        )
+        despachados += 1
+    return despachados

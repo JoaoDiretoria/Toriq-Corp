@@ -116,6 +116,10 @@ class VendasLeads(Base):
     ultimo_canal: Mapped[Optional[str]] = mapped_column(
         Text, server_default=text("'whatsapp'")
     )
+    # Debounce do SDR (canal Evolution): mensagens que chegaram rápido são
+    # acumuladas aqui; o scheduler drena após a janela e chama o SDR uma vez.
+    sdr_buffer: Mapped[Optional[str]] = mapped_column(Text)
+    sdr_buffer_ate: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True))
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime(True), server_default=text("now()")
     )

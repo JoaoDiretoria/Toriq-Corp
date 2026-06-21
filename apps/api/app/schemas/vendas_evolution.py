@@ -53,6 +53,15 @@ class EnviarIn(BaseModel):
     texto: str
 
 
+class EnviarMidiaIn(BaseModel):
+    numero: str
+    mediatype: str  # image | video | document | audio
+    media: str  # URL pública ou base64
+    mimetype: Optional[str] = None
+    filename: Optional[str] = None
+    caption: Optional[str] = None
+
+
 class EnviarOut(BaseModel):
     enviado: bool
     provider_id: Optional[str] = None

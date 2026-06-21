@@ -93,6 +93,10 @@ export function SdrConfig({ onSaved }: SdrConfigProps) {
   const [keySet, setKeySet] = useState(false);
   const [keyMasked, setKeyMasked] = useState<string | null>(null);
   const [keyInput, setKeyInput] = useState('');
+  // Chave OpenAI (Whisper) — transcrição de áudio recebido no WhatsApp (Evolution).
+  const [openaiKeySet, setOpenaiKeySet] = useState(false);
+  const [openaiKeyMasked, setOpenaiKeyMasked] = useState<string | null>(null);
+  const [openaiKeyInput, setOpenaiKeyInput] = useState('');
 
   const fetchConfig = useCallback(async () => {
     setLoading(true);
@@ -114,6 +118,9 @@ export function SdrConfig({ onSaved }: SdrConfigProps) {
       setKeySet(!!cfg.api_key_set);
       setKeyMasked(cfg.api_key_masked ?? null);
       setKeyInput('');
+      setOpenaiKeySet(!!cfg.openai_api_key_set);
+      setOpenaiKeyMasked(cfg.openai_api_key_masked ?? null);
+      setOpenaiKeyInput('');
       setShowKey(false);
     } catch (error) {
       console.error('[SdrConfig] erro ao carregar config:', error);
@@ -168,6 +175,7 @@ export function SdrConfig({ onSaved }: SdrConfigProps) {
     };
     // Só envia a chave se o usuário digitou algo (vazio = manter a atual).
     if (keyInput.trim()) payload.api_key = keyInput.trim();
+    if (openaiKeyInput.trim()) payload.openai_api_key = openaiKeyInput.trim();
 
     setSaving(true);
     try {
@@ -175,6 +183,9 @@ export function SdrConfig({ onSaved }: SdrConfigProps) {
       setKeySet(!!cfg.api_key_set);
       setKeyMasked(cfg.api_key_masked ?? null);
       setKeyInput('');
+      setOpenaiKeySet(!!cfg.openai_api_key_set);
+      setOpenaiKeyMasked(cfg.openai_api_key_masked ?? null);
+      setOpenaiKeyInput('');
       toast.success('Configuração do agente salva com sucesso!');
       onSaved?.();
     } catch (error: any) {
@@ -305,6 +316,32 @@ export function SdrConfig({ onSaved }: SdrConfigProps) {
             </div>
             <p className="text-xs text-muted-foreground">
               A chave fica criptografada em repouso e nunca volta em claro para o navegador.
+            </p>
+          </div>
+
+          {/* Chave OpenAI (Whisper) — transcrição de áudio do WhatsApp (Evolution) */}
+          <div className="space-y-2">
+            <Label htmlFor="sdr-openai-key">
+              Chave OpenAI (transcrição de áudio)
+              {openaiKeySet && openaiKeyMasked && (
+                <code className="ml-2 font-mono text-xs text-muted-foreground">
+                  {openaiKeyMasked}
+                </code>
+              )}
+            </Label>
+            <Input
+              id="sdr-openai-key"
+              type="password"
+              value={openaiKeyInput}
+              onChange={(e) => setOpenaiKeyInput(e.target.value)}
+              placeholder={
+                openaiKeySet ? '•••• (deixe em branco para manter)' : 'sk-...'
+              }
+              autoComplete="new-password"
+            />
+            <p className="text-xs text-muted-foreground">
+              Opcional. Usada para transcrever áudios recebidos no WhatsApp (canal
+              Evolution) via Whisper. Sem ela, áudios entram como "[áudio recebido]".
             </p>
           </div>
 
