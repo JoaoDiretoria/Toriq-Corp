@@ -446,6 +446,65 @@ async def test_campanha_whatsapp_evo_envia_pela_instancia(db_session, monkeypatc
     assert msg.instancia_id == inst.id
 
 
+@pytest.mark.anyio
+async def test_campanha_evo_usa_instancia_escolhida(db_session, monkeypatch):
+    """A campanha respeita a instância escolhida (instancia_id), não a 1ª conectada."""
+    _mock_rede(monkeypatch)
+    await _criar_servidor(db_session)
+    empresa_id = uuid.uuid4()
+    await _criar_empresa(db_session, empresa_id)
+
+    # A conectada (seria a escolha automática); B desconectada (a escolhida).
+    inst_a = await svc.criar_instancia(
+        db_session, empresa_id=empresa_id, nome_exibicao="A"
+    )
+    inst_a.status = "conectada"
+    inst_b = await svc.criar_instancia(
+        db_session, empresa_id=empresa_id, nome_exibicao="B"
+    )
+    inst_b.status = "desconectada"
+    await db_session.commit()
+
+    lead = VendasLeads(
+        id=uuid.uuid4(), empresa_id=empresa_id, nome="L",
+        telefone="+55 (11) 96666-5555",
+    )
+    db_session.add(lead)
+    from app.models.vendas_disparo import VendasCampanhas, VendasTemplates
+
+    tpl = VendasTemplates(
+        id=uuid.uuid4(), empresa_id=empresa_id, nome="T",
+        canal="whatsapp_evo", conteudo="Oi!",
+    )
+    db_session.add(tpl)
+    await db_session.commit()
+    camp = VendasCampanhas(
+        id=uuid.uuid4(), empresa_id=empresa_id, nome="C", canal="whatsapp_evo",
+        template_id=tpl.id, instancia_id=inst_b.id, lead_ids=[str(lead.id)],
+        status="rascunho",
+    )
+    db_session.add(camp)
+    await db_session.commit()
+
+    from app.services import vendas_disparo as disparo
+
+    await disparo.preparar_campanha(
+        db_session, campanha_id=camp.id, empresa_id=empresa_id
+    )
+    await disparo.enviar_campanha(
+        db_session, campanha_id=camp.id, empresa_id=empresa_id
+    )
+    await db_session.commit()
+
+    msg = await db_session.scalar(
+        select(VendasMensagens).where(VendasMensagens.campanha_id == camp.id)
+    )
+    await db_session.refresh(msg)
+    assert msg.status == "enviado"
+    # Usou a instância ESCOLHIDA (B), não a conectada automática (A).
+    assert msg.instancia_id == inst_b.id
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # SDR — responde via Evolution quando o lead chegou pelo canal evo
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -225,6 +225,23 @@ async def _resumo_status(
     }
 
 
+async def _resolver_instancia_evo(db: AsyncSession, *, empresa_id, instancia_id):
+    """Instância Evolution p/ o disparo: a escolhida na campanha (se houver e for da
+    empresa) ou a primeira conectada (fallback). Retorna None se nenhuma existir."""
+    from app.services.vendas_evolution import instancia_conectada
+
+    if instancia_id is not None:
+        from app.models.vendas_evolution import VendasEvolutionInstancias
+
+        return await db.scalar(
+            select(VendasEvolutionInstancias).where(
+                VendasEvolutionInstancias.id == instancia_id,
+                VendasEvolutionInstancias.empresa_id == empresa_id,
+            )
+        )
+    return await instancia_conectada(db, empresa_id)
+
+
 async def preparar_campanha(
     db: AsyncSession, *, campanha_id: uuid.UUID, empresa_id: uuid.UUID
 ) -> dict:
@@ -252,9 +269,9 @@ async def preparar_campanha(
         if config is None or not config.whatsapp_phone_id:
             raise ValueError("configure o WhatsApp")
     elif campanha.canal == "whatsapp_evo":
-        from app.services.vendas_evolution import instancia_conectada
-
-        if await instancia_conectada(db, empresa_id) is None:
+        if await _resolver_instancia_evo(
+            db, empresa_id=empresa_id, instancia_id=campanha.instancia_id
+        ) is None:
             raise ValueError("conecte uma instância Evolution antes de enviar")
     else:
         if config is None or not config.smtp_host:
@@ -336,9 +353,9 @@ async def _enviar_campanha_inner(
         if config is None or not config.whatsapp_phone_id:
             raise ValueError("configure o WhatsApp")
     elif campanha.canal == "whatsapp_evo":
-        from app.services.vendas_evolution import instancia_conectada
-
-        if await instancia_conectada(db, empresa_id) is None:
+        if await _resolver_instancia_evo(
+            db, empresa_id=empresa_id, instancia_id=campanha.instancia_id
+        ) is None:
             raise ValueError("conecte uma instância Evolution antes de enviar")
     else:
         if config is None or not config.smtp_host:
@@ -406,9 +423,9 @@ async def _enviar_campanha_inner(
     # Canal Evolution: resolve a instância conectada uma única vez.
     evo_inst = None
     if eh_evo:
-        from app.services.vendas_evolution import instancia_conectada
-
-        evo_inst = await instancia_conectada(db, empresa_id)
+        evo_inst = await _resolver_instancia_evo(
+            db, empresa_id=empresa_id, instancia_id=campanha.instancia_id
+        )
         if evo_inst is None:
             raise ValueError("conecte uma instância Evolution antes de enviar")
 

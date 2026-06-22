@@ -151,6 +151,8 @@ class VendasCampanhas(Base):
         Text, nullable=False, server_default=text("'email'")
     )
     segmento_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
+    # Instância Evolution escolhida p/ o disparo (null = 1ª conectada; n/a p/ email/Meta).
+    instancia_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
     lead_ids: Mapped[Optional[list]] = mapped_column(JSONB)
     agendada_para: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True))
     status: Mapped[Optional[str]] = mapped_column(

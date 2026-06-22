@@ -10,6 +10,7 @@ import {
   type VendasLead,
 } from '@/integrations/api/vendas';
 import { CANAIS_ENVIO, isWhatsappCanal } from '../canais';
+import { vendasEvolutionApi, type Instancia } from '@/integrations/api/vendasEvolution';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -56,6 +57,7 @@ type Alvo = 'segmento' | 'leads';
 export function CampanhaCriar({ open, onOpenChange, onCreated }: CampanhaCriarProps) {
   const [nome, setNome] = useState('');
   const [canal, setCanal] = useState<string>('email');
+  const [instanciaId, setInstanciaId] = useState('');
   const [templateId, setTemplateId] = useState('');
   const [alvo, setAlvo] = useState<Alvo>('segmento');
   const [segmentoId, setSegmentoId] = useState('');
@@ -65,6 +67,7 @@ export function CampanhaCriar({ open, onOpenChange, onCreated }: CampanhaCriarPr
   const [templates, setTemplates] = useState<DisparoTemplate[]>([]);
   const [segmentos, setSegmentos] = useState<VendasSegmento[]>([]);
   const [leads, setLeads] = useState<VendasLead[]>([]);
+  const [instancias, setInstancias] = useState<Instancia[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -72,6 +75,7 @@ export function CampanhaCriar({ open, onOpenChange, onCreated }: CampanhaCriarPr
   const reset = useCallback(() => {
     setNome(`Campanha ${new Date().toLocaleDateString('pt-BR')}`);
     setCanal('email');
+    setInstanciaId('');
     setTemplateId('');
     setAlvo('segmento');
     setSegmentoId('');
@@ -82,17 +86,20 @@ export function CampanhaCriar({ open, onOpenChange, onCreated }: CampanhaCriarPr
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [tpls, segs, leadsRes] = await Promise.all([
+      const [tpls, segs, leadsRes, insts] = await Promise.all([
         vendasDisparoApi.listTemplates(),
         vendasApi.listSegmentos(),
         // Trazemos uma página generosa; filtramos por canal (e-mail vs telefone)
         // ao exibir, conforme o canal escolhido.
         vendasApi.listLeads({ limit: 200, offset: 0 }),
+        // Instâncias Evolution (para o canal WhatsApp Evolution). Tolerante.
+        vendasEvolutionApi.listInstancias().catch(() => [] as Instancia[]),
       ]);
       setTemplates(Array.isArray(tpls) ? tpls : []);
       setSegmentos(Array.isArray(segs) ? segs : []);
       const items = Array.isArray(leadsRes?.items) ? leadsRes.items : [];
       setLeads(items);
+      setInstancias(Array.isArray(insts) ? insts : []);
     } catch (err) {
       console.error('[CampanhaCriar] erro ao carregar dados:', err);
       toast.error('Erro ao carregar templates/segmentos');
@@ -139,6 +146,10 @@ export function CampanhaCriar({ open, onOpenChange, onCreated }: CampanhaCriarPr
       toast.error('Selecione um template');
       return;
     }
+    if (canal === 'whatsapp_evo' && !instanciaId) {
+      toast.error('Selecione a instância de envio');
+      return;
+    }
     if (alvo === 'segmento' && !segmentoId) {
       toast.error('Selecione um segmento');
       return;
@@ -152,6 +163,7 @@ export function CampanhaCriar({ open, onOpenChange, onCreated }: CampanhaCriarPr
       nome: nome.trim(),
       template_id: templateId,
       canal,
+      instancia_id: canal === 'whatsapp_evo' ? instanciaId : null,
       segmento_id: alvo === 'segmento' ? segmentoId : null,
       lead_ids: alvo === 'leads' ? Array.from(selectedLeadIds) : null,
       agendada_para: agendadaPara ? new Date(agendadaPara).toISOString() : null,
@@ -212,6 +224,7 @@ export function CampanhaCriar({ open, onOpenChange, onCreated }: CampanhaCriarPr
                   setCanal(v);
                   setTemplateId('');
                   setSelectedLeadIds(new Set());
+                  setInstanciaId('');
                 }}
               >
                 <SelectTrigger id="camp-canal">
@@ -224,6 +237,32 @@ export function CampanhaCriar({ open, onOpenChange, onCreated }: CampanhaCriarPr
                 </SelectContent>
               </Select>
             </div>
+
+            {canal === 'whatsapp_evo' && (
+              <div className="space-y-2">
+                <Label htmlFor="camp-instancia">Instância (número) *</Label>
+                {instancias.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Nenhuma instância Evolution. Crie e conecte uma em WhatsApp Evolution.
+                  </p>
+                ) : (
+                  <Select value={instanciaId} onValueChange={setInstanciaId}>
+                    <SelectTrigger id="camp-instancia">
+                      <SelectValue placeholder="Escolha a instância de envio" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {instancias.map((i) => (
+                        <SelectItem key={i.id} value={i.id}>
+                          {i.nome_exibicao}
+                          {i.numero ? ` · ${i.numero}` : ''}
+                          {i.status ? ` (${i.status})` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label className="flex items-center gap-1.5">

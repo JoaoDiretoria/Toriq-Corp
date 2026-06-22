@@ -103,6 +103,7 @@ class CampanhaIn(BaseModel):
     template_id: Optional[uuid.UUID] = None
     canal: str = "email"
     segmento_id: Optional[uuid.UUID] = None
+    instancia_id: Optional[uuid.UUID] = None
     lead_ids: Optional[list[uuid.UUID]] = None
     agendada_para: Optional[datetime.datetime] = None
 
@@ -112,6 +113,7 @@ class CampanhaUpdate(BaseModel):
     template_id: Optional[uuid.UUID] = None
     canal: Optional[str] = None
     segmento_id: Optional[uuid.UUID] = None
+    instancia_id: Optional[uuid.UUID] = None
     lead_ids: Optional[list[uuid.UUID]] = None
     agendada_para: Optional[datetime.datetime] = None
     status: Optional[str] = None
@@ -124,6 +126,7 @@ class CampanhaOut(BaseModel):
     template_id: Optional[uuid.UUID]
     canal: str
     segmento_id: Optional[uuid.UUID]
+    instancia_id: Optional[uuid.UUID]
     lead_ids: Optional[list]
     agendada_para: Optional[datetime.datetime]
     status: str

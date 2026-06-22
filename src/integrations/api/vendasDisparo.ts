@@ -93,6 +93,7 @@ export interface DisparoCampanha {
   template_id: string | null;
   canal: string;
   segmento_id: string | null;
+  instancia_id: string | null;
   lead_ids: string[] | null;
   agendada_para: string | null;
   status: string;
@@ -111,6 +112,7 @@ export interface DisparoCampanhaInput {
   template_id?: string | null;
   canal?: string;
   segmento_id?: string | null;
+  instancia_id?: string | null;
   lead_ids?: string[] | null;
   agendada_para?: string | null;
 }
@@ -121,6 +123,7 @@ export interface DisparoCampanhaUpdate {
   template_id?: string | null;
   canal?: string;
   segmento_id?: string | null;
+  instancia_id?: string | null;
   lead_ids?: string[] | null;
   agendada_para?: string | null;
   status?: string;
