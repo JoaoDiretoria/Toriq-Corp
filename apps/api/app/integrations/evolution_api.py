@@ -1,18 +1,19 @@
-"""Integração com a Evolution API (gateway WhatsApp self-hosted, baseado em Baileys).
+"""Integração com a Evolution Go (gateway WhatsApp self-hosted, baseado em whatsmeow).
 
 Canal WhatsApp alternativo ao Meta (app/integrations/whatsapp_meta.py). Aqui só
-falamos com a Evolution API instalada na VPS: criar/conectar/encerrar instâncias,
-enviar mensagens, configurar webhook — além das funções PURAS de parsing do
-webhook (sem rede).
+falamos com a Evolution Go instalada na VPS: criar/conectar/encerrar instâncias,
+enviar mensagens — além das funções PURAS de parsing do webhook (sem rede).
+
+Auth — header ``apikey`` com DOIS significados conforme a rota:
+- rotas *admin* (create / all / delete / forcereconnect) → ``apikey`` = GLOBAL_API_KEY
+  do servidor (a nossa ``vendas_evolution_servidor.api_key_enc``).
+- rotas *de instância* (connect / qr / status / logout / reconnect / send/* / message/*)
+  → ``apikey`` = token DAQUELA instância (``instance_token_enc``); o servidor resolve
+  a instância via ``GetInstanceByToken``.
 
 Estilo: igual a whatsapp_meta.py — httpx.AsyncClient stateless (abre/fecha por
-chamada); falhas HTTP viram EvolutionError. Header de auth: ``apikey``.
-
-A CONFIRMAR contra a instância do usuário (paths/payloads divergem entre v1/v2):
-- /instance/create, /instance/connect/{i}, /instance/connectionState/{i},
-  /instance/logout/{i}, /instance/delete/{i}, /webhook/set/{i},
-  /message/sendText/{i}.
-- Callback: data.key.remoteJid/fromMe/id, data.message.conversation, data.pushName.
+chamada); falhas HTTP viram EvolutionError. Respostas do Go vêm embrulhadas em
+``{"message": "success", "data": {...}}`` — ver ``_unwrap``.
 """
 from __future__ import annotations
 
@@ -22,12 +23,13 @@ import httpx
 
 _TIMEOUT = 30.0
 
-# Eventos que pedimos a Evolution para nos enviar no webhook.
-EVENTOS_PADRAO = ["MESSAGES_UPSERT", "CONNECTION_UPDATE", "QRCODE_UPDATED"]
+# Categorias de evento que assinamos no connect (UPPERCASE — ver event_types.go):
+# MESSAGE (inbound), CONNECTION (Connected/Disconnected/LoggedOut), QRCODE (QR ao vivo).
+EVENTOS_PADRAO = ["MESSAGE", "CONNECTION", "QRCODE"]
 
 
 class EvolutionError(Exception):
-    """Erro ao falar com a Evolution API (HTTP ou resposta inesperada)."""
+    """Erro ao falar com a Evolution Go (HTTP ou resposta inesperada)."""
 
 
 def _headers(api_key: str) -> dict:
@@ -36,6 +38,13 @@ def _headers(api_key: str) -> dict:
 
 def _base(base_url: str) -> str:
     return (base_url or "").rstrip("/")
+
+
+def _unwrap(data):
+    """Desembrulha o envelope ``{"message","data"}`` do Go. Tolerante a respostas cruas."""
+    if isinstance(data, dict) and "data" in data:
+        return data["data"]
+    return data
 
 
 # ───────────────────────────── HTTP helpers ─────────────────────────────
@@ -60,152 +69,139 @@ async def _request(method: str, url: str, api_key: str, *, json=None, contexto: 
 
 # ───────────────────────────── Instâncias ─────────────────────────────
 
-async def criar_instancia(*, base_url: str, api_key: str, instance_name: str) -> dict:
-    """Cria a instância na Evolution. Retorna o JSON (inclui qrcode quando disponível)."""
+async def criar_instancia(
+    *, base_url: str, api_key: str, name: str, instance_id: str, token: str,
+    advanced_settings: dict | None = None,
+) -> dict:
+    """Cria a instância no servidor (rota admin → GLOBAL_API_KEY).
+
+    Passamos o ``instanceId`` (= nosso UUID local) e o ``token`` (gerado por nós),
+    que depois usamos como ``apikey`` nas rotas de instância. ``name`` e ``token``
+    são obrigatórios no Go.
+    """
     url = f"{_base(base_url)}/instance/create"
-    payload = {
-        "instanceName": instance_name,
-        "qrcode": True,
-        "integration": "WHATSAPP-BAILEYS",
-    }
+    payload: dict = {"name": name, "instanceId": instance_id, "token": token}
+    if advanced_settings:
+        payload["advancedSettings"] = advanced_settings
     return await _request("POST", url, api_key, json=payload, contexto="criar instancia")
 
 
-async def definir_webhook(
-    *, base_url: str, api_key: str, instance_name: str, webhook_url: str, eventos=None
+async def conectar(
+    *, base_url: str, token: str, webhook_url: str, subscribe=None
 ) -> dict:
-    url = f"{_base(base_url)}/webhook/set/{instance_name}"
-    payload = {
-        "webhook": {
-            "enabled": True,
-            "url": webhook_url,
-            "events": eventos or EVENTOS_PADRAO,
-            "base64": True,
-        }
-    }
-    return await _request("POST", url, api_key, json=payload, contexto="definir webhook")
+    """Inicia o login da instância e CONFIGURA o webhook (rota de instância → token).
+
+    No Go o webhook não tem endpoint próprio: a URL + as categorias assinadas vão
+    aqui no connect. O QR é obtido depois via ``obter_qrcode`` (ou chega no webhook).
+    """
+    url = f"{_base(base_url)}/instance/connect"
+    payload = {"webhookUrl": webhook_url, "subscribe": subscribe or EVENTOS_PADRAO}
+    return await _request("POST", url, token, json=payload, contexto="conectar")
 
 
-async def conectar_qrcode(*, base_url: str, api_key: str, instance_name: str) -> dict:
-    """GET connect → {base64, code/pairingCode}."""
-    url = f"{_base(base_url)}/instance/connect/{instance_name}"
-    return await _request("GET", url, api_key, contexto="conectar/qrcode")
-
-
-async def estado_conexao(*, base_url: str, api_key: str, instance_name: str) -> str:
-    """Retorna 'open' | 'connecting' | 'close'."""
-    url = f"{_base(base_url)}/instance/connectionState/{instance_name}"
-    data = await _request("GET", url, api_key, contexto="estado conexao")
+async def obter_qrcode(*, base_url: str, token: str) -> dict:
+    """GET /instance/qr → {base64, code}. O Go devolve o QR já como PNG data-URL."""
+    url = f"{_base(base_url)}/instance/qr"
+    data = _unwrap(await _request("GET", url, token, contexto="qrcode"))
     if isinstance(data, dict):
-        inst = data.get("instance")
-        if isinstance(inst, dict) and inst.get("state"):
-            return inst["state"]
-        if data.get("state"):
-            return data["state"]
+        return {
+            "base64": data.get("Qrcode") or data.get("qrcode"),
+            "code": data.get("code"),
+        }
+    return {"base64": None, "code": None}
+
+
+async def estado_conexao(*, base_url: str, token: str) -> str:
+    """GET /instance/status → 'open' | 'close' (Go devolve ``{Connected: bool}``)."""
+    url = f"{_base(base_url)}/instance/status"
+    data = _unwrap(await _request("GET", url, token, contexto="estado conexao"))
+    if isinstance(data, dict):
+        conectado = data.get("Connected")
+        if conectado is None:
+            conectado = data.get("connected")
+        return "open" if conectado else "close"
     return "close"
 
 
-async def logout(*, base_url: str, api_key: str, instance_name: str) -> dict:
-    url = f"{_base(base_url)}/instance/logout/{instance_name}"
-    return await _request("DELETE", url, api_key, contexto="logout")
+async def logout(*, base_url: str, token: str) -> dict:
+    url = f"{_base(base_url)}/instance/logout"
+    return await _request("DELETE", url, token, contexto="logout")
 
 
-async def deletar(*, base_url: str, api_key: str, instance_name: str) -> dict:
-    url = f"{_base(base_url)}/instance/delete/{instance_name}"
+async def reconectar(*, base_url: str, token: str) -> dict:
+    url = f"{_base(base_url)}/instance/reconnect"
+    return await _request("POST", url, token, contexto="reconectar")
+
+
+async def deletar(*, base_url: str, api_key: str, instance_id: str) -> dict:
+    """DELETE /instance/delete/{id} (rota admin → GLOBAL_API_KEY)."""
+    url = f"{_base(base_url)}/instance/delete/{instance_id}"
     return await _request("DELETE", url, api_key, contexto="deletar")
-
-
-async def reiniciar(*, base_url: str, api_key: str, instance_name: str) -> dict:
-    url = f"{_base(base_url)}/instance/restart/{instance_name}"
-    return await _request("PUT", url, api_key, contexto="reiniciar")
-
-
-async def definir_settings(
-    *, base_url: str, api_key: str, instance_name: str, settings: dict
-) -> dict:
-    """Aplica settings da instância (rejectCall, groupsIgnore, readMessages, ...)."""
-    url = f"{_base(base_url)}/settings/set/{instance_name}"
-    return await _request("POST", url, api_key, json=settings, contexto="settings")
 
 
 # ───────────────────────────── Mensagens ─────────────────────────────
 
 async def enviar_texto(
-    *, base_url: str, api_key: str, instance_name: str, numero: str, texto: str
+    *, base_url: str, token: str, numero: str, texto: str
 ) -> str:
-    """Envia texto. Retorna o id da mensagem (key.id) quando presente."""
-    url = f"{_base(base_url)}/message/sendText/{instance_name}"
+    """POST /send/text {number, text} (rota de instância → token). Retorna o id."""
+    url = f"{_base(base_url)}/send/text"
     payload = {"number": numero, "text": texto}
-    data = await _request("POST", url, api_key, json=payload, contexto="enviar texto")
+    data = await _request("POST", url, token, json=payload, contexto="enviar texto")
     return _extrair_id(data)
 
 
 async def enviar_midia(
-    *, base_url: str, api_key: str, instance_name: str, numero: str,
-    mediatype: str, media: str, mimetype: str | None = None,
-    filename: str | None = None, caption: str | None = None,
+    *, base_url: str, token: str, numero: str, mediatype: str, media: str,
+    mimetype: str | None = None, filename: str | None = None,
+    caption: str | None = None,
 ) -> str:
-    """Envia mídia (image/video/document). ``media`` = URL pública ou base64.
-    Retorna o id da mensagem."""
-    url = f"{_base(base_url)}/message/sendMedia/{instance_name}"
-    payload: dict = {"number": numero, "mediatype": mediatype, "media": media}
-    if mimetype:
-        payload["mimetype"] = mimetype
+    """POST /send/media (rota de instância → token).
+
+    ``media`` vai no campo ``url`` — que aceita URL pública OU base64 (se não começa
+    com http(s), o Go decodifica como base64). ``mediatype='audio'`` vira nota de voz
+    (PTT). O Go detecta o mime sozinho (não há campo mimetype). Retorna o id.
+    """
+    url = f"{_base(base_url)}/send/media"
+    payload: dict = {"number": numero, "type": mediatype, "url": media}
     if filename:
-        payload["fileName"] = filename
+        payload["filename"] = filename
     if caption:
         payload["caption"] = caption
-    data = await _request("POST", url, api_key, json=payload, contexto="enviar midia")
+    data = await _request("POST", url, token, json=payload, contexto="enviar midia")
     return _extrair_id(data)
-
-
-async def enviar_audio(
-    *, base_url: str, api_key: str, instance_name: str, numero: str, audio: str
-) -> str:
-    """Envia áudio de voz (PTT). ``audio`` = URL pública ou base64."""
-    url = f"{_base(base_url)}/message/sendWhatsAppAudio/{instance_name}"
-    payload = {"number": numero, "audio": audio}
-    data = await _request("POST", url, api_key, json=payload, contexto="enviar audio")
-    return _extrair_id(data)
-
-
-async def baixar_midia(
-    *, base_url: str, api_key: str, instance_name: str, message_id: str
-) -> str:
-    """Baixa a mídia de uma mensagem recebida como base64 (fallback quando o
-    webhook não trouxe base64 inline). Retorna '' se não vier."""
-    url = f"{_base(base_url)}/chat/getBase64FromMediaMessage/{instance_name}"
-    payload = {"message": {"key": {"id": message_id}}}
-    data = await _request("POST", url, api_key, json=payload, contexto="baixar midia")
-    if isinstance(data, dict):
-        return data.get("base64") or ""
-    return ""
 
 
 async def enviar_presenca(
-    *, base_url: str, api_key: str, instance_name: str, numero: str,
-    presence: str = "composing", delay_ms: int = 1200,
+    *, base_url: str, token: str, numero: str, state: str = "composing",
+    is_audio: bool = False,
 ) -> None:
     """Mostra 'digitando...'/'gravando...' no WhatsApp do contato (humaniza o SDR).
 
-    presence: 'composing' | 'recording' | 'paused' | 'available'. Best-effort:
-    nunca levanta (igual ao tio-crm) — falha de presença não pode bloquear o envio.
+    state: 'composing' | 'paused'. ``is_audio=True`` mostra 'gravando áudio'.
+    Best-effort: nunca levanta — falha de presença não pode bloquear o envio.
     """
-    url = f"{_base(base_url)}/chat/sendPresence/{instance_name}"
-    payload = {"number": numero, "presence": presence, "delay": delay_ms}
+    url = f"{_base(base_url)}/message/presence"
+    payload = {"number": numero, "state": state, "isAudio": is_audio}
     try:
-        await _request("POST", url, api_key, json=payload, contexto="presence")
+        await _request("POST", url, token, json=payload, contexto="presence")
     except EvolutionError:
         return
 
 
 def _extrair_id(data) -> str:
-    if isinstance(data, dict):
-        key = data.get("key")
+    """Id da mensagem enviada: ``data.Info.ID`` (Go embrulha em ``{message,data}``)."""
+    inner = _unwrap(data)
+    if isinstance(inner, dict):
+        info = inner.get("Info")
+        if isinstance(info, dict) and info.get("ID"):
+            return str(info["ID"])
+        # fallbacks defensivos
+        key = inner.get("key")
         if isinstance(key, dict) and key.get("id"):
-            return key["id"]
-        if data.get("id"):
-            return str(data["id"])
+            return str(key["id"])
+        if inner.get("id"):
+            return str(inner["id"])
     return ""
 
 
@@ -217,7 +213,18 @@ def normalizar_telefone(valor: str) -> str:
     return re.sub(r"\D", "", base)
 
 
-# Tipos de mídia da Evolution (chave em data.message → nosso vocabulário).
+def _jid_to_phone(valor) -> str:
+    """Telefone a partir de um JID que pode vir como string OU objeto whatsmeow.
+
+    whatsmeow pode serializar ``types.JID`` como string (``"55..@s.whatsapp.net"``)
+    ou como objeto (``{"User": "55..", "Server": "s.whatsapp.net", ...}``).
+    """
+    if isinstance(valor, dict):
+        return normalizar_telefone(valor.get("User") or valor.get("user") or "")
+    return normalizar_telefone(valor or "")
+
+
+# Tipos de mídia do whatsmeow (chave em data.Message → nosso vocabulário).
 _MEDIA_KEYS = {
     "imageMessage": "image",
     "audioMessage": "audio",
@@ -227,81 +234,83 @@ _MEDIA_KEYS = {
 }
 
 
-def _extrair_media(m: dict, msg: dict) -> dict | None:
-    """Extrai metadados de mídia + base64 inline (quando o webhook manda base64).
+def _extrair_media(info: dict, msg: dict) -> dict | None:
+    """Metadados de mídia + base64/url inline (o webhook do Go já traz a mídia).
 
-    Retorna ``None`` p/ mensagem de texto puro; senão um dict com
-    ``{tipo, mime_type, caption, filename, seconds, media_id, base64}``.
-    O ``base64`` é usado em memória (download/transcrição) e NÃO é persistido.
+    Retorna ``None`` p/ texto puro; senão ``{tipo, mime_type, caption, filename,
+    seconds, media_id, base64, url}``. ``base64`` (MinIO off) ou ``url`` (MinIO on)
+    vêm no nível de ``Message``; o resto, no objeto da mídia.
     """
     for chave, tipo in _MEDIA_KEYS.items():
         obj = msg.get(chave)
         if isinstance(obj, dict):
             return {
                 "tipo": tipo,
-                "mime_type": obj.get("mimetype"),
+                "mime_type": obj.get("mimetype") or msg.get("mimetype"),
                 "caption": obj.get("caption"),
                 "filename": obj.get("fileName"),
                 "seconds": obj.get("seconds"),
-                "media_id": (m.get("key") or {}).get("id"),
-                "base64": msg.get("base64") or m.get("base64"),
+                "media_id": (info or {}).get("ID"),
+                "base64": msg.get("base64"),
+                "url": msg.get("mediaUrl"),
             }
     return None
 
 
 def parse_webhook(payload) -> dict:
-    """Extrai inbound/conexão do callback da Evolution. Tolerante a lixo.
+    """Extrai inbound/conexão do callback da Evolution Go. Tolerante a lixo.
 
     Retorna {"mensagens": [...], "statuses": [...], "conexao": {...}|None,
-    "instance": str|None}. Cada mensagem: {wamid, from, pushName, texto, timestamp}.
+    "instance": str|None}. Cada mensagem: {wamid, from, pushName, texto, media,
+    timestamp}. Eventos relevantes (PascalCase): ``Message`` (inbound),
+    ``Connected`` / ``Disconnected`` / ``LoggedOut`` (conexão).
     """
     out = {"mensagens": [], "statuses": [], "conexao": None, "instance": None}
     if not isinstance(payload, dict):
         return out
 
-    out["instance"] = payload.get("instance")
+    out["instance"] = payload.get("instance") or payload.get("instanceName")
     evento = (payload.get("event") or "").lower()
     data = payload.get("data")
 
-    if evento == "messages.upsert":
-        itens = data if isinstance(data, list) else [data]
-        for m in itens:
-            if not isinstance(m, dict):
-                continue
-            key = m.get("key") or {}
-            if key.get("fromMe"):
-                continue  # ignora as mensagens que NÓS enviamos
-            msg = m.get("message") or {}
-            media = _extrair_media(m, msg)
-            texto = (
-                msg.get("conversation")
-                or (msg.get("extendedTextMessage") or {}).get("text")
-                or (media or {}).get("caption")
-            )
-            out["mensagens"].append(
-                {
-                    "wamid": key.get("id"),
-                    "from": normalizar_telefone(key.get("remoteJid") or ""),
-                    "pushName": m.get("pushName"),
-                    "texto": texto,
-                    "media": media,
-                    "timestamp": m.get("messageTimestamp"),
-                }
-            )
-    elif evento == "connection.update":
-        if isinstance(data, dict):
-            out["conexao"] = {"state": data.get("state")}
+    if evento == "message":
+        if not isinstance(data, dict):
+            return out
+        info = data.get("Info") or data.get("info") or {}
+        if info.get("IsFromMe") or info.get("isFromMe"):
+            return out  # ignora as mensagens que NÓS enviamos
+        msg = data.get("Message") or data.get("message") or {}
+        media = _extrair_media(info, msg)
+        texto = (
+            msg.get("conversation")
+            or (msg.get("extendedTextMessage") or {}).get("text")
+            or (media or {}).get("caption")
+        )
+        out["mensagens"].append(
+            {
+                "wamid": info.get("ID") or info.get("Id"),
+                "from": _jid_to_phone(info.get("Sender") or info.get("Chat")),
+                "pushName": info.get("PushName") or info.get("pushName"),
+                "texto": texto,
+                "media": media,
+                "timestamp": info.get("Timestamp"),
+            }
+        )
+    elif evento == "connected":
+        out["conexao"] = {"state": "open"}
+    elif evento in ("disconnected", "loggedout"):
+        out["conexao"] = {"state": "close"}
 
     return out
 
 
 def map_status(s: str) -> str:
-    """Normaliza status de mensagem da Evolution para nosso vocabulário."""
+    """Normaliza tipo de recibo (whatsmeow Receipt) para nosso vocabulário."""
     mapa = {
-        "PENDING": "pendente",
-        "SERVER_ACK": "enviado",
-        "DELIVERY_ACK": "entregue",
-        "READ": "lido",
-        "PLAYED": "lido",
+        "sender": "enviado",
+        "delivery": "entregue",
+        "read": "lido",
+        "read-self": "lido",
+        "played": "lido",
     }
     return mapa.get(s, s)

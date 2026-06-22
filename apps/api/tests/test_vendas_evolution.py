@@ -1,7 +1,10 @@
-"""Testes do canal Evolution: serviço (ciclo de vida, envio) + webhook + cross-tenant.
+"""Testes do canal Evolution Go: serviço (ciclo de vida, envio) + webhook + cross-tenant.
 
 A rede é SEMPRE mockada: substituímos as funções de
 app.integrations.evolution_api por fakes async. Nenhum teste fala com a Evolution.
+
+Contrato Go: auth por token de instância; webhook configurado no ``conectar``;
+payload inbound = evento ``Message`` com ``data.Info``/``data.Message``.
 """
 import uuid
 
@@ -36,20 +39,22 @@ async def _criar_servidor(db_session):
 
 def _mock_rede(monkeypatch):
     chamadas = {
-        "criadas": [], "webhooks": [], "textos": [], "presencas": [],
-        "logouts": [], "restarts": [], "settings": [],
+        "criadas": [], "conectados": [], "textos": [], "midias": [],
+        "presencas": [], "logouts": [], "qrcodes": [],
     }
 
     async def fake_criar(**kw):
         chamadas["criadas"].append(kw)
-        return {"instance": {"instanceName": kw["instance_name"]}}
+        return {"message": "success",
+                "data": {"id": kw["instance_id"], "token": kw["token"]}}
 
-    async def fake_webhook(**kw):
-        chamadas["webhooks"].append(kw)
-        return {"webhook": "ok"}
+    async def fake_conectar(**kw):
+        chamadas["conectados"].append(kw)
+        return {"message": "success", "data": {"webhookUrl": kw["webhook_url"]}}
 
     async def fake_qr(**kw):
-        return {"base64": "data:image/png;base64,AAA", "code": "PAIR-123"}
+        chamadas["qrcodes"].append(kw)
+        return {"base64": "data:image/png;base64,AAA", "code": None}
 
     async def fake_estado(**kw):
         return "open"
@@ -57,6 +62,10 @@ def _mock_rede(monkeypatch):
     async def fake_texto(**kw):
         chamadas["textos"].append(kw)
         return "EVO-MSG-1"
+
+    async def fake_midia(**kw):
+        chamadas["midias"].append(kw)
+        return "EVO-MEDIA-1"
 
     async def fake_logout(**kw):
         chamadas["logouts"].append(kw)
@@ -68,32 +77,13 @@ def _mock_rede(monkeypatch):
     async def fake_presenca(**kw):
         chamadas["presencas"].append(kw)
 
-    async def fake_reiniciar(**kw):
-        chamadas["restarts"].append(kw)
-        return {}
-
-    async def fake_settings(**kw):
-        chamadas["settings"].append(kw)
-        return {}
-
-    async def fake_midia(**kw):
-        chamadas.setdefault("midias", []).append(kw)
-        return "EVO-MEDIA-1"
-
-    async def fake_audio(**kw):
-        chamadas.setdefault("audios", []).append(kw)
-        return "EVO-AUDIO-1"
-
-    monkeypatch.setattr(evolution_api, "enviar_midia", fake_midia)
-    monkeypatch.setattr(evolution_api, "enviar_audio", fake_audio)
-    monkeypatch.setattr(evolution_api, "reiniciar", fake_reiniciar)
-    monkeypatch.setattr(evolution_api, "definir_settings", fake_settings)
-    monkeypatch.setattr(evolution_api, "enviar_presenca", fake_presenca)
     monkeypatch.setattr(evolution_api, "criar_instancia", fake_criar)
-    monkeypatch.setattr(evolution_api, "definir_webhook", fake_webhook)
-    monkeypatch.setattr(evolution_api, "conectar_qrcode", fake_qr)
+    monkeypatch.setattr(evolution_api, "conectar", fake_conectar)
+    monkeypatch.setattr(evolution_api, "obter_qrcode", fake_qr)
     monkeypatch.setattr(evolution_api, "estado_conexao", fake_estado)
     monkeypatch.setattr(evolution_api, "enviar_texto", fake_texto)
+    monkeypatch.setattr(evolution_api, "enviar_midia", fake_midia)
+    monkeypatch.setattr(evolution_api, "enviar_presenca", fake_presenca)
     monkeypatch.setattr(evolution_api, "logout", fake_logout)
     monkeypatch.setattr(evolution_api, "deletar", fake_deletar)
     return chamadas
@@ -106,12 +96,29 @@ async def _criar_empresa(db_session, empresa_id):
     await db_session.commit()
 
 
+def _payload_inbound(wid: str = "DUP-1", texto: str = "oi") -> dict:
+    """Payload de mensagem recebida no formato Evolution Go."""
+    return {
+        "event": "Message",
+        "data": {
+            "Info": {
+                "ID": wid,
+                "Sender": "5511999990000@s.whatsapp.net",
+                "Chat": "5511999990000@s.whatsapp.net",
+                "IsFromMe": False,
+                "PushName": "Lead",
+            },
+            "Message": {"conversation": texto},
+        },
+    }
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # SERVIÇO — instâncias e envio (mock de rede)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @pytest.mark.anyio
-async def test_criar_instancia_persiste_e_configura_webhook(db_session, monkeypatch):
+async def test_criar_instancia_persiste_token_e_configura_webhook(db_session, monkeypatch):
     chamadas = _mock_rede(monkeypatch)
     await _criar_servidor(db_session)
     empresa_id = uuid.uuid4()
@@ -125,10 +132,26 @@ async def test_criar_instancia_persiste_e_configura_webhook(db_session, monkeypa
     assert inst.status == "conectando"
     assert inst.instance_name.startswith(f"emp_{str(empresa_id)[:8]}_")
     assert inst.webhook_token
+    # token da instância persistido (criptografado)
+    assert inst.instance_token_enc
+    # create chamado com instanceId = id local, e webhook configurado no connect
     assert len(chamadas["criadas"]) == 1
-    assert chamadas["webhooks"][0]["webhook_url"].endswith(
+    assert chamadas["criadas"][0]["instance_id"] == str(inst.id)
+    assert chamadas["conectados"][0]["webhook_url"].endswith(
         f"/vendas/evolution/webhook/{inst.webhook_token}"
     )
+
+
+@pytest.mark.anyio
+async def test_criar_instancia_aplica_settings_padrao(db_session, monkeypatch):
+    chamadas = _mock_rede(monkeypatch)
+    await _criar_servidor(db_session)
+    empresa_id = uuid.uuid4()
+    await _criar_empresa(db_session, empresa_id)
+    await svc.criar_instancia(db_session, empresa_id=empresa_id, nome_exibicao="X")
+    await db_session.commit()
+    # settings padrão vão como advancedSettings no create (Go não tem /settings/set)
+    assert chamadas["criadas"][0]["advanced_settings"]["ignoreGroups"] is True
 
 
 @pytest.mark.anyio
@@ -147,7 +170,7 @@ async def test_limite_de_instancias(db_session, monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_enviar_texto_mockado(db_session, monkeypatch):
+async def test_enviar_texto_usa_token_da_instancia(db_session, monkeypatch):
     chamadas = _mock_rede(monkeypatch)
     await _criar_servidor(db_session)
     empresa_id = uuid.uuid4()
@@ -164,6 +187,77 @@ async def test_enviar_texto_mockado(db_session, monkeypatch):
     assert res["enviado"] is True
     assert res["provider_id"] == "EVO-MSG-1"
     assert chamadas["textos"][0]["numero"] == "5511999990000"
+    # envio usa o TOKEN da instância (não a global key)
+    assert chamadas["textos"][0]["token"] == svc._token(inst)
+
+
+@pytest.mark.anyio
+async def test_reconectar_faz_ritual_e_retorna_qr(db_session, monkeypatch):
+    chamadas = _mock_rede(monkeypatch)
+    await _criar_servidor(db_session)
+    empresa_id = uuid.uuid4()
+    await _criar_empresa(db_session, empresa_id)
+    inst = await svc.criar_instancia(
+        db_session, empresa_id=empresa_id, nome_exibicao="X"
+    )
+    await db_session.commit()
+
+    data = await svc.reconectar(
+        db_session, empresa_id=empresa_id, instancia_id=inst.id
+    )
+    assert data["base64"]  # novo QR retornado
+    # ritual: logout + connect (re-arma webhook + novo login) chamados
+    assert chamadas["logouts"]
+    assert len(chamadas["conectados"]) >= 2  # 1 no create + 1 no reconectar
+    assert inst.status == "conectando"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MÍDIA — envio (image e audio, ambos via /send/media no Go)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.anyio
+async def test_enviar_midia_imagem(db_session, monkeypatch):
+    chamadas = _mock_rede(monkeypatch)
+    await _criar_servidor(db_session)
+    empresa_id = uuid.uuid4()
+    await _criar_empresa(db_session, empresa_id)
+    inst = await svc.criar_instancia(
+        db_session, empresa_id=empresa_id, nome_exibicao="X"
+    )
+    await db_session.commit()
+
+    res = await svc.enviar_midia(
+        db_session, empresa_id=empresa_id, instancia_id=inst.id,
+        numero="+55 11 99999-0000", mediatype="image",
+        media="https://ex.com/foto.png", caption="olha",
+    )
+    assert res["enviado"] is True
+    assert res["provider_id"] == "EVO-MEDIA-1"
+    assert chamadas["midias"][0]["numero"] == "5511999990000"
+    assert chamadas["midias"][0]["caption"] == "olha"
+
+
+@pytest.mark.anyio
+async def test_enviar_midia_audio_via_send_media(db_session, monkeypatch):
+    chamadas = _mock_rede(monkeypatch)
+    await _criar_servidor(db_session)
+    empresa_id = uuid.uuid4()
+    await _criar_empresa(db_session, empresa_id)
+    inst = await svc.criar_instancia(
+        db_session, empresa_id=empresa_id, nome_exibicao="X"
+    )
+    await db_session.commit()
+
+    res = await svc.enviar_midia(
+        db_session, empresa_id=empresa_id, instancia_id=inst.id,
+        numero="5511999990000", mediatype="audio", media="https://ex.com/a.ogg",
+    )
+    assert res["enviado"] is True
+    assert res["provider_id"] == "EVO-MEDIA-1"
+    # áudio vai pelo MESMO endpoint de mídia (type=audio → PTT), não há endpoint de voz separado
+    assert chamadas["midias"][-1]["mediatype"] == "audio"
+    assert chamadas["midias"][-1]["media"] == "https://ex.com/a.ogg"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -206,18 +300,7 @@ async def test_webhook_inbound_marca_respondeu_e_seta_ultimo_canal(
     db_session.add(msg)
     await db_session.commit()
 
-    payload = {
-        "event": "messages.upsert",
-        "instance": inst.instance_name,
-        "data": {
-            "key": {
-                "remoteJid": "5511999990000@s.whatsapp.net",
-                "fromMe": False, "id": "IN-1",
-            },
-            "pushName": "Lead",
-            "message": {"conversation": "tenho interesse"},
-        },
-    }
+    payload = _payload_inbound("IN-1", "tenho interesse")
     n = await svc.processar_webhook(db_session, instancia=inst, payload=payload)
     assert n == 1
 
@@ -245,11 +328,7 @@ async def test_webhook_connection_update_atualiza_status(db_session, monkeypatch
     )
     await db_session.commit()
 
-    payload = {
-        "event": "connection.update",
-        "instance": inst.instance_name,
-        "data": {"state": "open"},
-    }
+    payload = {"event": "Connected", "data": {}}
     await svc.processar_webhook(db_session, instancia=inst, payload=payload)
     ref = await db_session.scalar(
         select(VendasEvolutionInstancias).where(VendasEvolutionInstancias.id == inst.id)
@@ -264,7 +343,6 @@ async def test_webhook_connection_update_atualiza_status(db_session, monkeypatch
 
 @pytest.mark.anyio
 async def test_api_servidor_requer_super_admin(client, db_session):
-    # cliente_torq NÃO pode configurar o servidor global.
     await login_as(client, db_session, role="cliente_torq", email="evo_cli@torq.com")
     r = await client.put("/vendas/evolution/servidor", json={"base_url": "x"})
     assert r.status_code == 403, r.text
@@ -292,14 +370,12 @@ async def test_api_cross_tenant_nao_ve_instancia_de_outro(
 ):
     _mock_rede(monkeypatch)
     await _criar_servidor(db_session)
-    # Empresa A cria instância.
     await login_as(client, db_session, role="cliente_torq", email="evo_a@torq.com")
     ra = await client.post(
         "/vendas/evolution/instancias", json={"nome_exibicao": "A"}
     )
     iid_a = ra.json()["id"]
 
-    # Empresa B loga e não deve ver a instância de A.
     await login_as(client, db_session, role="cliente_torq", email="evo_b@torq.com")
     rb = await client.get("/vendas/evolution/instancias")
     assert all(i["id"] != iid_a for i in rb.json())
@@ -394,28 +470,14 @@ async def test_sdr_envia_via_evolution_quando_ultimo_canal_evo(db_session, monke
     )
     assert ok is True
     assert chamadas["textos"][-1]["texto"] == "resposta sdr"
-    # typing indicator: 'composing' enviado antes do texto
+    # typing indicator: 'composing' enviado antes do texto (campo 'state' no Go)
     assert chamadas["presencas"], "SDR deve mostrar 'digitando...' antes de responder"
-    assert chamadas["presencas"][-1]["presence"] == "composing"
+    assert chamadas["presencas"][-1]["state"] == "composing"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # WEBHOOK — idempotência / dedup (evita reprocessar reenvios da Evolution)
 # ═══════════════════════════════════════════════════════════════════════════════
-
-def _payload_inbound(instance_name: str, wid: str = "DUP-1") -> dict:
-    return {
-        "event": "messages.upsert",
-        "instance": instance_name,
-        "data": {
-            "key": {
-                "remoteJid": "5511999990000@s.whatsapp.net",
-                "fromMe": False, "id": wid,
-            },
-            "message": {"conversation": "oi"},
-        },
-    }
-
 
 @pytest.mark.anyio
 async def test_registrar_webhook_evento_deduplica(db_session, monkeypatch):
@@ -428,32 +490,16 @@ async def test_registrar_webhook_evento_deduplica(db_session, monkeypatch):
     )
     await db_session.commit()
 
-    payload = _payload_inbound(inst.instance_name, "WID-DUP")
+    payload = _payload_inbound("WID-DUP")
     id1 = await svc.registrar_webhook_evento(db_session, instancia=inst, payload=payload)
     id2 = await svc.registrar_webhook_evento(db_session, instancia=inst, payload=payload)
     assert id1 is not None
-    assert id2 is None  # mesma key.id → descartado
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# CONEXÃO — settings padrão no create + ritual de reconexão
-# ═══════════════════════════════════════════════════════════════════════════════
-
-@pytest.mark.anyio
-async def test_criar_instancia_aplica_settings_padrao(db_session, monkeypatch):
-    chamadas = _mock_rede(monkeypatch)
-    await _criar_servidor(db_session)
-    empresa_id = uuid.uuid4()
-    await _criar_empresa(db_session, empresa_id)
-    await svc.criar_instancia(db_session, empresa_id=empresa_id, nome_exibicao="X")
-    await db_session.commit()
-    assert chamadas["settings"], "settings padrão devem ser aplicados no create"
-    assert chamadas["settings"][0]["settings"]["groupsIgnore"] is True
+    assert id2 is None  # mesmo Info.ID → descartado
 
 
 @pytest.mark.anyio
-async def test_reconectar_faz_ritual_e_retorna_qr(db_session, monkeypatch):
-    chamadas = _mock_rede(monkeypatch)
+async def test_api_webhook_duplicado_responde_deduped(client, db_session, monkeypatch):
+    _mock_rede(monkeypatch)
     await _criar_servidor(db_session)
     empresa_id = uuid.uuid4()
     await _criar_empresa(db_session, empresa_id)
@@ -462,58 +508,18 @@ async def test_reconectar_faz_ritual_e_retorna_qr(db_session, monkeypatch):
     )
     await db_session.commit()
 
-    data = await svc.reconectar(
-        db_session, empresa_id=empresa_id, instancia_id=inst.id
+    payload = _payload_inbound("WID-API")
+    r1 = await client.post(
+        f"/vendas/evolution/webhook/{inst.webhook_token}", json=payload
     )
-    assert data["base64"]  # novo QR retornado
-    assert chamadas["logouts"] and chamadas["restarts"]  # ritual chamado
-    assert inst.status == "conectando"
+    assert r1.status_code == 200, r1.text
+    assert r1.json().get("deduped") is not True
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# MÍDIA — envio (image via sendMedia, audio via sendWhatsAppAudio)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-@pytest.mark.anyio
-async def test_enviar_midia_imagem(db_session, monkeypatch):
-    chamadas = _mock_rede(monkeypatch)
-    await _criar_servidor(db_session)
-    empresa_id = uuid.uuid4()
-    await _criar_empresa(db_session, empresa_id)
-    inst = await svc.criar_instancia(
-        db_session, empresa_id=empresa_id, nome_exibicao="X"
+    r2 = await client.post(
+        f"/vendas/evolution/webhook/{inst.webhook_token}", json=payload
     )
-    await db_session.commit()
-
-    res = await svc.enviar_midia(
-        db_session, empresa_id=empresa_id, instancia_id=inst.id,
-        numero="+55 11 99999-0000", mediatype="image",
-        media="https://ex.com/foto.png", caption="olha",
-    )
-    assert res["enviado"] is True
-    assert res["provider_id"] == "EVO-MEDIA-1"
-    assert chamadas["midias"][0]["numero"] == "5511999990000"
-    assert chamadas["midias"][0]["caption"] == "olha"
-
-
-@pytest.mark.anyio
-async def test_enviar_midia_audio_usa_endpoint_de_voz(db_session, monkeypatch):
-    chamadas = _mock_rede(monkeypatch)
-    await _criar_servidor(db_session)
-    empresa_id = uuid.uuid4()
-    await _criar_empresa(db_session, empresa_id)
-    inst = await svc.criar_instancia(
-        db_session, empresa_id=empresa_id, nome_exibicao="X"
-    )
-    await db_session.commit()
-
-    res = await svc.enviar_midia(
-        db_session, empresa_id=empresa_id, instancia_id=inst.id,
-        numero="5511999990000", mediatype="audio", media="https://ex.com/a.ogg",
-    )
-    assert res["enviado"] is True
-    assert res["provider_id"] == "EVO-AUDIO-1"
-    assert chamadas["audios"][0]["audio"] == "https://ex.com/a.ogg"
+    assert r2.status_code == 200, r2.text
+    assert r2.json().get("deduped") is True
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -525,7 +531,6 @@ async def test_webhook_inbound_imagem_persiste_midia(db_session, monkeypatch):
     import base64 as b64
 
     _mock_rede(monkeypatch)
-    # storage mockado (sem tocar rede/RustFS) → retorna URL pública
     from app.core import storage as storage_mod
 
     subiu = {}
@@ -555,14 +560,14 @@ async def test_webhook_inbound_imagem_persiste_midia(db_session, monkeypatch):
 
     img_b64 = b64.b64encode(b"\xff\xd8\xff\xe0fakejpg").decode()
     payload = {
-        "event": "messages.upsert",
-        "instance": inst.instance_name,
+        "event": "Message",
         "data": {
-            "key": {
-                "remoteJid": "5511999990000@s.whatsapp.net",
-                "fromMe": False, "id": "IMG-1",
+            "Info": {
+                "ID": "IMG-1",
+                "Sender": "5511999990000@s.whatsapp.net",
+                "IsFromMe": False,
             },
-            "message": {
+            "Message": {
                 "imageMessage": {"mimetype": "image/jpeg", "caption": "olha isso"},
                 "base64": img_b64,
             },
@@ -570,10 +575,9 @@ async def test_webhook_inbound_imagem_persiste_midia(db_session, monkeypatch):
     }
     n = await svc.processar_webhook(db_session, instancia=inst, payload=payload)
     assert n == 1
-    assert subiu.get("bytes", 0) > 0  # upload chamado
+    assert subiu.get("bytes", 0) > 0
     assert subiu["bucket"] == "vendas-evolution"
 
-    # registrou no pipeline com a media e o caption como texto
     from app.models.vendas_pipeline import VendasConversas
 
     conv = await db_session.scalar(
@@ -659,7 +663,6 @@ async def test_debounce_agrupa_inbounds_em_uma_chamada(db_session, monkeypatch):
 
     _mock_rede(monkeypatch)
 
-    # Registra os enqueues do SDR (sem rodar o handler).
     from app.core import queue as queue_mod
     from app.models.vendas_sdr import VendasSdrConfig
 
@@ -691,19 +694,10 @@ async def test_debounce_agrupa_inbounds_em_uma_chamada(db_session, monkeypatch):
     db_session.add(lead)
     await db_session.commit()
 
-    # Dois inbounds rápidos → bufferizam, NÃO enfileiram ainda.
     for txt, wid in [("oi", "B1"), ("tudo bem?", "B2")]:
-        payload = {
-            "event": "messages.upsert", "instance": inst.instance_name,
-            "data": {
-                "key": {
-                    "remoteJid": "5511999990000@s.whatsapp.net",
-                    "fromMe": False, "id": wid,
-                },
-                "message": {"conversation": txt},
-            },
-        }
-        await svc.processar_webhook(db_session, instancia=inst, payload=payload)
+        await svc.processar_webhook(
+            db_session, instancia=inst, payload=_payload_inbound(wid, txt)
+        )
 
     assert enfileirados == []  # debounce: nada disparado ainda
     lead_ref = await db_session.scalar(
@@ -713,7 +707,6 @@ async def test_debounce_agrupa_inbounds_em_uma_chamada(db_session, monkeypatch):
     assert "oi" in (lead_ref.sdr_buffer or "")
     assert "tudo bem?" in (lead_ref.sdr_buffer or "")
 
-    # Força a janela vencer e drena → UMA chamada com o texto agrupado.
     lead_ref.sdr_buffer_ate = svc._now() - _dt.timedelta(seconds=1)
     await db_session.commit()
     n = await svc.processar_sdr_buffers(db_session)
@@ -722,28 +715,3 @@ async def test_debounce_agrupa_inbounds_em_uma_chamada(db_session, monkeypatch):
     nome, payload = enfileirados[0]
     assert nome == "sdr_inbound"
     assert "oi" in payload["mensagem"] and "tudo bem?" in payload["mensagem"]
-
-
-@pytest.mark.anyio
-async def test_api_webhook_duplicado_responde_deduped(client, db_session, monkeypatch):
-    _mock_rede(monkeypatch)
-    await _criar_servidor(db_session)
-    empresa_id = uuid.uuid4()
-    await _criar_empresa(db_session, empresa_id)
-    inst = await svc.criar_instancia(
-        db_session, empresa_id=empresa_id, nome_exibicao="X"
-    )
-    await db_session.commit()
-
-    payload = _payload_inbound(inst.instance_name, "WID-API")
-    r1 = await client.post(
-        f"/vendas/evolution/webhook/{inst.webhook_token}", json=payload
-    )
-    assert r1.status_code == 200, r1.text
-    assert r1.json().get("deduped") is not True
-
-    r2 = await client.post(
-        f"/vendas/evolution/webhook/{inst.webhook_token}", json=payload
-    )
-    assert r2.status_code == 200, r2.text
-    assert r2.json().get("deduped") is True

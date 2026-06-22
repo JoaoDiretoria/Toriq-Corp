@@ -1,4 +1,4 @@
-"""Canal WhatsApp via Evolution API — regra de negócio.
+"""Canal WhatsApp via Evolution Go — regra de negócio.
 
 Tenant SEMPRE por empresa_id. NÃO commita (quem chama commita), exceto
 ``processar_webhook`` (ponto de entrada de webhook, commita ao final), seguindo o
@@ -6,6 +6,10 @@ padrão de app/services/vendas_whatsapp.py.
 
 Rede delegada a app.integrations.evolution_api; nos testes é mockada por
 monkeypatch nesse módulo.
+
+Credenciais (Evolution Go): rotas admin usam a GLOBAL_API_KEY do servidor
+(``_exigir_servidor``); rotas de instância usam o token DAQUELA instância
+(``_token`` → ``instance_token_enc``).
 """
 from __future__ import annotations
 
@@ -51,18 +55,18 @@ def gerar_instance_name(empresa_id: uuid.UUID, nome: str) -> str:
 
 
 # Settings padrão de uma instância de vendas: ignora grupos, não rejeita ligação,
-# não marca lido automaticamente (o SDR controla o fluxo). Best-effort no create.
+# não marca lido automaticamente (o SDR controla o fluxo). Vão como advancedSettings
+# no create (o Go não tem /settings/set). Chaves no formato do AdvancedSettings do Go.
 SETTINGS_PADRAO = {
     "rejectCall": False,
-    "groupsIgnore": True,
+    "ignoreGroups": True,
     "alwaysOnline": False,
     "readMessages": False,
-    "readStatus": False,
-    "syncFullHistory": False,
+    "ignoreStatus": False,
 }
 
 
-# ───────────────────────── Servidor (global) ─────────────────────────
+# ───────────────────────────── Servidor (global) ─────────────────────────────
 
 async def get_servidor(db: AsyncSession) -> VendasEvolutionServidor | None:
     return await db.scalar(select(VendasEvolutionServidor).limit(1))
@@ -88,14 +92,26 @@ async def salvar_servidor(db: AsyncSession, *, dados) -> VendasEvolutionServidor
 
 
 async def _exigir_servidor(db: AsyncSession) -> tuple[str, str]:
-    """Retorna (base_url, api_key) ou levanta ValueError."""
+    """Retorna (base_url, GLOBAL_API_KEY) ou levanta ValueError."""
     srv = await get_servidor(db)
     if srv is None or not srv.base_url or not srv.api_key_enc:
         raise ValueError("servidor Evolution não configurado")
     return srv.base_url, decrypt_secret(srv.api_key_enc)
 
 
-# ───────────────────────── Instâncias ─────────────────────────
+def _token(inst: VendasEvolutionInstancias) -> str:
+    """Token (apikey) da instância para as rotas de instância do Go."""
+    return decrypt_secret(inst.instance_token_enc) if inst.instance_token_enc else ""
+
+
+def _webhook_url(srv: VendasEvolutionServidor, webhook_token: str) -> str:
+    return (
+        f"{(srv.webhook_base_url or '').rstrip('/')}"
+        f"/vendas/evolution/webhook/{webhook_token}"
+    )
+
+
+# ───────────────────────────── Instâncias ─────────────────────────────
 
 async def contar_instancias(db: AsyncSession, empresa_id: uuid.UUID) -> int:
     return int(
@@ -111,42 +127,46 @@ async def contar_instancias(db: AsyncSession, empresa_id: uuid.UUID) -> int:
 async def criar_instancia(
     db: AsyncSession, *, empresa_id: uuid.UUID, nome_exibicao: str, criado_por=None
 ) -> VendasEvolutionInstancias:
-    """Valida limite, cria na Evolution (com webhook) e persiste. NÃO commita."""
+    """Valida limite, cria a instância no Go (token + settings), conecta (configurando
+    webhook) e persiste o token. NÃO commita.
+
+    O ``id`` (UUID) da linha local é reusado como ``instanceId`` no Go — assim
+    ``delete/{id}`` não precisa de coluna extra. O ``token`` gerado vira a credencial
+    das rotas de instância (``instance_token_enc``).
+    """
     base_url, api_key = await _exigir_servidor(db)
     srv = await get_servidor(db)
     limite = srv.limite_padrao_instancias or 1
     if await contar_instancias(db, empresa_id) >= limite:
         raise ValueError(f"limite de instâncias atingido ({limite})")
 
+    instance_id = uuid.uuid4()
     instance_name = gerar_instance_name(empresa_id, nome_exibicao)
     webhook_token = secrets.token_urlsafe(24)
+    token = secrets.token_urlsafe(24)
 
+    # 1) cria no servidor (rota admin → global key); instanceId = nosso UUID.
     await evolution_api.criar_instancia(
-        base_url=base_url, api_key=api_key, instance_name=instance_name
+        base_url=base_url, api_key=api_key, name=instance_name,
+        instance_id=str(instance_id), token=token, advanced_settings=SETTINGS_PADRAO,
     )
-    webhook_url = (
-        f"{(srv.webhook_base_url or '').rstrip('/')}"
-        f"/vendas/evolution/webhook/{webhook_token}"
-    )
-    await evolution_api.definir_webhook(
-        base_url=base_url, api_key=api_key,
-        instance_name=instance_name, webhook_url=webhook_url,
-    )
-    # Settings padrão (best-effort: não bloqueia a criação se falhar).
+    # 2) conecta (rota de instância → token): configura webhook + categorias e
+    #    dispara o login (QR vem via /qr ou pelo próprio webhook). Best-effort.
     try:
-        await evolution_api.definir_settings(
-            base_url=base_url, api_key=api_key,
-            instance_name=instance_name, settings=SETTINGS_PADRAO,
+        await evolution_api.conectar(
+            base_url=base_url, token=token,
+            webhook_url=_webhook_url(srv, webhook_token),
         )
     except evolution_api.EvolutionError:
         pass
 
     obj = VendasEvolutionInstancias(
-        id=uuid.uuid4(),
+        id=instance_id,
         empresa_id=empresa_id,
         nome_exibicao=nome_exibicao,
         instance_name=instance_name,
         status="conectando",
+        instance_token_enc=encrypt_secret(token),
         webhook_token=webhook_token,
         criado_por=criado_por,
     )
@@ -168,29 +188,26 @@ async def _get_instancia(
 async def obter_qrcode(
     db: AsyncSession, *, empresa_id: uuid.UUID, instancia_id: uuid.UUID
 ) -> dict:
-    base_url, api_key = await _exigir_servidor(db)
+    base_url, _ = await _exigir_servidor(db)
     inst = await _get_instancia(db, empresa_id=empresa_id, instancia_id=instancia_id)
     if inst is None:
         raise ValueError("instância não encontrada")
-    data = await evolution_api.conectar_qrcode(
-        base_url=base_url, api_key=api_key, instance_name=inst.instance_name
-    )
-    return {
-        "base64": data.get("base64"),
-        "code": data.get("code") or data.get("pairingCode"),
-    }
+    # QR pode ainda não estar pronto (logo após o connect) → tolera e o front faz polling.
+    try:
+        data = await evolution_api.obter_qrcode(base_url=base_url, token=_token(inst))
+    except evolution_api.EvolutionError:
+        return {"base64": None, "code": None}
+    return {"base64": data.get("base64"), "code": data.get("code")}
 
 
 async def sincronizar_status(
     db: AsyncSession, *, empresa_id: uuid.UUID, instancia_id: uuid.UUID
 ) -> str:
-    base_url, api_key = await _exigir_servidor(db)
+    base_url, _ = await _exigir_servidor(db)
     inst = await _get_instancia(db, empresa_id=empresa_id, instancia_id=instancia_id)
     if inst is None:
         raise ValueError("instância não encontrada")
-    estado = await evolution_api.estado_conexao(
-        base_url=base_url, api_key=api_key, instance_name=inst.instance_name
-    )
+    estado = await evolution_api.estado_conexao(base_url=base_url, token=_token(inst))
     inst.status = {"open": "conectada", "connecting": "conectando"}.get(
         estado, "desconectada"
     )
@@ -201,31 +218,37 @@ async def sincronizar_status(
 async def reconectar(
     db: AsyncSession, *, empresa_id: uuid.UUID, instancia_id: uuid.UUID
 ) -> dict:
-    """Ritual de reconexão (estilo tio-crm, sem bloquear): logout → restart →
-    novo QR. logout/restart são best-effort; o status vai p/ 'conectando' e o
+    """Ritual de reconexão (re-pareamento): logout → connect (re-arma webhook + novo
+    login) → novo QR. logout/connect são best-effort; o status vai p/ 'conectando' e o
     frontend faz polling de status até 'conectada'. NÃO commita."""
-    base_url, api_key = await _exigir_servidor(db)
+    base_url, _ = await _exigir_servidor(db)
+    srv = await get_servidor(db)
     inst = await _get_instancia(db, empresa_id=empresa_id, instancia_id=instancia_id)
     if inst is None:
         raise ValueError("instância não encontrada")
+    token = _token(inst)
 
-    for fn in (evolution_api.logout, evolution_api.reiniciar):
-        try:
-            await fn(
-                base_url=base_url, api_key=api_key, instance_name=inst.instance_name
-            )
-        except evolution_api.EvolutionError:
-            pass
+    try:
+        await evolution_api.logout(base_url=base_url, token=token)
+    except evolution_api.EvolutionError:
+        pass
 
     inst.status = "conectando"
     inst.updated_at = _now()
-    data = await evolution_api.conectar_qrcode(
-        base_url=base_url, api_key=api_key, instance_name=inst.instance_name
-    )
-    return {
-        "base64": data.get("base64"),
-        "code": data.get("code") or data.get("pairingCode"),
-    }
+
+    try:
+        await evolution_api.conectar(
+            base_url=base_url, token=token,
+            webhook_url=_webhook_url(srv, inst.webhook_token),
+        )
+    except evolution_api.EvolutionError:
+        pass
+
+    try:
+        data = await evolution_api.obter_qrcode(base_url=base_url, token=token)
+    except evolution_api.EvolutionError:
+        data = {}
+    return {"base64": data.get("base64"), "code": data.get("code")}
 
 
 async def deletar_instancia(
@@ -236,11 +259,9 @@ async def deletar_instancia(
         return False
     try:
         base_url, api_key = await _exigir_servidor(db)
-        await evolution_api.logout(
-            base_url=base_url, api_key=api_key, instance_name=inst.instance_name
-        )
+        await evolution_api.logout(base_url=base_url, token=_token(inst))
         await evolution_api.deletar(
-            base_url=base_url, api_key=api_key, instance_name=inst.instance_name
+            base_url=base_url, api_key=api_key, instance_id=str(inst.id)
         )
     except (ValueError, evolution_api.EvolutionError):
         pass  # remove localmente mesmo se a Evolution já não tiver a instância
@@ -248,32 +269,31 @@ async def deletar_instancia(
     return True
 
 
-# ───────────────────────── Envio avulso ─────────────────────────
+# ───────────────────────────── Envio avulso ─────────────────────────────
 
 async def enviar_texto(
     db: AsyncSession, *, empresa_id: uuid.UUID, instancia_id: uuid.UUID,
     numero: str, texto: str, typing: bool = False,
 ) -> dict:
-    """Envia um texto e grava em vendas_mensagens. NÃO commita.
+    """Envia um texto pela instância. NÃO commita.
 
     ``typing=True`` mostra 'digitando...' antes (respostas do SDR — mais humano).
     """
-    base_url, api_key = await _exigir_servidor(db)
+    base_url, _ = await _exigir_servidor(db)
     inst = await _get_instancia(db, empresa_id=empresa_id, instancia_id=instancia_id)
     if inst is None:
         raise ValueError("instância não encontrada")
 
     destino = re.sub(r"\D", "", numero or "")
+    token = _token(inst)
     if typing:
         await evolution_api.enviar_presenca(
-            base_url=base_url, api_key=api_key,
-            instance_name=inst.instance_name, numero=destino, presence="composing",
+            base_url=base_url, token=token, numero=destino, state="composing",
         )
     enviado, provider_id, erro = False, None, None
     try:
         provider_id = await evolution_api.enviar_texto(
-            base_url=base_url, api_key=api_key,
-            instance_name=inst.instance_name, numero=destino, texto=texto,
+            base_url=base_url, token=token, numero=destino, texto=texto,
         )
         enviado = True
     except evolution_api.EvolutionError as exc:
@@ -288,8 +308,9 @@ async def enviar_midia(
     filename: str | None = None, caption: str | None = None,
 ) -> dict:
     """Envia mídia (image/video/document/audio) pela instância. NÃO commita.
-    ``media`` = URL pública ou base64. mediatype='audio' usa o endpoint de voz."""
-    base_url, api_key = await _exigir_servidor(db)
+    ``media`` = URL pública ou base64. ``mediatype='audio'`` vira nota de voz (PTT).
+    No Go tudo passa por /send/media (não há endpoint de voz separado)."""
+    base_url, _ = await _exigir_servidor(db)
     inst = await _get_instancia(db, empresa_id=empresa_id, instancia_id=instancia_id)
     if inst is None:
         raise ValueError("instância não encontrada")
@@ -297,18 +318,11 @@ async def enviar_midia(
     destino = re.sub(r"\D", "", numero or "")
     enviado, provider_id, erro = False, None, None
     try:
-        if mediatype == "audio":
-            provider_id = await evolution_api.enviar_audio(
-                base_url=base_url, api_key=api_key,
-                instance_name=inst.instance_name, numero=destino, audio=media,
-            )
-        else:
-            provider_id = await evolution_api.enviar_midia(
-                base_url=base_url, api_key=api_key,
-                instance_name=inst.instance_name, numero=destino,
-                mediatype=mediatype, media=media, mimetype=mimetype,
-                filename=filename, caption=caption,
-            )
+        provider_id = await evolution_api.enviar_midia(
+            base_url=base_url, token=_token(inst), numero=destino,
+            mediatype=mediatype, media=media, mimetype=mimetype,
+            filename=filename, caption=caption,
+        )
         enviado = True
     except evolution_api.EvolutionError as exc:
         erro = str(exc)
@@ -352,23 +366,6 @@ def _ext_de_mime(mime: str | None) -> str:
     return _EXT_MIME.get(mime.split(";")[0].strip(), ".bin")
 
 
-async def _obter_base64(db: AsyncSession, *, instancia, media: dict) -> str:
-    """base64 inline (preferido) ou fallback baixando da Evolution. '' se nada."""
-    b64 = media.get("base64")
-    if b64:
-        return b64
-    if media.get("media_id"):
-        try:
-            base_url, api_key = await _exigir_servidor(db)
-            return await evolution_api.baixar_midia(
-                base_url=base_url, api_key=api_key,
-                instance_name=instancia.instance_name, message_id=media["media_id"],
-            )
-        except (ValueError, evolution_api.EvolutionError):
-            return ""
-    return ""
-
-
 async def persistir_midia_inbound(
     db: AsyncSession, *, empresa_id: uuid.UUID, instancia, media: dict
 ) -> tuple[dict, bytes | None]:
@@ -376,7 +373,9 @@ async def persistir_midia_inbound(
 
     metadata (p/ o pipeline): {tipo, mime_type, caption, filename, url, downloaded}.
     Os ``bytes`` brutos são devolvidos p/ a IA (transcrição/visão) sem persistir o
-    base64 no banco. Storage não configurado (503) → url=None, mas o resto segue.
+    base64 no banco. O webhook do Go traz a mídia inline: ``base64`` (MinIO off) ou
+    ``mediaUrl`` (MinIO on). Com base64, subimos no nosso storage; com URL pronta,
+    usamos ela direto. Storage não configurado (503) → url=None, mas o resto segue.
     """
     meta = {
         "tipo": media.get("tipo"),
@@ -386,7 +385,14 @@ async def persistir_midia_inbound(
         "url": None,
         "downloaded": False,
     }
-    b64 = await _obter_base64(db, instancia=instancia, media=media)
+
+    # MinIO no Go: já temos uma URL pública pronta → usa direto (sem re-upload).
+    if media.get("url"):
+        meta["url"] = media["url"]
+        meta["downloaded"] = True
+        return meta, None
+
+    b64 = media.get("base64") or ""
     if not b64:
         return meta, None
     try:
@@ -462,14 +468,12 @@ async def _texto_de_midia(
 # ───────────────── Webhook: idempotência (dedup por event_id) ─────────────────
 
 def _event_id_de(payload: dict) -> str:
-    """ID estável do evento p/ dedup. Mensagens → data.key.id; resto → sintético."""
+    """ID estável do evento p/ dedup. Mensagens → data.Info.ID; resto → sintético."""
     data = (payload or {}).get("data")
-    if isinstance(data, list):
-        data = data[0] if data else None
     if isinstance(data, dict):
-        key = data.get("key") or {}
-        if key.get("id"):
-            return str(key["id"])
+        info = data.get("Info") or data.get("info") or {}
+        if info.get("ID"):
+            return str(info["ID"])
     return f"evt-{uuid.uuid4()}"
 
 
@@ -500,12 +504,12 @@ async def registrar_webhook_evento(
 # ───────────────── Webhook (ponto de entrada — COMMITA) ─────────────────
 
 async def processar_webhook(db: AsyncSession, *, instancia, payload: dict) -> int:
-    """Processa o callback da Evolution para UMA instância já identificada.
+    """Processa o callback da Evolution Go para UMA instância já identificada.
 
-    - connection.update → atualiza status/numero da instância.
-    - messages.upsert (inbound) → acha o lead pelo telefone, marca 'respondeu',
-      espelha no Pipeline (append_mensagem), grava ultimo_canal='whatsapp_evo' e
-      enfileira 'sdr_inbound' se o SDR estiver ativo+auto_responder. COMMITA.
+    - Connected/Disconnected/LoggedOut → atualiza status da instância.
+    - Message (inbound) → acha o lead pelo telefone, marca 'respondeu', espelha no
+      Pipeline (append_mensagem), grava ultimo_canal='whatsapp_evo' e bufferiza p/ o
+      SDR (debounce) se ativo+auto_responder. COMMITA.
     Retorna a quantidade de inbounds processados.
     """
     eventos = evolution_api.parse_webhook(payload)
