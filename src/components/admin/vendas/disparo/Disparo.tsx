@@ -98,11 +98,9 @@ export function Disparo() {
   }, [fetchConfig]);
 
   const handleNovaCampanha = () => {
-    if (!smtpConfigured) {
-      toast.info('Configure o provedor de e-mail antes de criar uma campanha.');
-      setTab('config');
-      return;
-    }
+    // Abre direto: a campanha pode ser e-mail, WhatsApp (Meta) ou Evolution. A
+    // validação por canal (SMTP p/ e-mail, instância p/ Evolution, etc.) acontece
+    // no envio (backend), então não bloqueamos a criação aqui.
     setCriarOpen(true);
   };
 
@@ -123,11 +121,11 @@ export function Disparo() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Send className="h-6 w-6" />
-            Disparo de E-mail
+            Disparo de campanhas
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Envie campanhas por e-mail aos seus leads, respeitando opt-out (LGPD)
-            e rate limit.
+            Envie campanhas por e-mail ou WhatsApp (Meta/Evolution) aos seus leads,
+            respeitando opt-out (LGPD) e rate limit.
           </p>
         </div>
         <Button onClick={handleNovaCampanha} disabled={loadingConfig}>
@@ -149,10 +147,11 @@ export function Disparo() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-                    Provedor de e-mail não configurado
+                    Provedor de e-mail (SMTP) não configurado
                   </p>
                   <p className="text-xs text-amber-800/80 dark:text-amber-300/80 mt-0.5">
-                    Configure o servidor SMTP antes de enviar campanhas.
+                    Necessário apenas para campanhas por <strong>e-mail</strong>. Campanhas
+                    por WhatsApp (Meta/Evolution) não usam SMTP.
                   </p>
                 </div>
               </div>
