@@ -505,6 +505,53 @@ async def test_campanha_evo_usa_instancia_escolhida(db_session, monkeypatch):
     assert msg.instancia_id == inst_b.id
 
 
+@pytest.mark.anyio
+async def test_campanha_evo_renderiza_variaveis_do_template(db_session, monkeypatch):
+    """Canal Evolution deve interpolar {{nome}} etc. (igual ao e-mail)."""
+    chamadas = _mock_rede(monkeypatch)
+    await _criar_servidor(db_session)
+    empresa_id = uuid.uuid4()
+    await _criar_empresa(db_session, empresa_id)
+    inst = await svc.criar_instancia(
+        db_session, empresa_id=empresa_id, nome_exibicao="X"
+    )
+    inst.status = "conectada"
+    await db_session.commit()
+
+    lead = VendasLeads(
+        id=uuid.uuid4(), empresa_id=empresa_id, nome="Maria",
+        telefone="+55 (11) 95555-4444",
+    )
+    db_session.add(lead)
+    from app.models.vendas_disparo import VendasCampanhas, VendasTemplates
+
+    tpl = VendasTemplates(
+        id=uuid.uuid4(), empresa_id=empresa_id, nome="T",
+        canal="whatsapp_evo", conteudo="Olá {{nome}}, sou da Toriq!",
+    )
+    db_session.add(tpl)
+    await db_session.commit()
+    camp = VendasCampanhas(
+        id=uuid.uuid4(), empresa_id=empresa_id, nome="C", canal="whatsapp_evo",
+        template_id=tpl.id, lead_ids=[str(lead.id)], status="rascunho",
+    )
+    db_session.add(camp)
+    await db_session.commit()
+
+    from app.services import vendas_disparo as disparo
+
+    await disparo.preparar_campanha(
+        db_session, campanha_id=camp.id, empresa_id=empresa_id
+    )
+    await disparo.enviar_campanha(
+        db_session, campanha_id=camp.id, empresa_id=empresa_id
+    )
+    await db_session.commit()
+
+    # {{nome}} foi interpolado para o nome do lead.
+    assert chamadas["textos"][-1]["texto"] == "Olá Maria, sou da Toriq!"
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # SDR — responde via Evolution quando o lead chegou pelo canal evo
 # ═══════════════════════════════════════════════════════════════════════════════

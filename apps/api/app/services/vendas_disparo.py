@@ -475,10 +475,19 @@ async def _enviar_campanha_inner(
                 continue
 
         if eh_evo:
-            # Canal Evolution: envia pela instância conectada da empresa.
+            # Canal Evolution: renderiza as variáveis do lead ({{nome}} etc.) e
+            # envia pela instância escolhida/conectada da empresa.
             from app.services.vendas_evolution import enviar_texto as evo_enviar
 
-            corpo_evo = (template.conteudo if template is not None else "") or ""
+            lead_evo: Optional[VendasLeads] = None
+            if msg.lead_id is not None:
+                lead_evo = await db.scalar(
+                    select(VendasLeads).where(VendasLeads.id == msg.lead_id)
+                )
+            corpo_evo = render_template(
+                template.conteudo if template is not None else None,
+                _variaveis_do_lead(lead_evo),
+            ) or ""
             res = await evo_enviar(
                 db,
                 empresa_id=empresa_id,
