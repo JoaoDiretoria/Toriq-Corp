@@ -59,6 +59,7 @@ import {
   CheckCircle2,
   PencilLine,
   Trash2,
+  X,
 } from 'lucide-react';
 
 const CAMP_STATUS: Record<
@@ -75,6 +76,14 @@ export function Disparo() {
   // Status do provedor (header).
   const [loadingConfig, setLoadingConfig] = useState(true);
   const [smtpConfigured, setSmtpConfigured] = useState(false);
+  // Aviso de SMTP é só informativo (e-mail). Pode ser dispensado e fica lembrado.
+  const [smtpAvisoDismissed, setSmtpAvisoDismissed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('vendas_smtp_aviso_dismissed') === '1';
+    } catch {
+      return false;
+    }
+  });
 
   const [tab, setTab] = useState('campanhas');
   const [selectedCampanha, setSelectedCampanha] = useState<string | null>(null);
@@ -96,6 +105,15 @@ export function Disparo() {
   useEffect(() => {
     fetchConfig();
   }, [fetchConfig]);
+
+  const handleDismissSmtpAviso = () => {
+    setSmtpAvisoDismissed(true);
+    try {
+      localStorage.setItem('vendas_smtp_aviso_dismissed', '1');
+    } catch {
+      /* ignore */
+    }
+  };
 
   const handleNovaCampanha = () => {
     // Abre direto: a campanha pode ser e-mail, WhatsApp (Meta) ou Evolution. A
@@ -138,7 +156,7 @@ export function Disparo() {
       {loadingConfig ? (
         <Skeleton className="h-20 w-full rounded-lg" />
       ) : (
-        !smtpConfigured && (
+        !smtpConfigured && !smtpAvisoDismissed && (
           <Card className="border-amber-300/60 bg-amber-50 dark:border-amber-800/60 dark:bg-amber-950/20">
             <CardContent className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 py-4">
               <div className="flex items-start gap-3">
@@ -155,14 +173,25 @@ export function Disparo() {
                   </p>
                 </div>
               </div>
-              <Button
-                size="sm"
-                className="bg-amber-600 hover:bg-amber-700 text-white shrink-0"
-                onClick={() => setTab('config')}
-              >
-                <Settings2 className="h-4 w-4 mr-2" />
-                Configurar agora
-              </Button>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  size="sm"
+                  className="bg-amber-600 hover:bg-amber-700 text-white"
+                  onClick={() => setTab('config')}
+                >
+                  <Settings2 className="h-4 w-4 mr-2" />
+                  Configurar agora
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-amber-700 hover:bg-amber-100 dark:text-amber-300 dark:hover:bg-amber-900/40"
+                  onClick={handleDismissSmtpAviso}
+                  title="Dispensar este aviso"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )
