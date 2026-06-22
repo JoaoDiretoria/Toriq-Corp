@@ -317,7 +317,8 @@ async def enviar_mensagem(
     empresa_id = _require_empresa(user)
     try:
         return await svc.enviar_resposta(
-            db, empresa_id=empresa_id, lead_id=lead_id, conteudo=payload.conteudo
+            db, empresa_id=empresa_id, lead_id=lead_id,
+            conteudo=payload.conteudo, canal=payload.canal,
         )
     except ValueError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc))

@@ -107,6 +107,8 @@ class ConversaThreadOut(BaseModel):
 
 class EnviarMensagemIn(BaseModel):
     conteudo: str
+    # 'whatsapp' (Meta) | 'whatsapp_evo' (Evolution) | None = segue o último canal do lead.
+    canal: Optional[str] = None
 
 
 class EnviarTemplateIn(BaseModel):

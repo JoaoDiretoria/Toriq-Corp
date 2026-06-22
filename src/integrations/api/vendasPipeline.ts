@@ -256,8 +256,8 @@ export const vendasPipelineApi = {
   getThread: (leadId: string) =>
     api.get<ConversaThread>(`/vendas/conversas/${leadId}`),
 
-  enviarMensagem: (leadId: string, conteudo: string) =>
-    api.post<ConversaMensagem>(`/vendas/conversas/${leadId}/mensagem`, { conteudo }),
+  enviarMensagem: (leadId: string, conteudo: string, canal?: string) =>
+    api.post<ConversaMensagem>(`/vendas/conversas/${leadId}/mensagem`, { conteudo, canal }),
 
   enviarTemplate: (leadId: string, templateId: string) =>
     api.post<ConversaMensagem>(`/vendas/conversas/${leadId}/template`, {

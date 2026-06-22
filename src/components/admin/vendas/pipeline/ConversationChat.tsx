@@ -38,6 +38,7 @@ import {
   nomeExibicao,
   iniciais,
 } from './ConversationList';
+import { CANAIS_WHATSAPP } from '../canais';
 
 // ---------------------------------------------------------------------------
 // Bolha de mensagem
@@ -184,6 +185,7 @@ export function ConversationChat({
   const [janelaAberta, setJanelaAberta] = useState(true);
   const [templates, setTemplates] = useState<TemplateAprovado[]>([]);
   const [templateSel, setTemplateSel] = useState<string>('');
+  const [canalManual, setCanalManual] = useState<string>('whatsapp');
   const [operadores, setOperadores] = useState<Operador[]>([]);
 
   const SEM_RESP = '__none__';
@@ -280,7 +282,7 @@ export function ConversationChat({
     if (!conteudo || !leadId || enviando) return;
     setEnviando(true);
     try {
-      const msg = await vendasPipelineApi.enviarMensagem(leadId, conteudo);
+      const msg = await vendasPipelineApi.enviarMensagem(leadId, conteudo, canalManual);
       setMensagens((prev) => [...prev, msg]);
       setTexto('');
       scrollToBottom();
@@ -422,28 +424,40 @@ export function ConversationChat({
       {/* Composer */}
       <div className="border-t p-3">
         {janelaAberta ? (
-          <div className="flex items-end gap-2">
-            <Textarea
-              value={texto}
-              onChange={(e) => setTexto(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Escreva uma mensagem… (Enter envia, Shift+Enter quebra linha)"
-              rows={1}
-              className="max-h-32 min-h-[40px] resize-none"
-              disabled={enviando}
-            />
-            <Button
-              onClick={handleEnviar}
-              disabled={enviando || !texto.trim()}
-              size="icon"
-              className="h-10 w-10 shrink-0"
-            >
-              {enviando ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
+          <div className="space-y-2">
+            <Select value={canalManual} onValueChange={setCanalManual}>
+              <SelectTrigger className="h-8 w-48 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CANAIS_WHATSAPP.map((c) => (
+                  <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex items-end gap-2">
+              <Textarea
+                value={texto}
+                onChange={(e) => setTexto(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Escreva uma mensagem… (Enter envia, Shift+Enter quebra linha)"
+                rows={1}
+                className="max-h-32 min-h-[40px] resize-none"
+                disabled={enviando}
+              />
+              <Button
+                onClick={handleEnviar}
+                disabled={enviando || !texto.trim()}
+                size="icon"
+                className="h-10 w-10 shrink-0"
+              >
+                {enviando ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="space-y-2">

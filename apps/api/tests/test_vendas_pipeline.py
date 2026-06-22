@@ -207,6 +207,50 @@ async def test_enviar_resposta_sem_config_registra_erro(client, db_session, monk
     assert len(r.json()["mensagens"]) == 1
 
 
+@pytest.mark.anyio
+async def test_enviar_resposta_canal_evolution_usa_instancia(
+    client, db_session, monkeypatch
+):
+    empresa_id = await login_as(client, db_session, email="pipe_evo@torq.com")
+
+    # Instância Evolution conectada (o envio manual deve rotear por ela).
+    from app.core.esocial_crypto import encrypt_secret
+    from app.models.vendas_evolution import VendasEvolutionInstancias
+
+    db_session.add(
+        VendasEvolutionInstancias(
+            id=uuid.uuid4(), empresa_id=empresa_id, nome_exibicao="WA",
+            instance_name=f"emp_{uuid.uuid4().hex[:8]}", status="conectada",
+            instance_token_enc=encrypt_secret("tok-evo"),
+            webhook_token=uuid.uuid4().hex,
+        )
+    )
+    await db_session.commit()
+
+    # Mock do envio Evolution (nível service) — não toca rede.
+    from app.services import vendas_evolution as evo
+
+    chamadas = []
+
+    async def fake_evo(db, *, empresa_id, instancia_id, numero, texto, typing=False):
+        chamadas.append({"numero": numero, "texto": texto})
+        return {"enviado": True, "provider_id": "EVO-1", "erro": None}
+
+    monkeypatch.setattr(evo, "enviar_texto", fake_evo)
+
+    lead_id = await _criar_lead(client, nome="Eve", telefone="+55 (11) 97777-0000")
+    r = await client.post(
+        f"/vendas/conversas/{lead_id}/mensagem",
+        json={"conteudo": "oi pelo evo", "canal": "whatsapp_evo"},
+    )
+    assert r.status_code == 200, r.text
+    msg = r.json()
+    assert msg["status"] == "enviado"
+    assert msg["canal"] == "whatsapp_evo"
+    assert chamadas and chamadas[0]["numero"] == "5511977770000"
+    assert chamadas[0]["texto"] == "oi pelo evo"
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # TEMPLATE HSM (reabrir conversa fora da janela 24h)
 # ═══════════════════════════════════════════════════════════════════════════════

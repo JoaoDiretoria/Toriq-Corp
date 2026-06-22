@@ -552,42 +552,30 @@ async def thread(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 async def enviar_resposta(
-    db: AsyncSession, *, empresa_id: uuid.UUID, lead_id: uuid.UUID, conteudo: str
+    db: AsyncSession, *, empresa_id: uuid.UUID, lead_id: uuid.UUID, conteudo: str,
+    canal: str | None = None,
 ) -> VendasConversas:
     """Envia resposta por WhatsApp e registra a mensagem (sender agente).
 
-    Tolerante: se o provider falhar (WhatsAppError ou config faltando), grava a
-    mensagem com status="erro" mesmo assim — o agente vê o que tentou enviar.
+    O canal pode ser escolhido explicitamente: 'whatsapp' (Meta) ou 'whatsapp_evo'
+    (Evolution). Sem canal, segue o último canal do lead (fallback Meta).
+    Tolerante: se o provider falhar (erro/config faltando), grava a mensagem com
+    status="erro" mesmo assim — o agente vê o que tentou enviar.
     """
     lead = await _get_lead(db, empresa_id, lead_id)
     if lead is None:
         raise ValueError("lead não encontrado")
 
-    config = await db.scalar(
-        select(VendasDisparoConfig).where(
-            VendasDisparoConfig.empresa_id == empresa_id
+    canal_efetivo = canal or lead.ultimo_canal or "whatsapp"
+    if canal_efetivo == "whatsapp_evo":
+        status = await _enviar_via_evolution(
+            db, empresa_id=empresa_id, telefone=lead.telefone, conteudo=conteudo
         )
-    )
-
-    status = "enviado"
-    if (
-        config is None
-        or not config.whatsapp_phone_id
-        or not config.whatsapp_token_enc
-        or not lead.telefone
-    ):
-        status = "erro"
     else:
-        to = re.sub(r"\D", "", lead.telefone)
-        try:
-            await send_text(
-                phone_id=config.whatsapp_phone_id,
-                token=decrypt_secret(config.whatsapp_token_enc),
-                to=to,
-                body=conteudo,
-            )
-        except WhatsAppError:
-            status = "erro"
+        canal_efetivo = "whatsapp"
+        status = await _enviar_via_meta(
+            db, empresa_id=empresa_id, telefone=lead.telefone, conteudo=conteudo
+        )
 
     return await append_mensagem(
         db,
@@ -595,9 +583,58 @@ async def enviar_resposta(
         lead_id=lead_id,
         sender_type="agente",
         conteudo=conteudo,
-        canal="whatsapp",
+        canal=canal_efetivo,
         status=status,
     )
+
+
+async def _enviar_via_meta(
+    db: AsyncSession, *, empresa_id: uuid.UUID, telefone: str | None, conteudo: str
+) -> str:
+    """Envio pela Cloud API da Meta. Retorna 'enviado' | 'erro' (tolerante)."""
+    config = await db.scalar(
+        select(VendasDisparoConfig).where(
+            VendasDisparoConfig.empresa_id == empresa_id
+        )
+    )
+    if (
+        config is None
+        or not config.whatsapp_phone_id
+        or not config.whatsapp_token_enc
+        or not telefone
+    ):
+        return "erro"
+    try:
+        await send_text(
+            phone_id=config.whatsapp_phone_id,
+            token=decrypt_secret(config.whatsapp_token_enc),
+            to=re.sub(r"\D", "", telefone),
+            body=conteudo,
+        )
+    except WhatsAppError:
+        return "erro"
+    return "enviado"
+
+
+async def _enviar_via_evolution(
+    db: AsyncSession, *, empresa_id: uuid.UUID, telefone: str | None, conteudo: str
+) -> str:
+    """Envio pela instância Evolution conectada da empresa. 'enviado' | 'erro'."""
+    if not telefone:
+        return "erro"
+    from app.services.vendas_evolution import (
+        enviar_texto as evo_enviar,
+        instancia_conectada,
+    )
+
+    inst = await instancia_conectada(db, empresa_id)
+    if inst is None:
+        return "erro"
+    res = await evo_enviar(
+        db, empresa_id=empresa_id, instancia_id=inst.id,
+        numero=re.sub(r"\D", "", telefone), texto=conteudo,
+    )
+    return "enviado" if res.get("enviado") else "erro"
 
 
 async def enviar_template(
