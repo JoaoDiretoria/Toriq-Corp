@@ -32,6 +32,7 @@ export interface SdrConfigPublic {
   ativo: boolean;
   auto_responder: boolean;
   notificar_telefones: string | null;
+  canal_saida_padrao: string | null;
   api_key_set: boolean;
   api_key_masked: string | null;
   openai_api_key_set?: boolean;
@@ -52,6 +53,7 @@ export interface SdrConfigUpdate {
   ativo?: boolean | null;
   auto_responder?: boolean | null;
   notificar_telefones?: string | null;
+  canal_saida_padrao?: string | null;
   clear_api_key?: boolean | null;
   openai_api_key?: string | null; // Whisper (transcrição de áudio do WhatsApp)
   clear_openai_api_key?: boolean | null;

@@ -75,6 +75,11 @@ class VendasSdrConfig(Base):
         Boolean, server_default=text("false")
     )
     notificar_telefones: Mapped[Optional[str]] = mapped_column(Text)
+    # Canal de saída padrão do SDR: 'auto' (segue lead.ultimo_canal) | 'whatsapp'
+    # (Meta) | 'whatsapp_evo' (Evolution).
+    canal_saida_padrao: Mapped[Optional[str]] = mapped_column(
+        Text, server_default=text("'auto'")
+    )
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime(True), server_default=text("now()")
     )

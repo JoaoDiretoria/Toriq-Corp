@@ -58,6 +58,7 @@ interface FormState {
   ativo: boolean;
   auto_responder: boolean;
   notificar_telefones: string;
+  canal_saida_padrao: string;
 }
 
 const EMPTY_FORM: FormState = {
@@ -72,6 +73,7 @@ const EMPTY_FORM: FormState = {
   ativo: false,
   auto_responder: false,
   notificar_telefones: '',
+  canal_saida_padrao: 'auto',
 };
 
 // Modelos sugeridos (o backend aceita texto livre; estes são atalhos comuns).
@@ -114,6 +116,7 @@ export function SdrConfig({ onSaved }: SdrConfigProps) {
         ativo: cfg.ativo ?? false,
         auto_responder: cfg.auto_responder ?? false,
         notificar_telefones: cfg.notificar_telefones ?? '',
+        canal_saida_padrao: cfg.canal_saida_padrao ?? 'auto',
       });
       setKeySet(!!cfg.api_key_set);
       setKeyMasked(cfg.api_key_masked ?? null);
@@ -172,6 +175,7 @@ export function SdrConfig({ onSaved }: SdrConfigProps) {
       ativo: form.ativo,
       auto_responder: form.auto_responder,
       notificar_telefones: form.notificar_telefones.trim() || null,
+      canal_saida_padrao: form.canal_saida_padrao,
     };
     // Só envia a chave se o usuário digitou algo (vazio = manter a atual).
     if (keyInput.trim()) payload.api_key = keyInput.trim();
@@ -412,6 +416,30 @@ export function SdrConfig({ onSaved }: SdrConfigProps) {
             <p className="text-xs text-muted-foreground">
               Números (com DDI/DDD) que recebem alerta no WhatsApp quando um lead é
               qualificado como quente. Separe por vírgula.
+            </p>
+          </div>
+
+          {/* Canal de saída padrão */}
+          <div className="space-y-1.5">
+            <Label htmlFor="sdr-canal-saida" className="text-sm">
+              Canal de saída (WhatsApp)
+            </Label>
+            <Select
+              value={form.canal_saida_padrao}
+              onValueChange={(v) => updateField('canal_saida_padrao', v)}
+            >
+              <SelectTrigger id="sdr-canal-saida">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Automático (canal de origem do lead)</SelectItem>
+                <SelectItem value="whatsapp">WhatsApp (Meta)</SelectItem>
+                <SelectItem value="whatsapp_evo">WhatsApp (Evolution)</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Por qual WhatsApp o SDR envia. "Automático" responde pelo mesmo canal
+              em que o lead chegou (fallback Meta).
             </p>
           </div>
         </CardContent>

@@ -499,6 +499,15 @@ def _telefones_notificacao(config: VendasSdrConfig) -> list[str]:
     return [t.strip() for t in raw.split(",") if t.strip()]
 
 
+def _resolver_canal_saida(config, lead) -> str:
+    """Canal de saída do SDR. Usa o canal padrão configurado (se != 'auto'),
+    senão o último canal do lead (fallback Meta)."""
+    padrao = getattr(config, "canal_saida_padrao", None)
+    if padrao and padrao != "auto":
+        return padrao
+    return (lead.ultimo_canal if lead is not None else None) or "whatsapp"
+
+
 async def _enviar_whatsapp_sdr(
     db: AsyncSession, *, empresa_id: uuid.UUID, to: str, texto: str,
     canal: str = "whatsapp",
@@ -644,7 +653,7 @@ async def processar_inbound_sdr(
     if next_msg:
         enviou = await _enviar_whatsapp_sdr(
             db, empresa_id=empresa_id, to=lead.telefone or "", texto=next_msg,
-            canal=(lead.ultimo_canal or "whatsapp"),
+            canal=_resolver_canal_saida(config, lead),
         )
         db.add(
             VendasSdrInteracoes(
@@ -706,7 +715,7 @@ async def processar_inbound_sdr(
         for tel in telefones:
             if await _enviar_whatsapp_sdr(
                 db, empresa_id=empresa_id, to=tel, texto=alerta,
-                canal=(lead.ultimo_canal or "whatsapp"),
+                canal=_resolver_canal_saida(config, lead),
             ):
                 notificados += 1
         db.add(
@@ -806,7 +815,7 @@ async def processar_followup_sdr(
     if texto:
         enviou = await _enviar_whatsapp_sdr(
             db, empresa_id=empresa_id, to=lead.telefone or "", texto=texto,
-            canal=(lead.ultimo_canal or "whatsapp"),
+            canal=_resolver_canal_saida(config, lead),
         )
         db.add(
             VendasSdrInteracoes(

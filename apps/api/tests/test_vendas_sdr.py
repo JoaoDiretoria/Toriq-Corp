@@ -132,6 +132,47 @@ async def test_config_put_get_mascara_chave(client, db_session):
     assert body["persona"] == "Sou um SDR cordial da Toriq."
 
 
+@pytest.mark.anyio
+async def test_config_canal_saida_padrao_roundtrip(client, db_session):
+    await login_as(client, db_session, email="sdr_canal@torq.com")
+    r = await client.put(
+        "/vendas/sdr/config", json={"canal_saida_padrao": "whatsapp_evo"}
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["canal_saida_padrao"] == "whatsapp_evo"
+    r = await client.get("/vendas/sdr/config")
+    assert r.json()["canal_saida_padrao"] == "whatsapp_evo"
+
+
+# ── _resolver_canal_saida (decisão de canal do SDR) ──────────────────────────
+
+def test_resolver_canal_saida_override_config():
+    from app.models.vendas import VendasLeads
+    from app.models.vendas_sdr import VendasSdrConfig
+
+    cfg = VendasSdrConfig(canal_saida_padrao="whatsapp_evo")
+    lead = VendasLeads(ultimo_canal="whatsapp")
+    assert svc._resolver_canal_saida(cfg, lead) == "whatsapp_evo"
+
+
+def test_resolver_canal_saida_auto_segue_lead():
+    from app.models.vendas import VendasLeads
+    from app.models.vendas_sdr import VendasSdrConfig
+
+    cfg = VendasSdrConfig(canal_saida_padrao="auto")
+    lead = VendasLeads(ultimo_canal="whatsapp_evo")
+    assert svc._resolver_canal_saida(cfg, lead) == "whatsapp_evo"
+
+
+def test_resolver_canal_saida_fallback_meta():
+    from app.models.vendas import VendasLeads
+    from app.models.vendas_sdr import VendasSdrConfig
+
+    cfg = VendasSdrConfig(canal_saida_padrao="auto")
+    lead = VendasLeads(ultimo_canal=None)
+    assert svc._resolver_canal_saida(cfg, lead) == "whatsapp"
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # QUALIFICAÇÃO
 # ═══════════════════════════════════════════════════════════════════════════════
