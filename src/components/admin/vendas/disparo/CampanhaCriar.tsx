@@ -9,6 +9,7 @@ import {
   type VendasSegmento,
   type VendasLead,
 } from '@/integrations/api/vendas';
+import { CANAIS_ENVIO, isWhatsappCanal } from '../canais';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -54,6 +55,7 @@ type Alvo = 'segmento' | 'leads';
 
 export function CampanhaCriar({ open, onOpenChange, onCreated }: CampanhaCriarProps) {
   const [nome, setNome] = useState('');
+  const [canal, setCanal] = useState<string>('email');
   const [templateId, setTemplateId] = useState('');
   const [alvo, setAlvo] = useState<Alvo>('segmento');
   const [segmentoId, setSegmentoId] = useState('');
@@ -69,6 +71,7 @@ export function CampanhaCriar({ open, onOpenChange, onCreated }: CampanhaCriarPr
 
   const reset = useCallback(() => {
     setNome(`Campanha ${new Date().toLocaleDateString('pt-BR')}`);
+    setCanal('email');
     setTemplateId('');
     setAlvo('segmento');
     setSegmentoId('');
@@ -80,16 +83,16 @@ export function CampanhaCriar({ open, onOpenChange, onCreated }: CampanhaCriarPr
     setLoading(true);
     try {
       const [tpls, segs, leadsRes] = await Promise.all([
-        vendasDisparoApi.listTemplates('email'),
+        vendasDisparoApi.listTemplates(),
         vendasApi.listSegmentos(),
-        // Só leads com e-mail entram no canal email; trazemos uma página
-        // generosa para seleção manual.
+        // Trazemos uma página generosa; filtramos por canal (e-mail vs telefone)
+        // ao exibir, conforme o canal escolhido.
         vendasApi.listLeads({ limit: 200, offset: 0 }),
       ]);
       setTemplates(Array.isArray(tpls) ? tpls : []);
       setSegmentos(Array.isArray(segs) ? segs : []);
       const items = Array.isArray(leadsRes?.items) ? leadsRes.items : [];
-      setLeads(items.filter((l) => !!l.email));
+      setLeads(items);
     } catch (err) {
       console.error('[CampanhaCriar] erro ao carregar dados:', err);
       toast.error('Erro ao carregar templates/segmentos');
@@ -121,13 +124,19 @@ export function CampanhaCriar({ open, onOpenChange, onCreated }: CampanhaCriarPr
       ? selectedLeadIds.size
       : segmentoSel?.total_leads ?? null;
 
+  // Templates e leads válidos para o canal escolhido (e-mail usa e-mail;
+  // WhatsApp Meta/Evolution usam telefone).
+  const isWa = isWhatsappCanal(canal);
+  const templatesDoCanal = templates.filter((t) => t.canal === canal);
+  const leadsDisponiveis = leads.filter((l) => (isWa ? !!l.telefone : !!l.email));
+
   const handleSubmit = async () => {
     if (!nome.trim()) {
       toast.error('Informe o nome da campanha');
       return;
     }
     if (!templateId) {
-      toast.error('Selecione um template de e-mail');
+      toast.error('Selecione um template');
       return;
     }
     if (alvo === 'segmento' && !segmentoId) {
@@ -142,7 +151,7 @@ export function CampanhaCriar({ open, onOpenChange, onCreated }: CampanhaCriarPr
     const payload: DisparoCampanhaInput = {
       nome: nome.trim(),
       template_id: templateId,
-      canal: 'email',
+      canal,
       segmento_id: alvo === 'segmento' ? segmentoId : null,
       lead_ids: alvo === 'leads' ? Array.from(selectedLeadIds) : null,
       agendada_para: agendadaPara ? new Date(agendadaPara).toISOString() : null,
@@ -171,7 +180,7 @@ export function CampanhaCriar({ open, onOpenChange, onCreated }: CampanhaCriarPr
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Send className="h-5 w-5" />
-            Nova campanha de e-mail
+            Nova campanha
           </DialogTitle>
           <DialogDescription>
             Escolha o template e o público. A campanha é criada como rascunho —
@@ -196,13 +205,34 @@ export function CampanhaCriar({ open, onOpenChange, onCreated }: CampanhaCriarPr
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="camp-canal">Canal *</Label>
+              <Select
+                value={canal}
+                onValueChange={(v) => {
+                  setCanal(v);
+                  setTemplateId('');
+                  setSelectedLeadIds(new Set());
+                }}
+              >
+                <SelectTrigger id="camp-canal">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CANAIS_ENVIO.map((c) => (
+                    <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
               <Label className="flex items-center gap-1.5">
                 <FileText className="h-3.5 w-3.5" />
-                Template de e-mail *
+                Template *
               </Label>
-              {templates.length === 0 ? (
+              {templatesDoCanal.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  Nenhum template de e-mail. Crie um na aba Templates.
+                  Nenhum template neste canal. Crie um na aba Templates.
                 </p>
               ) : (
                 <Select value={templateId} onValueChange={setTemplateId}>
@@ -210,7 +240,7 @@ export function CampanhaCriar({ open, onOpenChange, onCreated }: CampanhaCriarPr
                     <SelectValue placeholder="Selecione um template" />
                   </SelectTrigger>
                   <SelectContent>
-                    {templates.map((t) => (
+                    {templatesDoCanal.map((t) => (
                       <SelectItem key={t.id} value={t.id}>{t.nome}</SelectItem>
                     ))}
                   </SelectContent>
@@ -270,14 +300,16 @@ export function CampanhaCriar({ open, onOpenChange, onCreated }: CampanhaCriarPr
                     </SelectContent>
                   </Select>
                 )
-              ) : leads.length === 0 ? (
+              ) : leadsDisponiveis.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  Nenhum lead com e-mail disponível para seleção.
+                  {isWa
+                    ? 'Nenhum lead com telefone disponível para seleção.'
+                    : 'Nenhum lead com e-mail disponível para seleção.'}
                 </p>
               ) : (
                 <ScrollArea className="h-48 rounded-md border">
                   <div className="p-2 space-y-0.5">
-                    {leads.map((lead) => {
+                    {leadsDisponiveis.map((lead) => {
                       const checked = selectedLeadIds.has(lead.id);
                       return (
                         <button
@@ -292,7 +324,7 @@ export function CampanhaCriar({ open, onOpenChange, onCreated }: CampanhaCriarPr
                               {lead.empresa_nome || lead.nome || 'Sem nome'}
                             </span>
                             <span className="block truncate text-xs text-muted-foreground">
-                              {lead.email}
+                              {isWa ? lead.telefone : lead.email}
                             </span>
                           </span>
                         </button>

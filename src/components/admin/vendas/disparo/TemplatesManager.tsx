@@ -5,6 +5,7 @@ import {
   type DisparoTemplateInput,
   type DisparoTemplateUpdate,
 } from '@/integrations/api/vendasDisparo';
+import { CANAIS_ENVIO, labelCanal } from '../canais';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,6 +13,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Dialog,
   DialogContent,
@@ -79,7 +87,7 @@ export function TemplatesManager() {
   const fetchTemplates = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await vendasDisparoApi.listTemplates('email');
+      const data = await vendasDisparoApi.listTemplates();
       setTemplates(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('[TemplatesManager] erro ao listar:', err);
@@ -123,7 +131,7 @@ export function TemplatesManager() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
         <p className="text-sm text-muted-foreground">
-          {templates.length} {templates.length === 1 ? 'template' : 'templates'} de e-mail
+          {templates.length} {templates.length === 1 ? 'template' : 'templates'}
         </p>
         <Button onClick={openCreate}>
           <Plus className="h-4 w-4 mr-2" />
@@ -163,6 +171,7 @@ export function TemplatesManager() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-medium truncate">{tpl.nome}</p>
+                      <Badge variant="secondary" className="text-xs">{labelCanal(tpl.canal)}</Badge>
                       {tpl.categoria && (
                         <Badge variant="outline" className="text-xs">{tpl.categoria}</Badge>
                       )}
@@ -273,6 +282,7 @@ function TemplateEditor({
   onSaved: () => void;
 }) {
   const [nome, setNome] = useState('');
+  const [canal, setCanal] = useState<string>('email');
   const [assunto, setAssunto] = useState('');
   const [conteudo, setConteudo] = useState('');
   const [categoria, setCategoria] = useState('');
@@ -287,6 +297,7 @@ function TemplateEditor({
   useEffect(() => {
     if (open) {
       setNome(template?.nome ?? '');
+      setCanal(template?.canal ?? 'email');
       setAssunto(template?.assunto ?? '');
       setConteudo(template?.conteudo ?? '');
       setCategoria(template?.categoria ?? '');
@@ -330,7 +341,7 @@ function TemplateEditor({
       if (template) {
         const payload: DisparoTemplateUpdate = {
           nome: nome.trim(),
-          assunto: assunto.trim() || null,
+          assunto: canal === 'email' ? assunto.trim() || null : null,
           conteudo,
           categoria: categoria.trim() || null,
         };
@@ -339,8 +350,8 @@ function TemplateEditor({
       } else {
         const payload: DisparoTemplateInput = {
           nome: nome.trim(),
-          canal: 'email',
-          assunto: assunto.trim() || null,
+          canal,
+          assunto: canal === 'email' ? assunto.trim() || null : null,
           conteudo,
           categoria: categoria.trim() || null,
         };
@@ -361,11 +372,10 @@ function TemplateEditor({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
-            {template ? 'Editar template' : 'Novo template de e-mail'}
+            {template ? 'Editar template' : 'Novo template'}
           </DialogTitle>
           <DialogDescription>
-            Use variáveis como {'{{nome}}'} no assunto ou no corpo para
-            personalizar cada e-mail enviado.
+            Use variáveis como {'{{nome}}'} para personalizar cada mensagem enviada.
           </DialogDescription>
         </DialogHeader>
 
@@ -392,16 +402,37 @@ function TemplateEditor({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="tpl-assunto">Assunto</Label>
-            <Input
-              id="tpl-assunto"
-              ref={assuntoRef}
-              value={assunto}
-              onChange={(e) => setAssunto(e.target.value)}
-              onFocus={() => (lastFocused.current = 'assunto')}
-              placeholder="Olá {{nome}}, uma proposta para a {{empresa_nome}}"
-            />
+            <Label htmlFor="tpl-canal">Canal</Label>
+            <Select value={canal} onValueChange={setCanal} disabled={!!template}>
+              <SelectTrigger id="tpl-canal">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CANAIS_ENVIO.map((c) => (
+                  <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {!!template && (
+              <p className="text-xs text-muted-foreground">
+                O canal não pode ser alterado depois de criar o template.
+              </p>
+            )}
           </div>
+
+          {canal === 'email' && (
+            <div className="space-y-2">
+              <Label htmlFor="tpl-assunto">Assunto</Label>
+              <Input
+                id="tpl-assunto"
+                ref={assuntoRef}
+                value={assunto}
+                onChange={(e) => setAssunto(e.target.value)}
+                onFocus={() => (lastFocused.current = 'assunto')}
+                placeholder="Olá {{nome}}, uma proposta para a {{empresa_nome}}"
+              />
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label>Variáveis disponíveis</Label>
@@ -424,7 +455,7 @@ function TemplateEditor({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="tpl-conteudo">Corpo do e-mail *</Label>
+            <Label htmlFor="tpl-conteudo">{canal === 'email' ? 'Corpo do e-mail *' : 'Mensagem *'}</Label>
             <Textarea
               id="tpl-conteudo"
               ref={conteudoRef}
@@ -435,8 +466,10 @@ function TemplateEditor({
               rows={8}
             />
             <p className="text-xs text-muted-foreground">
-              {conteudo.length} caracteres · O link de descadastro é adicionado
-              automaticamente ao final do e-mail (LGPD).
+              {conteudo.length} caracteres
+              {canal === 'email'
+                ? ' · O link de descadastro é adicionado automaticamente ao final do e-mail (LGPD).'
+                : ''}
             </p>
           </div>
 
