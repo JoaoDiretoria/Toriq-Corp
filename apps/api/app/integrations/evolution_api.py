@@ -213,6 +213,26 @@ def normalizar_telefone(valor: str) -> str:
     return re.sub(r"\D", "", base)
 
 
+def telefone_chave(valor: str) -> str:
+    """Chave canônica p/ casar telefones BR ignorando código do país (55) e o
+    9º dígito de celular.
+
+    O webhook traz o remetente com 55 e (geralmente) com o 9; os leads no banco
+    são salvos em formatos variados. Normaliza tudo para ``DDD + 8 dígitos`` de
+    modo que '+55 (11) 99045-0386', '5511990450386', '11990450386' e
+    '1190450386' produzam a MESMA chave ('1190450386'). Fixos (8 dígitos) só
+    perdem o 55. String vazia/None → ''.
+    """
+    d = normalizar_telefone(valor)
+    # Remove o código do país (55) quando claramente presente (sobra > 11 díg.).
+    if d.startswith("55") and len(d) > 11:
+        d = d[2:]
+    # Celular com 9º dígito: DDD(2) + 9 + 8 díg. = 11 → remove o 9 → DDD + 8.
+    if len(d) == 11 and d[2] == "9":
+        d = d[:2] + d[3:]
+    return d
+
+
 def _jid_to_phone(valor) -> str:
     """Telefone a partir de um JID que pode vir como string OU objeto whatsmeow.
 

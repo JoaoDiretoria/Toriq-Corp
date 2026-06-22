@@ -318,6 +318,41 @@ async def test_webhook_inbound_marca_respondeu_e_seta_ultimo_canal(
 
 
 @pytest.mark.anyio
+async def test_webhook_inbound_casa_lead_salvo_sem_codigo_pais(
+    db_session, monkeypatch
+):
+    """Lead salvo SEM o 55 (formato comum) deve casar o remetente do webhook
+    (que vem com 55) e registrar a conversa — antes ficava órfão (sem match)."""
+    from app.models.vendas_pipeline import VendasConversas
+
+    _mock_rede(monkeypatch)
+    await _criar_servidor(db_session)
+    empresa_id = uuid.uuid4()
+    await _criar_empresa(db_session, empresa_id)
+    inst = await svc.criar_instancia(
+        db_session, empresa_id=empresa_id, nome_exibicao="X"
+    )
+    await db_session.commit()
+
+    # Salvo sem 55; o Sender do payload é "5511999990000" (com 55).
+    lead = VendasLeads(
+        id=uuid.uuid4(), empresa_id=empresa_id, nome="Lead", telefone="11999990000",
+    )
+    db_session.add(lead)
+    await db_session.commit()
+
+    payload = _payload_inbound("IN-SEM55", "oi, tenho interesse")
+    n = await svc.processar_webhook(db_session, instancia=inst, payload=payload)
+    assert n == 1  # casou o lead apesar do formato diferente
+
+    conversa = await db_session.scalar(
+        select(VendasConversas).where(VendasConversas.lead_id == lead.id)
+    )
+    assert conversa is not None
+    assert conversa.sender_type == "lead"
+
+
+@pytest.mark.anyio
 async def test_webhook_connection_update_atualiza_status(db_session, monkeypatch):
     _mock_rede(monkeypatch)
     await _criar_servidor(db_session)
@@ -550,6 +585,61 @@ async def test_campanha_evo_renderiza_variaveis_do_template(db_session, monkeypa
 
     # {{nome}} foi interpolado para o nome do lead.
     assert chamadas["textos"][-1]["texto"] == "Olá Maria, sou da Toriq!"
+
+
+@pytest.mark.anyio
+async def test_campanha_evo_registra_conversa_no_pipeline(db_session, monkeypatch):
+    """Disparo por Evolution deve registrar a mensagem enviada em VendasConversas
+    (sender 'agente') p/ o lead aparecer em Conversas/pipeline com o conteúdo."""
+    from app.models.vendas_pipeline import VendasConversas
+
+    _mock_rede(monkeypatch)
+    await _criar_servidor(db_session)
+    empresa_id = uuid.uuid4()
+    await _criar_empresa(db_session, empresa_id)
+    inst = await svc.criar_instancia(
+        db_session, empresa_id=empresa_id, nome_exibicao="X"
+    )
+    inst.status = "conectada"
+    await db_session.commit()
+
+    lead = VendasLeads(
+        id=uuid.uuid4(), empresa_id=empresa_id, nome="Maria",
+        telefone="+55 (11) 95555-4444",
+    )
+    db_session.add(lead)
+    from app.models.vendas_disparo import VendasCampanhas, VendasTemplates
+
+    tpl = VendasTemplates(
+        id=uuid.uuid4(), empresa_id=empresa_id, nome="T",
+        canal="whatsapp_evo", conteudo="Olá {{nome}}!",
+    )
+    db_session.add(tpl)
+    await db_session.commit()
+    camp = VendasCampanhas(
+        id=uuid.uuid4(), empresa_id=empresa_id, nome="C", canal="whatsapp_evo",
+        template_id=tpl.id, lead_ids=[str(lead.id)], status="rascunho",
+    )
+    db_session.add(camp)
+    await db_session.commit()
+
+    from app.services import vendas_disparo as disparo
+
+    await disparo.preparar_campanha(
+        db_session, campanha_id=camp.id, empresa_id=empresa_id
+    )
+    await disparo.enviar_campanha(
+        db_session, campanha_id=camp.id, empresa_id=empresa_id
+    )
+    await db_session.commit()
+
+    conversa = await db_session.scalar(
+        select(VendasConversas).where(VendasConversas.lead_id == lead.id)
+    )
+    assert conversa is not None
+    assert conversa.sender_type == "agente"
+    assert conversa.canal == "whatsapp_evo"
+    assert conversa.conteudo == "Olá Maria!"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

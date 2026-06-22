@@ -542,8 +542,14 @@ async def processar_webhook(db: AsyncSession, *, instancia, payload: dict) -> in
                 )
             )
         ).all()
+        de_chave = evolution_api.telefone_chave(de)
         lead = next(
-            (l for l in leads if re.sub(r"\D", "", l.telefone or "") == de), None
+            (
+                l
+                for l in leads
+                if evolution_api.telefone_chave(l.telefone or "") == de_chave
+            ),
+            None,
         )
         if lead is None:
             continue

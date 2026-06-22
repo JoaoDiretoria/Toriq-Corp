@@ -415,6 +415,9 @@ async def _enviar_campanha_inner(
     suprimidos = 0
     erros = 0
     dedup = 0
+    # Conversas a registrar no Pipeline após o disparo (canais WhatsApp): o lead
+    # passa a aparecer em "Conversas" com a mensagem enviada. (lead_id, conteudo, canal)
+    conversas_outbound: list[tuple] = []
 
     eh_whatsapp = campanha.canal == "whatsapp"
     eh_evo = campanha.canal == "whatsapp_evo"
@@ -501,6 +504,10 @@ async def _enviar_campanha_inner(
                 msg.instancia_id = evo_inst.id
                 msg.enviado_em = _now()
                 enviados += 1
+                if msg.lead_id is not None:
+                    conversas_outbound.append(
+                        (msg.lead_id, corpo_evo, "whatsapp_evo")
+                    )
             else:
                 msg.status = "erro"
                 msg.erro = res["erro"]
@@ -521,6 +528,18 @@ async def _enviar_campanha_inner(
             )
             if msg.status == "enviado":
                 enviados += 1
+                if msg.lead_id is not None:
+                    lead_wpp = await db.scalar(
+                        select(VendasLeads).where(VendasLeads.id == msg.lead_id)
+                    )
+                    corpo_wpp = (
+                        render_template(
+                            template.conteudo if template is not None else None,
+                            _variaveis_do_lead(lead_wpp),
+                        )
+                        or ""
+                    )
+                    conversas_outbound.append((msg.lead_id, corpo_wpp, "whatsapp"))
             elif msg.status == "erro":
                 erros += 1
             continue
@@ -590,6 +609,26 @@ async def _enviar_campanha_inner(
         )
 
     await db.commit()
+
+    # Espelha os envios de WhatsApp no Pipeline (após o commit do disparo).
+    # append_mensagem commita e publica SSE por mensagem → o lead aparece em
+    # "Conversas" com o conteúdo disparado e sobe na lista (last_message_at).
+    if conversas_outbound:
+        from app.services.vendas_pipeline import append_mensagem
+
+        for lead_id_out, conteudo_out, canal_out in conversas_outbound:
+            try:
+                await append_mensagem(
+                    db,
+                    empresa_id=empresa_id,
+                    lead_id=lead_id_out,
+                    sender_type="agente",
+                    conteudo=conteudo_out,
+                    canal=canal_out,
+                    status="enviado",
+                )
+            except Exception:  # best-effort: não derruba o disparo já concluído
+                await db.rollback()
 
     return {
         "campanha_id": campanha.id,

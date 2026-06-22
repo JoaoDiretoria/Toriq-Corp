@@ -200,9 +200,11 @@ export function ConversationChat({
   }, []);
 
   const fetchThread = useCallback(
-    async (markRead: boolean) => {
+    // markRead: marca a thread como lida (só na abertura do lead). silent: não
+    // mostra o skeleton (refresh de fundo via SSE/polling).
+    async (markRead: boolean, silent = false) => {
       if (!leadId) return;
-      setLoading(true);
+      if (!silent) setLoading(true);
       try {
         const res = await vendasPipelineApi.getThread(leadId);
         setLead(res.lead);
@@ -221,7 +223,7 @@ export function ConversationChat({
         console.error('[ConversationChat] erro ao carregar thread:', err);
         toast.error(err?.message || 'Erro ao carregar a conversa');
       } finally {
-        setLoading(false);
+        if (!silent) setLoading(false);
       }
     },
     [leadId, scrollToBottom, onLido],
@@ -266,13 +268,16 @@ export function ConversationChat({
     }
   };
 
-  // -- Eventos SSE / polling: se o evento é deste lead, refaz a thread (e relê)
+  // -- Eventos SSE / polling: se o evento é deste lead, refaz a thread em SILÊNCIO
+  // e SEM re-marcar como lido. Marcar lido publica "lead_atualizado" no SSE, que
+  // voltaria aqui e re-dispararia o fetch → loop infinito. markRead=false quebra
+  // o ciclo; silent=true evita piscar o skeleton no refresh de fundo.
   useEffect(() => {
     if (!leadId || refreshKey === 0) return;
     const evLead = ultimoEvento?.lead_id;
     // Sem lead_id no evento (ou polling) -> atualiza a thread aberta também.
     if (!evLead || evLead === leadId) {
-      fetchThread(true);
+      fetchThread(false, true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey]);
