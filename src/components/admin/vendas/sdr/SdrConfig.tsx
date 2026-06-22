@@ -76,12 +76,39 @@ const EMPTY_FORM: FormState = {
   canal_saida_padrao: 'auto',
 };
 
-// Modelos sugeridos (o backend aceita texto livre; estes são atalhos comuns).
-const MODELOS = [
-  { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
-  { value: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
-  { value: 'claude-haiku-4-6', label: 'Claude Haiku 4.6' },
+// Provedores de IA suportados pelo SDR (roteamento por `provider` no backend).
+const PROVEDORES = [
+  { value: 'anthropic', label: 'Anthropic (Claude)' },
+  { value: 'openai', label: 'OpenAI (GPT)' },
+  { value: 'gemini', label: 'Google (Gemini)' },
 ];
+
+// Modelos sugeridos por provedor (o backend aceita texto livre; são atalhos).
+const MODELOS_POR_PROVEDOR: Record<string, { value: string; label: string }[]> = {
+  anthropic: [
+    { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
+    { value: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
+    { value: 'claude-haiku-4-6', label: 'Claude Haiku 4.6' },
+  ],
+  openai: [
+    { value: 'gpt-4o', label: 'GPT-4o' },
+    { value: 'gpt-4o-mini', label: 'GPT-4o mini' },
+    { value: 'gpt-4.1', label: 'GPT-4.1' },
+    { value: 'gpt-4.1-mini', label: 'GPT-4.1 mini' },
+  ],
+  gemini: [
+    { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
+    { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
+    { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
+  ],
+};
+
+// Modelo default por provedor (bate com o backend: app/integrations/llm.py).
+const MODELO_PADRAO: Record<string, string> = {
+  anthropic: 'claude-sonnet-4-6',
+  openai: 'gpt-4o',
+  gemini: 'gemini-2.0-flash',
+};
 
 export function SdrConfig({ onSaved }: SdrConfigProps) {
   const [loading, setLoading] = useState(true);
@@ -139,6 +166,16 @@ export function SdrConfig({ onSaved }: SdrConfigProps) {
 
   const updateField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  // Ao trocar de provedor, reseta o modelo para o default daquele provedor
+  // (evita ficar com um modelo de outro provedor selecionado).
+  const handleProviderChange = (provider: string) => {
+    setForm((prev) => ({
+      ...prev,
+      provider,
+      modelo: MODELO_PADRAO[provider] ?? prev.modelo,
+    }));
   };
 
   const handleClearKey = async () => {
@@ -235,13 +272,17 @@ export function SdrConfig({ onSaved }: SdrConfigProps) {
               <Label htmlFor="sdr-provider">Provedor</Label>
               <Select
                 value={form.provider}
-                onValueChange={(v) => updateField('provider', v)}
+                onValueChange={handleProviderChange}
               >
                 <SelectTrigger id="sdr-provider">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="anthropic">Anthropic (Claude)</SelectItem>
+                  {PROVEDORES.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -255,15 +296,18 @@ export function SdrConfig({ onSaved }: SdrConfigProps) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {MODELOS.map((m) => (
+                  {(MODELOS_POR_PROVEDOR[form.provider] ?? []).map((m) => (
                     <SelectItem key={m.value} value={m.value}>
                       {m.label}
                     </SelectItem>
                   ))}
                   {/* Se a config tiver um modelo fora da lista, ainda o exibe. */}
-                  {!MODELOS.some((m) => m.value === form.modelo) && form.modelo && (
-                    <SelectItem value={form.modelo}>{form.modelo}</SelectItem>
-                  )}
+                  {!(MODELOS_POR_PROVEDOR[form.provider] ?? []).some(
+                    (m) => m.value === form.modelo,
+                  ) &&
+                    form.modelo && (
+                      <SelectItem value={form.modelo}>{form.modelo}</SelectItem>
+                    )}
                 </SelectContent>
               </Select>
             </div>
@@ -305,7 +349,15 @@ export function SdrConfig({ onSaved }: SdrConfigProps) {
                 type={showKey ? 'text' : 'password'}
                 value={keyInput}
                 onChange={(e) => setKeyInput(e.target.value)}
-                placeholder={keySet ? '•••• (deixe em branco para manter)' : 'sk-ant-...'}
+                placeholder={
+                  keySet
+                    ? '•••• (deixe em branco para manter)'
+                    : form.provider === 'openai'
+                      ? 'sk-...'
+                      : form.provider === 'gemini'
+                        ? 'AIza...'
+                        : 'sk-ant-...'
+                }
                 className="pr-10"
                 autoComplete="new-password"
               />
@@ -319,7 +371,10 @@ export function SdrConfig({ onSaved }: SdrConfigProps) {
               </button>
             </div>
             <p className="text-xs text-muted-foreground">
-              A chave fica criptografada em repouso e nunca volta em claro para o navegador.
+              Chave do provedor selecionado (
+              {PROVEDORES.find((p) => p.value === form.provider)?.label ??
+                form.provider}
+              ). Fica criptografada em repouso e nunca volta em claro para o navegador.
             </p>
           </div>
 
@@ -346,6 +401,8 @@ export function SdrConfig({ onSaved }: SdrConfigProps) {
             <p className="text-xs text-muted-foreground">
               Opcional. Usada para transcrever áudios recebidos no WhatsApp (canal
               Evolution) via Whisper. Sem ela, áudios entram como "[áudio recebido]".
+              {form.provider === 'openai' &&
+                ' Com o provedor OpenAI, a chave acima já é reutilizada para o Whisper se este campo ficar vazio.'}
             </p>
           </div>
 

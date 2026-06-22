@@ -732,13 +732,14 @@ async def test_texto_de_midia_audio_transcreve(db_session, monkeypatch):
 
 @pytest.mark.anyio
 async def test_texto_de_midia_imagem_descreve(db_session, monkeypatch):
-    from app.integrations import llm_claude
+    from app.integrations import llm
     from app.models.vendas_sdr import VendasSdrConfig
 
     async def fake_descrever(**kw):
         return "um comprovante de pagamento"
 
-    monkeypatch.setattr(llm_claude, "descrever_imagem", fake_descrever)
+    # A visão agora passa pelo dispatcher (roteia por provider).
+    monkeypatch.setattr(llm, "descrever_imagem_llm", fake_descrever)
 
     empresa_id = uuid.uuid4()
     await _criar_empresa(db_session, empresa_id)

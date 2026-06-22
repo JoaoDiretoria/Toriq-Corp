@@ -1,4 +1,4 @@
-"""Toriq Vendas — FASE 4 (SDR Inteligente): serviço do agente de IA (Claude).
+"""Toriq Vendas — FASE 4 (SDR Inteligente): serviço do agente de IA (multi-provedor).
 
 Dois usos principais, ambos guiados por PROMPTS DINÂMICOS configuráveis por
 empresa (persona, objetivo, prompt_sistema, diretrizes, prompt_qualificacao,
@@ -15,8 +15,11 @@ Convenções:
 - Tenant SEMPRE por empresa_id (toda query escopada).
 - A chave da API (api_key) é guardada criptografada (api_key_enc) e só é
   descriptografada na hora de chamar o modelo (reusa app.core.esocial_crypto).
-- A chamada ao modelo é delegada a app.integrations.llm_claude.chamar_claude,
-  que nos testes é mockado por monkeypatch nesta mesma referência (chamar_claude).
+- A chamada ao modelo passa pelo helper _chamar_ia, que decripta a chave do
+  provedor ativo (api_key_enc), resolve o modelo (config.modelo ou default do
+  provedor) e delega ao dispatcher app.integrations.llm.chamar_llm — que roteia
+  por config.provider (anthropic|openai|gemini). Nos testes, chamar_llm é mockado
+  por monkeypatch nesta mesma referência (svc.chamar_llm).
 - Estilo de sessão seguindo app/services/vendas_disparo.py — as funções de
   entrada (qualificar_lead, qualificar_batch, gerar_resposta) commitam ao final.
 """
@@ -30,7 +33,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.esocial_crypto import decrypt_secret
-from app.integrations.llm_claude import LLMError, chamar_claude, extrair_json
+from app.integrations.llm import LLMError, chamar_llm, extrair_json, modelo_padrao
 from app.models.vendas import VendasLeads
 from app.models.vendas_sdr import VendasSdrConfig, VendasSdrInteracoes
 
@@ -73,6 +76,36 @@ async def assegurar_config(db: AsyncSession, empresa_id: uuid.UUID) -> None:
     para o endpoint de qualificação assíncrona dar feedback imediato antes de
     enfileirar o trabalho pesado de IA."""
     await _carregar_config(db, empresa_id)
+
+
+async def _chamar_ia(
+    config: VendasSdrConfig,
+    *,
+    system: str | None,
+    mensagens: list[dict],
+    temperatura: float | None = None,
+    max_tokens: int = 1024,
+) -> str:
+    """Chama o provedor de IA configurado na empresa (Claude/OpenAI/Gemini).
+
+    Centraliza o que antes se repetia em cada call site: decripta a chave
+    (``api_key_enc`` = chave do provedor ativo), resolve o modelo
+    (``config.modelo`` ou o default do provedor) e a temperatura
+    (override explícito > ``config.temperatura`` > 0.7), e delega ao dispatcher
+    ``chamar_llm``. Levanta ``LLMError`` em falha (igual antes)."""
+    if temperatura is None:
+        temperatura = (
+            float(config.temperatura) if config.temperatura is not None else 0.7
+        )
+    return await chamar_llm(
+        provider=config.provider,
+        api_key=decrypt_secret(config.api_key_enc),
+        modelo=config.modelo or modelo_padrao(config.provider),
+        system=system,
+        mensagens=mensagens,
+        temperatura=temperatura,
+        max_tokens=max_tokens,
+    )
 
 
 def _resumo_lead(lead: VendasLeads) -> str:
@@ -159,12 +192,10 @@ async def qualificar_lead(
         + _FORMATO_QUALIFICACAO
     )
 
-    texto = await chamar_claude(
-        api_key=decrypt_secret(config.api_key_enc),
-        modelo=config.modelo or "claude-sonnet-4-6",
+    texto = await _chamar_ia(
+        config,
         system=system,
         mensagens=[{"role": "user", "content": user}],
-        temperatura=float(config.temperatura) if config.temperatura is not None else 0.7,
     )
 
     parsed = extrair_json(texto)
@@ -253,12 +284,10 @@ async def _qualificar_lead_sem_commit(
         + _FORMATO_QUALIFICACAO
     )
 
-    texto = await chamar_claude(
-        api_key=decrypt_secret(config.api_key_enc),
-        modelo=config.modelo or "claude-sonnet-4-6",
+    texto = await _chamar_ia(
+        config,
         system=system,
         mensagens=[{"role": "user", "content": user}],
-        temperatura=float(config.temperatura) if config.temperatura is not None else 0.7,
     )
 
     parsed = extrair_json(texto)
@@ -350,12 +379,10 @@ async def gerar_resposta(
 
     system = _system_conversa(config, lead)
 
-    resposta = await chamar_claude(
-        api_key=decrypt_secret(config.api_key_enc),
-        modelo=config.modelo or "claude-sonnet-4-6",
+    resposta = await _chamar_ia(
+        config,
         system=system,
         mensagens=mensagens,
-        temperatura=float(config.temperatura) if config.temperatura is not None else 0.7,
     )
 
     db.add(
@@ -451,13 +478,8 @@ async def _cot_decisao(
     """Raciocínio em 2 fases (Chain-of-Thought): primeiro o modelo "pensa" a
     conversa em texto livre; depois decide em JSON usando o próprio raciocínio
     como contexto. Melhora a qualidade vs. um único prompt."""
-    api_key = decrypt_secret(config.api_key_enc)
-    modelo = config.modelo or "claude-sonnet-4-6"
-    temp = float(config.temperatura) if config.temperatura is not None else 0.7
-
-    pensamento = await chamar_claude(
-        api_key=api_key,
-        modelo=modelo,
+    pensamento = await _chamar_ia(
+        config,
         system=system,
         mensagens=[
             {
@@ -467,7 +489,6 @@ async def _cot_decisao(
                 "estágio, próximo passo ideal). Ainda NÃO responda em JSON.",
             }
         ],
-        temperatura=temp,
         max_tokens=600,
     )
 
@@ -479,9 +500,8 @@ async def _cot_decisao(
         '"summary": "resumo da conversa e situação", '
         '"reason": "motivo objetivo da decisão", "score": 0-100}'
     )
-    texto = await chamar_claude(
-        api_key=api_key,
-        modelo=modelo,
+    texto = await _chamar_ia(
+        config,
         system="Você responde SOMENTE com JSON válido, sem texto fora do objeto.",
         mensagens=[
             {"role": "user", "content": contexto_user},
@@ -797,12 +817,10 @@ async def processar_followup_sdr(
         "Responda apenas com a mensagem, sem aspas."
     )
     try:
-        texto = await chamar_claude(
-            api_key=decrypt_secret(config.api_key_enc),
-            modelo=config.modelo or "claude-sonnet-4-6",
+        texto = await _chamar_ia(
+            config,
             system=system,
             mensagens=[{"role": "user", "content": contexto}],
-            temperatura=float(config.temperatura) if config.temperatura is not None else 0.7,
             max_tokens=400,
         )
     except LLMError:

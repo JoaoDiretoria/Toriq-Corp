@@ -423,10 +423,12 @@ async def persistir_midia_inbound(
 async def _texto_de_midia(
     db: AsyncSession, *, empresa_id: uuid.UUID, media: dict, conteudo: bytes | None
 ) -> str | None:
-    """Texto que representa a mídia para a IA: áudio→Whisper, imagem→Claude vision.
+    """Texto que representa a mídia para a IA: áudio→Whisper, imagem→visão do
+    provedor configurado (Claude/OpenAI/Gemini).
 
-    Usa a config do SDR (openai_api_key_enc p/ Whisper; api_key_enc/modelo p/
-    Claude). Degrada graciosamente (sem chave / falha → None → cai no placeholder).
+    Usa a config do SDR (openai_api_key_enc p/ Whisper, com fallback p/ api_key_enc
+    quando provider=openai; api_key_enc/modelo/provider p/ visão). Degrada
+    graciosamente (sem chave / falha → None → cai no placeholder).
     """
     if not conteudo:
         return None
@@ -440,21 +442,26 @@ async def _texto_de_midia(
 
     tipo = media.get("tipo")
     mime = media.get("mime_type")
+    eh_openai = (sdr.provider or "").lower() == "openai"
+    # Whisper usa a chave dedicada; se o provedor for OpenAI, reusa a chave do
+    # provedor ativo (api_key_enc) como fallback.
+    whisper_key = sdr.openai_api_key_enc or (sdr.api_key_enc if eh_openai else None)
     try:
-        if tipo == "audio" and sdr.openai_api_key_enc:
+        if tipo == "audio" and whisper_key:
             from app.integrations.openai_whisper import transcrever
 
             texto = await transcrever(
-                api_key=decrypt_secret(sdr.openai_api_key_enc),
+                api_key=decrypt_secret(whisper_key),
                 audio=conteudo, mime=mime,
             )
             return f"[áudio transcrito] {texto}".strip() if texto else None
         if tipo == "image" and sdr.api_key_enc:
-            from app.integrations.llm_claude import descrever_imagem
+            from app.integrations.llm import descrever_imagem_llm, modelo_padrao
 
-            desc = await descrever_imagem(
+            desc = await descrever_imagem_llm(
+                provider=sdr.provider,
                 api_key=decrypt_secret(sdr.api_key_enc),
-                modelo=sdr.modelo or "claude-sonnet-4-6",
+                modelo=sdr.modelo or modelo_padrao(sdr.provider),
                 imagem=conteudo, mime=mime,
             )
             cap = media.get("caption")

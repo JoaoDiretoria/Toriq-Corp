@@ -43,7 +43,7 @@ class _Chamadas:
 def _patch_claude(monkeypatch, *, resposta_conversa="Olá! Como posso ajudar?"):
     registro = _Chamadas()
 
-    async def fake_chamar_claude(**kwargs):
+    async def fake_chamar_llm(**kwargs):
         registro.chamadas.append(kwargs)
         mensagens = kwargs.get("mensagens") or []
         conteudo = mensagens[-1]["content"] if mensagens else ""
@@ -52,7 +52,8 @@ def _patch_claude(monkeypatch, *, resposta_conversa="Olá! Como posso ajudar?"):
             return '{"score": 87, "status": "quente", "notas": "Bom fit comercial."}'
         return resposta_conversa
 
-    monkeypatch.setattr(svc, "chamar_claude", fake_chamar_claude)
+    # O serviço agora roteia por provedor via dispatcher chamar_llm; mockamos ele.
+    monkeypatch.setattr(svc, "chamar_llm", fake_chamar_llm)
     return registro
 
 
