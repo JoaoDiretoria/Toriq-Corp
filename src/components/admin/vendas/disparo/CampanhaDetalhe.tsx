@@ -206,12 +206,33 @@ export function CampanhaDetalhe({ campanhaId, onBack }: CampanhaDetalheProps) {
       <Card>
         <CardContent className="p-4 space-y-3">
           <div className="flex items-center justify-between text-sm">
-            <span>{progress}% processado</span>
-            <span className="text-muted-foreground">
+            <span className="flex items-center gap-1.5 font-medium">
+              {campanha.status === 'concluida' ? (
+                <>
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  Concluída — {progress}%
+                </>
+              ) : campanha.status === 'enviando' ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                  Enviando… {progress}%
+                </>
+              ) : (
+                <>{progress}% processado</>
+              )}
+            </span>
+            <span className="text-muted-foreground tabular-nums">
               {processados} / {total}
             </span>
           </div>
-          <Progress value={progress} />
+          <Progress
+            value={progress}
+            className={
+              campanha.status === 'concluida'
+                ? 'transition-all [&>div]:bg-emerald-500'
+                : 'transition-all'
+            }
+          />
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center pt-1">
             <div>
