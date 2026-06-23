@@ -22,12 +22,72 @@ NOTA (integrador):
   sdr_proximo_followup. Estes testes DEPENDEM dessas colunas.
 - O model VendasLeads (app/models/vendas.py) precisa ganhar os atributos sdr_*.
 """
+import datetime
 import uuid
 
 import pytest
+from sqlalchemy import select
 
+from app.models.vendas import VendasLeads
 from app.services import vendas_sdr as svc
 from tests.helpers import login_as
+
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Agendamento real do SDR (_agendar_demo): cria evento na Agenda quando o lead
+# confirma um horário (parsed['agendar_em'] em ISO, horário de Brasília).
+# ───────────────────────────────────────────────────────────────────────────────
+
+@pytest.mark.anyio
+async def test_agendar_demo_cria_evento_na_agenda(client, db_session):
+    empresa_id = await login_as(
+        client, db_session, role="cliente_torq", email="dono.sdr@test.com"
+    )
+    lead = VendasLeads(
+        id=uuid.uuid4(), empresa_id=empresa_id, nome="Lucas",
+        email="lucas@x.com", telefone="11999990000",
+    )
+    db_session.add(lead)
+    await db_session.commit()
+
+    from app.models.generated import AgendaEventos
+
+    evento = await svc._agendar_demo(
+        db_session, empresa_id=empresa_id, lead=lead,
+        parsed={"agendar_em": "2026-06-23T18:00", "summary": "quer demo"},
+    )
+    await db_session.commit()
+
+    assert evento is not None
+    row = await db_session.scalar(
+        select(AgendaEventos).where(AgendaEventos.empresa_id == empresa_id)
+    )
+    assert row is not None
+    assert "Lucas" in row.titulo
+    assert row.cliente_email == "lucas@x.com"
+    assert row.tipo == "reuniao"
+    # Instante absoluto = 18:00 -03:00 (independe do fuso de leitura).
+    esperado = datetime.datetime(
+        2026, 6, 23, 18, 0, tzinfo=datetime.timezone(datetime.timedelta(hours=-3))
+    )
+    assert row.data_inicio == esperado
+
+
+@pytest.mark.anyio
+async def test_agendar_demo_sem_data_nao_cria(client, db_session):
+    empresa_id = await login_as(
+        client, db_session, role="cliente_torq", email="dono.sdr2@test.com"
+    )
+    lead = VendasLeads(
+        id=uuid.uuid4(), empresa_id=empresa_id, nome="X", telefone="11999990001",
+    )
+    db_session.add(lead)
+    await db_session.commit()
+
+    evento = await svc._agendar_demo(
+        db_session, empresa_id=empresa_id, lead=lead, parsed={"agendar_em": None},
+    )
+    assert evento is None
 
 
 # ───────────────────────────────────────────────────────────────────────────────

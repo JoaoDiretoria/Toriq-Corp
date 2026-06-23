@@ -59,6 +59,10 @@ _FORMATO_QUALIFICACAO = (
     '"notas": "..."}'
 )
 
+# Fuso de Brasília (sem horário de verão desde 2019) — usado p/ interpretar os
+# horários que o lead combina com o SDR ("amanhã às 18h").
+_TZ_BR = datetime.timezone(datetime.timedelta(hours=-3))
+
 
 async def _carregar_config(db: AsyncSession, empresa_id: uuid.UUID) -> VendasSdrConfig:
     """Carrega a config do SDR da empresa. Sem config OU sem api_key_enc →
@@ -492,13 +496,19 @@ async def _cot_decisao(
         max_tokens=600,
     )
 
+    hoje_br = _now().astimezone(_TZ_BR).strftime("%Y-%m-%d (%a)")
     formato = (
         "Com base na sua análise, responda APENAS um JSON válido: "
         '{"is_final": true|false, '
         '"decision": "qualified|em_contato|desqualified", '
         '"next_message": "mensagem curta para enviar ao lead (ou vazio)", '
         '"summary": "resumo da conversa e situação", '
-        '"reason": "motivo objetivo da decisão", "score": 0-100}'
+        '"reason": "motivo objetivo da decisão", "score": 0-100, '
+        '"agendar_em": "ISO YYYY-MM-DDTHH:MM em horário de Brasília, SOMENTE '
+        "quando o lead CONFIRMAR explicitamente um dia e horário para "
+        'reunião/demonstração; caso contrário null"}'
+        f". Hoje é {hoje_br} (horário de Brasília); use para resolver "
+        '"amanhã", "sexta", etc. NÃO afirme que agendou se agendar_em for null.'
     )
     texto = await _chamar_ia(
         config,
@@ -512,6 +522,83 @@ async def _cot_decisao(
         max_tokens=800,
     )
     return texto, extrair_json(texto)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Agendamento real (SDR → Agenda + Google Calendar)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _parse_agendamento(valor) -> datetime.datetime | None:
+    """Converte o ``agendar_em`` (ISO, horário de Brasília) em datetime aware.
+    Sem valor / formato inválido → None (nunca explode)."""
+    if not valor or not isinstance(valor, str):
+        return None
+    try:
+        d = datetime.datetime.fromisoformat(valor.strip())
+    except ValueError:
+        return None
+    return d.replace(tzinfo=_TZ_BR) if d.tzinfo is None else d
+
+
+async def _criador_padrao(db: AsyncSession, empresa_id: uuid.UUID):
+    """Perfil que será o ``criado_por`` do evento (obrigatório, FK p/ profiles).
+    Prefere o dono da empresa (cliente_torq); fallback p/ qualquer perfil dela."""
+    from app.models.generated import Profiles
+
+    pid = await db.scalar(
+        select(Profiles.id)
+        .where(Profiles.empresa_id == empresa_id, Profiles.role == "cliente_torq")
+        .limit(1)
+    )
+    if pid is None:
+        pid = await db.scalar(
+            select(Profiles.id).where(Profiles.empresa_id == empresa_id).limit(1)
+        )
+    return pid
+
+
+async def _agendar_demo(
+    db: AsyncSession, *, empresa_id: uuid.UUID, lead: VendasLeads, parsed: dict
+):
+    """Cria o evento de demonstração na Agenda quando o SDR fechou um horário
+    (``parsed['agendar_em']``). Sincroniza Google Calendar se a empresa estiver
+    conectada (best-effort). NÃO commita (o chamador commita). Retorna o evento
+    criado ou None (sem data válida ou sem perfil p/ criado_por)."""
+    quando = _parse_agendamento((parsed or {}).get("agendar_em"))
+    if quando is None:
+        return None
+    criador = await _criador_padrao(db, empresa_id)
+    if criador is None:
+        return None
+
+    from app.models.generated import AgendaEventos
+
+    evento = AgendaEventos(
+        id=uuid.uuid4(),
+        empresa_id=empresa_id,
+        criado_por=criador,
+        titulo=f"Demonstração — {lead.nome or lead.empresa_nome or 'Lead'}",
+        data_inicio=quando,
+        data_fim=quando + datetime.timedelta(minutes=30),
+        tipo="reuniao",
+        status="ativo",
+        descricao=(
+            "Agendado automaticamente pelo SDR. " + (parsed.get("summary") or "")
+        ).strip(),
+        cliente_nome=lead.nome,
+        cliente_email=lead.email,
+    )
+    db.add(evento)
+    await db.flush()
+
+    # Google Calendar (best-effort): gera o link do Meet se a empresa conectou.
+    try:
+        from app.services import google_calendar as gcal_svc
+
+        await gcal_svc.sincronizar_criar(db, empresa_id=empresa_id, evento=evento)
+    except Exception:  # pragma: no cover - best-effort
+        pass
+    return evento
 
 
 def _telefones_notificacao(config: VendasSdrConfig) -> list[str]:
@@ -675,6 +762,27 @@ async def processar_inbound_sdr(
         lead.sdr_proximo_followup = _now() + datetime.timedelta(hours=FOLLOWUP_HORAS)
     elif decisao in ("qualified", "desqualified"):
         lead.sdr_proximo_followup = None
+
+    # 4b) Agendamento real: se o lead confirmou um horário, cria o evento na
+    # Agenda (e Google Calendar se conectado) — não fica só na promessa do texto.
+    evento_agendado = await _agendar_demo(
+        db, empresa_id=empresa_id, lead=lead, parsed=parsed
+    )
+    if evento_agendado is not None:
+        db.add(
+            VendasSdrInteracoes(
+                id=uuid.uuid4(),
+                empresa_id=empresa_id,
+                lead_id=lead.id,
+                papel="evento",
+                tipo="agendamento",
+                conteudo=(
+                    "Demonstração agendada para "
+                    f"{evento_agendado.data_inicio.astimezone(_TZ_BR):%d/%m %H:%M}."
+                ),
+                meta={"evento_id": str(evento_agendado.id)},
+            )
+        )
 
     # 5) Responde automaticamente (se houver next_message e telefone).
     if next_msg:
