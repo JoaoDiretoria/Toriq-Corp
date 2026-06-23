@@ -88,7 +88,12 @@ def parse_pfx(pfx_bytes: bytes, senha: str) -> dict:
 
     valido_de = cert_obj.not_valid_before_utc.date()
     valido_ate = cert_obj.not_valid_after_utc.date()
-    expirado = valido_ate < datetime.date.today()
+    # Expiração comparada em datetime UTC completo (não em data local): comparar
+    # a data UTC do vencimento com date.today() (local) perde a hora e fica
+    # flaky no limite (fuso UTC vs. local). Aqui é preciso e determinístico.
+    expirado = cert_obj.not_valid_after_utc < datetime.datetime.now(
+        datetime.timezone.utc
+    )
 
     info = CertificadoInfo(
         cn=cn,
