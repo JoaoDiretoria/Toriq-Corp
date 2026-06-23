@@ -104,6 +104,27 @@ async def garantir_estagios(
     return list(result)
 
 
+async def avancar_estagio(
+    db: AsyncSession, *, empresa_id: uuid.UUID, lead: VendasLeads, alvo: str
+) -> bool:
+    """Avança o lead para o estágio nomeado ``alvo`` SE for um avanço (ordem maior
+    que a atual). Nunca recua nem reabre lead fechado por engano.
+
+    Automação do funil: disparo→"Contatado", resposta→"Respondeu", SDR qualifica
+    →"Qualificado". Apenas muta ``lead.stage_id`` (o chamador commita). Retorna
+    True se moveu. Estágio inexistente / sem avanço → False (no-op)."""
+    estagios = await garantir_estagios(db, empresa_id)
+    destino = next((s for s in estagios if s.nome == alvo), None)
+    if destino is None:
+        return False
+    atual = next((s for s in estagios if s.id == lead.stage_id), None)
+    ordem_atual = atual.ordem if atual is not None else -1
+    if (destino.ordem or 0) <= ordem_atual:
+        return False
+    lead.stage_id = destino.id
+    return True
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Helpers de card / conversas
 # ═══════════════════════════════════════════════════════════════════════════════

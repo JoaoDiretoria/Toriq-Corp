@@ -643,6 +643,117 @@ async def test_campanha_evo_registra_conversa_no_pipeline(db_session, monkeypatc
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# AUTOMAÇÃO DE ESTÁGIO (Kanban): disparo→Contatado, resposta→Respondeu
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def _stage_nome(db_session, stage_id):
+    from app.models.vendas_pipeline import VendasPipelineStages
+
+    if stage_id is None:
+        return None
+    s = await db_session.scalar(
+        select(VendasPipelineStages).where(VendasPipelineStages.id == stage_id)
+    )
+    return s.nome if s else None
+
+
+@pytest.mark.anyio
+async def test_avancar_estagio_so_avanca(db_session):
+    from app.services import vendas_pipeline as pipe
+
+    empresa_id = uuid.uuid4()
+    await _criar_empresa(db_session, empresa_id)
+    lead = VendasLeads(
+        id=uuid.uuid4(), empresa_id=empresa_id, nome="L", telefone="11999990000"
+    )
+    db_session.add(lead)
+    await db_session.commit()
+
+    moveu = await pipe.avancar_estagio(
+        db_session, empresa_id=empresa_id, lead=lead, alvo="Qualificado"
+    )
+    assert moveu is True
+    assert await _stage_nome(db_session, lead.stage_id) == "Qualificado"
+
+    # Recuo (Qualificado -> Contatado) é ignorado.
+    moveu = await pipe.avancar_estagio(
+        db_session, empresa_id=empresa_id, lead=lead, alvo="Contatado"
+    )
+    assert moveu is False
+    assert await _stage_nome(db_session, lead.stage_id) == "Qualificado"
+
+
+@pytest.mark.anyio
+async def test_disparo_evo_avanca_para_contatado(db_session, monkeypatch):
+    _mock_rede(monkeypatch)
+    await _criar_servidor(db_session)
+    empresa_id = uuid.uuid4()
+    await _criar_empresa(db_session, empresa_id)
+    inst = await svc.criar_instancia(
+        db_session, empresa_id=empresa_id, nome_exibicao="X"
+    )
+    inst.status = "conectada"
+    await db_session.commit()
+    lead = VendasLeads(
+        id=uuid.uuid4(), empresa_id=empresa_id, nome="Maria",
+        telefone="+55 (11) 95555-4444",
+    )
+    db_session.add(lead)
+    from app.models.vendas_disparo import VendasCampanhas, VendasTemplates
+
+    tpl = VendasTemplates(
+        id=uuid.uuid4(), empresa_id=empresa_id, nome="T",
+        canal="whatsapp_evo", conteudo="Oi {{nome}}",
+    )
+    db_session.add(tpl)
+    await db_session.commit()
+    camp = VendasCampanhas(
+        id=uuid.uuid4(), empresa_id=empresa_id, nome="C", canal="whatsapp_evo",
+        template_id=tpl.id, lead_ids=[str(lead.id)], status="rascunho",
+    )
+    db_session.add(camp)
+    await db_session.commit()
+    from app.services import vendas_disparo as disparo
+
+    await disparo.preparar_campanha(
+        db_session, campanha_id=camp.id, empresa_id=empresa_id
+    )
+    await disparo.enviar_campanha(
+        db_session, campanha_id=camp.id, empresa_id=empresa_id
+    )
+    await db_session.commit()
+    refreshed = await db_session.scalar(
+        select(VendasLeads).where(VendasLeads.id == lead.id)
+    )
+    assert await _stage_nome(db_session, refreshed.stage_id) == "Contatado"
+
+
+@pytest.mark.anyio
+async def test_inbound_evo_avanca_para_respondeu(db_session, monkeypatch):
+    _mock_rede(monkeypatch)
+    await _criar_servidor(db_session)
+    empresa_id = uuid.uuid4()
+    await _criar_empresa(db_session, empresa_id)
+    inst = await svc.criar_instancia(
+        db_session, empresa_id=empresa_id, nome_exibicao="X"
+    )
+    await db_session.commit()
+    lead = VendasLeads(
+        id=uuid.uuid4(), empresa_id=empresa_id, nome="Lead", telefone="5511999990000"
+    )
+    db_session.add(lead)
+    await db_session.commit()
+
+    payload = _payload_inbound("IN-STAGE", "tenho interesse")
+    await svc.processar_webhook(db_session, instancia=inst, payload=payload)
+
+    refreshed = await db_session.scalar(
+        select(VendasLeads).where(VendasLeads.id == lead.id)
+    )
+    assert await _stage_nome(db_session, refreshed.stage_id) == "Respondeu"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # SDR — responde via Evolution quando o lead chegou pelo canal evo
 # ═══════════════════════════════════════════════════════════════════════════════
 

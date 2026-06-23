@@ -222,6 +222,11 @@ async def processar_inbound_webhook(
         msg.status = "respondeu"
         processadas += 1
 
+        # Automação do funil: lead que respondeu avança p/ "Respondeu" (só avança).
+        from app.services.vendas_pipeline import avancar_estagio
+
+        await avancar_estagio(db, empresa_id=empresa_id, lead=lead, alvo="Respondeu")
+
         # Pipeline & Conversas (CRM): registra a mensagem recebida na thread do
         # lead (sender_type='lead'). Isso abre pending_reply, atualiza
         # last_message_at e publica o evento em tempo real (SSE). Best-effort:

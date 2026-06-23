@@ -659,6 +659,13 @@ async def processar_inbound_sdr(
         lead.sdr_score = int(score)
     if decisao in _DECISAO_PARA_STATUS:
         lead.sdr_status = _DECISAO_PARA_STATUS[decisao]
+        # Espelha a classificação do SDR na temperatura do lead (alimenta o filtro
+        # "Temperatura" do CRM). desqualificado → frio.
+        lead.temperatura = {
+            "quente": "quente",
+            "morno": "morno",
+            "desqualificado": "frio",
+        }.get(lead.sdr_status, lead.temperatura)
     if summary:
         lead.sdr_notas = summary
 
@@ -724,6 +731,12 @@ async def processar_inbound_sdr(
 
     # 6) Handoff humano se o lead esquentou (qualified).
     if decisao == "qualified":
+        # Automação do funil: lead qualificado avança p/ "Qualificado" no Kanban.
+        from app.services.vendas_pipeline import avancar_estagio
+
+        await avancar_estagio(
+            db, empresa_id=empresa_id, lead=lead, alvo="Qualificado"
+        )
         telefones = _telefones_notificacao(config)
         alerta = (
             f"🔥 Lead qualificado pelo SDR: "

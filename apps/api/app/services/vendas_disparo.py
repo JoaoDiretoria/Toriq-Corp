@@ -508,6 +508,12 @@ async def _enviar_campanha_inner(
                     conversas_outbound.append(
                         (msg.lead_id, corpo_evo, "whatsapp_evo")
                     )
+                    if lead_evo is not None:
+                        from app.services.vendas_pipeline import avancar_estagio
+
+                        await avancar_estagio(
+                            db, empresa_id=empresa_id, lead=lead_evo, alvo="Contatado"
+                        )
             else:
                 msg.status = "erro"
                 msg.erro = res["erro"]
@@ -540,6 +546,12 @@ async def _enviar_campanha_inner(
                         or ""
                     )
                     conversas_outbound.append((msg.lead_id, corpo_wpp, "whatsapp"))
+                    if lead_wpp is not None:
+                        from app.services.vendas_pipeline import avancar_estagio
+
+                        await avancar_estagio(
+                            db, empresa_id=empresa_id, lead=lead_wpp, alvo="Contatado"
+                        )
             elif msg.status == "erro":
                 erros += 1
             continue

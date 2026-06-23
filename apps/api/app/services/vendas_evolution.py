@@ -570,6 +570,11 @@ async def processar_webhook(db: AsyncSession, *, instancia, payload: dict) -> in
         lead.ultimo_canal = "whatsapp_evo"
         processadas += 1
 
+        # Automação do funil: lead que respondeu avança p/ "Respondeu" (só avança).
+        from app.services.vendas_pipeline import avancar_estagio
+
+        await avancar_estagio(db, empresa_id=empresa_id, lead=lead, alvo="Respondeu")
+
         # Mídia recebida: download + storage (best-effort) + texto para a IA.
         midia = inbound.get("media")
         texto_in = inbound.get("texto") or ""
