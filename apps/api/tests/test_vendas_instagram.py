@@ -185,3 +185,90 @@ def _fake_responder():
     async def _fn(db, *, config, lead, gatilho, comentario, registro):
         return None
     return _fn
+
+
+# ─── Task 5: testes de endpoint (router) ───────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_webhook_get_handshake(client, db_session):
+    eid = await _empresa_id(db_session)
+    cfg = VendasDisparoConfig(
+        id=uuid.uuid4(), empresa_id=eid,
+        instagram_verify_token="vtok", instagram_user_id="ig_self",
+    )
+    db_session.add(cfg)
+    await db_session.commit()
+
+    r = await client.get(
+        "/vendas/instagram/webhook",
+        params={"hub.mode": "subscribe", "hub.verify_token": "vtok", "hub.challenge": "12345"},
+    )
+    assert r.status_code == 200
+    assert r.text == "12345"
+
+    r2 = await client.get(
+        "/vendas/instagram/webhook",
+        params={"hub.mode": "subscribe", "hub.verify_token": "errado", "hub.challenge": "x"},
+    )
+    assert r2.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_webhook_post_assinatura_invalida_403(client, db_session, monkeypatch):
+    from app.core.esocial_crypto import encrypt_secret
+    eid = await _empresa_id(db_session)
+    cfg = VendasDisparoConfig(
+        id=uuid.uuid4(), empresa_id=eid, instagram_user_id="ig_self",
+        instagram_app_secret_enc=encrypt_secret("segredo"),
+    )
+    db_session.add(cfg)
+    await db_session.commit()
+
+    payload = {"entry": [{"id": "ig_self", "changes": [{"field": "comments", "value": {"id": "c1"}}]}]}
+    r = await client.post(
+        "/vendas/instagram/webhook", json=payload,
+        headers={"X-Hub-Signature-256": "sha256=errado"},
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_gatilhos_crud(client, db_session):
+    eid = await _empresa_id(db_session)
+    await login_as(client, db_session, role="cliente_torq", email="ig_gat@test.com", empresa_id=eid)
+
+    r = await client.post("/vendas/instagram/gatilhos", json={
+        "palavra_chave": "preco", "responder_publico": True, "responder_dm": True,
+        "instrucao_ia": "mande a tabela",
+    })
+    assert r.status_code == 201
+    gid = r.json()["id"]
+
+    r = await client.get("/vendas/instagram/gatilhos")
+    assert r.status_code == 200
+    assert any(g["id"] == gid for g in r.json())
+
+    r = await client.put(f"/vendas/instagram/gatilhos/{gid}", json={"ativo": False})
+    assert r.status_code == 200
+    assert r.json()["ativo"] is False
+
+    r = await client.delete(f"/vendas/instagram/gatilhos/{gid}")
+    assert r.status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_config_mascara_segredo(client, db_session):
+    eid = await _empresa_id(db_session)
+    await login_as(client, db_session, role="cliente_torq", email="ig_cfg@test.com", empresa_id=eid)
+
+    r = await client.put("/vendas/instagram/config", json={
+        "instagram_user_id": "ig_1", "instagram_token": "TOKENSECRETO123",
+        "instagram_app_secret": "APPSECRET",
+    })
+    assert r.status_code == 200
+    body = r.json()
+    assert body["instagram_user_id"] == "ig_1"
+    assert body["instagram_token_set"] is True
+    assert "TOKENSECRETO123" not in str(body)
+    assert body["instagram_token_masked"].endswith("123")
+    assert body["instagram_app_secret_set"] is True
