@@ -15,7 +15,7 @@ import { InstagramGatilhos } from './InstagramGatilhos';
 import { InstagramConexao } from './InstagramConexao';
 
 export function AutomacaoInstagram() {
-  const [tab, setTab] = useState('comentarios');
+  const [tab, setTab] = useState<string | null>(null);
   const [stats, setStats] = useState<InstagramStats | null>(null);
   const [loadingStats, setLoadingStats] = useState(true);
   const [conectado, setConectado] = useState(false);
@@ -32,17 +32,18 @@ export function AutomacaoInstagram() {
     setLoadingConfig(true);
     try {
       const cfg = await vendasInstagramApi.getConfig();
-      setConectado(!!cfg.instagram_user_id && cfg.instagram_token_set);
-    } catch { setConectado(false); }
-    finally { setLoadingConfig(false); }
+      const ok = !!cfg.instagram_user_id && cfg.instagram_token_set;
+      setConectado(ok);
+      setTab((prev) => prev ?? (ok ? 'comentarios' : 'conexao'));
+    } catch {
+      setConectado(false);
+      setTab((prev) => prev ?? 'conexao');
+    } finally {
+      setLoadingConfig(false);
+    }
   }, []);
 
   useEffect(() => { fetchStats(); fetchConfig(); }, [fetchStats, fetchConfig]);
-
-  // Se descobriu que não está conectado, abre na aba Conexão (nudge).
-  useEffect(() => {
-    if (!loadingConfig && !conectado) setTab('conexao');
-  }, [loadingConfig, conectado]);
 
   return (
     <div className="space-y-6">
@@ -84,18 +85,20 @@ export function AutomacaoInstagram() {
         <StatCard label="Erros" value={stats?.erros ?? 0} icon={AlertTriangle} iconClass="text-amber-500" loading={loadingStats} />
       </div>
 
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="comentarios" className="gap-2"><MessageCircle className="h-4 w-4" />Comentários</TabsTrigger>
-          <TabsTrigger value="posts" className="gap-2"><ImageIcon className="h-4 w-4" />Posts</TabsTrigger>
-          <TabsTrigger value="gatilhos" className="gap-2"><Zap className="h-4 w-4" />Gatilhos</TabsTrigger>
-          <TabsTrigger value="conexao" className="gap-2"><Settings2 className="h-4 w-4" />Conexão</TabsTrigger>
-        </TabsList>
-        <TabsContent value="comentarios" className="mt-4"><InstagramComentarios /></TabsContent>
-        <TabsContent value="posts" className="mt-4"><InstagramPosts onGoToConexao={() => setTab('conexao')} /></TabsContent>
-        <TabsContent value="gatilhos" className="mt-4"><InstagramGatilhos /></TabsContent>
-        <TabsContent value="conexao" className="mt-4"><InstagramConexao onSaved={() => { fetchConfig(); fetchStats(); }} /></TabsContent>
-      </Tabs>
+      {tab && (
+        <Tabs value={tab} onValueChange={setTab}>
+          <TabsList>
+            <TabsTrigger value="comentarios" className="gap-2"><MessageCircle className="h-4 w-4" />Comentários</TabsTrigger>
+            <TabsTrigger value="posts" className="gap-2"><ImageIcon className="h-4 w-4" />Posts</TabsTrigger>
+            <TabsTrigger value="gatilhos" className="gap-2"><Zap className="h-4 w-4" />Gatilhos</TabsTrigger>
+            <TabsTrigger value="conexao" className="gap-2"><Settings2 className="h-4 w-4" />Conexão</TabsTrigger>
+          </TabsList>
+          <TabsContent value="comentarios" className="mt-4"><InstagramComentarios /></TabsContent>
+          <TabsContent value="posts" className="mt-4"><InstagramPosts onGoToConexao={() => setTab('conexao')} /></TabsContent>
+          <TabsContent value="gatilhos" className="mt-4"><InstagramGatilhos /></TabsContent>
+          <TabsContent value="conexao" className="mt-4"><InstagramConexao onSaved={() => { fetchConfig(); fetchStats(); }} /></TabsContent>
+        </Tabs>
+      )}
     </div>
   );
 }

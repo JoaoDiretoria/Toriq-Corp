@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { vendasInstagramApi, type InstagramConfigUpdate } from '@/integrations/api/vendasInstagram';
+import { API_URL } from '@/integrations/api/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,8 +8,6 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { CheckCircle2, Trash2, Copy, KeyRound } from 'lucide-react';
-
-const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000';
 
 export function InstagramConexao({ onSaved }: { onSaved?: () => void }) {
   const [loading, setLoading] = useState(true);

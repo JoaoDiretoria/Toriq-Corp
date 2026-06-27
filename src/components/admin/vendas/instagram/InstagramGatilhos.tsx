@@ -28,7 +28,7 @@ export function InstagramGatilhos() {
   const fetchItems = useCallback(async () => {
     setLoading(true);
     try { const d = await vendasInstagramApi.listGatilhos(); setItems(Array.isArray(d) ? d : []); }
-    catch { toast.error('Erro ao carregar gatilhos'); setItems([]); }
+    catch (err) { console.error('[InstagramGatilhos] erro:', err); toast.error('Erro ao carregar gatilhos'); setItems([]); }
     finally { setLoading(false); }
   }, []);
 
