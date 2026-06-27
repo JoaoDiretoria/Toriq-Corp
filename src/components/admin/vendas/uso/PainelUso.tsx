@@ -173,7 +173,7 @@ export function PainelUso() {
             Uso & Contratação
           </h1>
           <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-            Acompanhe o consumo do Toriq Vendas. Estes números são a base para os
+            Acompanhe o consumo do Toriq Prospecção. Estes números são a base para os
             planos e a contratação do módulo por empresa — cada métrica representa
             um recurso medido (captação, disparos e SDR).
           </p>
@@ -278,7 +278,7 @@ export function PainelUso() {
                 <h3 className="text-lg font-semibold">Nenhum uso registrado</h3>
                 <p className="text-sm text-muted-foreground max-w-sm mt-1">
                   Ainda não há consumo medido neste período. Assim que as empresas
-                  usarem o Toriq Vendas, o consumo aparecerá aqui.
+                  usarem o Toriq Prospecção, o consumo aparecerá aqui.
                 </p>
               </div>
             ) : (

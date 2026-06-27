@@ -54,6 +54,7 @@ const SECAO_PARA_PERMISSAO: Record<string, { modulo_id: string; pagina_id: strin
   'vendas-pipeline': { modulo_id: 'toriq_vendas', pagina_id: 'vendas_pipeline' },
   'vendas-disparo': { modulo_id: 'toriq_vendas', pagina_id: 'vendas_disparo' },
   'vendas-sdr': { modulo_id: 'toriq_vendas', pagina_id: 'vendas_sdr' },
+  'vendas-instagram': { modulo_id: 'toriq_vendas', pagina_id: 'vendas_instagram' },
   'vendas-evolution': { modulo_id: 'toriq_vendas', pagina_id: 'vendas_evolution' },
   'vendas-segmentacao': { modulo_id: 'toriq_vendas', pagina_id: 'vendas_segmentacao' },
   'vendas-tags': { modulo_id: 'toriq_vendas', pagina_id: 'vendas_tags' },
@@ -71,7 +72,7 @@ const MODULO_SECOES: Record<string, string[]> = {
   ],
   'toriq_vendas': [
     'vendas-prospeccao', 'vendas-leads', 'vendas-pipeline', 'vendas-disparo',
-    'vendas-sdr', 'vendas-evolution', 'vendas-segmentacao', 'vendas-tags', 'vendas-uso'
+    'vendas-sdr', 'vendas-instagram', 'vendas-evolution', 'vendas-segmentacao', 'vendas-tags', 'vendas-uso'
   ],
 };
 

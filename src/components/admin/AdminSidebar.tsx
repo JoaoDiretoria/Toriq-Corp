@@ -49,6 +49,7 @@ import {
   Bot,
   MessageCircle,
   KanbanSquare,
+  Instagram,
   type LucideIcon,
 } from 'lucide-react';
 import { NotificationPopover } from '@/components/shared/notifications';
@@ -91,6 +92,7 @@ type AdminSection =
   | 'vendas-tags'
   | 'vendas-disparo'
   | 'vendas-sdr'
+  | 'vendas-instagram'
   | 'vendas-evolution'
   | 'vendas-uso';
 
@@ -146,7 +148,7 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     id: 'vendas',
-    label: 'Toriq Vendas',
+    label: 'Toriq Prospecção',
     icon: Megaphone,
     items: [
       { id: 'vendas-prospeccao', label: 'Prospecção', icon: Radar },
@@ -154,6 +156,7 @@ const NAV_GROUPS: NavGroup[] = [
       { id: 'vendas-pipeline', label: 'Pipeline & Conversas', icon: KanbanSquare },
       { id: 'vendas-disparo', label: 'Disparo em Massa', icon: Send },
       { id: 'vendas-sdr', label: 'SDR Inteligente', icon: Bot },
+      { id: 'vendas-instagram', label: 'Automação Instagram', icon: Instagram },
       { id: 'vendas-evolution', label: 'WhatsApp Evolution', icon: MessageCircle },
       { id: 'vendas-segmentacao', label: 'Segmentação', icon: Layers },
       { id: 'vendas-tags', label: 'Tags', icon: Tags },

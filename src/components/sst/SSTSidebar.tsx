@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, LogOut, Package, Shield, Heart, GraduationCap, Building2, FileText, Building, ChevronDown, Settings, User, Building as BuildingIcon, UsersRound, ClipboardList, Briefcase, TrendingUp, DollarSign, GitBranch, CheckSquare, FileSignature, HardHat, FolderPlus, Receipt, Wallet, Car, Headphones, LayoutDashboard, PanelLeftClose, PanelLeft, Search, CalendarDays, Megaphone, Radar, Send, Bot, MessageCircle, Layers, Tags, KanbanSquare, BarChart3 } from 'lucide-react';
+import { Users, LogOut, Package, Shield, Heart, GraduationCap, Building2, FileText, Building, ChevronDown, Settings, User, Building as BuildingIcon, UsersRound, ClipboardList, Briefcase, TrendingUp, DollarSign, GitBranch, CheckSquare, FileSignature, HardHat, FolderPlus, Receipt, Wallet, Car, Headphones, LayoutDashboard, PanelLeftClose, PanelLeft, Search, CalendarDays, Megaphone, Radar, Send, Bot, MessageCircle, Layers, Tags, KanbanSquare, BarChart3, Instagram } from 'lucide-react';
 import { NotificationPopover } from '@/components/shared/notifications';
 import { QuickSearch, useQuickSearch, TelaItem } from '@/components/shared/QuickSearch';
 import { useNavigate } from 'react-router-dom';
@@ -263,15 +263,16 @@ export function SSTSidebar({ activeSection, onSectionChange, modulosAtivos, load
     
     // Toriq Vendas
     if (moduloVisivelEContratado('toriq_vendas')) {
-      if (telaVisivel('vendas-prospeccao')) telas.push({ id: 'vendas-prospeccao', nome: 'Prospecção', icone: 'Radar', categoria: 'Toriq Vendas' });
-      if (telaVisivel('vendas-leads')) telas.push({ id: 'vendas-leads', nome: 'Leads Captados', icone: 'Users', categoria: 'Toriq Vendas' });
-      if (telaVisivel('vendas-pipeline')) telas.push({ id: 'vendas-pipeline', nome: 'Pipeline & Conversas', icone: 'KanbanSquare', categoria: 'Toriq Vendas' });
-      if (telaVisivel('vendas-disparo')) telas.push({ id: 'vendas-disparo', nome: 'Disparo em Massa', icone: 'Send', categoria: 'Toriq Vendas' });
-      if (telaVisivel('vendas-sdr')) telas.push({ id: 'vendas-sdr', nome: 'SDR Inteligente', icone: 'Bot', categoria: 'Toriq Vendas' });
-      if (telaVisivel('vendas-evolution')) telas.push({ id: 'vendas-evolution', nome: 'WhatsApp Evolution', icone: 'MessageCircle', categoria: 'Toriq Vendas' });
-      if (telaVisivel('vendas-segmentacao')) telas.push({ id: 'vendas-segmentacao', nome: 'Segmentação', icone: 'Layers', categoria: 'Toriq Vendas' });
-      if (telaVisivel('vendas-tags')) telas.push({ id: 'vendas-tags', nome: 'Tags', icone: 'Tags', categoria: 'Toriq Vendas' });
-      if (telaVisivel('vendas-uso')) telas.push({ id: 'vendas-uso', nome: 'Uso & Contratação', icone: 'BarChart3', categoria: 'Toriq Vendas' });
+      if (telaVisivel('vendas-prospeccao')) telas.push({ id: 'vendas-prospeccao', nome: 'Prospecção', icone: 'Radar', categoria: 'Toriq Prospecção' });
+      if (telaVisivel('vendas-leads')) telas.push({ id: 'vendas-leads', nome: 'Leads Captados', icone: 'Users', categoria: 'Toriq Prospecção' });
+      if (telaVisivel('vendas-pipeline')) telas.push({ id: 'vendas-pipeline', nome: 'Pipeline & Conversas', icone: 'KanbanSquare', categoria: 'Toriq Prospecção' });
+      if (telaVisivel('vendas-disparo')) telas.push({ id: 'vendas-disparo', nome: 'Disparo em Massa', icone: 'Send', categoria: 'Toriq Prospecção' });
+      if (telaVisivel('vendas-sdr')) telas.push({ id: 'vendas-sdr', nome: 'SDR Inteligente', icone: 'Bot', categoria: 'Toriq Prospecção' });
+      if (telaVisivel('vendas-instagram')) telas.push({ id: 'vendas-instagram', nome: 'Automação Instagram', icone: 'Instagram', categoria: 'Toriq Prospecção' });
+      if (telaVisivel('vendas-evolution')) telas.push({ id: 'vendas-evolution', nome: 'WhatsApp Evolution', icone: 'MessageCircle', categoria: 'Toriq Prospecção' });
+      if (telaVisivel('vendas-segmentacao')) telas.push({ id: 'vendas-segmentacao', nome: 'Segmentação', icone: 'Layers', categoria: 'Toriq Prospecção' });
+      if (telaVisivel('vendas-tags')) telas.push({ id: 'vendas-tags', nome: 'Tags', icone: 'Tags', categoria: 'Toriq Prospecção' });
+      if (telaVisivel('vendas-uso')) telas.push({ id: 'vendas-uso', nome: 'Uso & Contratação', icone: 'BarChart3', categoria: 'Toriq Prospecção' });
     }
 
     // Configurações - só mostra se o usuário tem acesso à tela de configurações
@@ -755,7 +756,7 @@ export function SSTSidebar({ activeSection, onSectionChange, modulosAtivos, load
                         onClick={() => onSectionChange('vendas-pipeline')}
                       >
                         <Megaphone className="h-4 w-4" />
-                        <span>Toriq Vendas</span>
+                        <span>Toriq Prospecção</span>
                         <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]/collapsible-vendas:rotate-180" />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
@@ -798,6 +799,14 @@ export function SSTSidebar({ activeSection, onSectionChange, modulosAtivos, load
                             <SidebarMenuSubButton onClick={() => onSectionChange('vendas-sdr')} isActive={activeSection === 'vendas-sdr'} className="cursor-pointer">
                               <Bot className="h-4 w-4" />
                               <span>SDR Inteligente</span>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        )}
+                        {telaVisivel('vendas-instagram') && (
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton onClick={() => onSectionChange('vendas-instagram')} isActive={activeSection === 'vendas-instagram'} className="cursor-pointer">
+                              <Instagram className="h-4 w-4" />
+                              <span>Automação Instagram</span>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
                         )}

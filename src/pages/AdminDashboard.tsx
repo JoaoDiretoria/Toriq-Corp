@@ -34,6 +34,7 @@ import { Agenda } from '@/components/shared/Agenda';
 import { Prospeccao } from '@/components/admin/vendas/prospeccao/Prospeccao';
 import { Disparo } from '@/components/admin/vendas/disparo/Disparo';
 import { SdrInteligente } from '@/components/admin/vendas/sdr/SdrInteligente';
+import { AutomacaoInstagram } from '@/components/admin/vendas/instagram/AutomacaoInstagram';
 import { EvolutionApi } from '@/components/admin/vendas/evolution/EvolutionApi';
 import { PainelUso } from '@/components/admin/vendas/uso/PainelUso';
 import { PipelineCRM } from '@/components/admin/vendas/pipeline/PipelineCRM';
@@ -42,7 +43,7 @@ import { Segmentacao } from '@/components/admin/vendas/Segmentacao';
 import { TagsManager } from '@/components/admin/vendas/TagsManager';
 import { useState } from 'react';
 
-type AdminSection = 'dashboard' | 'empresas' | 'usuarios' | 'colaboradores' | 'servicos' | 'modulos' | 'tarefas' | 'agenda' | 'comercial-dashboard' | 'comercial' | 'comercial-prospeccao' | 'comercial-pos-venda' | 'comercial-cross-selling' | 'financeiro' | 'financeiro-dashboard' | 'financeiro-cadastros' | 'financeiro-contas-receber' | 'financeiro-contas-pagar' | 'financeiro-fluxo-caixa' | 'financeiro-dre' | 'estatisticas' | 'suporte' | 'conteudo-blogs' | 'conteudo-pesquisas' | 'conteudo-newsletter' | 'conteudo-vagas' | 'vendas-prospeccao' | 'vendas-leads' | 'vendas-pipeline' | 'vendas-segmentacao' | 'vendas-tags' | 'vendas-disparo' | 'vendas-sdr' | 'vendas-evolution' | 'vendas-uso';
+type AdminSection = 'dashboard' | 'empresas' | 'usuarios' | 'colaboradores' | 'servicos' | 'modulos' | 'tarefas' | 'agenda' | 'comercial-dashboard' | 'comercial' | 'comercial-prospeccao' | 'comercial-pos-venda' | 'comercial-cross-selling' | 'financeiro' | 'financeiro-dashboard' | 'financeiro-cadastros' | 'financeiro-contas-receber' | 'financeiro-contas-pagar' | 'financeiro-fluxo-caixa' | 'financeiro-dre' | 'estatisticas' | 'suporte' | 'conteudo-blogs' | 'conteudo-pesquisas' | 'conteudo-newsletter' | 'conteudo-vagas' | 'vendas-prospeccao' | 'vendas-leads' | 'vendas-pipeline' | 'vendas-segmentacao' | 'vendas-tags' | 'vendas-disparo' | 'vendas-sdr' | 'vendas-instagram' | 'vendas-evolution' | 'vendas-uso';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -151,6 +152,8 @@ const AdminDashboard = () => {
         return <Disparo />;
       case 'vendas-sdr':
         return <SdrInteligente />;
+      case 'vendas-instagram':
+        return <AutomacaoInstagram />;
       case 'vendas-evolution':
         return <EvolutionApi />;
       case 'vendas-uso':
@@ -188,15 +191,16 @@ const AdminDashboard = () => {
       'conteudo-pesquisas': 'Pesquisas de Opinião',
       'conteudo-newsletter': 'Newsletter',
       'conteudo-vagas': 'Vagas',
-      'vendas-prospeccao': 'Toriq Vendas — Prospecção',
-      'vendas-leads': 'Toriq Vendas — Leads Captados',
-      'vendas-pipeline': 'Toriq Vendas — Pipeline & Conversas',
-      'vendas-segmentacao': 'Toriq Vendas — Segmentação',
-      'vendas-tags': 'Toriq Vendas — Tags',
-      'vendas-disparo': 'Toriq Vendas — Disparo em Massa',
-      'vendas-sdr': 'Toriq Vendas — SDR Inteligente',
-      'vendas-evolution': 'Toriq Vendas — WhatsApp Evolution API',
-      'vendas-uso': 'Toriq Vendas — Uso & Contratação',
+      'vendas-prospeccao': 'Toriq Prospecção — Prospecção',
+      'vendas-leads': 'Toriq Prospecção — Leads Captados',
+      'vendas-pipeline': 'Toriq Prospecção — Pipeline & Conversas',
+      'vendas-segmentacao': 'Toriq Prospecção — Segmentação',
+      'vendas-tags': 'Toriq Prospecção — Tags',
+      'vendas-disparo': 'Toriq Prospecção — Disparo em Massa',
+      'vendas-sdr': 'Toriq Prospecção — SDR Inteligente',
+      'vendas-instagram': 'Toriq Prospecção — Automação Instagram',
+      'vendas-evolution': 'Toriq Prospecção — WhatsApp Evolution API',
+      'vendas-uso': 'Toriq Prospecção — Uso & Contratação',
     };
     return titles[activeSection] || 'Dashboard';
   };

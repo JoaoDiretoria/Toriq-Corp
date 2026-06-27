@@ -2,10 +2,10 @@
 // Usado para controle granular de acesso por empresa
 // IMPORTANTE: Apenas módulos que existem na sidebar devem estar aqui
 
-import { 
+import {
   Building2, User, Settings, FolderPlus,
   Briefcase, CheckSquare, TrendingUp, FileSignature, ClipboardList, DollarSign, Wrench, Megaphone, HardHat, Receipt, Wallet, FileText, GitBranch,
-  GraduationCap, CalendarDays, FileCheck, BookOpen, Grid3X3, Users, ListChecks, UserCheck, Building
+  GraduationCap, CalendarDays, FileCheck, BookOpen, Grid3X3, Users, ListChecks, UserCheck, Building, Instagram
 } from 'lucide-react';
 
 export interface TelaMódulo {
@@ -27,7 +27,7 @@ export interface ModuloConfig {
 // Mapeamento de nomes de módulos do banco para IDs usados no código
 export const MODULO_NOME_PARA_CODIGO: Record<string, string> = {
   'Toriq Corp': 'toriq_corp',
-  'Toriq Vendas': 'toriq_vendas',
+  'Toriq Prospecção': 'toriq_vendas',
 };
 
 // Configuração completa de módulos e suas telas
@@ -76,7 +76,7 @@ export const MODULOS_CONFIG: ModuloConfig[] = [
   },
   {
     id: 'toriq_vendas',
-    nome: 'Toriq Vendas',
+    nome: 'Toriq Prospecção',
     icone: 'Megaphone',
     telas: [
       { id: 'vendas-prospeccao', nome: 'Prospecção', icone: 'Megaphone' },
@@ -84,6 +84,7 @@ export const MODULOS_CONFIG: ModuloConfig[] = [
       { id: 'vendas-pipeline', nome: 'Pipeline & Conversas', icone: 'Grid3X3' },
       { id: 'vendas-disparo', nome: 'Disparo em Massa', icone: 'Megaphone' },
       { id: 'vendas-sdr', nome: 'SDR Inteligente', icone: 'CheckSquare' },
+      { id: 'vendas-instagram', nome: 'Automação Instagram', icone: 'Instagram' },
       { id: 'vendas-evolution', nome: 'WhatsApp Evolution', icone: 'MessageCircle' },
       { id: 'vendas-segmentacao', nome: 'Segmentação', icone: 'ListChecks' },
       { id: 'vendas-tags', nome: 'Tags', icone: 'FileText' },

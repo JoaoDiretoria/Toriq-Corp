@@ -21,13 +21,13 @@ const ModulosAtivosContext = createContext<ModulosAtivosContextType | undefined>
 // Mapeamento de nomes de módulos do banco para IDs usados no código
 const MODULO_NOME_PARA_ID: Record<string, string> = {
   'Toriq Corp': 'toriq_corp',
-  'Toriq Vendas': 'toriq_vendas',
+  'Toriq Prospecção': 'toriq_vendas',
 };
 
 // Mapeamento inverso: ID do código para nomes do banco
 const ID_PARA_MODULO_NOMES: Record<string, string[]> = {
   'toriq_corp': ['Toriq Corp'],
-  'toriq_vendas': ['Toriq Vendas'],
+  'toriq_vendas': ['Toriq Prospecção'],
 };
 
 export function ModulosAtivosProvider({ children }: { children: ReactNode }) {
