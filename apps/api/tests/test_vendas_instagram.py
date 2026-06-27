@@ -495,6 +495,45 @@ async def test_executar_publicacao_erro(db_session, monkeypatch):
     assert pub.status == "erro" and "falhou" in (pub.erro or "")
 
 
+@pytest.mark.asyncio
+async def test_executar_publicacao_carrossel(db_session, monkeypatch):
+    from app.core.esocial_crypto import encrypt_secret
+    from app.services import vendas_instagram as svc
+    from app.models.vendas_instagram import VendasInstagramPublicacoes
+
+    eid = await _empresa_id(db_session)
+    db_session.add(VendasDisparoConfig(
+        id=uuid.uuid4(), empresa_id=eid,
+        instagram_user_id="ig1", instagram_token_enc=encrypt_secret("tok"),
+    ))
+    pub = VendasInstagramPublicacoes(
+        id=uuid.uuid4(), empresa_id=eid, tipo="CAROUSEL", caption="c",
+        midias=[{"url": "http://x/a.jpg", "tipo": "image"},
+                {"url": "http://x/v.mp4", "tipo": "video"}],
+    )
+    db_session.add(pub)
+    await db_session.commit()
+
+    criados = []
+    async def _crc(**kw):
+        criados.append(kw)
+        return f"cre{len(criados)}"
+    async def _st(**kw): return "FINISHED"
+    async def _pub(**kw): return "media_carousel"
+    monkeypatch.setattr(svc.instagram_meta, "criar_container", _crc)
+    monkeypatch.setattr(svc.instagram_meta, "status_container", _st)
+    monkeypatch.setattr(svc.instagram_meta, "publicar_container", _pub)
+    monkeypatch.setattr(svc, "_POLL_SLEEP", 0)
+
+    await svc.executar_publicacao(db_session, publicacao_id=pub.id)
+    await db_session.refresh(pub)
+    assert pub.status == "publicado" and pub.ig_media_id == "media_carousel"
+    assert len(criados) == 3  # 2 filhos + 1 pai
+    assert criados[0].get("is_carousel_item") is True
+    assert criados[2].get("media_type") == "CAROUSEL"
+    assert criados[2].get("children") and len(criados[2]["children"]) == 2
+
+
 # ─── Task 4: endpoints publicar (multipart) + listar publicações ───────────────
 
 @pytest.mark.asyncio

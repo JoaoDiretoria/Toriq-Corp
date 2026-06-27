@@ -279,6 +279,11 @@ async def executar_publicacao(db: AsyncSession, *, publicacao_id: uuid.UUID) -> 
     token = decrypt_secret(config.instagram_token_enc)
     ig_id = config.instagram_user_id
     midias = pub.midias or []
+    if not midias:
+        pub.status = "erro"
+        pub.erro = "sem mídia"
+        await db.commit()
+        return
     try:
         if pub.tipo == "CAROUSEL":
             filhos: list[str] = []
