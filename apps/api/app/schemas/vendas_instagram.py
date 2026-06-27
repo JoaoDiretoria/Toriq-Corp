@@ -118,3 +118,17 @@ class RespostaManualResult(BaseModel):
     ok: bool
     respondido_publico: bool
     respondido_dm: bool
+
+
+# ── Fase 3: publicações ─────────────────────────────────────────────────────────
+class PublicacaoPublic(BaseModel):
+    id: uuid.UUID
+    tipo: str
+    caption: Optional[str] = None
+    midias: Optional[list] = None
+    status: str
+    ig_media_id: Optional[str] = None
+    erro: Optional[str] = None
+    created_at: Optional[datetime.datetime] = None
+
+    model_config = {"from_attributes": True}

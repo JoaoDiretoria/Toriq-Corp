@@ -11,7 +11,7 @@ import datetime
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import require_role
 from app.core.db import get_db
 from app.core.esocial_crypto import decrypt_secret, encrypt_secret, mask_secret
+from app.core.storage import storage_service
+from app.core.queue import queue
 from app.integrations import instagram_meta
 from app.models.user import User, UserRole
 from app.models.vendas_disparo import VendasDisparoConfig
@@ -26,6 +28,7 @@ from app.models.vendas import VendasLeads
 from app.models.vendas_instagram import (
     VendasInstagramComentarios,
     VendasInstagramGatilhos,
+    VendasInstagramPublicacoes,
 )
 from app.schemas import vendas_instagram as s
 from app.services import vendas_instagram as svc
@@ -396,3 +399,81 @@ async def responder_comentario(
     reg.resposta_texto = payload.texto
     await db.commit()
     return s.RespostaManualResult(ok=True, respondido_publico=pub_ok, respondido_dm=dm_ok)
+
+
+# ── Fase 3: publicar (multipart → storage → fila) + listar publicações ─────────
+
+_IG_IMAGE_MIME = {"image/jpeg", "image/png"}
+_IG_VIDEO_MIME = {"video/mp4", "video/quicktime"}
+_IG_BUCKET = "instagram-media"
+
+
+def _tipo_midia(content_type: str) -> str | None:
+    if content_type in _IG_IMAGE_MIME:
+        return "image"
+    if content_type in _IG_VIDEO_MIME:
+        return "video"
+    return None
+
+
+@router.post("/instagram/publicar", response_model=s.PublicacaoPublic, status_code=201)
+async def publicar(
+    files: list[UploadFile] = File(...),
+    caption: str = Form(""),
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    empresa_id = _require_empresa(user)
+    config = await db.scalar(
+        select(VendasDisparoConfig).where(VendasDisparoConfig.empresa_id == empresa_id)
+    )
+    if config is None or not config.instagram_user_id or not config.instagram_token_enc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "configure o Instagram")
+    if not files:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "nenhuma mídia enviada")
+    if len(files) > 10:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "carrossel aceita no máximo 10 mídias")
+
+    midias: list[dict] = []
+    for f in files:
+        ct = f.content_type or ""
+        tipo = _tipo_midia(ct)
+        if tipo is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, f"tipo não suportado: {ct}")
+        data = await f.read()
+        ext = (f.filename or "midia").split(".")[-1][:5]
+        key = f"{empresa_id}/{uuid.uuid4()}.{ext}"
+        url = storage_service.upload(bucket=_IG_BUCKET, key=key, data=data, content_type=ct)
+        midias.append({"url": url, "tipo": tipo})
+
+    if len(midias) >= 2:
+        tipo_pub = "CAROUSEL"
+    elif midias[0]["tipo"] == "video":
+        tipo_pub = "REELS"
+    else:
+        tipo_pub = "IMAGE"
+
+    from app.services import vendas_instagram as svc_local
+    pub = await svc_local.iniciar_publicacao(
+        db, empresa_id=empresa_id, tipo=tipo_pub, caption=caption or None, midias=midias
+    )
+    await db.commit()
+    await db.refresh(pub)
+    await queue.enqueue("instagram_publicar", {"publicacao_id": str(pub.id)})
+    return pub
+
+
+@router.get("/instagram/publicacoes", response_model=list[s.PublicacaoPublic])
+async def listar_publicacoes(
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(50, le=200),
+):
+    empresa_id = _require_empresa(user)
+    rows = (await db.scalars(
+        select(VendasInstagramPublicacoes)
+        .where(VendasInstagramPublicacoes.empresa_id == empresa_id)
+        .order_by(VendasInstagramPublicacoes.created_at.desc())
+        .limit(limit)
+    )).all()
+    return rows

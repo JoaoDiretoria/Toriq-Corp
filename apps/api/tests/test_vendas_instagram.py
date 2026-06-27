@@ -493,3 +493,60 @@ async def test_executar_publicacao_erro(db_session, monkeypatch):
     await svc.executar_publicacao(db_session, publicacao_id=pub.id)
     await db_session.refresh(pub)
     assert pub.status == "erro" and "falhou" in (pub.erro or "")
+
+
+# ─── Task 4: endpoints publicar (multipart) + listar publicações ───────────────
+
+@pytest.mark.asyncio
+async def test_publicar_imagem_enfileira(client, db_session, monkeypatch):
+    from app.core.esocial_crypto import encrypt_secret
+    from app.api import vendas_instagram as router_mod
+    from app.models.vendas_instagram import VendasInstagramPublicacoes
+    from sqlalchemy import select
+
+    eid = await _empresa_id(db_session)
+    await login_as(client, db_session, role="cliente_torq", email="ig_pub1@test.com", empresa_id=eid)
+    db_session.add(VendasDisparoConfig(
+        id=uuid.uuid4(), empresa_id=eid,
+        instagram_user_id="ig1", instagram_token_enc=encrypt_secret("tok"),
+    ))
+    await db_session.commit()
+
+    monkeypatch.setattr(router_mod.storage_service, "upload",
+                        lambda **kw: "http://public/instagram-media/x.jpg")
+    enq = {}
+    async def _enq(nome, payload): enq["nome"] = nome; enq["payload"] = payload
+    monkeypatch.setattr(router_mod.queue, "enqueue", _enq)
+
+    files = {"files": ("a.jpg", b"\xff\xd8\xff", "image/jpeg")}
+    r = await client.post("/vendas/instagram/publicar", data={"caption": "oi"}, files=files)
+    assert r.status_code == 201
+    body = r.json()
+    assert body["tipo"] == "IMAGE" and body["status"] == "processando"
+    assert enq["nome"] == "instagram_publicar"
+    pub = await db_session.scalar(select(VendasInstagramPublicacoes).where(
+        VendasInstagramPublicacoes.empresa_id == eid))
+    assert pub is not None and pub.midias[0]["url"].endswith("x.jpg")
+
+
+@pytest.mark.asyncio
+async def test_publicar_sem_config_400(client, db_session):
+    eid = await _empresa_id(db_session)
+    await login_as(client, db_session, role="cliente_torq", email="ig_pub2@test.com", empresa_id=eid)
+    files = {"files": ("a.jpg", b"\xff\xd8\xff", "image/jpeg")}
+    r = await client.post("/vendas/instagram/publicar", data={"caption": "x"}, files=files)
+    assert r.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_listar_publicacoes(client, db_session):
+    from app.models.vendas_instagram import VendasInstagramPublicacoes
+    eid = await _empresa_id(db_session)
+    await login_as(client, db_session, role="cliente_torq", email="ig_pub3@test.com", empresa_id=eid)
+    db_session.add(VendasInstagramPublicacoes(
+        id=uuid.uuid4(), empresa_id=eid, tipo="IMAGE", status="publicado",
+        ig_media_id="m1", midias=[{"url": "u", "tipo": "image"}]))
+    await db_session.commit()
+    r = await client.get("/vendas/instagram/publicacoes")
+    assert r.status_code == 200
+    assert r.json()[0]["status"] == "publicado"
