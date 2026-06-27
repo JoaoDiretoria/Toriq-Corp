@@ -4,6 +4,16 @@
 **Módulo:** Vendas → Canal Instagram (UI)
 **Status:** aprovado (Abordagem A — uma seção com abas, espelha `SdrInteligente`)
 
+## Atualização de escopo (2026-06-27, requisito do usuário)
+
+Dois ajustes que **prevalecem sobre o resto do documento**:
+
+1. **A página nova chama "Automação Instagram"** (base ManyChat) — onde o doc diz "Instagram"/"Conexão Instagram" como nome de tela, leia **"Automação Instagram"**. O id de seção continua `vendas-instagram` / `pagina_id` `vendas_instagram`.
+2. **Renomear o módulo (nome de exibição) "Toriq Vendas" → "Toriq Prospecção"**, mantendo o **id interno `toriq_vendas`** (mudar o id cascatearia por permissões/contratos/DB — fora de escopo). O rename é em 3 camadas, consistente:
+   - **Banco:** `UPDATE public.modulos SET nome='Toriq Prospecção' WHERE id='b5c6d7e8-f9a0-4b1c-8d2e-000000000005'` via migration Alembic (com downgrade que volta para 'Toriq Vendas').
+   - **Mapas nome→id no front:** `src/config/modulosTelas.ts:30`, `src/hooks/useModulosAtivos.tsx:24` e o id→nomes em `useModulosAtivos.tsx:30` passam a usar a chave/valor `'Toriq Prospecção'`.
+   - **Labels de UI:** `AdminSidebar.tsx:149`, `SSTSidebar.tsx:758` (grupo), `SSTSidebar` quick-search `categoria` (266-274), `AdminDashboard.tsx` títulos (191-199), `modulosTelas.ts:79` `nome`, e o texto do `PainelUso.tsx` (176, 281).
+
 ## Problema
 
 A Fase 1a entregou o **motor de backend** do canal Instagram (webhook de comentários → IA responde público/DM → lead + Conversas), já na `main`. Falta a **interface**: o usuário precisa conectar a conta, criar os gatilhos (palavra-chave → IA), ver os comentários recebidos e ver as próprias postagens — tudo de dentro do sistema. Esta é a Fase 1b.
