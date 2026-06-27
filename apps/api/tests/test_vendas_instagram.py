@@ -404,3 +404,92 @@ async def test_responder_sem_config_400(client, db_session):
     r = await client.post("/vendas/instagram/comentarios/cY/responder",
                           json={"texto": "x", "publico": True, "dm": False})
     assert r.status_code == 400
+
+
+# ─── Task 3: serviço de publicação (container + poll + publish) ────────────────
+
+@pytest.mark.asyncio
+async def test_executar_publicacao_imagem(db_session, monkeypatch):
+    from app.core.esocial_crypto import encrypt_secret
+    from app.services import vendas_instagram as svc
+    from app.models.vendas_instagram import VendasInstagramPublicacoes
+
+    eid = await _empresa_id(db_session)
+    db_session.add(VendasDisparoConfig(
+        id=uuid.uuid4(), empresa_id=eid,
+        instagram_user_id="ig1", instagram_token_enc=encrypt_secret("tok"),
+    ))
+    pub = VendasInstagramPublicacoes(
+        id=uuid.uuid4(), empresa_id=eid, tipo="IMAGE", caption="oi",
+        midias=[{"url": "http://x/a.jpg", "tipo": "image"}],
+    )
+    db_session.add(pub)
+    await db_session.commit()
+
+    async def _crc(**kw): return "cre1"
+    async def _pub(**kw): return "media1"
+    monkeypatch.setattr(svc.instagram_meta, "criar_container", _crc)
+    monkeypatch.setattr(svc.instagram_meta, "publicar_container", _pub)
+
+    await svc.executar_publicacao(db_session, publicacao_id=pub.id)
+    await db_session.refresh(pub)
+    assert pub.status == "publicado"
+    assert pub.ig_media_id == "media1"
+
+
+@pytest.mark.asyncio
+async def test_executar_publicacao_video_poll(db_session, monkeypatch):
+    from app.core.esocial_crypto import encrypt_secret
+    from app.services import vendas_instagram as svc
+    from app.models.vendas_instagram import VendasInstagramPublicacoes
+
+    eid = await _empresa_id(db_session)
+    db_session.add(VendasDisparoConfig(
+        id=uuid.uuid4(), empresa_id=eid,
+        instagram_user_id="ig1", instagram_token_enc=encrypt_secret("tok"),
+    ))
+    pub = VendasInstagramPublicacoes(
+        id=uuid.uuid4(), empresa_id=eid, tipo="REELS",
+        midias=[{"url": "http://x/v.mp4", "tipo": "video"}],
+    )
+    db_session.add(pub)
+    await db_session.commit()
+
+    estados = iter(["IN_PROGRESS", "FINISHED"])
+    async def _crc(**kw): return "cre1"
+    async def _st(**kw): return next(estados)
+    async def _pub(**kw): return "media2"
+    monkeypatch.setattr(svc.instagram_meta, "criar_container", _crc)
+    monkeypatch.setattr(svc.instagram_meta, "status_container", _st)
+    monkeypatch.setattr(svc.instagram_meta, "publicar_container", _pub)
+    monkeypatch.setattr(svc, "_POLL_SLEEP", 0)  # não dormir no teste
+
+    await svc.executar_publicacao(db_session, publicacao_id=pub.id)
+    await db_session.refresh(pub)
+    assert pub.status == "publicado" and pub.ig_media_id == "media2"
+
+
+@pytest.mark.asyncio
+async def test_executar_publicacao_erro(db_session, monkeypatch):
+    from app.core.esocial_crypto import encrypt_secret
+    from app.services import vendas_instagram as svc
+    from app.models.vendas_instagram import VendasInstagramPublicacoes
+
+    eid = await _empresa_id(db_session)
+    db_session.add(VendasDisparoConfig(
+        id=uuid.uuid4(), empresa_id=eid,
+        instagram_user_id="ig1", instagram_token_enc=encrypt_secret("tok"),
+    ))
+    pub = VendasInstagramPublicacoes(
+        id=uuid.uuid4(), empresa_id=eid, tipo="IMAGE",
+        midias=[{"url": "http://x/a.jpg", "tipo": "image"}],
+    )
+    db_session.add(pub)
+    await db_session.commit()
+
+    async def _boom(**kw): raise svc.instagram_meta.InstagramError("falhou")
+    monkeypatch.setattr(svc.instagram_meta, "criar_container", _boom)
+
+    await svc.executar_publicacao(db_session, publicacao_id=pub.id)
+    await db_session.refresh(pub)
+    assert pub.status == "erro" and "falhou" in (pub.erro or "")

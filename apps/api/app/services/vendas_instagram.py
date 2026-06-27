@@ -16,6 +16,7 @@ vira um commit por comentário, igual ao inbound de WhatsApp.)
 """
 from __future__ import annotations
 
+import asyncio
 import uuid
 
 from sqlalchemy import select
@@ -30,9 +31,13 @@ from app.models.vendas_disparo import VendasDisparoConfig
 from app.models.vendas_instagram import (
     VendasInstagramComentarios,
     VendasInstagramGatilhos,
+    VendasInstagramPublicacoes,
 )
 from app.services import vendas_sdr
 from app.services.vendas_pipeline import append_mensagem
+
+_POLL_SLEEP = 5.0       # s entre polls de vídeo
+_POLL_MAX = 24          # ~2 min
 
 
 async def _carregar_config(db: AsyncSession, empresa_id: uuid.UUID) -> VendasDisparoConfig | None:
@@ -225,3 +230,90 @@ async def processar_comentarios_webhook(
 
     await db.commit()
     return processados
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Fase 3: publicação de posts (Content Publishing)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def iniciar_publicacao(
+    db: AsyncSession, *, empresa_id: uuid.UUID, tipo: str, caption: str | None, midias: list[dict]
+) -> VendasInstagramPublicacoes:
+    """Cria a linha de publicação (status processando). NÃO chama a Meta (o router
+    commita e enfileira)."""
+    pub = VendasInstagramPublicacoes(
+        id=uuid.uuid4(), empresa_id=empresa_id, tipo=tipo,
+        caption=caption, midias=midias, status="processando",
+    )
+    db.add(pub)
+    await db.flush()
+    return pub
+
+
+async def _aguardar_container(token: str, creation_id: str) -> None:
+    """Faz poll do container até FINISHED. ERROR/timeout → InstagramError."""
+    for _ in range(_POLL_MAX):
+        st = await instagram_meta.status_container(token=token, creation_id=creation_id)
+        if st == "FINISHED":
+            return
+        if st == "ERROR":
+            raise instagram_meta.InstagramError("processamento da mídia falhou (ERROR)")
+        if _POLL_SLEEP:
+            await asyncio.sleep(_POLL_SLEEP)
+    raise instagram_meta.InstagramError("timeout aguardando processamento da mídia")
+
+
+async def executar_publicacao(db: AsyncSession, *, publicacao_id: uuid.UUID) -> None:
+    """Handler da fila 'instagram_publicar'. Cria container(s), publica e atualiza a
+    linha. Idempotente (pula se já publicado). COMMITA ao final."""
+    pub = await db.get(VendasInstagramPublicacoes, publicacao_id)
+    if pub is None or pub.status == "publicado":
+        return
+    config = await _carregar_config(db, pub.empresa_id)
+    if config is None or not config.instagram_user_id or not config.instagram_token_enc:
+        pub.status = "erro"
+        pub.erro = "Instagram não configurado"
+        await db.commit()
+        return
+
+    token = decrypt_secret(config.instagram_token_enc)
+    ig_id = config.instagram_user_id
+    midias = pub.midias or []
+    try:
+        if pub.tipo == "CAROUSEL":
+            filhos: list[str] = []
+            for m in midias:
+                kw = {"image_url": m["url"]} if m.get("tipo") == "image" else {"video_url": m["url"]}
+                cid = await instagram_meta.criar_container(
+                    token=token, ig_user_id=ig_id, is_carousel_item=True, **kw
+                )
+                if m.get("tipo") == "video":
+                    await _aguardar_container(token, cid)
+                filhos.append(cid)
+            creation_id = await instagram_meta.criar_container(
+                token=token, ig_user_id=ig_id, media_type="CAROUSEL",
+                children=filhos, caption=pub.caption,
+            )
+        elif pub.tipo == "REELS":
+            creation_id = await instagram_meta.criar_container(
+                token=token, ig_user_id=ig_id, media_type="REELS",
+                video_url=midias[0]["url"], caption=pub.caption,
+            )
+            await _aguardar_container(token, creation_id)
+        else:  # IMAGE
+            creation_id = await instagram_meta.criar_container(
+                token=token, ig_user_id=ig_id, image_url=midias[0]["url"], caption=pub.caption,
+            )
+
+        pub.creation_id = creation_id
+        media_id = await instagram_meta.publicar_container(
+            token=token, ig_user_id=ig_id, creation_id=creation_id
+        )
+        pub.ig_media_id = media_id
+        pub.status = "publicado"
+        pub.erro = None
+    except instagram_meta.InstagramError as exc:
+        pub.status = "erro"
+        pub.erro = str(exc)
+
+    await db.commit()

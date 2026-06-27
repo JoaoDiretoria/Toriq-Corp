@@ -106,3 +106,16 @@ async def _sdr_qualificar_lote(payload: dict) -> None:
             await qualificar_batch(db, empresa_id=uuid.UUID(str(eid)), lead_ids=lead_ids)
         except ValueError:
             pass
+
+
+@register("instagram_publicar")
+async def _instagram_publicar(payload: dict) -> None:
+    """Publica um post do Instagram (container -> poll -> publish) fora do request."""
+    pid = payload.get("publicacao_id")
+    if not pid:
+        return
+    from app.core.db import SessionLocal
+    from app.services.vendas_instagram import executar_publicacao
+
+    async with SessionLocal() as db:
+        await executar_publicacao(db, publicacao_id=uuid.UUID(str(pid)))
