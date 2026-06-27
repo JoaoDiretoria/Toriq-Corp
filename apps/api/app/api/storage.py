@@ -30,6 +30,7 @@ ALLOWED_BUCKETS: set[str] = {
     "sinistro_fotos",
     "turmas",
     "white-label",
+    "instagram-media",
 }
 
 # Tipos servidos inline (imagens seguras). SVG fica DE FORA de propósito

@@ -19,6 +19,7 @@ from sqlalchemy import (
     Uuid,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.generated import Base
@@ -94,6 +95,37 @@ class VendasInstagramComentarios(Base):
     respondido_publico: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     respondido_dm: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     resposta_texto: Mapped[Optional[str]] = mapped_column(Text)
+    erro: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[Optional[datetime.datetime]] = mapped_column(
+        DateTime(True), server_default=text("now()")
+    )
+    updated_at: Mapped[Optional[datetime.datetime]] = mapped_column(
+        DateTime(True), server_default=text("now()")
+    )
+
+
+class VendasInstagramPublicacoes(Base):
+    __tablename__ = "vendas_instagram_publicacoes"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["empresa_id"], ["public.empresas.id"],
+            ondelete="CASCADE", name="vendas_instagram_publicacoes_empresa_id_fkey",
+        ),
+        PrimaryKeyConstraint("id", name="vendas_instagram_publicacoes_pkey"),
+        Index("idx_vendas_instagram_publicacoes_empresa_id", "empresa_id"),
+        {"schema": "public"},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    empresa_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    tipo: Mapped[str] = mapped_column(Text, nullable=False)  # IMAGE | REELS | CAROUSEL
+    caption: Mapped[Optional[str]] = mapped_column(Text)
+    midias: Mapped[Optional[list]] = mapped_column(JSONB)  # [{"url":..,"tipo":"image|video"}]
+    status: Mapped[str] = mapped_column(Text, server_default=text("'processando'"))
+    creation_id: Mapped[Optional[str]] = mapped_column(Text)
+    ig_media_id: Mapped[Optional[str]] = mapped_column(Text)
     erro: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime(True), server_default=text("now()")
