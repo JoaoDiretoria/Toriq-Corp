@@ -116,6 +116,9 @@ class VendasLeads(Base):
     ultimo_canal: Mapped[Optional[str]] = mapped_column(
         Text, server_default=text("'whatsapp'")
     )
+    # Identidade Instagram (Fase IG-1) — casa o @ que comentou com o lead.
+    instagram_user_id: Mapped[Optional[str]] = mapped_column(Text)
+    instagram_username: Mapped[Optional[str]] = mapped_column(Text)
     # Debounce do SDR (canal Evolution): mensagens que chegaram rápido são
     # acumuladas aqui; o scheduler drena após a janela e chama o SDR uma vez.
     sdr_buffer: Mapped[Optional[str]] = mapped_column(Text)

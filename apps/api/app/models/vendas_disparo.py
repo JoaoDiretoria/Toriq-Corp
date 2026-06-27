@@ -77,6 +77,12 @@ class VendasDisparoConfig(Base):
     whatsapp_rate_limit: Mapped[Optional[int]] = mapped_column(
         Integer, server_default=text("80")
     )
+    # Instagram (Fase IG-1 — Graph API, comment-to-DM). Token/app_secret cripto.
+    instagram_user_id: Mapped[Optional[str]] = mapped_column(Text)
+    instagram_username: Mapped[Optional[str]] = mapped_column(Text)
+    instagram_token_enc: Mapped[Optional[str]] = mapped_column(Text)
+    instagram_app_secret_enc: Mapped[Optional[str]] = mapped_column(Text)
+    instagram_verify_token: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime(True), server_default=text("now()")
     )
