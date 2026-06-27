@@ -1598,3 +1598,17 @@ router e testes. Schemas (`InstagramConfigPublic`, `GatilhoPublic`,
 - **Fase 2:** galeria de posts (usa `list_media`) + comentários por post.
 - **Fase 3:** publicar/agendar posts (`/media` + `/media_publish`, mídia em S3/RustFS).
 - Conversa por DM após resposta (webhook `messages`), OAuth de conexão.
+
+---
+
+## Correções aplicadas na execução (lições p/ a Fase 1b)
+
+Itens que as revisões pegaram e que **devem ser aplicados de cara** quando a Fase 1b (frontend) ou fatias futuras espelharem estes padrões:
+
+1. **Registrar todo model novo em `app/models/__init__.py`.** O `main.py` faz `import app.models` para registrar tudo no `Base.metadata`; um módulo de model não importado lá fica invisível (bug silencioso — nenhum teste quebra). Foi preciso adicionar `from app.models import vendas_instagram  # noqa: F401`. (Task 1)
+2. **Tabela com estado mutável precisa de `updated_at`.** `vendas_instagram_comentarios` é atualizada pelo serviço (`respondido_*`, `erro`) — ganhou `updated_at` + índice em `lead_id` (FK consultável). (Task 1)
+3. **Nunca `except (ValueError, Exception)` em caminho de negócio.** É redundante e mascara `AttributeError`/`TypeError`. Capture o contrato real: `except (ValueError, LLMError)` (LLMError de `app.integrations.llm`). (Task 4)
+4. **Após `db.rollback()` no loop, `continue`.** Senão o resto da iteração opera sobre `registro`/`lead` detached. (Task 4)
+5. **Auth de teste é por COOKIE, não header.** `tests.helpers.login_as(...)` **retorna o `empresa_id`** e o `client` guarda o cookie do login; não existe `headers=` de auth. (Task 5)
+6. **204 sem corpo + constantes de status.** DELETE usa `status_code=status.HTTP_204_NO_CONTENT` e **não** retorna corpo; POST usa `status.HTTP_201_CREATED`. (Task 5)
+7. **Imports no topo** (inclusive `from app.core.queue import queue`), não dentro de loops. (Task 4)
