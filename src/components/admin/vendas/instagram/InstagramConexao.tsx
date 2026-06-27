@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, type ReactNode } from 'react';
 import { vendasInstagramApi, type InstagramConfigUpdate } from '@/integrations/api/vendasInstagram';
 import { API_URL } from '@/integrations/api/client';
 import { Card, CardContent } from '@/components/ui/card';
@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
-import { CheckCircle2, Trash2, Copy, KeyRound } from 'lucide-react';
+import { CheckCircle2, Trash2, Copy, KeyRound, ListChecks } from 'lucide-react';
 
 export function InstagramConexao({ onSaved }: { onSaved?: () => void }) {
   const [loading, setLoading] = useState(true);
@@ -71,8 +71,9 @@ export function InstagramConexao({ onSaved }: { onSaved?: () => void }) {
   if (loading) return <div className="space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>;
 
   return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
     <Card>
-      <CardContent className="space-y-5 py-5 max-w-xl">
+      <CardContent className="space-y-5 py-5">
         <div className="space-y-2">
           <Label htmlFor="ig-uid">IG User ID (conta profissional)</Label>
           <Input id="ig-uid" value={userId} onChange={(e) => setUserId(e.target.value)} placeholder="17841400000000000" />
@@ -115,5 +116,70 @@ export function InstagramConexao({ onSaved }: { onSaved?: () => void }) {
         <Button onClick={handleSave} disabled={saving}>{saving ? 'Salvando…' : 'Salvar conexão'}</Button>
       </CardContent>
     </Card>
+
+    <Card className="bg-muted/20">
+      <CardContent className="py-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <ListChecks className="h-5 w-5 text-primary" />
+          <h3 className="font-semibold">Passo a passo da conexão</h3>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Pré-requisito: conta Instagram <strong>Profissional</strong> (Comercial ou Criador de conteúdo)
+          vinculada a uma Página do Facebook.
+        </p>
+        <ol className="space-y-3">
+          <Passo n={1} titulo="Crie um app na Meta">
+            Em <code>developers.facebook.com</code> → Meus Apps → Criar App (tipo Empresa) →
+            adicione o produto <strong>Instagram</strong>.
+          </Passo>
+          <Passo n={2} titulo="Copie o App secret">
+            No app: Configurações → Básico → copie a “Chave Secreta do App” e cole no campo{' '}
+            <strong>App secret</strong> ao lado.
+          </Passo>
+          <Passo n={3} titulo="Pegue o IG User ID e o Token de acesso">
+            Gere um token com as permissões <code>instagram_basic</code>,{' '}
+            <code>instagram_manage_comments</code> e <code>instagram_manage_messages</code>. Cole o ID
+            da conta profissional em <strong>IG User ID</strong> e o token em <strong>Token de acesso</strong>.
+          </Passo>
+          <Passo n={4} titulo="Defina um Verify token">
+            Invente um segredo qualquer (uma senha aleatória) e cole em <strong>Verify token</strong> —
+            você usará exatamente o mesmo na Meta.
+          </Passo>
+          <Passo n={5} titulo="Salve a conexão">
+            Clique em <strong>Salvar conexão</strong> aqui.
+          </Passo>
+          <Passo n={6} titulo="Configure o webhook na Meta">
+            No app: Webhooks → Instagram → <strong>Callback URL</strong> = a URL ao lado (botão Copiar),{' '}
+            <strong>Verify Token</strong> = o mesmo do passo 4 → Verificar e salvar → assine o campo{' '}
+            <strong>comments</strong>.
+          </Passo>
+          <Passo n={7} titulo="Pronto!">
+            Os comentários passam a chegar na aba <strong>Comentários</strong> e o agente responde
+            pelos seus gatilhos.
+          </Passo>
+        </ol>
+        <p className="text-[11px] text-muted-foreground border-t pt-2">
+          Em produção, a Meta exige aprovação (App Review) das permissões{' '}
+          <code>instagram_manage_comments</code> e <code>instagram_manage_messages</code>.
+        </p>
+      </CardContent>
+    </Card>
+    </div>
+  );
+}
+
+function Passo({ n, titulo, children }: { n: number; titulo: string; children: ReactNode }) {
+  return (
+    <li className="flex gap-3">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+        {n}
+      </span>
+      <div className="space-y-0.5">
+        <p className="text-sm font-medium leading-tight">{titulo}</p>
+        <p className="text-xs text-muted-foreground leading-snug [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-[11px] [&_code]:font-mono">
+          {children}
+        </p>
+      </div>
+    </li>
   );
 }
