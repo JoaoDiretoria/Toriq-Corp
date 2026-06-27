@@ -111,3 +111,30 @@ async def test_reply_public_erro_http_vira_InstagramError(monkeypatch):
     monkeypatch.setattr(httpx, "AsyncClient", _Client)
     with pytest.raises(ig.InstagramError):
         await ig.reply_public(token="tok", comment_id="c", message="x")
+
+
+@pytest.mark.asyncio
+async def test_list_comentarios_parse(monkeypatch):
+    capt = {}
+
+    class _Resp:
+        def raise_for_status(self): pass
+        def json(self): return {"data": [
+            {"id": "c1", "text": "oi", "username": "fulano", "timestamp": "2026-01-01"},
+            {"id": "c2"},
+        ]}
+
+    class _Client:
+        def __init__(self, *a, **k): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def get(self, url, params):
+            capt["url"] = url; capt["params"] = params
+            return _Resp()
+
+    monkeypatch.setattr(httpx, "AsyncClient", _Client)
+    out = await ig.list_comentarios(token="tok", media_id="m1")
+    assert capt["url"].endswith("/m1/comments")
+    assert capt["params"]["access_token"] == "tok"
+    assert out[0] == {"id": "c1", "text": "oi", "username": "fulano", "timestamp": "2026-01-01"}
+    assert out[1] == {"id": "c2", "text": None, "username": None, "timestamp": None}

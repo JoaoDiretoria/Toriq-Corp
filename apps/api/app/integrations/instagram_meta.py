@@ -130,3 +130,31 @@ async def list_media(*, token: str, ig_user_id: str) -> list[dict]:
             raise InstagramError(f"Erro de rede (list_media): {e}") from e
         data = resp.json()
     return data.get("data") or []
+
+
+async def list_comentarios(*, token: str, media_id: str) -> list[dict]:
+    """Lista os comentários de uma mídia (post). Tolerante a campos ausentes."""
+    url = f"{BASE}/{GRAPH_VERSION}/{media_id}/comments"
+    params = {"fields": "id,text,username,timestamp", "access_token": token}
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
+        try:
+            resp = await c.get(url, params=params)
+            resp.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            raise InstagramError(
+                f"Falha (list_comentarios): HTTP {e.response.status_code} — {e.response.text}"
+            ) from e
+        except httpx.HTTPError as e:
+            raise InstagramError(f"Erro de rede (list_comentarios): {e}") from e
+        data = resp.json()
+    out: list[dict] = []
+    for c in data.get("data") or []:
+        if not isinstance(c, dict):
+            continue
+        out.append({
+            "id": c.get("id"),
+            "text": c.get("text"),
+            "username": c.get("username"),
+            "timestamp": c.get("timestamp"),
+        })
+    return out
