@@ -22,7 +22,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.esocial_crypto import decrypt_secret
+from app.core.queue import queue
 from app.integrations import instagram_meta
+from app.integrations.llm import LLMError
 from app.models.vendas import VendasLeads
 from app.models.vendas_disparo import VendasDisparoConfig
 from app.models.vendas_instagram import (
@@ -108,7 +110,7 @@ async def _responder(
             texto_ia = await vendas_sdr.gerar_resposta(
                 db, empresa_id=lead.empresa_id, lead_id=lead.id, mensagem=mensagem
             )
-        except (ValueError, Exception):  # SDR sem config / falha de IA → segue sem IA
+        except (ValueError, LLMError):  # SDR sem config / falha de IA → segue sem IA
             texto_ia = ""
 
     texto_publico = gatilho.resposta_publica_fixa or texto_ia
@@ -143,7 +145,7 @@ async def processar_comentarios_webhook(
     """Processa comentários inbound. COMMITA ao final. Retorna quantos viraram
     registro novo (após anti-loop + dedup)."""
     config = await _carregar_config(db, empresa_id)
-    self_id = (config.instagram_user_id if config else None) or None
+    self_id = (config.instagram_user_id or None) if config else None
 
     gatilhos = (
         await db.scalars(
@@ -202,6 +204,7 @@ async def processar_comentarios_webhook(
             )
         except Exception:  # pragma: no cover - espelho best-effort
             await db.rollback()
+            continue
 
         # 5) gating + resposta
         if config is not None:
@@ -213,8 +216,6 @@ async def processar_comentarios_webhook(
                 )
 
         # 6) qualificação assíncrona (reusa a fila existente)
-        from app.core.queue import queue
-
         await queue.enqueue(
             "sdr_qualificar_lote",
             {"empresa_id": str(empresa_id), "lead_ids": [str(lead.id)]},
