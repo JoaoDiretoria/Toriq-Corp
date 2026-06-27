@@ -89,6 +89,17 @@ export interface InstagramStats {
   erros: number;
 }
 
+export interface Publicacao {
+  id: string;
+  tipo: string;
+  caption: string | null;
+  midias: { url: string; tipo: string }[] | null;
+  status: string;
+  ig_media_id: string | null;
+  erro: string | null;
+  created_at: string | null;
+}
+
 export const vendasInstagramApi = {
   getConfig: () => api.get<InstagramConfigPublic>("/vendas/instagram/config"),
   saveConfig: (data: InstagramConfigUpdate) =>
@@ -114,4 +125,8 @@ export const vendasInstagramApi = {
   responderComentario: (commentId: string, data: RespostaManualPayload) =>
     api.post<{ ok: boolean; respondido_publico: boolean; respondido_dm: boolean }>(
       `/vendas/instagram/comentarios/${commentId}/responder`, data),
+
+  publicar: (form: FormData) =>
+    api.post<Publicacao>("/vendas/instagram/publicar", form),
+  listPublicacoes: () => api.get<Publicacao[]>("/vendas/instagram/publicacoes"),
 };

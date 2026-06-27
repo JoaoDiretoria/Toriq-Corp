@@ -58,12 +58,15 @@ export async function apiRequest<T = unknown>(
 ): Promise<T> {
   const { method = "GET", body, retryOn401 = true, signal } = opts;
 
+  const isFormData = body instanceof FormData;
   const doFetch = () =>
     fetch(`${API_URL}${path}`, {
       method,
       credentials: "include",
-      headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      // FormData: deixa o browser setar Content-Type (com boundary do multipart).
+      // Objetos normais: serializa como JSON.
+      headers: body !== undefined && !isFormData ? { "Content-Type": "application/json" } : undefined,
+      body: body !== undefined ? (isFormData ? body : JSON.stringify(body)) : undefined,
       signal,
     });
 
