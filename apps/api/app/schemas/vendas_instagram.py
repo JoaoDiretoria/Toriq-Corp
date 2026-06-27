@@ -97,3 +97,24 @@ class InstagramStats(BaseModel):
     respondidos: int
     leads: int
     erros: int
+
+
+# ── Fase 2: comentários de um post + resposta manual ───────────────────────────
+class ComentarioIG(BaseModel):
+    id: Optional[str] = None
+    text: Optional[str] = None
+    username: Optional[str] = None
+    timestamp: Optional[str] = None
+
+
+class RespostaManual(BaseModel):
+    texto: str
+    publico: bool = True
+    dm: bool = False
+    from_username: Optional[str] = None
+
+
+class RespostaManualResult(BaseModel):
+    ok: bool
+    respondido_publico: bool
+    respondido_dm: bool

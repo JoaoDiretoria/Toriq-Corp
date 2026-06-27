@@ -339,3 +339,68 @@ async def test_posts_lista_com_config(client, db_session, monkeypatch):
     body = r.json()
     assert body[0]["id"] == "p1"
     assert body[0]["comments_count"] == 3
+
+
+# ─── Task 2: endpoints comentários do post + responder manual ──────────────────
+
+@pytest.mark.asyncio
+async def test_listar_comentarios_post(client, db_session, monkeypatch):
+    from app.core.esocial_crypto import encrypt_secret
+    from app.api import vendas_instagram as router_mod
+    eid = await _empresa_id(db_session)
+    await login_as(client, db_session, role="cliente_torq", email="ig_pc1@test.com", empresa_id=eid)
+    db_session.add(VendasDisparoConfig(
+        id=uuid.uuid4(), empresa_id=eid,
+        instagram_user_id="ig1", instagram_token_enc=encrypt_secret("tok"),
+    ))
+    await db_session.commit()
+
+    async def _fake(*, token, media_id):
+        return [{"id": "c1", "text": "oi", "username": "f", "timestamp": "t"}]
+    monkeypatch.setattr(router_mod.instagram_meta, "list_comentarios", _fake)
+
+    r = await client.get("/vendas/instagram/posts/m1/comentarios")
+    assert r.status_code == 200
+    assert r.json()[0]["id"] == "c1"
+
+
+@pytest.mark.asyncio
+async def test_responder_comentario_publico_e_dm(client, db_session, monkeypatch):
+    from app.core.esocial_crypto import encrypt_secret
+    from app.api import vendas_instagram as router_mod
+    from app.models.vendas_instagram import VendasInstagramComentarios
+    from sqlalchemy import select
+
+    eid = await _empresa_id(db_session)
+    await login_as(client, db_session, role="cliente_torq", email="ig_pc2@test.com", empresa_id=eid)
+    db_session.add(VendasDisparoConfig(
+        id=uuid.uuid4(), empresa_id=eid,
+        instagram_user_id="igself", instagram_token_enc=encrypt_secret("tok"),
+    ))
+    await db_session.commit()
+
+    enviados = {"pub": [], "dm": []}
+    async def _pub(*, token, comment_id, message): enviados["pub"].append((comment_id, message)); return "r"
+    async def _dm(*, token, ig_user_id, comment_id, message): enviados["dm"].append((comment_id, message)); return "m"
+    monkeypatch.setattr(router_mod.instagram_meta, "reply_public", _pub)
+    monkeypatch.setattr(router_mod.instagram_meta, "send_private_reply", _dm)
+
+    r = await client.post("/vendas/instagram/comentarios/cX/responder",
+                          json={"texto": "valeu!", "publico": True, "dm": True})
+    assert r.status_code == 200
+    assert enviados["pub"] == [("cX", "valeu!")]
+    assert enviados["dm"] == [("cX", "valeu!")]
+    reg = await db_session.scalar(select(VendasInstagramComentarios).where(
+        VendasInstagramComentarios.empresa_id == eid,
+        VendasInstagramComentarios.comment_id == "cX",
+    ))
+    assert reg is not None and reg.respondido_publico is True and reg.respondido_dm is True
+
+
+@pytest.mark.asyncio
+async def test_responder_sem_config_400(client, db_session):
+    eid = await _empresa_id(db_session)
+    await login_as(client, db_session, role="cliente_torq", email="ig_pc3@test.com", empresa_id=eid)
+    r = await client.post("/vendas/instagram/comentarios/cY/responder",
+                          json={"texto": "x", "publico": True, "dm": False})
+    assert r.status_code == 400

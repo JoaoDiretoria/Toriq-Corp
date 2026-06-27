@@ -320,3 +320,79 @@ async def listar_posts(user: User = Depends(require_admin), db: AsyncSession = D
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc))
     campos = ("id", "caption", "media_type", "media_url", "permalink", "timestamp", "comments_count")
     return [s.PostPublic(**{k: p.get(k) for k in campos}) for p in posts]
+
+
+# ── Fase 2: comentários de um post + resposta manual ──────────────────────────
+
+@router.get("/instagram/posts/{media_id}/comentarios", response_model=list[s.ComentarioIG])
+async def listar_comentarios_post(
+    media_id: str,
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    empresa_id = _require_empresa(user)
+    config = await db.scalar(
+        select(VendasDisparoConfig).where(VendasDisparoConfig.empresa_id == empresa_id)
+    )
+    if config is None or not config.instagram_user_id or not config.instagram_token_enc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "configure o Instagram")
+    token = decrypt_secret(config.instagram_token_enc)
+    try:
+        coments = await instagram_meta.list_comentarios(token=token, media_id=media_id)
+    except instagram_meta.InstagramError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc))
+    return [s.ComentarioIG(**c) for c in coments]
+
+
+@router.post(
+    "/instagram/comentarios/{comment_id}/responder",
+    response_model=s.RespostaManualResult,
+)
+async def responder_comentario(
+    comment_id: str,
+    payload: s.RespostaManual,
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    empresa_id = _require_empresa(user)
+    config = await db.scalar(
+        select(VendasDisparoConfig).where(VendasDisparoConfig.empresa_id == empresa_id)
+    )
+    if config is None or not config.instagram_user_id or not config.instagram_token_enc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "configure o Instagram")
+    token = decrypt_secret(config.instagram_token_enc)
+
+    reg = await db.scalar(
+        select(VendasInstagramComentarios).where(
+            VendasInstagramComentarios.empresa_id == empresa_id,
+            VendasInstagramComentarios.comment_id == comment_id,
+        )
+    )
+    if reg is None:
+        reg = VendasInstagramComentarios(
+            id=uuid.uuid4(), empresa_id=empresa_id, comment_id=comment_id,
+            from_username=payload.from_username,
+        )
+        db.add(reg)
+
+    pub_ok = dm_ok = False
+    try:
+        if payload.publico:
+            await instagram_meta.reply_public(token=token, comment_id=comment_id, message=payload.texto)
+            reg.respondido_publico = True
+            pub_ok = True
+        if payload.dm:
+            await instagram_meta.send_private_reply(
+                token=token, ig_user_id=config.instagram_user_id,
+                comment_id=comment_id, message=payload.texto,
+            )
+            reg.respondido_dm = True
+            dm_ok = True
+    except instagram_meta.InstagramError as exc:
+        reg.erro = str(exc)
+        await db.commit()
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc))
+
+    reg.resposta_texto = payload.texto
+    await db.commit()
+    return s.RespostaManualResult(ok=True, respondido_publico=pub_ok, respondido_dm=dm_ok)
