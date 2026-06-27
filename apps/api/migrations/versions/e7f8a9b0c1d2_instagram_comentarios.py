@@ -4,13 +4,15 @@ Revision ID: e7f8a9b0c1d2
 Revises: d6e7f8a9b0c1
 Create Date: 2026-06-27
 """
+from typing import Sequence, Union
+
 from alembic import op
 import sqlalchemy as sa
 
-revision = "e7f8a9b0c1d2"
-down_revision = "d6e7f8a9b0c1"
-branch_labels = None
-depends_on = None
+revision: str = "e7f8a9b0c1d2"
+down_revision: Union[str, None] = "d6e7f8a9b0c1"
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
@@ -63,6 +65,7 @@ def upgrade() -> None:
         sa.Column("resposta_texto", sa.Text(), nullable=True),
         sa.Column("erro", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
         sa.ForeignKeyConstraint(["empresa_id"], ["public.empresas.id"], ondelete="CASCADE", name="vendas_instagram_comentarios_empresa_id_fkey"),
         sa.ForeignKeyConstraint(["lead_id"], ["public.vendas_leads.id"], ondelete="SET NULL", name="vendas_instagram_comentarios_lead_id_fkey"),
         sa.ForeignKeyConstraint(["gatilho_id"], ["public.vendas_instagram_gatilhos.id"], ondelete="SET NULL", name="vendas_instagram_comentarios_gatilho_id_fkey"),
@@ -71,9 +74,11 @@ def upgrade() -> None:
         schema="public",
     )
     op.create_index("idx_vendas_instagram_comentarios_empresa_id", "vendas_instagram_comentarios", ["empresa_id"], schema="public")
+    op.create_index("idx_vendas_instagram_comentarios_lead_id", "vendas_instagram_comentarios", ["lead_id"], schema="public")
 
 
 def downgrade() -> None:
+    op.drop_index("idx_vendas_instagram_comentarios_lead_id", table_name="vendas_instagram_comentarios", schema="public")
     op.drop_table("vendas_instagram_comentarios", schema="public")
     op.drop_table("vendas_instagram_gatilhos", schema="public")
     op.drop_index("idx_vendas_leads_instagram_user_id", table_name="vendas_leads", schema="public")

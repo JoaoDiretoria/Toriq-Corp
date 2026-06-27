@@ -75,6 +75,7 @@ class VendasInstagramComentarios(Base):
             name="vendas_instagram_comentarios_empresa_comment_key",
         ),
         Index("idx_vendas_instagram_comentarios_empresa_id", "empresa_id"),
+        Index("idx_vendas_instagram_comentarios_lead_id", "lead_id"),
         {"schema": "public"},
     )
 
@@ -95,5 +96,8 @@ class VendasInstagramComentarios(Base):
     resposta_texto: Mapped[Optional[str]] = mapped_column(Text)
     erro: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(
+        DateTime(True), server_default=text("now()")
+    )
+    updated_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime(True), server_default=text("now()")
     )
