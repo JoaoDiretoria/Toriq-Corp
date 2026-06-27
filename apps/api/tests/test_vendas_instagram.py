@@ -283,3 +283,59 @@ async def test_config_mascara_segredo(client, db_session):
     assert "TOKENSECRETO123" not in str(body)
     assert body["instagram_token_masked"].endswith("123")
     assert body["instagram_app_secret_set"] is True
+
+
+@pytest.mark.asyncio
+async def test_stats_conta_por_empresa(client, db_session):
+    eid = await _empresa_id(db_session)
+    await login_as(client, db_session, role="cliente_torq", email="ig_stats@test.com", empresa_id=eid)
+    db_session.add_all([
+        VendasInstagramComentarios(id=uuid.uuid4(), empresa_id=eid, comment_id="cs1", respondido_publico=True),
+        VendasInstagramComentarios(id=uuid.uuid4(), empresa_id=eid, comment_id="cs2", erro="boom"),
+    ])
+    db_session.add(VendasLeads(id=uuid.uuid4(), empresa_id=eid, instagram_user_id="us1"))
+    await db_session.commit()
+
+    r = await client.get("/vendas/instagram/stats")
+    assert r.status_code == 200
+    b = r.json()
+    assert b["comentarios"] == 2
+    assert b["respondidos"] == 1
+    assert b["erros"] == 1
+    assert b["leads"] == 1
+
+
+@pytest.mark.asyncio
+async def test_posts_sem_config_400(client, db_session):
+    eid = await _empresa_id(db_session)
+    await login_as(client, db_session, role="cliente_torq", email="ig_posts1@test.com", empresa_id=eid)
+    r = await client.get("/vendas/instagram/posts")
+    assert r.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_posts_lista_com_config(client, db_session, monkeypatch):
+    from app.core.esocial_crypto import encrypt_secret
+    from app.api import vendas_instagram as router_mod
+
+    eid = await _empresa_id(db_session)
+    await login_as(client, db_session, role="cliente_torq", email="ig_posts2@test.com", empresa_id=eid)
+    db_session.add(VendasDisparoConfig(
+        id=uuid.uuid4(), empresa_id=eid,
+        instagram_user_id="ig1", instagram_token_enc=encrypt_secret("tok"),
+    ))
+    await db_session.commit()
+
+    async def _fake_list_media(*, token, ig_user_id):
+        return [{
+            "id": "p1", "caption": "oi", "comments_count": 3,
+            "media_url": "http://x/p.jpg", "permalink": "http://insta/p1",
+            "media_type": "IMAGE", "timestamp": "2026-01-01",
+        }]
+    monkeypatch.setattr(router_mod.instagram_meta, "list_media", _fake_list_media)
+
+    r = await client.get("/vendas/instagram/posts")
+    assert r.status_code == 200
+    body = r.json()
+    assert body[0]["id"] == "p1"
+    assert body[0]["comments_count"] == 3

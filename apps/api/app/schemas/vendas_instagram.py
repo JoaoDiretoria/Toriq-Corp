@@ -78,3 +78,22 @@ class ComentarioPublic(BaseModel):
     created_at: Optional[datetime.datetime] = None
 
     model_config = {"from_attributes": True}
+
+
+# ── Posts (galeria — list_media) ───────────────────────────────────────────────
+class PostPublic(BaseModel):
+    id: str
+    caption: Optional[str] = None
+    media_type: Optional[str] = None
+    media_url: Optional[str] = None
+    permalink: Optional[str] = None
+    timestamp: Optional[str] = None
+    comments_count: Optional[int] = None
+
+
+# ── Stats do canal ──────────────────────────────────────────────────────────────
+class InstagramStats(BaseModel):
+    comentarios: int
+    respondidos: int
+    leads: int
+    erros: int

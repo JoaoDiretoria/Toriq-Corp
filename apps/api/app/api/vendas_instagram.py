@@ -13,7 +13,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse, PlainTextResponse
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_role
@@ -22,6 +22,7 @@ from app.core.esocial_crypto import decrypt_secret, encrypt_secret, mask_secret
 from app.integrations import instagram_meta
 from app.models.user import User, UserRole
 from app.models.vendas_disparo import VendasDisparoConfig
+from app.models.vendas import VendasLeads
 from app.models.vendas_instagram import (
     VendasInstagramComentarios,
     VendasInstagramGatilhos,
@@ -261,3 +262,61 @@ async def listar_comentarios(
         .limit(limit)
     )).all()
     return rows
+
+
+# ── Stats ───────────────────────────────────────────────────────────────────────
+@router.get("/instagram/stats", response_model=s.InstagramStats)
+async def get_stats(user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    empresa_id = _require_empresa(user)
+    comentarios = await db.scalar(
+        select(func.count()).select_from(VendasInstagramComentarios).where(
+            VendasInstagramComentarios.empresa_id == empresa_id
+        )
+    ) or 0
+    respondidos = await db.scalar(
+        select(func.count()).select_from(VendasInstagramComentarios).where(
+            VendasInstagramComentarios.empresa_id == empresa_id,
+            or_(
+                VendasInstagramComentarios.respondido_publico.is_(True),
+                VendasInstagramComentarios.respondido_dm.is_(True),
+            ),
+        )
+    ) or 0
+    erros = await db.scalar(
+        select(func.count()).select_from(VendasInstagramComentarios).where(
+            VendasInstagramComentarios.empresa_id == empresa_id,
+            VendasInstagramComentarios.erro.isnot(None),
+        )
+    ) or 0
+    leads = await db.scalar(
+        select(func.count()).select_from(VendasLeads).where(
+            VendasLeads.empresa_id == empresa_id,
+            VendasLeads.instagram_user_id.isnot(None),
+        )
+    ) or 0
+    return s.InstagramStats(
+        comentarios=comentarios, respondidos=respondidos, leads=leads, erros=erros
+    )
+
+
+# ── Posts (galeria via list_media) ──────────────────────────────────────────────
+@router.get("/instagram/posts", response_model=list[s.PostPublic])
+async def listar_posts(user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    empresa_id = _require_empresa(user)
+    config = await db.scalar(
+        select(VendasDisparoConfig).where(VendasDisparoConfig.empresa_id == empresa_id)
+    )
+    if config is None or not config.instagram_user_id or not config.instagram_token_enc:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "configure o Instagram (conta + token) para ver os posts",
+        )
+    token = decrypt_secret(config.instagram_token_enc)
+    try:
+        posts = await instagram_meta.list_media(
+            token=token, ig_user_id=config.instagram_user_id
+        )
+    except instagram_meta.InstagramError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc))
+    campos = ("id", "caption", "media_type", "media_url", "permalink", "timestamp", "comments_count")
+    return [s.PostPublic(**{k: p.get(k) for k in campos}) for p in posts]
