@@ -233,6 +233,17 @@ async def test_webhook_post_assinatura_invalida_403(client, db_session, monkeypa
 
 
 @pytest.mark.asyncio
+async def test_webhook_post_sem_config_403(client, db_session):
+    # entry.id que não casa com nenhuma empresa → 403 (branch config is None)
+    payload = {"entry": [{"id": "ig_inexistente_xyz", "changes": [{"field": "comments", "value": {"id": "c1"}}]}]}
+    r = await client.post(
+        "/vendas/instagram/webhook", json=payload,
+        headers={"X-Hub-Signature-256": "sha256=qualquer"},
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_gatilhos_crud(client, db_session):
     eid = await _empresa_id(db_session)
     await login_as(client, db_session, role="cliente_torq", email="ig_gat@test.com", empresa_id=eid)

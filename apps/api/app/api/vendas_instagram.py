@@ -69,6 +69,11 @@ async def verificar_webhook(
 
 
 async def _descobrir_config(db: AsyncSession, payload: dict) -> Optional[VendasDisparoConfig]:
+    """Descobre a empresa dona do payload pelo entry[].id.
+
+    No webhook do campo 'comments' do Instagram, entry[].id é o IG User ID
+    (conta profissional) — o mesmo valor que salvamos em instagram_user_id.
+    """
     ids: set[str] = set()
     for entry in payload.get("entry") or []:
         if isinstance(entry, dict) and entry.get("id"):
@@ -196,7 +201,7 @@ async def listar_gatilhos(user: User = Depends(require_admin), db: AsyncSession 
     return rows
 
 
-@router.post("/instagram/gatilhos", response_model=s.GatilhoPublic, status_code=201)
+@router.post("/instagram/gatilhos", response_model=s.GatilhoPublic, status_code=status.HTTP_201_CREATED)
 async def criar_gatilho(
     payload: s.GatilhoCreate,
     user: User = Depends(require_admin),
@@ -229,7 +234,7 @@ async def atualizar_gatilho(
     return obj
 
 
-@router.delete("/instagram/gatilhos/{gid}", status_code=204)
+@router.delete("/instagram/gatilhos/{gid}", status_code=status.HTTP_204_NO_CONTENT)
 async def remover_gatilho(
     gid: uuid.UUID,
     user: User = Depends(require_admin),
@@ -239,7 +244,6 @@ async def remover_gatilho(
     obj = await _get_gatilho(db, gid, empresa_id)
     await db.delete(obj)
     await db.commit()
-    return PlainTextResponse("", status_code=204)
 
 
 # ── Comentários (leitura p/ a tela) ────────────────────────────────────────────
