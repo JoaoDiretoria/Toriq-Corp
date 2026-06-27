@@ -138,3 +138,43 @@ async def test_list_comentarios_parse(monkeypatch):
     assert capt["params"]["access_token"] == "tok"
     assert out[0] == {"id": "c1", "text": "oi", "username": "fulano", "timestamp": "2026-01-01"}
     assert out[1] == {"id": "c2", "text": None, "username": None, "timestamp": None}
+
+
+@pytest.mark.asyncio
+async def test_criar_container_imagem(monkeypatch):
+    capt = {}
+    class _Resp:
+        def raise_for_status(self): pass
+        def json(self): return {"id": "cre1"}
+    class _Client:
+        def __init__(self, *a, **k): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def post(self, url, params, json=None):
+            capt["url"] = url; capt["params"] = params; return _Resp()
+    monkeypatch.setattr(httpx, "AsyncClient", _Client)
+    cid = await ig.criar_container(token="t", ig_user_id="ig1", image_url="http://x/a.jpg", caption="oi")
+    assert cid == "cre1"
+    assert capt["url"].endswith("/ig1/media")
+    assert capt["params"]["image_url"] == "http://x/a.jpg"
+    assert capt["params"]["caption"] == "oi"
+
+
+@pytest.mark.asyncio
+async def test_status_e_publicar(monkeypatch):
+    seq = {"calls": 0}
+    class _Resp:
+        def __init__(self, body): self._b = body
+        def raise_for_status(self): pass
+        def json(self): return self._b
+    class _Client:
+        def __init__(self, *a, **k): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def get(self, url, params): return _Resp({"status_code": "FINISHED"})
+        async def post(self, url, params, json=None): return _Resp({"id": "pub1"})
+    monkeypatch.setattr(httpx, "AsyncClient", _Client)
+    st = await ig.status_container(token="t", creation_id="cre1")
+    assert st == "FINISHED"
+    mid = await ig.publicar_container(token="t", ig_user_id="ig1", creation_id="cre1")
+    assert mid == "pub1"

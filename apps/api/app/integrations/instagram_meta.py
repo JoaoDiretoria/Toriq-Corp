@@ -158,3 +158,72 @@ async def list_comentarios(*, token: str, media_id: str) -> list[dict]:
             "timestamp": c.get("timestamp"),
         })
     return out
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Content Publishing — criar container, checar status, publicar (Fase 3)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def _post_params(url: str, token: str, params: dict, *, contexto: str) -> dict:
+    """POST com params na query (padrão do Content Publishing) + Bearer."""
+    headers = {"Authorization": f"Bearer {token}"}
+    async with httpx.AsyncClient(timeout=_TIMEOUT, headers=headers) as c:
+        try:
+            resp = await c.post(url, params=params)
+            resp.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            raise InstagramError(
+                f"Falha ({contexto}): HTTP {e.response.status_code} — {e.response.text}"
+            ) from e
+        except httpx.HTTPError as e:
+            raise InstagramError(f"Erro de rede ({contexto}): {e}") from e
+        return resp.json()
+
+
+async def criar_container(
+    *, token: str, ig_user_id: str,
+    image_url: str | None = None, video_url: str | None = None,
+    media_type: str | None = None, caption: str | None = None,
+    is_carousel_item: bool = False, children: list[str] | None = None,
+) -> str:
+    """Cria um container de mídia. Retorna o creation_id."""
+    url = f"{BASE}/{GRAPH_VERSION}/{ig_user_id}/media"
+    params: dict = {}
+    if image_url:
+        params["image_url"] = image_url
+    if video_url:
+        params["video_url"] = video_url
+    if media_type:
+        params["media_type"] = media_type
+    if caption is not None:
+        params["caption"] = caption
+    if is_carousel_item:
+        params["is_carousel_item"] = "true"
+    if children:
+        params["children"] = ",".join(children)
+    data = await _post_params(url, token, params, contexto="criar_container")
+    return data.get("id") or ""
+
+
+async def status_container(*, token: str, creation_id: str) -> str:
+    """Status de processamento do container (FINISHED|IN_PROGRESS|ERROR|...)."""
+    url = f"{BASE}/{GRAPH_VERSION}/{creation_id}"
+    headers = {"Authorization": f"Bearer {token}"}
+    async with httpx.AsyncClient(timeout=_TIMEOUT, headers=headers) as c:
+        try:
+            resp = await c.get(url, params={"fields": "status_code"})
+            resp.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            raise InstagramError(
+                f"Falha (status_container): HTTP {e.response.status_code} — {e.response.text}"
+            ) from e
+        except httpx.HTTPError as e:
+            raise InstagramError(f"Erro de rede (status_container): {e}") from e
+        return (resp.json() or {}).get("status_code") or ""
+
+
+async def publicar_container(*, token: str, ig_user_id: str, creation_id: str) -> str:
+    """Publica um container pronto. Retorna o ig_media_id."""
+    url = f"{BASE}/{GRAPH_VERSION}/{ig_user_id}/media_publish"
+    data = await _post_params(url, token, {"creation_id": creation_id}, contexto="publicar_container")
+    return data.get("id") or ""
