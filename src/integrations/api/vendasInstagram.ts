@@ -68,6 +68,20 @@ export interface Post {
   comments_count: number | null;
 }
 
+export interface ComentarioIG {
+  id: string | null;
+  text: string | null;
+  username: string | null;
+  timestamp: string | null;
+}
+
+export interface RespostaManualPayload {
+  texto: string;
+  publico: boolean;
+  dm: boolean;
+  from_username?: string | null;
+}
+
 export interface InstagramStats {
   comentarios: number;
   respondidos: number;
@@ -94,4 +108,10 @@ export const vendasInstagramApi = {
     api.get<Comentario[]>(`/vendas/instagram/comentarios?limit=${limit}`),
 
   listPosts: () => api.get<Post[]>("/vendas/instagram/posts"),
+
+  listComentariosPost: (mediaId: string) =>
+    api.get<ComentarioIG[]>(`/vendas/instagram/posts/${mediaId}/comentarios`),
+  responderComentario: (commentId: string, data: RespostaManualPayload) =>
+    api.post<{ ok: boolean; respondido_publico: boolean; respondido_dm: boolean }>(
+      `/vendas/instagram/comentarios/${commentId}/responder`, data),
 };
