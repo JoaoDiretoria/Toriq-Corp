@@ -17,6 +17,7 @@ import datetime
 import hashlib
 import json
 import re
+import unicodedata
 import uuid
 from typing import Optional
 
@@ -80,6 +81,36 @@ def _parametros_hash(plataforma: str, parametros: dict) -> str:
     base = plataforma + "|" + json.dumps(parametros or {}, sort_keys=True, default=str)
     return hashlib.sha256(base.encode()).hexdigest()
 
+
+_UF_BY_NAME = {
+    "acre": "AC", "alagoas": "AL", "amapa": "AP", "amazonas": "AM",
+    "bahia": "BA", "ceara": "CE", "distrito federal": "DF",
+    "espirito santo": "ES", "goias": "GO", "maranhao": "MA",
+    "mato grosso": "MT", "mato grosso do sul": "MS", "minas gerais": "MG",
+    "para": "PA", "paraiba": "PB", "parana": "PR", "pernambuco": "PE",
+    "piaui": "PI", "rio de janeiro": "RJ", "rio grande do norte": "RN",
+    "rio grande do sul": "RS", "rondonia": "RO", "roraima": "RR",
+    "santa catarina": "SC", "sao paulo": "SP", "sergipe": "SE",
+    "tocantins": "TO",
+}
+
+def _location_key(value: object) -> str:
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    return " ".join(text.casefold().split())
+
+def _state_key(value: object) -> str:
+    key = _location_key(value)
+    return _UF_BY_NAME.get(key, key.upper() if len(key) == 2 else key)
+
+def _matches_google_location(lead: dict, parametros: dict) -> bool:
+    cidade = parametros.get("cidade")
+    estado = parametros.get("estado")
+    if cidade and _location_key(lead.get("cidade")) != _location_key(cidade):
+        return False
+    if estado and _state_key(lead.get("estado")) != _state_key(estado):
+        return False
+    return True
 
 async def _get_config(
     db: AsyncSession, empresa_id: uuid.UUID
@@ -351,6 +382,15 @@ async def scraping_results(
                 raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc))
 
     leads = normalize_items(job.plataforma, itens)
+    parametros = job.parametros or {}
+    if job.plataforma == "google":
+        leads = [lead for lead in leads if _matches_google_location(lead, parametros)]
+    limite = parametros.get("max")
+    try:
+        if limite is not None and int(limite) > 0:
+            leads = leads[: int(limite)]
+    except (TypeError, ValueError):
+        pass
     total = len(leads)
     inseridos = 0
     duplicados = 0
