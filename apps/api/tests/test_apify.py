@@ -45,7 +45,8 @@ def test_build_input_google_completo():
         "google",
         {"termo": "restaurante", "cidade": "São Paulo", "estado": "SP", "max": 25},
     )
-    assert inp["searchStringsArray"] == ["restaurante São Paulo SP"]
+    assert inp["searchStringsArray"] == ["restaurante"]
+    assert inp["locationQuery"].endswith(", SP, Brasil")
     assert inp["maxCrawledPlacesPerSearch"] == 25
     assert inp["language"] == "pt-BR"
     assert inp["countryCode"] == "br"

@@ -147,18 +147,18 @@ def build_actor_input(plataforma: str, parametros: dict) -> dict:
 
     if plataforma == "google":
         termo = p.get("termo", "")
-        partes = [termo]
-        if p.get("cidade"):
-            partes.append(p["cidade"])
-        if p.get("estado"):
-            partes.append(p["estado"])
-        search_string = " ".join(str(x) for x in partes if x)
-        return {
-            "searchStringsArray": [search_string],
+        run_input = {
+            "searchStringsArray": [str(termo).strip()],
             "maxCrawledPlacesPerSearch": p.get("max"),
             "language": "pt-BR",
             "countryCode": "br",
         }
+        if p.get("cidade"):
+            localidade = str(p["cidade"]).strip()
+            if p.get("estado"):
+                localidade += f", {str(p['estado']).strip()}"
+            run_input["locationQuery"] = f"{localidade}, Brasil"
+        return run_input
 
     if plataforma == "facebook":
         run_input: dict = {
