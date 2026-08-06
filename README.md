@@ -37,6 +37,22 @@ Em **migração** de uma arquitetura *frontend-direto-no-Supabase* para um **bac
 | **Tipos front↔back** | **OpenAPI → TypeScript** (`schema.d.ts` gerado) |
 | **Infra** | **EasyPanel** na VPS (`69.62.89.220`) — Postgres + RustFS + serviços Docker |
 
+### Módulo Chat Meta (WhatsApp)
+
+O Super Admin possui o módulo **Chat WhatsApp**, integrado ao backend NestJS isolado do fluxo legado de disparos. Ele inclui:
+
+- conexão da conta pelo Meta Embedded Signup;
+- acompanhamento do status e da qualidade da conta;
+- inbox responsiva com busca, paginação, não lidas e atualização periódica;
+- histórico e envio de mensagens dentro da janela de atendimento de 24 horas;
+- bloqueio orientado da composição fora da janela, preparando o fluxo futuro de templates.
+
+Para ativar em produção, configure as variáveis `VITE_CHAT_API_URL`, `VITE_META_APP_ID`,
+`VITE_META_CONFIG_ID` e `VITE_META_API_VERSION` descritas abaixo. A autenticação atual do front usa
+cookie httpOnly do FastAPI, enquanto o serviço Chat Meta valida JWT Supabase; portanto, a publicação
+exige uma ponte de autenticação server-side ou a unificação do guard no backend. Nunca exponha tokens
+de serviço ou bearer tokens em variáveis `VITE_*`.
+
 **Por que FastAPI:** isolamento de tenant estrutural no repositório base (substitui o RLS do Supabase),
 JWT próprio para assinar tudo, e portabilidade da lógica que hoje vive no front/triggers para Python.
 
@@ -139,6 +155,9 @@ uv run alembic revision -m "x"  # nova migration
 | Variável | Descrição |
 |---|---|
 | `VITE_API_URL` | URL pública da API nova (ex.: `https://api.toriqcorp.com.br`). **Queimada no bundle em build-time** — em produção precisa apontar pra API real, senão cai no default `http://localhost:8000`. |
+| `VITE_CHAT_API_URL` | URL pública do serviço NestJS do Chat Meta. Se omitida, usa `VITE_API_URL` e pressupõe gateway para `/api/chat/*`. |
+| `VITE_META_APP_ID` / `VITE_META_CONFIG_ID` | Identificadores públicos do app e da configuração de Embedded Signup usados para conectar o WhatsApp no Super Admin. |
+| `VITE_META_API_VERSION` | Versão da Graph API usada ao inicializar o SDK da Meta (ex.: `v25.0`). Deve acompanhar `META_API_VERSION` do backend. |
 | `VITE_SUPABASE_URL` / `VITE_SUPABASE_PUBLISHABLE_KEY` / `VITE_SUPABASE_PROJECT_ID` | Legado (telas ainda não migradas). Sai no cutover. |
 | `VITE_TURNSTILE_SITE_KEY` | Captcha Cloudflare Turnstile (widget de login). |
 | `VITE_ESOCIAL_BACKEND_URL` / `VITE_ESOCIAL_CONFIG_API_KEY` | Backend eSocial (Fatia 4). |

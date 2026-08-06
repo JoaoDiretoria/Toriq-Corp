@@ -11,6 +11,7 @@ Welcome to the repository knowledge base. Start with the project overview, then 
 - [Data Flow & Integrations](./data-flow.md)
 - [Security & Compliance Notes](./security.md)
 - [Tooling & Productivity Guide](./tooling.md)
+- [Chat Meta no Super Admin](./chat-meta-frontend.md)
 
 ## Repository Snapshot
 - `AGENTS.md/`

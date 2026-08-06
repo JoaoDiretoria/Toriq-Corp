@@ -41,9 +41,10 @@ import { PipelineCRM } from '@/components/admin/vendas/pipeline/PipelineCRM';
 import { LeadsCaptados } from '@/components/admin/vendas/LeadsCaptados';
 import { Segmentacao } from '@/components/admin/vendas/Segmentacao';
 import { TagsManager } from '@/components/admin/vendas/TagsManager';
+import { AdminChatMeta } from '@/components/admin/chat/AdminChatMeta';
 import { useState } from 'react';
 
-type AdminSection = 'dashboard' | 'empresas' | 'usuarios' | 'colaboradores' | 'servicos' | 'modulos' | 'tarefas' | 'agenda' | 'comercial-dashboard' | 'comercial' | 'comercial-prospeccao' | 'comercial-pos-venda' | 'comercial-cross-selling' | 'financeiro' | 'financeiro-dashboard' | 'financeiro-cadastros' | 'financeiro-contas-receber' | 'financeiro-contas-pagar' | 'financeiro-fluxo-caixa' | 'financeiro-dre' | 'estatisticas' | 'suporte' | 'conteudo-blogs' | 'conteudo-pesquisas' | 'conteudo-newsletter' | 'conteudo-vagas' | 'vendas-prospeccao' | 'vendas-leads' | 'vendas-pipeline' | 'vendas-segmentacao' | 'vendas-tags' | 'vendas-disparo' | 'vendas-sdr' | 'vendas-instagram' | 'vendas-evolution' | 'vendas-uso';
+type AdminSection = 'dashboard' | 'chat-whatsapp' | 'empresas' | 'usuarios' | 'colaboradores' | 'servicos' | 'modulos' | 'tarefas' | 'agenda' | 'comercial-dashboard' | 'comercial' | 'comercial-prospeccao' | 'comercial-pos-venda' | 'comercial-cross-selling' | 'financeiro' | 'financeiro-dashboard' | 'financeiro-cadastros' | 'financeiro-contas-receber' | 'financeiro-contas-pagar' | 'financeiro-fluxo-caixa' | 'financeiro-dre' | 'estatisticas' | 'suporte' | 'conteudo-blogs' | 'conteudo-pesquisas' | 'conteudo-newsletter' | 'conteudo-vagas' | 'vendas-prospeccao' | 'vendas-leads' | 'vendas-pipeline' | 'vendas-segmentacao' | 'vendas-tags' | 'vendas-disparo' | 'vendas-sdr' | 'vendas-instagram' | 'vendas-evolution' | 'vendas-uso';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -64,7 +65,7 @@ const AdminDashboard = () => {
     if (!loading && user && profile?.role === 'admin_vertical') {
       logView('Dashboard', 'Admin Dashboard', 'Acessou o painel administrativo');
     }
-  }, [user, loading, navigate, profile]);
+  }, [user, loading, navigate, profile, logView]);
 
   useEffect(() => {
     if (!loading && profile && profile.role !== 'admin_vertical') {
@@ -88,6 +89,8 @@ const AdminDashboard = () => {
     switch (activeSection) {
       case 'dashboard':
         return <AdminDashboardHome onNavigate={(section) => setActiveSection(section as AdminSection)} />;
+      case 'chat-whatsapp':
+        return <AdminChatMeta />;
       case 'empresas':
         return <AdminEmpresas />;
       case 'usuarios':
@@ -166,6 +169,7 @@ const AdminDashboard = () => {
   const getSectionTitle = () => {
     const titles: Record<AdminSection, string> = {
       dashboard: 'Dashboard',
+      'chat-whatsapp': 'Chat WhatsApp',
       empresas: 'Empresas',
       usuarios: 'Usuários',
       colaboradores: 'Colaboradores',

@@ -60,6 +60,7 @@ import { toast } from 'sonner';
 
 type AdminSection =
   | 'dashboard'
+  | 'chat-whatsapp'
   | 'empresas'
   | 'usuarios'
   | 'colaboradores'
@@ -123,6 +124,7 @@ const NAV_GROUPS: NavGroup[] = [
     icon: Building2,
     items: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { id: 'chat-whatsapp', label: 'Chat WhatsApp', icon: MessageCircle },
       { id: 'empresas', label: 'Empresas', icon: Building2 },
       { id: 'usuarios', label: 'Usuários', icon: Users },
       { id: 'colaboradores', label: 'Colaboradores', icon: UserCog },
